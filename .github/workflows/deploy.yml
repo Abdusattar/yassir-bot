@@ -19,4 +19,5 @@ jobs:
             cd ~/yassir-bot && git pull origin master
             source ~/yassir-bot/venv/bin/activate && pip install -r requirements.txt -q
             sudo systemctl restart yassir-bot
+            systemctl --user restart yassir-bot-female
             echo "Deploy done"
