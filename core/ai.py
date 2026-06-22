@@ -235,7 +235,7 @@ async def answer_question(question, program_info, group_title, phone=None, group
         save_chat(phone, group_id, "user", question)
         save_chat(phone, group_id, "assistant", result)
     return result or (
-        "🤖 Ясир: Ассаляму алейкум! Не могу ответить прямо сейчас 🙏\n"
+        "Ассаляму алейкум! Не могу ответить прямо сейчас.\n"
         "Задай вопрос через несколько минут, или Устаз ответит лично. БаракАллаху фийк! 🕌"
     )
 
