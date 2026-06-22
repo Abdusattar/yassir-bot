@@ -9,7 +9,7 @@ from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner,
-    get_missing_students, get_date
+    get_missing_students, get_date, get_tadabbur_group
 )
 from core.tg import send_message
 from core.i18n import T
@@ -82,11 +82,17 @@ async def evening_report():
             report_text = format_daily_report(group["id"], group["title"] or chat_id, group_tasks, today)
             await send_message(chat_id, report_text)
 
-            if gtype == "pro" and group["summary_chat_id"]:
-                await send_message(
-                    group["summary_chat_id"],
-                    "📋 Сводка из про-группы " + (group["title"] or chat_id) + ":\n\n" + report_text
-                )
+            if gtype == "pro":
+                summary_id = group["summary_chat_id"]
+                if not summary_id:
+                    tadabbur = get_tadabbur_group()
+                    if tadabbur:
+                        summary_id = tadabbur["chat_id"]
+                if summary_id and summary_id != chat_id:
+                    await send_message(
+                        summary_id,
+                        "📋 Сводка из про-группы " + (group["title"] or chat_id) + ":\n\n" + report_text
+                    )
 
             students = get_students(group["id"])
             full_done = [
