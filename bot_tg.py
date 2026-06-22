@@ -1648,6 +1648,16 @@ def get_skip_count_month(sid):
         d += timedelta(days=1)
     return skips
 
+
+def get_group_thresholds(group):
+    cat = group["category"] if "category" in group.keys() else 0
+    if cat == 1:
+        return {"task": 14, "warn": 10, "lesson": 4, "name": "Обычная группа"}
+    if cat == 2:
+        return {"task": 20, "warn": 15, "lesson": 6, "name": "Средняя группа"}
+    return None
+
+
 def get_lesson_skip_count_month(sid, group_id):
     """Сколько онлайн уроков студент пропустил в этом месяце"""
     tz = pytz.timezone(TZ)
@@ -2244,6 +2254,30 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
         await send_message(chat_id, "✅ Удалены все студенты (" + str(cnt) + "). Группа очищена.")
         return
 
+    if text == "/tadabur" and is_group_admin(phone, group_id):
+        with db() as c:
+            c.execute("INSERT OR REPLACE INTO bot_settings (key, value) VALUES (?, ?)", ("tadabur_chat", str(chat_id)))
+        await send_message(chat_id, "Eta gruppa naznachena obshchey gruppoy Tadabur. Syuda budut prihodit svodnye otchety.")
+        return
+
+    if text == "/tadabur_off" and is_group_admin(phone, group_id):
+        with db() as c:
+            c.execute("DELETE FROM bot_settings WHERE key=?", ("tadabur_chat",))
+        await send_message(chat_id, "Gruppa Tadabur otmenena. Svodnye otchety otklyucheny.")
+        return
+
+    if text.startswith("/category") and is_group_admin(phone, group_id):
+        parts = text.split()
+        if len(parts) == 2 and parts[1] in ("1", "2"):
+            cat = int(parts[1])
+            with db() as c:
+                c.execute("UPDATE groups SET category=? WHERE id=?", (cat, group_id))
+            nm = "Obychnaya (14 zadaniy / 4 uroka)" if cat == 1 else "Srednyaya (20 zadaniy / 6 urokov)"
+            await send_message(chat_id, "Kategoriya gruppy ustanovlena: " + str(cat) + " - " + nm)
+        else:
+            await send_message(chat_id, "Format: /category 1 ili /category 2")
+        return
+
     if text == "/students":
         students = get_students(group_id)
         lines = ["📋 Студенты — " + group["title"] + ":\n"]
@@ -2696,9 +2730,12 @@ async def scheduler():
                         pass
 
                     # Удаление за 14 пропусков / предупреждение за 10
+                    _thr = get_group_thresholds(group)
+                    if _thr is None:
+                        continue
                     for s in get_students(group["id"]):
                         skip_cnt = get_skip_count_month(s["id"])
-                        if skip_cnt >= 14:
+                        if skip_cnt >= _thr["task"]:
                             deactivate_student(s["id"])
                             if s["phone"]:
                                 try:
@@ -2711,13 +2748,13 @@ async def scheduler():
                             for ap in ADMIN_PHONES:
                                 await send_message(ap,
                                     "⚠️ " + s["name"] + " удалён из " + group["title"])
-                        elif skip_cnt == 10 and s["phone"]:
+                        elif skip_cnt == _thr["warn"] and s["phone"]:
                             # Предупреждение — только в группу (без лички студенту)
                             await send_message(group["chat_id"],
                                 "⚠️ " + s["name"] + " — 10 дней пропусков! При 14 будет удалён.")
                         # Проверка пропусков онлайн уроков (4 за месяц = удаление)
                         lesson_skips = get_lesson_skip_count_month(s["id"], group["id"])
-                        if lesson_skips >= 4:
+                        if lesson_skips >= _thr["lesson"]:
                             deactivate_student(s["id"])
                             if s["phone"]:
                                 try:
