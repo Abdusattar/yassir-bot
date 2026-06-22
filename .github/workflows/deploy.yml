@@ -16,12 +16,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/yassir-bot
-            git pull origin master
-            source ~/yassir-bot/venv/bin/activate
-            pip install -r requirements.txt -q
-            pkill -f "python3 bot.py" || true
-            sleep 1
-            source ~/yassir-bot/start.sh
-            disown -a
+            cd ~/yassir-bot && git pull origin master
+            source ~/yassir-bot/venv/bin/activate && pip install -r requirements.txt -q
+            sudo systemctl restart yassir-bot
             echo "Deploy done"
