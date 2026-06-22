@@ -13,7 +13,7 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message
-from core.db import init, get_all_groups, get_group_tasks, db
+from core.db import init, seed_default_knowledge, get_all_groups, get_group_tasks, db
 from core.handlers import process_message
 from core.scheduler import scheduler
 
@@ -41,6 +41,7 @@ async def queued_process_message(chat_id, sender, text, sender_name, is_media=Fa
 
 async def main():
     init()
+    seed_default_knowledge()
     if not TELEGRAM_TOKEN:
         log.error("TELEGRAM_TOKEN не задан! Задай переменную окружения.")
         return
