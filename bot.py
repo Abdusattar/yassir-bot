@@ -64,10 +64,14 @@ async def main():
                 timeout=40
             )
             if not resp or not resp.get("ok"):
+                log.warning("getUpdates failed: %s", resp)
                 await asyncio.sleep(2)
                 continue
 
-            for upd in resp.get("result", []):
+            updates = resp.get("result", [])
+            if updates:
+                log.debug("getUpdates: %d updates", len(updates))
+            for upd in updates:
                 offset = upd["update_id"] + 1
                 msg = upd.get("message")
                 if not msg:
