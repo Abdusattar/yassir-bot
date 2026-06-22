@@ -22,6 +22,6 @@ jobs:
             pip install -r requirements.txt -q
             pkill -f "python3 bot.py" || true
             sleep 1
-            bash ~/yassir-bot/start.sh
-            sleep 2
-            tail -5 ~/yassir-bot/bot.log
+            source ~/yassir-bot/start.sh
+            disown -a
+            echo "Deploy done"
