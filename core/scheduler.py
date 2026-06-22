@@ -7,7 +7,7 @@ import pytz
 from config import TZ, ADMIN_PHONES
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
-    get_students, get_today_report, get_consecutive_skips,
+    get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date
 )
@@ -110,15 +110,18 @@ async def skip_warnings():
         gtype = group["group_type"] or "relaxed"
         if gtype == "tadabbur":
             continue
-        limit = 10 if gtype == "pro" else 20
-        warn_threshold = limit // 2
         glang = get_group_lang(group)
         chat_id = group["chat_id"]
         try:
             for s in get_students(group["id"]):
                 if not s["phone"]:
                     continue
-                skips = get_consecutive_skips(s["id"])
+                if gtype == "pro":
+                    skips = get_skip_count_month(s["id"])
+                    warn_threshold = 7   # предупреждаем при 7+ из 14 за месяц
+                else:
+                    skips = get_consecutive_skips(s["id"])
+                    warn_threshold = 15  # предупреждаем при 15+ подряд из 30
                 if skips >= warn_threshold:
                     warn = await ai.warning_skips(s["name"], skips, glang)
                     if warn:

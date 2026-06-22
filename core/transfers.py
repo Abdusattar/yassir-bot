@@ -12,8 +12,8 @@ import asyncio
 
 from core.db import (
     get_all_groups, get_students, get_days_since_last_report,
-    get_miss_count_last_30_days, deactivate_student, add_student,
-    log_transfer, get_group
+    get_skip_count_month, get_miss_count_last_30_days,
+    deactivate_student, add_student, log_transfer, get_group
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message
@@ -47,9 +47,10 @@ async def _check_group_for_transfers(group, gtype):
             continue
         try:
             days_absent = get_days_since_last_report(student["id"])
+            month_skips = get_skip_count_month(student["id"])
 
-            if gtype == "pro" and days_absent >= PRO_INACTIVE_DAYS:
-                await _transfer_to_tadabbur(student, group, fallback_id, days_absent, lang)
+            if gtype == "pro" and month_skips >= PRO_INACTIVE_DAYS:
+                await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang)
 
             elif gtype == "relaxed":
                 if days_absent >= RELAXED_INACTIVE_DAYS:
