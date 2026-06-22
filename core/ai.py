@@ -5,11 +5,18 @@ import aiohttp
 from datetime import datetime
 import pytz
 
-from config import OR_API_KEY, OR_URL, AI_MODEL, TZ
+from config import OR_API_KEY, OR_URL, AI_MODEL, TZ, PROFILE
 from core.i18n import lang_instruction
 from core.db import get_yassir_knowledge, get_student_memory, save_chat
 
 log = logging.getLogger(__name__)
+
+_IS_FEMALE = PROFILE == "female"
+
+
+def _g(m: str, f: str) -> str:
+    """Выбирает мужскую или женскую форму в зависимости от профиля бота."""
+    return f if _IS_FEMALE else m
 
 
 async def _or_call(messages, max_tokens=1024, retries=3):
@@ -244,16 +251,16 @@ async def reminder(name, missed_tasks, day, lang="ru"):
     elif day <= 7:
         urgency, tone = str(day) + " дней подряд не сдаёт", "настойчиво о потере хифза"
     else:
-        urgency, tone = str(day) + " дней подряд не сдаёт", "как старший брат об ответственности перед Аллахом"
+        urgency, tone = str(day) + " дней подряд не сдаёт", "как " + _g("старший брат", "старшая сестра") + " об ответственности перед Аллахом"
     prompt = (
-        "Напиши напоминание для студента «" + name + "».\n"
+        "Напиши напоминание для " + _g("студента", "студентки") + " «" + name + "».\n"
         "Ситуация: " + urgency + ". Не сданные: " + tasks_str + ".\n"
         "Тон: " + tone + ".\n"
         "1. Начни с «Ассаляму алейкум, " + name + "!»\n"
         "2. Один аят о важности знания (с сурой и номером)\n"
         "3. Один хадис о заучивании (с источником)\n"
-        "4. Слова учёного или сподвижника\n"
-        "5. Дуа за студента\n"
+        "4. Слова учёного или сподвижницы\n"
+        "5. Дуа за " + _g("студента", "студентку") + "\n"
         + lang_instruction(lang) + " Объём: 8-10 строк."
     )
     return await ask_ai(prompt) or "📖 Ассаляму алейкум, " + name + "! Не забудь сдать уроки 🙏"
@@ -276,7 +283,7 @@ async def group_motivation(missing_names, group_title, lang="ru"):
 
 async def personal_streak_praise(name, streak_days, lang="ru"):
     prompt = (
-        "Напиши поздравление студенту «" + name + "».\n"
+        "Напиши поздравление " + _g("студенту", "студентке") + " «" + name + "».\n"
         "Достижение: " + str(streak_days) + " дней подряд без пропуска!\n"
         "1. «Ассаляму алейкум, " + name + "! МашаАллах!»\n"
         "2. Поздравь с достижением\n"
@@ -290,7 +297,7 @@ async def personal_streak_praise(name, streak_days, lang="ru"):
 
 async def praise_completed(name, lang="ru"):
     prompt = (
-        "Напиши тёплую похвалу студенту Корана «" + name + "», который СЕГОДНЯ выполнил все задания.\n"
+        "Напиши тёплую похвалу " + _g("студенту", "студентке") + " Корана «" + name + "», " + _g("который", "которая") + " СЕГОДНЯ выполнил" + _g("", "а") + " все задания.\n"
         + _variety_hint() + "\n"
         "1. Начни с «БаракАллаху фик, " + name + "!»\n"
         "2. Похвали за усердие сегодня\n"
@@ -305,7 +312,7 @@ async def praise_completed(name, lang="ru"):
 
 async def absent_motivation(name, days, lang="ru"):
     prompt = (
-        "Студент Корана «" + name + "» уже " + str(days) + " дня не сдавал отчёт.\n"
+        _g("Студент", "Студентка") + " Корана «" + name + "» уже " + str(days) + " дня не сдавал" + _g("", "а") + " отчёт.\n"
         + _variety_hint() + "\n"
         "Напиши МЯГКОЕ, тёплое напоминание (НЕ ругай!):\n"
         "1. Обратись по имени с теплотой\n"
@@ -319,7 +326,7 @@ async def absent_motivation(name, days, lang="ru"):
 
 async def winner_praise(name, period_label, points, lang="ru"):
     prompt = (
-        "Напиши поздравление студенту Корана «" + name + "» — он ЛУЧШИЙ за " + period_label +
+        "Напиши поздравление " + _g("студенту", "студентке") + " Корана «" + name + "» — " + _g("он ЛУЧШИЙ", "она ЛУЧШАЯ") + " за " + period_label +
         " с " + str(points) + " очками!\n"
         + _variety_hint() + "\n"
         "1. Начни с «🏆 МашаАллах, " + name + "!»\n"
@@ -348,7 +355,7 @@ async def group_praise(names, lang="ru"):
 
 async def warning_skips(name, skip_count, lang="ru"):
     prompt = (
-        "Напиши СЕРЬЁЗНОЕ предупреждение студенту «" + name + "».\n"
+        "Напиши СЕРЬЁЗНОЕ предупреждение " + _g("студенту", "студентке") + " «" + name + "».\n"
         "Ситуация: " + str(skip_count) + " дней пропусков в этом месяце. При 14 — перевод в группу Тадаббур!\n"
         "1. «Ассаляму алейкум, " + name + "!»\n"
         "2. Предупреди — осталось " + str(14 - skip_count) + " дней до перевода\n"
