@@ -13,7 +13,8 @@ import asyncio
 from core.db import (
     get_all_groups, get_students, get_days_since_last_report,
     get_skip_count_month, get_miss_count_last_30_days,
-    deactivate_student, add_student, log_transfer, get_group
+    deactivate_student, add_student, log_transfer, get_group,
+    get_tadabbur_group
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message
@@ -70,12 +71,16 @@ async def _transfer_to_tadabbur(student, group, fallback_id, days_absent, lang):
     # Деактивируем студента в текущей группе
     deactivate_student(sid)
 
-    # Если есть группа-назначение — добавляем туда
-    target_chat_id = fallback_id or group["chat_id"]
+    # Целевая группа: явный fallback → иначе единственная tadabbur-группа профиля
+    target_group = None
     if fallback_id:
         target_group = get_group(fallback_id)
-        if target_group:
-            add_student(name, target_group["id"], student["phone"])
+    if not target_group:
+        target_group = get_tadabbur_group()
+
+    target_chat_id = target_group["chat_id"] if target_group else chat_id
+    if target_group:
+        add_student(name, target_group["id"], student["phone"])
 
     log_transfer(sid, chat_id, target_chat_id, f"inactive_{group['group_type']}")
 

@@ -351,6 +351,12 @@ def get_groups_by_type(group_type):
         ).fetchall()
 
 
+def get_tadabbur_group():
+    """Возвращает единственную Тадаббур-группу профиля (или None)."""
+    rows = get_groups_by_type("tadabbur")
+    return rows[0] if rows else None
+
+
 def get_group_tasks(group):
     return group["tasks"].split(",") if group["tasks"] else ["m", "r", "t"]
 
