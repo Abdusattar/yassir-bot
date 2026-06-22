@@ -111,6 +111,20 @@ def init():
                 reason TEXT NOT NULL,
                 transferred_at TEXT DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS teachers(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                telegram_id TEXT UNIQUE NOT NULL,
+                langs TEXT DEFAULT 'ru',
+                role TEXT DEFAULT 'group_admin'
+            );
+            CREATE TABLE IF NOT EXISTS teacher_groups(
+                teacher_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                PRIMARY KEY (teacher_id, group_id),
+                FOREIGN KEY (teacher_id) REFERENCES teachers(id),
+                FOREIGN KEY (group_id) REFERENCES groups(id)
+            );
         """)
         _run_migrations(c)
 
@@ -129,6 +143,9 @@ def _run_migrations(c):
         c.execute("ALTER TABLE groups ADD COLUMN fallback_chat_id TEXT")
     if "summary_chat_id" not in gcols:
         c.execute("ALTER TABLE groups ADD COLUMN summary_chat_id TEXT")
+    if "started_at" not in gcols:
+        c.execute("ALTER TABLE groups ADD COLUMN started_at TEXT")
+        c.execute("UPDATE groups SET started_at = date('now') WHERE started_at IS NULL")
 
 
 # ── Time ──────────────────────────────────────────────────────────────────────
