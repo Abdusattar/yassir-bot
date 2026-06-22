@@ -263,7 +263,7 @@ async def reminder(name, missed_tasks, day, lang="ru"):
         "5. Дуа за " + _g("студента", "студентку") + "\n"
         + lang_instruction(lang) + " Объём: 8-10 строк."
     )
-    return await ask_ai(prompt) or "📖 Ассаляму алейкум, " + name + "! Не забудь сдать уроки 🙏"
+    return await ask_ai(prompt) or "📖 Ассаляму алейкум, " + name + "! Не забудь сдать уроки, ИншаАллах."
 
 
 async def group_motivation(missing_names, group_title, lang="ru"):
