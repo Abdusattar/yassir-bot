@@ -1,0 +1,13 @@
+#!/bin/bash
+# Скрипт запуска бота Ясир (Telegram)
+# Скопируй этот файл: cp start.sh.example start.sh
+# Затем вставь свои значения и запусти: bash start.sh
+
+export TELEGRAM_TOKEN="ВАШ_ТОКЕН_ОТ_BOTFATHER"
+export CLAUDE_API_KEY="sk-ant-..."
+export ADMIN_IDS="ВАШ_TELEGRAM_USER_ID"
+
+source venv/bin/activate 2>/dev/null || true
+nohup python3 bot_tg.py > bot.log 2>&1 &
+echo "Бот запущен, PID: $!"
+echo "Лог: tail -f bot.log"

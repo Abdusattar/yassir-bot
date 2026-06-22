@@ -1,0 +1,9 @@
+start.sh
+*.db
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+bot.log
+nohup.out
