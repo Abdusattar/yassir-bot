@@ -154,7 +154,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
                 "Типы групп:\n"
                 "pro — соревновательная (14 дней без отчёта → Тадаббур)\n"
                 "relaxed — расслабленная (30 дней → Тадаббур)\n"
-                "tadabbur — размышление (нет задач, получает сводки от pro)\n\n"
+                "tadabbur — красота и смыслы Корана (не учебная, для всех)\n\n"
                 "👤 СТУДЕНТЫ\n"
                 "/add Имя — добавить\n"
                 "/add 996XXX Имя — с номером\n"
@@ -291,7 +291,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
             type_desc = {
                 "pro": "Про-группа (14 дней без отчёта → Тадаббур)",
                 "relaxed": "Расслабленная (30 дней → Тадаббур)",
-                "tadabbur": "Тадаббур (нет задач, получает сводки от pro-групп)"
+                "tadabbur": "Тадаббур — пространство красоты и смыслов Корана (не учебная группа)"
             }
             await send_message(chat_id, "✅ Тип группы: " + type_desc[gtype])
         else:
