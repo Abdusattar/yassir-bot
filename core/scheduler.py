@@ -57,18 +57,14 @@ async def personal_reminders():
         glang = get_group_lang(group)
         chat_id = group["chat_id"]
         try:
-            for s in get_students(group["id"]):
-                if not s["phone"]:
-                    continue
-                rep = get_today_report(s["id"])
-                if rep and all(rep[k] for k in group_tasks):
-                    continue
-                missed = [k for k in group_tasks if not rep or not rep[k]]
-                days = get_consecutive_skips(s["id"])
-                msg = await ai.reminder(s["name"], missed, days, glang)
-                if msg:
-                    await send_message(chat_id, msg)
-                await asyncio.sleep(0.8)
+            missing = get_missing_students(group["id"], group_tasks)
+            if not missing:
+                continue
+            missing_names = [s["name"] for s, _ in missing]
+            msg = await ai.group_motivation(missing_names, group["title"] or chat_id, glang)
+            if msg:
+                await send_message(chat_id, "📖 " + msg)
+            await asyncio.sleep(1)
         except Exception as e:
             log.error("personal_reminders error in %s: %s", chat_id, e)
 
