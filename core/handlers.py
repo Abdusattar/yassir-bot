@@ -1,0 +1,775 @@
+import asyncio
+import logging
+
+from config import ADMIN_PHONES
+from core.content import (
+    TASK_KEYS, DEFAULT_TASKS, ONLINE_WORDS, EXCUSE_WORDS, PROGRAM_INFO
+)
+from core.i18n import T, get_group_lang, LANG_NAMES
+from core.tg import send_message
+import core.ai as ai
+from core.db import (
+    get_group, save_group, get_group_tasks, update_group_tasks, update_group_lang,
+    update_group_type, update_group_fallback, update_group_summary,
+    get_all_groups, get_students, find_by_phone, find_by_name, add_student,
+    register_student, deactivate_student, rename_student, remove_all_students,
+    add_group_admin, remove_group_admin, get_group_admins,
+    is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
+    get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
+    get_streak_days, get_skip_count_month, add_bonus,
+    start_online_lesson, mark_attendance,
+    get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge,
+    format_daily_report, format_period_report, get_period_winner,
+    get_missing_students, get_date, db
+)
+
+log = logging.getLogger(__name__)
+
+
+def extract_phone(sender):
+    if sender is None:
+        return ""
+    s = str(sender)
+    return s.split("@")[0] if "@" in s else s
+
+
+def is_group_chat(chat_id):
+    try:
+        return int(str(chat_id)) < 0
+    except (ValueError, TypeError):
+        return False
+
+
+def is_admin(phone):
+    return phone in ADMIN_PHONES
+
+
+def is_group_admin(phone, group_id):
+    if phone in ADMIN_PHONES:
+        return True
+    return phone in get_group_admins(group_id)
+
+
+def detect_yassir(text):
+    t = text.strip()
+    low = t.lower()
+    for v in ["ясир", "ясыр", "yassir", "yasir", "yassır", "яссир"]:
+        if low.startswith(v):
+            return t[len(v):].lstrip(" ,!:-—?")
+    return None
+
+
+def get_full_program_info():
+    extra = get_knowledge()
+    if not extra:
+        return PROGRAM_INFO
+    lines = [PROGRAM_INFO, "\nДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ОТ УСТАЗА:"]
+    for row in extra:
+        lines.append("- " + row["text"])
+    return "\n".join(lines)
+
+
+async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks):
+    try:
+        system = (
+            "Ты учитель Корана Ясир. Проверь ТОЛЬКО " + ", ".join(checks) + " в сообщении студента.\n\n"
+            "🚨 ГЛАВНОЕ ПРАВИЛО ПРОВЕРКИ:\n"
+            "Прежде чем заявить об ошибке — НАЙДИ это правило в СПРАВОЧНИКЕ ниже и сверься БУКВА В БУКВУ.\n"
+            "Если ответ студента СОВПАДАЕТ со справочником — это ВЕРНО, НЕ исправляй.\n"
+            "НЕ полагайся на свою память — справочник ГЛАВНЕЕ твоих знаний.\n"
+            "Если правила нет в справочнике и ты не уверен на 100% — НЕ делай замечание.\n\n"
+            "СТРОГОЕ РАЗДЕЛЕНИЕ:\n"
+            "📖 ТАДЖВИД: проверяй ТОЛЬКО махрадж (место выхода буквы) и сифат (свойство). "
+            "⚠️ КРИТИЧЕСКИ ВАЖНО — не путай буквы:\n  ح (ха) → СЕРЕДИНА горла\n  خ (ха-кх) → КОНЕЦ горла. ح ≠ خ!\n\n"
+            "📝 МУФРАДАТ: проверяй ТОЛЬКО БУКВЫ арабского слова и точность перевода. "
+            "ОГЛАСОВКИ (харакат) НЕ ТРЕБУЙ — это НЕ ошибка! Проверяй только хуруф (согласные).\n\n"
+            "📚 НАХВ: проверяй ТОЛЬКО ИЪРАБ (конечную огласовку) и название члена предложения. "
+            "ТАБЛИЦА: فاعل→رفع, مفعول به→نصب, مضاف إليه→جر, اسم كان→رفع, خبر كان→نصب.\n\n"
+            "ПРАВИЛА ОТВЕТА:\n"
+            "- Если всё ВЕРНО → ответь ровно одним словом: ВЕРНО\n"
+            "- Если есть ОШИБКА → МАКСИМУМ 3 строки: что неверно и как правильно\n"
+            "- ЗАПРЕЩЕНО: длинные объяснения, лекции, хвалебные фразы\n\n"
+            "СПРАВОЧНИК:\n" + get_full_program_info()
+        )
+        prompt = "Сообщение студента " + name + ":\n" + text
+        result = await ai.ask_ai(prompt, system=system)
+        if result and "ВЕРНО" not in result.upper()[:20]:
+            await send_message(chat_id, "🤖 Ясир (проверка):\n" + result)
+        elif result and "ВЕРНО" in result.upper()[:20]:
+            await send_message(chat_id, "✅")
+    except Exception as e:
+        log.error("verify error: %s", e)
+
+
+async def process_message(chat_id, sender, text, sender_name="", is_media=False):
+    phone = extract_phone(sender)
+    text = (text or "").strip()
+    if not text and not is_media:
+        return
+
+    # /id — узнать свой id
+    if text == "/id":
+        await send_message(chat_id,
+            "🆔 Твой user_id: " + str(phone) + "\n"
+            "💬 id этого чата: " + str(chat_id) + "\n\n"
+            "Чтобы стать админом — впиши свой user_id в ADMIN_IDS.")
+        return
+
+    is_group = is_group_chat(chat_id)
+
+    # ── Личные команды Устаза (личка) ─────────────────────────────────────────
+    if is_admin(phone):
+        if text.startswith("/отчёт ") or text.startswith("/отчет "):
+            name_part = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
+            if not name_part:
+                await send_message(chat_id, "Формат: /отчёт Имя")
+                return
+            matched = None
+            for g in get_all_groups():
+                for st in get_students(g["id"]):
+                    if name_part.lower() in st["name"].lower():
+                        matched = (st, g)
+                        break
+                if matched:
+                    break
+            if not matched:
+                await send_message(chat_id, "❌ Студент не найден: " + name_part)
+                return
+            st, g = matched
+            td = {k: True for k in get_group_tasks(g)}
+            save_report(st["id"], g["id"], get_date(), td)
+            await send_message(chat_id, "✅ Отчёт засчитан: " + st["name"])
+            return
+
+        if text == "/start":
+            await send_message(chat_id,
+                "👋 Ассаляму алейкум, Устаз! 🕌\n"
+                "Я — Ясир, ваш помощник.\n\n"
+                "🔧 НАСТРОЙКА ГРУППЫ (внутри группы)\n"
+                "/setgroup — подключить группу\n"
+                "/settasks m,r,t — задания группы\n"
+                "/setlang ru — язык группы\n"
+                "/settype pro|relaxed|tadabbur — тип группы\n"
+                "/setfallback [chat_id] — куда переводить неактивных\n\n"
+                "Типы групп:\n"
+                "pro — соревновательная (14 дней без отчёта → Тадаббур)\n"
+                "relaxed — расслабленная (30 дней → Тадаббур)\n"
+                "tadabbur — размышление (нет задач, получает сводки от pro)\n\n"
+                "👤 СТУДЕНТЫ\n"
+                "/add Имя — добавить\n"
+                "/add 996XXX Имя — с номером\n"
+                "/remove Имя — удалить\n"
+                "/students — список\n\n"
+                "📊 ОТЧЁТЫ\n"
+                "/report — сегодня\n"
+                "/week — неделя\n"
+                "/month — месяц\n\n"
+                "🤖 ЯСИР (в личке)\n"
+                "/teach правило — научить\n"
+                "/knowledge — все знания\n\n"
+                "БаракАллаху фийк, Устаз 🤲"
+            )
+            return
+
+        if text.startswith("/teach "):
+            knowledge = text[7:].strip()
+            if knowledge:
+                add_knowledge(knowledge)
+                await send_message(chat_id, "✅ Ясир запомнил! 🧠\n\n" + knowledge)
+            return
+
+        if text == "/knowledge":
+            rows = get_knowledge()
+            if not rows:
+                await send_message(chat_id, "Знаний пока нет. Добавь: /teach правило")
+            else:
+                lines = ["🧠 Знания Ясира:\n"]
+                for row in rows:
+                    lines.append(str(row["id"]) + ". " + row["text"])
+                lines.append("\nУдалить: /forget номер")
+                await send_message(chat_id, "\n".join(lines))
+            return
+
+        if text.startswith("/forget "):
+            num = text[8:].strip()
+            if num.isdigit():
+                delete_knowledge(int(num))
+                await send_message(chat_id, "✅ Удалено из знаний Ясира")
+            return
+
+    # ── Только группы дальше ──────────────────────────────────────────────────
+    if not is_group:
+        if not is_admin(phone):
+            await send_message(chat_id, "Ассаляму алейкум! 🕌\nПиши в своей группе.")
+        return
+
+    group = get_group(chat_id)
+
+    if text == "/setgroup":
+        if not is_admin(phone):
+            return
+        from core.tg import tg_call
+        chat_info = await tg_call("getChat", {"chat_id": int(chat_id)})
+        title = (chat_info or {}).get("result", {}).get("title", sender_name or chat_id)
+        save_group(chat_id, title)
+        await send_message(chat_id,
+            "✅ Группа зарегистрирована: " + str(title) + "\n"
+            "По умолчанию тип: relaxed, 3 задания (m,r,t).\n"
+            "Сменить тип: /settype pro|relaxed|tadabbur\n"
+            "Сменить задания: /settasks m,r,t,j"
+        )
+        return
+
+    if not group:
+        return
+
+    group_id = group["id"]
+    group_tasks = get_group_tasks(group)
+    glang = get_group_lang(group)
+
+    # ── Управление группой (только группа-админ) ───────────────────────────────
+    if text.startswith("/admin ") and phone in ADMIN_PHONES:
+        new_admin = text[7:].strip().replace("+", "").replace(" ", "")
+        if new_admin.isdigit():
+            add_group_admin(group_id, new_admin)
+            await send_message(chat_id, "✅ " + new_admin + " назначен админом группы!")
+        else:
+            await send_message(chat_id, "Напиши: /admin 996700123456")
+        return
+
+    if text.startswith("/unadmin ") and phone in ADMIN_PHONES:
+        rem = text[9:].strip().replace("+", "").replace(" ", "")
+        remove_group_admin(group_id, rem)
+        await send_message(chat_id, "✅ " + rem + " убран из админов")
+        return
+
+    if text == "/admins":
+        admins = get_group_admins(group_id)
+        lines = ["👤 Админы группы:"]
+        lines.append("Главные: " + ", ".join(ADMIN_PHONES))
+        if admins:
+            lines.append("Группы: " + ", ".join(admins))
+        await send_message(chat_id, "\n".join(lines))
+        return
+
+    if text.startswith("/settasks ") and is_group_admin(phone, group_id):
+        tasks_str = text[10:].strip().lower()
+        valid = [k.strip() for k in tasks_str.split(",") if k.strip() in TASK_KEYS]
+        if valid:
+            update_group_tasks(chat_id, ",".join(valid))
+            names = [DEFAULT_TASKS[k] for k in valid]
+            await send_message(chat_id, "✅ Задания обновлены:\n" + "\n".join(names))
+        else:
+            await send_message(chat_id, "Напиши: /settasks m,r,t\nДоступные: m r t j n h")
+        return
+
+    if text.startswith("/setlang ") and is_group_admin(phone, group_id):
+        lang_code = text[9:].strip().lower()
+        if lang_code in LANG_NAMES:
+            update_group_lang(chat_id, lang_code)
+            await send_message(chat_id,
+                "✅ Язык группы: " + LANG_NAMES[lang_code] + "\n"
+                "Отчёты и напоминания теперь на этом языке.")
+        else:
+            codes = "\n".join(c + " — " + n for c, n in LANG_NAMES.items())
+            await send_message(chat_id, "Доступные языки:\n" + codes + "\n\nНапример: /setlang ky")
+        return
+
+    if text == "/lang":
+        cur = get_group_lang(group)
+        await send_message(chat_id,
+            "🌍 Язык группы: " + LANG_NAMES.get(cur, "русский") + " (" + cur + ")\n\n"
+            "Сменить: /setlang код\n" +
+            "\n".join(c + " — " + n for c, n in LANG_NAMES.items()))
+        return
+
+    # ── Управление типом группы (новые команды) ───────────────────────────────
+    if text.startswith("/settype ") and is_group_admin(phone, group_id):
+        gtype = text[9:].strip().lower()
+        if gtype in ("pro", "relaxed", "tadabbur"):
+            update_group_type(chat_id, gtype)
+            type_desc = {
+                "pro": "Про-группа (14 дней без отчёта → Тадаббур)",
+                "relaxed": "Расслабленная (30 дней → Тадаббур)",
+                "tadabbur": "Тадаббур (нет задач, получает сводки от pro-групп)"
+            }
+            await send_message(chat_id, "✅ Тип группы: " + type_desc[gtype])
+        else:
+            await send_message(chat_id, "Доступные типы:\n/settype pro\n/settype relaxed\n/settype tadabbur")
+        return
+
+    if text.startswith("/setfallback ") and is_group_admin(phone, group_id):
+        fallback_id = text[13:].strip()
+        if fallback_id.lstrip("-").isdigit():
+            update_group_fallback(chat_id, fallback_id)
+            await send_message(chat_id,
+                "✅ Группа для перевода неактивных: " + fallback_id + "\n"
+                "Сюда будут переводиться студенты превысившие порог пропусков.")
+        else:
+            await send_message(chat_id, "Напиши: /setfallback -1234567890 (id целевой группы)")
+        return
+
+    if text.startswith("/setsummary ") and is_group_admin(phone, group_id):
+        summary_id = text[12:].strip()
+        if summary_id.lstrip("-").isdigit():
+            update_group_summary(chat_id, summary_id)
+            await send_message(chat_id,
+                "✅ Группа для сводок: " + summary_id + "\n"
+                "Туда будут отправляться ежедневные отчёты этой pro-группы.")
+        else:
+            await send_message(chat_id, "Напиши: /setsummary -1234567890")
+        return
+
+    if text == "/groupinfo" and is_group_admin(phone, group_id):
+        gtype = group["group_type"] or "relaxed"
+        lines = [
+            "ℹ️ Информация о группе:",
+            "Название: " + (group["title"] or chat_id),
+            "Тип: " + gtype,
+            "Задания: " + ", ".join(DEFAULT_TASKS[k] for k in group_tasks),
+            "Язык: " + LANG_NAMES.get(glang, glang),
+            "Fallback (для неактивных): " + (group["fallback_chat_id"] or "не задан"),
+            "Summary (для сводок): " + (group["summary_chat_id"] or "не задан"),
+        ]
+        await send_message(chat_id, "\n".join(lines))
+        return
+
+    # ── Студенты ──────────────────────────────────────────────────────────────
+    if text.startswith("/add ") and is_group_admin(phone, group_id):
+        rest = text[5:].strip()
+        parts = rest.split(None, 1)
+        student_phone = None
+        name = rest
+        if len(parts) == 2 and parts[0].lstrip("+").isdigit() and len(parts[0].lstrip("+")) >= 9:
+            student_phone = parts[0].lstrip("+")
+            name = parts[1].strip()
+        if name:
+            add_student(name, group_id, student_phone)
+            if student_phone:
+                await send_message(chat_id, "✅ " + name + " добавлен с id " + student_phone + "!")
+            else:
+                await send_message(chat_id, "✅ " + name + " добавлен! (id привяжется когда напишет в группе)")
+        return
+
+    if text.startswith("/remove ") and is_group_admin(phone, group_id):
+        name = text[8:].strip()
+        for s in get_students(group_id):
+            if s["name"].lower() == name.lower():
+                deactivate_student(s["id"])
+                await send_message(chat_id, "✅ " + name + " удалён!")
+                return
+        await send_message(chat_id, "Студент не найден")
+        return
+
+    if text.startswith("/rename ") and is_group_admin(phone, group_id):
+        parts = text[8:].strip().split("|")
+        if len(parts) != 2:
+            await send_message(chat_id, "Формат:\n/rename Имя | Новое имя\n/rename 3 | Новое имя")
+            return
+        old_part = parts[0].strip()
+        new_name = parts[1].strip()
+        students = get_students(group_id)
+        found = None
+        if old_part.isdigit():
+            idx = int(old_part) - 1
+            if 0 <= idx < len(students):
+                found = students[idx]
+        else:
+            for s in students:
+                if s["name"].lower() == old_part.lower():
+                    found = s
+                    break
+        if not found:
+            await send_message(chat_id, "Студент не найден. Список: /students")
+            return
+        old_name = found["name"]
+        from core.db import rename_student
+        rename_student(found["id"], new_name)
+        await send_message(chat_id, "✅ " + old_name + " → " + new_name)
+        return
+
+    if text == "/removeall" and is_group_admin(phone, group_id):
+        cnt = len(get_students(group_id))
+        await send_message(chat_id,
+            "⚠️ Удалить ВСЕХ студентов (" + str(cnt) + ")?\n"
+            "Напиши: /removeall_да для подтверждения")
+        return
+
+    if text == "/removeall_да" and is_group_admin(phone, group_id):
+        cnt = len(get_students(group_id))
+        remove_all_students(group_id)
+        await send_message(chat_id, "✅ Удалены все студенты (" + str(cnt) + ").")
+        return
+
+    if text == "/students":
+        students = get_students(group_id)
+        gtype = group["group_type"] or "relaxed"
+        lines = ["📋 Студенты — " + (group["title"] or chat_id) + " [" + gtype + "]:\n"]
+        lines.append("Задания: " + " | ".join(DEFAULT_TASKS[k] for k in group_tasks) + "\n")
+        for i, s in enumerate(students, 1):
+            status = "✅" if s["phone"] else "⬜"
+            lines.append(status + " " + str(i) + ". " + s["name"])
+        await send_message(chat_id, "\n".join(lines))
+        return
+
+    # ── Отчёты ────────────────────────────────────────────────────────────────
+    if text == "/report":
+        await send_message(chat_id, format_daily_report(group_id, group["title"] or chat_id, group_tasks))
+        return
+
+    if text == "/week":
+        await send_message(chat_id, format_period_report(group_id, group["title"] or chat_id, group_tasks, 7))
+        return
+
+    if text == "/month":
+        await send_message(chat_id, format_period_report(group_id, group["title"] or chat_id, group_tasks, 30))
+        return
+
+    if text == "/year":
+        await send_message(chat_id, format_period_report(group_id, group["title"] or chat_id, group_tasks, 365))
+        return
+
+    if text == "/rating":
+        import pytz
+        from datetime import timedelta
+        from config import TZ
+        week_ago = (__import__('datetime').datetime.now(pytz.timezone(TZ)).date() - timedelta(days=7)).isoformat()
+        with db() as c:
+            rows = c.execute("""
+                SELECT s.name, COALESCE(SUM(r.score),0) as total, COUNT(r.id) as days
+                FROM students s
+                LEFT JOIN reports r ON s.id=r.sid AND r.date>=? AND r.group_id=?
+                WHERE s.group_id=? AND s.active=1
+                GROUP BY s.id ORDER BY total DESC
+            """, (week_ago, group_id, group_id)).fetchall()
+        medals = ["🥇", "🥈", "🥉"]
+        lines = ["🏆 Рейтинг — " + (group["title"] or chat_id) + " (7 дней):\n"]
+        for i, r in enumerate(rows):
+            medal = medals[i] if i < 3 else str(i + 1) + "."
+            lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " очков (" + str(r["days"]) + " дней)")
+        await send_message(chat_id, "\n".join(lines))
+        return
+
+    if text == "/help":
+        task_names = {
+            "m": "Заучивание (или 40+40)",
+            "r": "Повторение",
+            "t": "Слова (или Перевод)",
+            "j": "Таджвид",
+            "n": "Грамматика (или Нахв)",
+            "h": "Хадис"
+        }
+        task_lines = "\n".join(
+            str(i + 1) + ". " + task_names[k]
+            for i, k in enumerate(group_tasks) if k in task_names
+        )
+        gtype = group["group_type"] or "relaxed"
+        type_info = ""
+        if gtype == "pro":
+            type_info = "\n\n⚠️ Это pro-группа: пропуск 14 дней → Тадаббур"
+        elif gtype == "relaxed":
+            type_info = "\n\n📅 Группа расслабленная: пропуск 30 дней → Тадаббур"
+        await send_message(chat_id,
+            "📚 КАК СДАВАТЬ ОТЧЁТ\n\n"
+            "Пиши что выполнил:\n\n" + task_lines +
+            "\n\nЗа каждое задание +1 балл 💎\n\n"
+            "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
+            "📡 Онлайн урок: напиши +\n"
+            "📊 Своя статистика: /mystats\n"
+            "🤖 Вопрос Ясиру: «Ясир, ...?»"
+            + type_info +
+            "\n\nБаракАллаху фийк! 🤲"
+        )
+        return
+
+    if text == "/mystats":
+        s_check = find_by_phone(phone, group_id)
+        if not s_check:
+            await send_message(chat_id, "Ты ещё не зарегистрирован в группе 📝")
+            return
+        streak = get_streak_days(s_check["id"])
+        skips_month = get_skip_count_month(s_check["id"])
+        with db() as c:
+            total_row = c.execute(
+                "SELECT COALESCE(SUM(score),0) as total, COUNT(id) as days FROM reports WHERE sid=?",
+                (s_check["id"],)
+            ).fetchone()
+            bonus_row = c.execute(
+                "SELECT COALESCE(SUM(points),0) as bonus FROM bonus_points WHERE sid=?",
+                (s_check["id"],)
+            ).fetchone()
+            rank_rows = c.execute("""
+                SELECT s.id, COALESCE(SUM(r.score),0)+COALESCE(b.bonus,0) as grand
+                FROM students s
+                LEFT JOIN reports r ON r.sid=s.id
+                LEFT JOIN (SELECT sid, SUM(points) as bonus FROM bonus_points GROUP BY sid) b ON b.sid=s.id
+                WHERE s.group_id=? AND s.active=1
+                GROUP BY s.id ORDER BY grand DESC
+            """, (group_id,)).fetchall()
+        total_score = (total_row["total"] or 0) + (bonus_row["bonus"] or 0)
+        days_done = total_row["days"] or 0
+        rank = next((i + 1 for i, r in enumerate(rank_rows) if r["id"] == s_check["id"]), "?")
+        today_rep = get_today_report(s_check["id"])
+        today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
+        gtype = group["group_type"] or "relaxed"
+        limit_days = 14 if gtype == "pro" else 30
+
+        lines = [
+            "📊 Моя статистика — " + s_check["name"] + "\n",
+            "🔥 Серия: " + str(streak) + " дней подряд",
+            "🏆 Место в группе: #" + str(rank),
+            "💎 Всего баллов: " + str(total_score),
+            "📅 Дней сдано: " + str(days_done),
+            "⚠️ Пропусков в месяце: " + str(skips_month) + "/" + str(limit_days),
+            "✅ Сегодня: " + str(today_done) + "/" + str(len(group_tasks)) + " заданий",
+        ]
+        await send_message(chat_id, "\n".join(lines))
+        comment = await ai.mystats_comment(s_check["name"], streak, rank, total_score, days_done, glang)
+        if comment:
+            await send_message(chat_id, "🤖 Ясир: " + comment)
+        return
+
+    if text.startswith("/bonus ") and is_group_admin(phone, group_id):
+        parts = text[7:].strip().split(" ", 2)
+        if len(parts) >= 2 and parts[1].lstrip("-").isdigit():
+            b_name = parts[0]
+            b_points = int(parts[1])
+            b_reason = parts[2] if len(parts) > 2 else "ручной бонус"
+            b_student = find_by_name(b_name, group_id)
+            if b_student:
+                add_bonus(b_student["id"], group_id, get_date(), b_points, "manual_" + get_date() + "_" + b_reason[:20])
+                sign = "+" if b_points >= 0 else ""
+                await send_message(chat_id,
+                    "✅ " + b_name + ": " + sign + str(b_points) + " баллов\nПричина: " + b_reason)
+            else:
+                await send_message(chat_id, "Студент «" + b_name + "» не найден")
+        else:
+            await send_message(chat_id, "Формат: /bonus Имя 10 причина\nПример: /bonus Бакыт 5 победил в конкурсе")
+        return
+
+    # ── Уважительная причина → 1 балл ─────────────────────────────────────────
+    is_excuse = any(w in text.strip().lower() for w in EXCUSE_WORDS)
+    s_pre = find_by_phone(phone, group_id)
+    if is_excuse and s_pre:
+        with db() as c:
+            already_excuse = c.execute(
+                "SELECT 1 FROM bonus_points WHERE sid=? AND date=? AND reason='excuse'",
+                (s_pre["id"], get_date())
+            ).fetchone()
+        if not already_excuse:
+            add_bonus(s_pre["id"], group_id, get_date(), 1, "excuse")
+            await send_message(chat_id,
+                "✅ " + s_pre["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
+        else:
+            await send_message(chat_id, "ℹ️ " + s_pre["name"] + ", причина уже засчитана сегодня. 🤲")
+        return
+
+    # ── Отметка присутствия (+) ────────────────────────────────────────────────
+    text_lower = text.strip().lower()
+    is_online_word = text_lower in [w.lower() for w in ONLINE_WORDS] or text.strip() == "+"
+    if is_online_word and not is_group_admin(phone, group_id):
+        s_self = find_by_phone(phone, group_id)
+        if s_self:
+            lesson = start_online_lesson(group_id)
+            with db() as c:
+                already = c.execute(
+                    "SELECT 1 FROM attendance WHERE sid=? AND lesson_id=?",
+                    (s_self["id"], lesson["id"])
+                ).fetchone()
+            if not already:
+                mark_attendance(s_self["id"], lesson["id"])
+                add_bonus(s_self["id"], group_id, get_date(), 5, "online_lesson")
+                await send_message(chat_id, T("present", glang, name=s_self["name"]))
+            return
+
+    # ── Отметка присутствия списком (от учителя) ──────────────────────────────
+    def try_mark_attendance(msg_text):
+        chunks = msg_text.replace("\n", ",").replace(".", ",").split(",")
+        found_students, leftover = [], []
+        for chunk in chunks:
+            nm = chunk.strip()
+            if not nm:
+                continue
+            st = find_by_name(nm, group_id)
+            if st:
+                found_students.append(st)
+            else:
+                leftover.append(nm)
+        return found_students, leftover
+
+    found, leftover = try_mark_attendance(text)
+    has_task_word = any(v for v in check_text(text).values())
+    is_yassir = detect_yassir(text) is not None
+    junk = [x for x in leftover if len(x) > 2 and x.lower() not in
+            ("был", "была", "были", "и", "да", "все", "тут", "есть", "присутствовал", "присутствовали")]
+    is_attendance_list = (len(found) >= 2) or (len(found) >= 1 and is_group_admin(phone, group_id))
+    if found and is_attendance_list and not has_task_word and not is_yassir and not junk:
+        lesson = start_online_lesson(group_id)
+        marked = []
+        for st in found:
+            mark_attendance(st["id"], lesson["id"])
+            add_bonus(st["id"], group_id, get_date(), 5, "online_lesson")
+            marked.append(st["name"])
+        await send_message(chat_id,
+            "📡 Онлайн урок отмечен!\n\n✅ Присутствовали (+5 баллов):\n" +
+            "\n".join("• " + n for n in marked))
+        return
+
+    if is_group_admin(phone, group_id):
+        return
+
+    s = find_by_phone(phone, group_id)
+
+    # ── Регистрация нового участника ───────────────────────────────────────────
+    if not s:
+        if is_pending_name(phone, group_id):
+            new_name = text.strip()
+            if new_name.startswith("/") or len(new_name) > 40 or len(new_name) < 2:
+                await send_message(chat_id, T("name_only", glang))
+                return
+            saved_report = get_pending_text(phone, group_id)
+            add_student(new_name, group_id, phone)
+            clear_pending_name(phone, group_id)
+            for admin_phone in ADMIN_PHONES:
+                await send_message(admin_phone,
+                    "👤 Новый студент в " + (group["title"] or chat_id) + ": " + new_name)
+            if saved_report and saved_report.strip():
+                s = find_by_phone(phone, group_id)
+                try:
+                    classified = await asyncio.wait_for(
+                        ai.classify_message(saved_report, group_tasks), timeout=25)
+                except Exception:
+                    classified = None
+                td = {k: False for k in TASK_KEYS}
+                if classified and "report" in classified.get("type", ""):
+                    td = {k: classified["tasks"].get(k, False) for k in TASK_KEYS}
+                else:
+                    td = check_text(saved_report)
+                sc = sum(1 for k in group_tasks if td.get(k))
+                if sc > 0 and s:
+                    save_report(s["id"], group_id, get_date(), td)
+                    done_list = [DEFAULT_TASKS[k] for k in group_tasks if td.get(k)]
+                    await send_message(chat_id,
+                        T("welcome_report", glang, name=new_name) + "\n" +
+                        "\n".join("✅ " + n for n in done_list))
+                    return
+            await send_message(chat_id, T("welcome", glang, name=new_name))
+            return
+
+        students = get_students(group_id)
+        if text.strip().isdigit():
+            num = int(text.strip())
+            if 1 <= num <= len(students):
+                st = students[num - 1]
+                register_student(st["id"], phone)
+                await send_message(chat_id, T("registered", glang, name=st["name"]))
+                return
+
+        matched = find_by_name(text.strip(), group_id)
+        if matched and not matched["phone"]:
+            register_student(matched["id"], phone)
+            await send_message(chat_id, T("registered", glang, name=matched["name"]))
+            return
+
+        set_pending_name(phone, group_id, text)
+        await send_message(chat_id, T("ask_name", glang))
+        return
+
+    # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
+    yassir_question = detect_yassir(text)
+    if yassir_question is not None:
+        if not yassir_question:
+            await send_message(chat_id, T("yassir_listening", glang))
+            return
+        answer = await ai.answer_question(
+            yassir_question, get_full_program_info(),
+            group["title"] or chat_id, phone, group_id, s["name"]
+        )
+        await send_message(chat_id, "🤖 Ясир:\n" + answer)
+        return
+
+    # ── Определяем тип сообщения и задания ────────────────────────────────────
+    tasks_done = {k: False for k in TASK_KEYS}
+    legend = "\n".join(DEFAULT_TASKS[k] for k in group_tasks)
+
+    if is_media:
+        if text and not is_checkmarks_only(text) and len(text.strip()) > 3:
+            tasks_done = check_text(text)
+        else:
+            return
+    elif is_checkmarks_only(text):
+        await send_message(chat_id, T("ask_words", glang, name=s["name"], legend=legend))
+        return
+    else:
+        tasks_done = check_text(text)
+
+    score = sum(1 for k in group_tasks if tasks_done.get(k))
+
+    # Вопрос к Ясиру (есть "?")
+    is_question = ("?" in text and score == 0)
+    if is_question and not is_media:
+        answer = await ai.answer_question(
+            text, get_full_program_info(),
+            group["title"] or chat_id, phone, group_id, s["name"]
+        )
+        await send_message(chat_id, "🤖 Ясир:\n" + answer)
+        return
+
+    if score == 0:
+        return
+
+    # ── ИИ-проверка таджвид/нахв/муфрадат в фоне ─────────────────────────────
+    if not is_media and len(text.strip()) > 15:
+        checks = []
+        if tasks_done.get("j"):
+            checks.append("таджвид")
+        if tasks_done.get("n"):
+            checks.append("грамматику (нахв)")
+        if tasks_done.get("t"):
+            checks.append("муфрадат (написание арабских слов и перевод)")
+        if checks:
+            asyncio.create_task(_verify_and_reply(
+                chat_id, text, group["title"] or chat_id, phone, group_id, s["name"], checks))
+
+    # ── Засчитываем отчёт ─────────────────────────────────────────────────────
+    prev = get_today_report(s["id"])
+    prev_done = set()
+    if prev:
+        prev_done = {k for k in group_tasks if prev[k]}
+    was_complete = (len(prev_done) == len(group_tasks))
+
+    if prev:
+        for key in group_tasks:
+            if prev[key]:
+                tasks_done[key] = True
+    save_report(s["id"], group_id, get_date(), tasks_done)
+
+    now_done = {k for k in group_tasks if tasks_done.get(k)}
+    new_tasks = now_done - prev_done
+    missing = [k for k in group_tasks if not tasks_done.get(k, False)]
+    wait_list = [DEFAULT_TASKS[k] for k in missing]
+    now_complete = (len(missing) == 0)
+
+    if was_complete and not new_tasks:
+        await send_message(chat_id, T("already_all", glang, name=s["name"]))
+        return
+
+    if not new_tasks:
+        reply = T("already_counted", glang, name=s["name"])
+        if wait_list:
+            reply += "\n\n" + T("still_left", glang) + "\n" + "\n".join("⬜ " + n for n in wait_list)
+        await send_message(chat_id, reply)
+        return
+
+    new_names = [DEFAULT_TASKS[k] for k in group_tasks if k in new_tasks]
+    reply = T("accepted", glang, name=s["name"]) + "\n\n"
+    reply += T("counted_today", glang) + "\n" + "\n".join("✅ " + n for n in new_names)
+    if wait_list:
+        reply += "\n\n" + T("still_left", glang) + "\n" + "\n".join("⬜ " + n for n in wait_list)
+        reply += "\n\n" + T("keep_going", glang)
+    if now_complete:
+        reply += "\n\n" + T("all_done", glang)
+    await send_message(chat_id, reply)
+
+    if now_complete and not was_complete:
+        await send_message(chat_id, T("all_done_praise", glang, name=s["name"]))

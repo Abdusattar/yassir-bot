@@ -1,13 +1,37 @@
 #!/bin/bash
-# Скрипт запуска бота Ясир (Telegram)
-# Скопируй этот файл: cp start.sh.example start.sh
-# Затем вставь свои значения и запусти: bash start.sh
+# Запуск бота Ясир
+# cp start.sh.example start.sh → вставь токены → bash start.sh
 
+# ── Обязательные переменные ───────────────────────────────────────────────────
 export TELEGRAM_TOKEN="ВАШ_ТОКЕН_ОТ_BOTFATHER"
-export CLAUDE_API_KEY="sk-ant-..."
-export ADMIN_IDS="ВАШ_TELEGRAM_USER_ID"
+export OPENROUTER_API_KEY="sk-or-..."        # или CLAUDE_API_KEY если ещё не переехал
+export ADMIN_IDS="ВАШ_TELEGRAM_USER_ID"     # числа через запятую: 123456,789012
 
+# ── Профиль (два бота из одной кодовой базы) ──────────────────────────────────
+# export BOT_PROFILE="male"    # для мужских групп (по умолчанию)
+# export BOT_PROFILE="female"  # для женских групп
+# При female нужен отдельный токен: TELEGRAM_TOKEN_FEMALE="..."
+
+# ── Shadow mode (тестирование в живых группах) ────────────────────────────────
+# Добавь нового бота в группу где работает старый.
+# Новый бот будет молчать в группе, но пересылать ответы наблюдателям.
+# Когда убедишься что всё работает — убери строку ниже, бот начнёт отвечать в группе.
+# export SHADOW_CHAT_IDS="7666229019,TELEGRAM_ID_УСТАЗА"  # user_id через запятую
+
+# ── Опционально ───────────────────────────────────────────────────────────────
+# export TZ="Asia/Bishkek"
+# export AI_MODEL="google/gemini-flash-1.5"
+# export DB_PATH="quran_male.db"
+
+# ── Запуск ────────────────────────────────────────────────────────────────────
 source venv/bin/activate 2>/dev/null || true
-nohup python3 bot_tg.py > bot.log 2>&1 &
-echo "Бот запущен, PID: $!"
+
+# Новый модульный бот (для новых групп и тестирования):
+nohup python3 bot.py >> bot.log 2>&1 &
+echo "Новый бот запущен, PID: $!"
+
+# Старый монолит (для групп устаза — не трогаем пока не мигрировали):
+# nohup python3 bot_tg.py >> bot_old.log 2>&1 &
+# echo "Старый бот запущен, PID: $!"
+
 echo "Лог: tail -f bot.log"
