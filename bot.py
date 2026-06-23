@@ -13,7 +13,8 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins
+from config import ADMIN_PHONES
 from core.i18n import T
 from core.handlers import process_message
 from core.scheduler import scheduler
@@ -111,6 +112,12 @@ async def main():
                 for nm in msg.get("new_chat_members", []):
                     if not nm.get("is_bot"):
                         uid = str(nm.get("id", ""))
+                        group_info = get_group(chat_id)
+                        # Суперадмины и устазы группы — не регистрируем как студентов
+                        is_super = uid in ADMIN_PHONES
+                        is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
+                        if is_super or is_grp_admin:
+                            continue
                         with db() as c:
                             c.execute(
                                 "INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
@@ -121,7 +128,6 @@ async def main():
                             tg_name = (tg_name + " " + nm["last_name"]).strip()
                         if not tg_name and nm.get("username"):
                             tg_name = nm["username"]
-                        group_info = get_group(chat_id)
                         glang = get_group_lang(group_info) if group_info else "ru"
                         if group_info:
                             set_pending_name(uid, group_info["id"], "")
