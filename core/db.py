@@ -176,6 +176,14 @@ def delete_setting(key):
         c.execute("DELETE FROM bot_settings WHERE key=?", (key,))
 
 
+def cache_username(username: str, user_id: str):
+    set_setting("uid:" + username.lower().lstrip("@"), user_id)
+
+
+def lookup_username(username: str):
+    return get_setting("uid:" + username.lower().lstrip("@"))
+
+
 # ── Knowledge ─────────────────────────────────────────────────────────────────
 
 def add_knowledge(text):

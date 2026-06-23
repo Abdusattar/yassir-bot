@@ -18,7 +18,7 @@ from core.db import (
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_skip_count_month, add_bonus,
     start_online_lesson, mark_attendance,
-    get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge,
+    get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db
 )
@@ -369,19 +369,33 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # ── Управление группой (только группа-админ) ───────────────────────────────
     if (text.startswith("/admin") or text == "/admin") and phone in ADMIN_PHONES:
         new_admin = None
-        # Реплай на сообщение устаза → берём его user_id
+        new_admin_label = ""
+        # 1. Реплай → берём user_id из реплая
         if reply_to_id:
             new_admin = str(reply_to_id)
+            new_admin_label = "из реплая"
         else:
-            # Числовой ID как аргумент (fallback)
-            arg = text[6:].strip().replace("+", "").replace(" ", "")
-            if arg.isdigit():
-                new_admin = arg
+            arg = text[6:].strip()
+            if arg.startswith("@"):
+                # 2. @username → ищем в кеше
+                uid = lookup_username(arg)
+                if uid:
+                    new_admin = uid
+                    new_admin_label = arg
+                else:
+                    await send_message(chat_id, "Не нашёл " + arg + " — он должен написать хоть раз в группу. Или ответь реплаем на его сообщение и напиши /admin")
+                    return
+            else:
+                # 3. Числовой Telegram ID (fallback)
+                clean = arg.replace("+", "").replace(" ", "")
+                if clean.isdigit():
+                    new_admin = clean
+                    new_admin_label = "ID " + clean
         if new_admin:
             add_group_admin(group_id, new_admin)
-            await send_message(chat_id, "✅ Назначен устазом группы (ID: " + new_admin + ")")
+            await send_message(chat_id, "✅ Назначен устазом группы (" + new_admin_label + ")")
         else:
-            await send_message(chat_id, "Ответь реплаем на сообщение устаза и напиши /admin")
+            await send_message(chat_id, "Как назначить устаза:\n• Ответь реплаем на его сообщение → /admin\n• /admin @username\n• /admin 123456789")
         return
 
     if text.startswith("/unadmin ") and phone in ADMIN_PHONES:
