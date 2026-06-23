@@ -836,11 +836,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             "\n".join("• " + n for n in marked))
         return
 
-    # Устазы группы не сдают отчёты и не получают AI-ответов в своей группе
-    if is_group_admin(phone, group_id):
-        return
-
     s = find_by_phone(phone, group_id)
+
+    # Устаз без активной студенческой роли в этой группе — игнорируем
+    if is_group_admin(phone, group_id) and not s:
+        return
 
     if not s:
         return

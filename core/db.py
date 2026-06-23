@@ -514,7 +514,7 @@ def add_student(name, group_id, phone=None):
                 if phone:
                     c.execute("UPDATE users SET phone=? WHERE id=?", (phone, uid))
             else:
-                c.execute("INSERT INTO users(name, phone) VALUES(?,?)", (name, phone))
+                c.execute("INSERT INTO users(name, phone, added_date) VALUES(?,?,?)", (name, phone, get_date()))
                 uid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
 
         c.execute(
