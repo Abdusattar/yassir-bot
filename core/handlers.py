@@ -261,109 +261,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
                 await send_message(chat_id, "✅ Удалено из знаний Ясира")
             return
 
-    # ── Только группы дальше ──────────────────────────────────────────────────
+    # ── Личка только для супер-админов ───────────────────────────────────────
     if not is_group:
-        if text == "/help":
-            role_is_super = is_admin(phone)
-            with db() as c:
-                role_is_grp_admin = role_is_super or bool(c.execute(
-                    "SELECT 1 FROM group_admins WHERE phone=?", (phone,)
-                ).fetchone())
-                student_rows = c.execute(
-                    "SELECT g.tasks, g.group_type FROM students s "
-                    "JOIN groups g ON g.id=s.group_id "
-                    "WHERE s.phone=? AND s.active=1",
-                    (phone,)
-                ).fetchall()
-
-            sections = []
-
-            if student_rows:
-                if len(student_rows) == 1:
-                    sr = student_rows[0]
-                    grp_tasks = [t.strip() for t in (sr["tasks"] or "m,r,t").split(",") if t.strip()]
-                    sections.append(_section_student(grp_tasks, sr["group_type"] or "relaxed"))
-                else:
-                    sections.append(_section_student(list(_TASK_NAMES.keys()), "relaxed"))
-
-            if role_is_grp_admin:
-                sections.append(_SECTION_GRP_ADMIN)
-
-            if role_is_super:
-                sections.append(_SECTION_SUPER)
-
-            if not sections:
-                await send_message(chat_id,
-                    "Ассаляму алейкум! 🕌\n"
-                    "Не вижу тебя в группах бота.\n"
-                    "Напиши своё имя в группе чтобы зарегистрироваться.")
-            else:
-                await send_message(chat_id, ("\n\n" + "─" * 20 + "\n\n").join(sections))
-            return
-
-        # ── Самостоятельная регистрация студента ──────────────────────────────
-        if text == "/start":
-            with db() as c:
-                existing = c.execute(
-                    "SELECT s.name, g.title FROM students s "
-                    "JOIN groups g ON g.id=s.group_id "
-                    "WHERE s.phone=? AND s.active=1", (phone,)
-                ).fetchone()
-            if existing:
-                await send_message(chat_id,
-                    "Ассаляму алейкум, " + existing["name"] + "! 🌙\n"
-                    "Ты уже зарегистрирован в группе «" + (existing["title"] or "") + "».\n"
-                    "Напиши /help чтобы узнать команды.")
-            else:
-                set_pending_name(phone, 0, "")
-                await send_message(chat_id,
-                    "Ассаляму алейкум! 🌙\n"
-                    "Я — Ясир, помощник в изучении Корана.\n\n"
-                    "Напиши своё имя 📝")
-            return
-
-        # ── Ввод имени при регистрации ─────────────────────────────────────────
-        if is_pending_name(phone, 0) and not text.startswith("/"):
-            new_name = text.strip()
-            if len(new_name) < 2 or len(new_name) > 40:
-                await send_message(chat_id, "Напиши только своё имя (например: Бакыт) 📝")
-                return
-            from core.tg import tg_call
-            registered_groups = []
-            for g in get_all_groups():
-                try:
-                    res = await tg_call("getChatMember", {
-                        "chat_id": int(g["chat_id"]), "user_id": int(phone)
-                    })
-                    status = (res or {}).get("result", {}).get("status", "")
-                    if status in ("member", "creator", "administrator", "restricted"):
-                        existing_s = find_by_name(new_name, g["id"])
-                        if existing_s:
-                            register_student(existing_s["id"], phone)
-                        else:
-                            add_student(new_name, g["id"], phone)
-                        registered_groups.append(g["title"] or str(g["chat_id"]))
-                except Exception:
-                    pass
-            clear_pending_name(phone, 0)
-            if registered_groups:
-                await send_message(chat_id,
-                    "✅ Зарегистрирован как «" + new_name + "»!\n"
-                    "Группа: " + ", ".join(registered_groups) + "\n\n"
-                    "Теперь можешь сдавать отчёты в группе 📖\n"
-                    "Напиши /help чтобы узнать как.")
-                for admin_phone in ADMIN_PHONES:
-                    await send_message(admin_phone,
-                        "👤 Новый студент зарегистрировался: " + new_name +
-                        "\nГруппа: " + ", ".join(registered_groups))
-            else:
-                await send_message(chat_id,
-                    "Не нашёл тебя ни в одной группе 🤔\n"
-                    "Попроси устаза добавить тебя в группу в Telegram.")
-            return
-
-        if not is_admin(phone):
-            await send_message(chat_id, "Ассаляму алейкум! 🕌\nПиши в своей группе.")
         return
 
     group = get_group(chat_id)
@@ -389,6 +288,32 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
     group_id = group["id"]
     group_tasks = get_group_tasks(group)
     glang = get_group_lang(group)
+
+    # ── Регистрация в группе ──────────────────────────────────────────────────
+    if not is_group_admin(phone, group_id) and not text.startswith("/"):
+        s_reg = find_by_phone(phone, group_id)
+        if not s_reg:
+            if is_pending_name(phone, group_id):
+                import re as _re
+                new_name = text.strip()
+                if len(new_name) < 2 or len(new_name) > 40 or not _re.search(r"[a-zA-Zа-яА-ЯёЁЀ-ӿ؀-ۿЀ-ԯ]", new_name):
+                    await send_message(chat_id, T("ask_name_again", glang))
+                    return
+                existing_s = find_by_name(new_name, group_id)
+                if existing_s:
+                    register_student(existing_s["id"], phone)
+                else:
+                    add_student(new_name, group_id, phone)
+                clear_pending_name(phone, group_id)
+                await send_message(chat_id, T("registered_group", glang, name=new_name))
+                for ap in ADMIN_PHONES:
+                    await send_message(ap, "👤 " + new_name + " зарегистрировался в «" + (group["title"] or str(chat_id)) + "»")
+                return
+            else:
+                set_pending_name(phone, group_id, "")
+                greeting = ("Ассаляму алейкум, " + sender_name + "! 🌙\n") if sender_name else "Ассаляму алейкум! 🌙\n"
+                await send_message(chat_id, greeting + T("ask_name", glang))
+                return
 
     # ── Управление группой (только группа-админ) ───────────────────────────────
     if text.startswith("/admin ") and phone in ADMIN_PHONES:
@@ -598,7 +523,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
         return
 
     if text == "/help":
-        await send_message(chat_id, T("help_redirect", glang))
+        s_h = find_by_phone(phone, group_id)
+        sections = []
+        if s_h:
+            sections.append(_section_student(group_tasks, group["group_type"] or "relaxed"))
+        if is_group_admin(phone, group_id):
+            sections.append(_SECTION_GRP_ADMIN)
+        if sections:
+            await send_message(chat_id, ("\n\n" + "─" * 20 + "\n\n").join(sections))
         return
 
     if text == "/mystats":
@@ -740,9 +672,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
     if is_group_admin(phone, group_id) and not s:
         return
 
-    # ── Незарегистрированный участник ─────────────────────────────────────────
     if not s:
-        await send_message(chat_id, T("not_registered", glang))
         return
 
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
