@@ -10,9 +10,9 @@ from core.db import (
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
-    get_setting
+    get_setting, add_student
 )
-from core.tg import send_message
+from core.tg import send_message, tg_call
 from core.i18n import T
 from core.transfers import run_transfer_checks
 import core.ai as ai
@@ -145,6 +145,26 @@ async def skip_warnings():
 
 TADABBUR_INVITE = "https://t.me/+8dP2yljXPtJmM2Ey"
 
+async def _sync_tadabbur_member(student, tadabbur):
+    """Проверяет через Telegram API — реально ли студент в Тадаббур-группе.
+    Если да — добавляет в user_groups и возвращает True."""
+    phone = student["phone"]
+    if not phone:
+        return False
+    try:
+        resp = await tg_call("getChatMember", {
+            "chat_id": int(tadabbur["chat_id"]),
+            "user_id": int(phone)
+        })
+        status = (resp or {}).get("result", {}).get("status", "")
+        if status in ("member", "administrator", "creator"):
+            add_student(student["name"], tadabbur["id"], phone)
+            return True
+    except Exception as e:
+        log.debug("getChatMember error for %s: %s", phone, e)
+    return False
+
+
 async def tadabbur_invite_reminder():
     tadabbur = get_tadabbur_group()
     if not tadabbur:
@@ -156,7 +176,15 @@ async def tadabbur_invite_reminder():
             missing = get_students_not_in_tadabbur(group["id"])
             if not missing:
                 continue
-            names = "\n".join("• " + s["name"] for s in missing)
+            # Синхронизируем: кто уже вступил в Telegram — добавляем в БД
+            truly_missing = []
+            for s in missing:
+                already_in = await _sync_tadabbur_member(s, tadabbur)
+                if not already_in:
+                    truly_missing.append(s)
+            if not truly_missing:
+                continue
+            names = "\n".join("• " + s["name"] for s in truly_missing)
             msg = (
                 "📚 Братья, напоминаем! Присоединяйтесь к нашей общей группе "
                 "Тадаббур — пространство красоты и смыслов Корана, общих отчётов и объявлений 🌿\n\n"
