@@ -544,14 +544,43 @@ def find_by_name(name, group_id):
 
 
 def find_unlinked_by_name(name, group_id):
-    """Студент с таким именем и без Telegram ID — для привязки при регистрации."""
+    """Студент без Telegram ID — точное совпадение, затем нечёткий поиск."""
     with db() as c:
-        return c.execute(
+        exact = c.execute(
             _student_row_sql() +
             "WHERE LOWER(u.name)=LOWER(?) AND ug.group_id=? AND ug.role='student'"
             " AND ug.active=1 AND u.phone IS NULL",
             (name, group_id)
         ).fetchone()
+        if exact:
+            return exact
+        candidates = c.execute(
+            _student_row_sql() +
+            "WHERE ug.group_id=? AND ug.role='student' AND ug.active=1 AND u.phone IS NULL",
+            (group_id,)
+        ).fetchall()
+
+    if not candidates:
+        return None
+
+    from difflib import SequenceMatcher
+    needle = name.lower().strip()
+    needle_words = set(needle.split())
+
+    best, best_score = None, 0.0
+    for row in candidates:
+        stored = row["name"].lower().strip()
+        stored_words = set(stored.split())
+        if needle in stored or stored in needle:
+            score = 0.9
+        elif needle_words & stored_words:
+            score = 0.7
+        else:
+            score = SequenceMatcher(None, needle, stored).ratio()
+        if score > best_score:
+            best_score, best = score, row
+
+    return best if best_score >= 0.6 else None
 
 
 def register_student(uid, phone):
