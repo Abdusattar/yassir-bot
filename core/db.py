@@ -201,6 +201,23 @@ def lookup_by_name_in_chat(chat_id: str, name: str):
             if needle in r["key"][len(key_prefix):]]
 
 
+def get_students_not_in_tadabbur(group_id):
+    """Активные студенты группы, которых нет в Тадаббур-группе."""
+    tadabbur = get_tadabbur_group()
+    if not tadabbur:
+        return []
+    with db() as c:
+        tadabbur_phones = {r["phone"] for r in c.execute(
+            "SELECT phone FROM students WHERE group_id=? AND active=1 AND phone IS NOT NULL",
+            (tadabbur["id"],)
+        ).fetchall()}
+        students = c.execute(
+            "SELECT * FROM students WHERE group_id=? AND active=1 AND phone IS NOT NULL",
+            (group_id,)
+        ).fetchall()
+    return [s for s in students if s["phone"] not in tadabbur_phones]
+
+
 # ── Knowledge ─────────────────────────────────────────────────────────────────
 
 def add_knowledge(text):

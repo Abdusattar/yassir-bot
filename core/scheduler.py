@@ -9,7 +9,8 @@ from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner,
-    get_missing_students, get_date, get_tadabbur_group
+    get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
+    get_setting
 )
 from core.tg import send_message
 from core.i18n import T
@@ -138,6 +139,33 @@ async def skip_warnings():
             log.error("skip_warnings error in %s: %s", chat_id, e)
 
 
+# ── Приглашение в Тадаббур (10:00) ───────────────────────────────────────────
+
+TADABBUR_INVITE = "https://t.me/+8dP2yljXPtJmM2Ey"
+
+async def tadabbur_invite_reminder():
+    tadabbur = get_tadabbur_group()
+    if not tadabbur:
+        return
+    for group in get_all_groups():
+        if group["group_type"] == "tadabbur":
+            continue
+        try:
+            missing = get_students_not_in_tadabbur(group["id"])
+            if not missing:
+                continue
+            names = "\n".join("• " + s["name"] for s in missing)
+            msg = (
+                "📚 Братья, напоминаем! Присоединяйтесь к нашей общей группе "
+                "Тадаббур — пространство красоты и смыслов Корана 🌿\n\n"
+                "Ещё не в группе:\n" + names + "\n\n"
+                "👉 " + TADABBUR_INVITE
+            )
+            await send_message(group["chat_id"], msg)
+        except Exception as e:
+            log.error("tadabbur_invite_reminder error in %s: %s", group["chat_id"], e)
+
+
 # ── Проверка переводов (21:00) ─────────────────────────────────────────────────
 
 async def transfer_check():
@@ -259,10 +287,12 @@ async def scheduler():
 
             if h == 7 and m == 0:
                 await maybe_run("morning_reminder", morning_reminder)
+                await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
             elif h == 18 and m == 0:
                 await maybe_run("personal_reminders", personal_reminders)
             elif h == 20 and m == 0:
                 await maybe_run("evening_report", evening_report)
+                await maybe_run("tadabbur_invite", tadabbur_invite_reminder)
             elif h == 20 and m == 30:
                 await maybe_run("skip_warnings", skip_warnings)
             elif h == 21 and m == 0:
