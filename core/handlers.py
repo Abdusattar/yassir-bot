@@ -19,6 +19,7 @@ from core.db import (
     get_streak_days, get_skip_count_month, add_bonus,
     start_online_lesson, mark_attendance,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
+    find_unlinked_by_name,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db
 )
@@ -339,7 +340,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 if len(new_name) < 2 or len(new_name) > 40 or not _re.search(r"[a-zA-Zа-яА-ЯёЁЀ-ӿ؀-ۿЀ-ԯ]", new_name):
                     await send_message(chat_id, T("ask_name_again", glang))
                     return
-                existing_s = find_by_name(new_name, group_id)
+                # Привязать к существующему студенту без ID, иначе создать нового
+                existing_s = find_unlinked_by_name(new_name, group_id)
                 if existing_s:
                     register_student(existing_s["id"], phone)
                     sid = existing_s["id"]

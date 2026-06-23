@@ -338,6 +338,15 @@ def find_by_name(name, group_id):
         ).fetchone()
 
 
+def find_unlinked_by_name(name, group_id):
+    """Студент с таким именем и без Telegram ID (phone IS NULL) — для привязки."""
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM students WHERE LOWER(name)=LOWER(?) AND group_id=? AND active=1 AND phone IS NULL",
+            (name, group_id)
+        ).fetchone()
+
+
 def register_student(sid, phone):
     with db() as c:
         c.execute("UPDATE students SET phone=? WHERE id=?", (phone, sid))
