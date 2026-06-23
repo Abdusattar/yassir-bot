@@ -7,7 +7,7 @@ import pytz
 
 from config import OR_API_KEY, OR_URL, AI_MODEL, TZ, PROFILE
 from core.i18n import lang_instruction
-from core.db import get_yassir_knowledge, get_student_memory, save_chat
+from core.db import get_student_memory, save_chat
 from core.content import PROJECT_INFO
 
 log = logging.getLogger(__name__)
@@ -213,7 +213,6 @@ async def check_report(name, tasks_done, lang="ru"):
 
 
 async def answer_question(question, program_info, group_title, phone=None, group_id=None, student_name=""):
-    knowledge = get_yassir_knowledge()
     system = (
         "Ты ИИ-помощник учителя Корана по имени Ясир. Работаешь в Telegram-группе проекта Яссир.\n"
         "Отвечай на основании Корана, хадисов, слов учёных. В вопросах методики — "
@@ -228,8 +227,6 @@ async def answer_question(question, program_info, group_title, phone=None, group
         + PROJECT_INFO + "\n\n"
         "АКАДЕМИЧЕСКИЙ СПРАВОЧНИК (таджвид, нахв, методика):\n" + program_info
     )
-    if knowledge:
-        system += "\n\nДОПОЛНИТЕЛЬНЫЕ ЗНАНИЯ ОТ УСТАЗА:\n" + knowledge
 
     messages = []
     if phone and group_id:
