@@ -25,6 +25,72 @@ from core.db import (
 
 log = logging.getLogger(__name__)
 
+_TASK_NAMES = {
+    "m": "Заучивание (или 40+40)",
+    "r": "Повторение",
+    "t": "Слова (или Перевод)",
+    "j": "Таджвид",
+    "n": "Грамматика (или Нахв)",
+    "h": "Хадис",
+}
+
+_SECTION_GRP_ADMIN = (
+    "👤 КОМАНДЫ УСТАЗА (пиши в группе)\n"
+    "/add +996700123456 Имя — добавить студента с номером\n"
+    "/add Имя — добавить без номера\n"
+    "/remove Имя — убрать студента\n"
+    "/rename Имя | Новое имя — переименовать\n"
+    "/students — список студентов\n\n"
+    "/report — отчёт за сегодня\n"
+    "/week — за 7 дней\n"
+    "/month — за 30 дней\n"
+    "/year — за год\n"
+    "/rating — рейтинг\n\n"
+    "/bonus Имя 5 причина — начислить баллы\n"
+    "/groupinfo — настройки группы\n"
+    "/settasks m,r,t — задания\n"
+    "/setlang ru — язык (ru/ky/ar)\n"
+    "/settype pro/relaxed/tadabbur — тип группы\n"
+    "/setfallback -chatid — группа для неактивных\n"
+    "/setsummary -chatid — куда слать сводки"
+)
+
+_SECTION_SUPER = (
+    "🔧 КОМАНДЫ ГЛАВНОГО АДМИНА\n"
+    "/setgroup — зарегистрировать группу\n"
+    "/admin +телефон — назначить устаза группы\n"
+    "/unadmin +телефон — убрать устаза\n"
+    "/admins — список устазов\n"
+    "/removeall — удалить всех студентов\n\n"
+    "/teach текст — обучить бота\n"
+    "/knowledge — что знает бот\n"
+    "/forget N — удалить знание N\n\n"
+    "/отчёт Имя — засчитать отчёт вручную"
+)
+
+
+def _section_student(group_tasks, gtype):
+    task_lines = "\n".join(
+        str(i + 1) + ". " + _TASK_NAMES[k]
+        for i, k in enumerate(group_tasks) if k in _TASK_NAMES
+    )
+    limit_info = ""
+    if gtype == "pro":
+        limit_info = "\n⚠️ Pro-группа: пропуск 14 дней → Тадаббур"
+    elif gtype == "relaxed":
+        limit_info = "\n📅 Расслабленная: пропуск 30 дней → Тадаббур"
+    return (
+        "📚 КАК СДАВАТЬ ОТЧЁТ\n"
+        "Пиши что выполнил:\n" + task_lines + "\n"
+        "За каждое задание +1 балл 💎\n\n"
+        "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
+        "📡 Онлайн урок: напиши +\n\n"
+        "/mystats — твоя статистика\n"
+        "/rating — рейтинг группы\n"
+        "Ясир, ...? — задай вопрос боту"
+        + limit_info
+    )
+
 
 def extract_phone(sender):
     if sender is None:
@@ -199,6 +265,44 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
 
     # ── Только группы дальше ──────────────────────────────────────────────────
     if not is_group:
+        if text == "/help":
+            role_is_super = is_admin(phone)
+            with db() as c:
+                role_is_grp_admin = role_is_super or bool(c.execute(
+                    "SELECT 1 FROM group_admins WHERE phone=?", (phone,)
+                ).fetchone())
+                student_rows = c.execute(
+                    "SELECT g.tasks, g.group_type FROM students s "
+                    "JOIN groups g ON g.id=s.group_id "
+                    "WHERE s.phone=? AND s.active=1",
+                    (phone,)
+                ).fetchall()
+
+            sections = []
+
+            if student_rows:
+                if len(student_rows) == 1:
+                    sr = student_rows[0]
+                    grp_tasks = [t.strip() for t in (sr["tasks"] or "m,r,t").split(",") if t.strip()]
+                    sections.append(_section_student(grp_tasks, sr["group_type"] or "relaxed"))
+                else:
+                    sections.append(_section_student(list(_TASK_NAMES.keys()), "relaxed"))
+
+            if role_is_grp_admin:
+                sections.append(_SECTION_GRP_ADMIN)
+
+            if role_is_super:
+                sections.append(_SECTION_SUPER)
+
+            if not sections:
+                await send_message(chat_id,
+                    "Ассаляму алейкум! 🕌\n"
+                    "Не вижу тебя в группах бота.\n"
+                    "Напиши своё имя в группе чтобы зарегистрироваться.")
+            else:
+                await send_message(chat_id, ("\n\n" + "─" * 20 + "\n\n").join(sections))
+            return
+
         if not is_admin(phone):
             await send_message(chat_id, "Ассаляму алейкум! 🕌\nПиши в своей группе.")
         return
@@ -451,92 +555,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
         return
 
     if text == "/help":
-        task_names = {
-            "m": "Заучивание (или 40+40)",
-            "r": "Повторение",
-            "t": "Слова (или Перевод)",
-            "j": "Таджвид",
-            "n": "Грамматика (или Нахв)",
-            "h": "Хадис"
-        }
-        gtype = group["group_type"] or "relaxed"
-        limit_days = 14 if gtype == "pro" else 30
-
-        role_is_student = bool(find_by_phone(phone, group_id))
-        role_is_grp_admin = is_group_admin(phone, group_id)
-        role_is_super = is_admin(phone)
-
-        sections = []
-
-        if role_is_student:
-            task_lines = "\n".join(
-                str(i + 1) + ". " + task_names[k]
-                for i, k in enumerate(group_tasks) if k in task_names
-            )
-            type_info = ""
-            if gtype == "pro":
-                type_info = "\n⚠️ Pro-группа: пропуск 14 дней → Тадаббур"
-            elif gtype == "relaxed":
-                type_info = "\n📅 Расслабленная: пропуск 30 дней → Тадаббур"
-            sections.append(
-                "📚 КАК СДАВАТЬ ОТЧЁТ\n"
-                "Пиши что выполнил:\n" + task_lines + "\n"
-                "За каждое задание +1 балл 💎\n\n"
-                "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
-                "📡 Онлайн урок: напиши +\n\n"
-                "/mystats — твоя статистика\n"
-                "/rating — рейтинг группы\n"
-                "Ясир, ...? — задай вопрос боту"
-                + type_info
-            )
-
-        if role_is_grp_admin:
-            sections.append(
-                "👤 КОМАНДЫ УСТАЗА\n"
-                "/add +996700123456 Имя — добавить студента с номером\n"
-                "/add Имя — добавить без номера (привяжется когда напишет)\n"
-                "/remove Имя — убрать студента\n"
-                "/rename Имя | Новое имя — переименовать\n"
-                "/students — список студентов\n\n"
-                "/report — отчёт за сегодня\n"
-                "/week — за 7 дней\n"
-                "/month — за 30 дней\n"
-                "/year — за год\n"
-                "/rating — рейтинг\n\n"
-                "/bonus Имя 5 причина — начислить баллы\n"
-                "/groupinfo — настройки группы\n"
-                "/settasks m,r,t — задать задания\n"
-                "/setlang ru — язык (ru/ky/ar)\n"
-                "/settype pro/relaxed/tadabbur — тип группы\n"
-                "/setfallback -chatid — группа для неактивных\n"
-                "/setsummary -chatid — куда слать сводки"
-            )
-
-        if role_is_super:
-            sections.append(
-                "🔧 КОМАНДЫ ГЛАВНОГО АДМИНА\n"
-                "/setgroup — зарегистрировать группу\n"
-                "/admin +телефон — назначить устаза группы\n"
-                "/unadmin +телефон — убрать устаза\n"
-                "/admins — список устазов\n"
-                "/removeall — удалить всех студентов\n\n"
-                "/teach текст — обучить бота\n"
-                "/knowledge — что знает бот\n"
-                "/forget N — удалить знание N\n\n"
-                "/отчёт Имя — засчитать отчёт вручную"
-            )
-
-        if not sections:
-            sections.append(
-                "📚 КАК СДАВАТЬ ОТЧЁТ\n"
-                "Пиши что выполнил из заданий группы.\n"
-                "За каждое +1 балл 💎\n\n"
-                "/mystats — твоя статистика\n"
-                "/rating — рейтинг\n"
-                "Ясир, ...? — задай вопрос боту"
-            )
-
-        await send_message(chat_id, ("\n\n" + "—" * 20 + "\n\n").join(sections))
+        await send_message(chat_id, "Напиши мне в личку /help — покажу команды по твоей роли 👤")
         return
 
     if text == "/mystats":
