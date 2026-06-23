@@ -196,7 +196,7 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         log.error("verify error: %s", e)
 
 
-async def process_message(chat_id, sender, text, sender_name="", is_media=False):
+async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None):
     phone = extract_phone(sender)
     text = (text or "").strip()
     if not text and not is_media:
@@ -367,13 +367,21 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
                 return
 
     # ── Управление группой (только группа-админ) ───────────────────────────────
-    if text.startswith("/admin ") and phone in ADMIN_PHONES:
-        new_admin = text[7:].strip().replace("+", "").replace(" ", "")
-        if new_admin.isdigit():
-            add_group_admin(group_id, new_admin)
-            await send_message(chat_id, "✅ " + new_admin + " назначен админом группы!")
+    if (text.startswith("/admin") or text == "/admin") and phone in ADMIN_PHONES:
+        new_admin = None
+        # Реплай на сообщение устаза → берём его user_id
+        if reply_to_id:
+            new_admin = str(reply_to_id)
         else:
-            await send_message(chat_id, "Напиши: /admin 996700123456")
+            # Числовой ID как аргумент (fallback)
+            arg = text[6:].strip().replace("+", "").replace(" ", "")
+            if arg.isdigit():
+                new_admin = arg
+        if new_admin:
+            add_group_admin(group_id, new_admin)
+            await send_message(chat_id, "✅ Назначен устазом группы (ID: " + new_admin + ")")
+        else:
+            await send_message(chat_id, "Ответь реплаем на сообщение устаза и напиши /admin")
         return
 
     if text.startswith("/unadmin ") and phone in ADMIN_PHONES:
