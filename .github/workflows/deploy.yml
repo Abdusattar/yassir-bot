@@ -6,7 +6,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Syntax check
+        run: |
+          find . -name "*.py" -not -path "./venv/*" -not -path "./.git/*" \
+            | xargs python -m py_compile
+          echo "Syntax OK"
+
   deploy:
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
