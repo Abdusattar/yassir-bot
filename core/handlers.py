@@ -17,7 +17,7 @@ from core.db import (
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_skip_count_month, add_bonus,
-    start_online_lesson, mark_attendance,
+    open_lesson, close_lesson, get_open_lesson, get_lesson_attendance, mark_attendance,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -621,6 +621,32 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, "\n".join(lines))
         return
 
+    # ── Онлайн урок (устаз открывает / закрывает) ────────────────────────────
+    if text in ("/урок", "/lesson") and is_group_admin(phone, group_id):
+        lesson = open_lesson(group_id)
+        students = get_students(group_id)
+        await send_message(chat_id,
+            "📡 Урок начат!\n\n"
+            "Братья, кто присутствует — напишите «+»\n\n"
+            "Всего в группе: " + str(len(students)) + " студентов")
+        return
+
+    if text in ("/урокзавершен", "/endlesson") and is_group_admin(phone, group_id):
+        lesson = get_open_lesson(group_id)
+        if not lesson:
+            await send_message(chat_id, "Активного урока нет.")
+            return
+        attended = get_lesson_attendance(lesson["id"])
+        close_lesson(group_id)
+        if attended:
+            names = "\n".join("• " + r["name"] for r in attended)
+            await send_message(chat_id,
+                "✅ Урок завершён!\n\n"
+                "Присутствовали (" + str(len(attended)) + " человек):\n" + names)
+        else:
+            await send_message(chat_id, "✅ Урок завершён. Никто не отметился.")
+        return
+
     # ── Студенты ──────────────────────────────────────────────────────────────
     if text.startswith("/remove ") and is_group_admin(phone, group_id):
         name = text[8:].strip()
@@ -822,7 +848,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if is_online_word and not is_group_admin(phone, group_id):
         s_self = find_by_phone(phone, group_id)
         if s_self:
-            lesson = start_online_lesson(group_id)
+            lesson = get_open_lesson(group_id)
+            if not lesson:
+                # Урок не открыт устазом — тихо игнорируем
+                return
             with db() as c:
                 already = c.execute(
                     "SELECT 1 FROM attendance WHERE sid=? AND lesson_id=?",
@@ -856,7 +885,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             ("был", "была", "были", "и", "да", "все", "тут", "есть", "присутствовал", "присутствовали")]
     is_attendance_list = (len(found) >= 2) or (len(found) >= 1 and is_group_admin(phone, group_id))
     if found and is_attendance_list and not has_task_word and not is_yassir and not junk:
-        lesson = start_online_lesson(group_id)
+        lesson = get_open_lesson(group_id)
+        if not lesson:
+            # Устаз перечислил имена, но урок не открыт — открываем автоматически
+            lesson = open_lesson(group_id)
         marked = []
         for st in found:
             mark_attendance(st["id"], lesson["id"])

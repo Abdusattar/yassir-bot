@@ -924,24 +924,56 @@ def get_today_avg(group_id):
 
 # ── Online lessons ─────────────────────────────────────────────────────────────
 
-def start_online_lesson(group_id):
+_LESSON_KEY = "lesson_active:"
+
+
+def open_lesson(group_id):
+    """Устаз открывает урок: создаёт запись и активирует флаг."""
     today = get_date()
     with db() as c:
         c.execute(
             "INSERT OR IGNORE INTO online_lessons(group_id,date) VALUES(?,?)",
             (group_id, today)
         )
-        return c.execute(
+        lesson = c.execute(
             "SELECT * FROM online_lessons WHERE group_id=? AND date=?", (group_id, today)
         ).fetchone()
+    set_setting(_LESSON_KEY + str(group_id), str(lesson["id"]))
+    return lesson
+
+
+def close_lesson(group_id):
+    """Устаз закрывает урок."""
+    delete_setting(_LESSON_KEY + str(group_id))
+
+
+def get_open_lesson(group_id):
+    """Возвращает текущий активный (открытый устазом) урок или None."""
+    lesson_id = get_setting(_LESSON_KEY + str(group_id))
+    if not lesson_id:
+        return None
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM online_lessons WHERE id=?", (int(lesson_id),)
+        ).fetchone()
+
+
+def get_lesson_attendance(lesson_id):
+    """Список студентов отметившихся на уроке."""
+    with db() as c:
+        return c.execute(
+            "SELECT u.name FROM attendance a JOIN users u ON a.sid=u.id WHERE a.lesson_id=?",
+            (lesson_id,)
+        ).fetchall()
+
+
+# Оставляем для обратной совместимости с тестами/шедулером
+def start_online_lesson(group_id):
+    return open_lesson(group_id)
 
 
 def get_active_lesson(group_id):
-    with db() as c:
-        return c.execute(
-            "SELECT * FROM online_lessons WHERE group_id=? AND date=?",
-            (group_id, get_date())
-        ).fetchone()
+    return get_open_lesson(group_id)
 
 
 def mark_attendance(uid, lesson_id):
