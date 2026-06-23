@@ -293,6 +293,44 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 await send_message(chat_id, "✅ Удалено из знаний Ясира")
             return
 
+        if text == "/dbstats":
+            with db() as c:
+                total_users = c.execute("SELECT COUNT(*) FROM users WHERE active=1").fetchone()[0]
+                with_phone = c.execute("SELECT COUNT(*) FROM users WHERE active=1 AND phone IS NOT NULL").fetchone()[0]
+                no_phone = c.execute("""
+                    SELECT u.name, g.title
+                    FROM users u
+                    JOIN user_groups ug ON u.id=ug.user_id
+                    JOIN groups g ON g.id=ug.group_id
+                    WHERE u.active=1 AND u.phone IS NULL AND ug.role='student' AND ug.active=1
+                    ORDER BY g.id, u.name
+                """).fetchall()
+                groups = c.execute("""
+                    SELECT g.title, g.group_type, COUNT(ug.user_id) as cnt
+                    FROM groups g
+                    LEFT JOIN user_groups ug ON g.id=ug.group_id AND ug.role='student' AND ug.active=1
+                    WHERE g.active=1
+                    GROUP BY g.id ORDER BY g.id
+                """).fetchall()
+                today_reports = c.execute(
+                    "SELECT COUNT(DISTINCT sid) FROM reports WHERE date=?", (get_date(),)
+                ).fetchone()[0]
+            lines = ["📊 База данных (сервер)\n"]
+            lines.append("👥 Пользователей: " + str(total_users))
+            lines.append("  ✅ С Telegram ID: " + str(with_phone))
+            lines.append("  ⬜ Без ID: " + str(total_users - with_phone))
+            if no_phone:
+                for r in no_phone:
+                    lines.append("    • " + r["name"] + " — " + (r["title"] or "?"))
+            lines.append("\n📋 Группы:")
+            for g in groups:
+                gtype = g["group_type"] or "relaxed"
+                label = " [тадаббур]" if gtype == "tadabbur" else ""
+                lines.append("  • " + (g["title"] or "?") + label + " — " + str(g["cnt"]) + " студентов")
+            lines.append("\n📈 Отчётов сегодня: " + str(today_reports))
+            await send_message(chat_id, "\n".join(lines))
+            return
+
     # ── Личка только для супер-админов ───────────────────────────────────────
     if not is_group:
         if not is_admin(phone):
