@@ -202,6 +202,34 @@ async def monthly_report():
         log.error("monthly_report admin summary error: %s", e)
 
 
+# ── Воскресенье 20:30 — Ясир спрашивает устаза ───────────────────────────────
+
+async def yassir_asks_admin():
+    try:
+        question = await ai.ask_admin_improvement(get_all_groups())
+        if question:
+            for ap in ADMIN_PHONES:
+                await send_message(ap,
+                    "🤖 Ясир хочет стать лучше:\n\n" + question +
+                    "\n\nОтветь: /teach твой ответ")
+    except Exception as e:
+        log.error("yassir_asks_admin error: %s", e)
+
+
+# ── Годовой отчёт (1 января 11:00) ────────────────────────────────────────────
+
+async def yearly_report():
+    for group in get_all_groups():
+        chat_id = group["chat_id"]
+        group_tasks = get_group_tasks(group)
+        try:
+            report = format_period_report(group["id"], group["title"] or chat_id, group_tasks, 365)
+            await send_message(chat_id, "🎊 ИТОГИ ГОДА! 🎊\n\n" + report)
+            await asyncio.sleep(1)
+        except Exception as e:
+            log.error("yearly_report error in %s: %s", chat_id, e)
+
+
 # ── Главный планировщик ────────────────────────────────────────────────────────
 
 async def scheduler():
@@ -241,8 +269,12 @@ async def scheduler():
                 await maybe_run("transfer_check", transfer_check)
             elif wd == 6 and h == 19 and m == 0:
                 await maybe_run("weekly_report", weekly_report)
+            elif wd == 6 and h == 20 and m == 30:
+                await maybe_run("yassir_asks_admin", yassir_asks_admin)
             elif d == 1 and h == 19 and m == 0:
                 await maybe_run("monthly_report", monthly_report)
+            elif d == 1 and now.month == 1 and h == 11 and m == 0:
+                await maybe_run("yearly_report", yearly_report)
 
             await asyncio.sleep(30)
 
