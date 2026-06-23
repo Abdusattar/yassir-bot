@@ -82,17 +82,18 @@ async def evening_report():
             report_text = format_daily_report(group["id"], group["title"] or chat_id, group_tasks, today)
             await send_message(chat_id, report_text)
 
-            if gtype == "pro":
-                summary_id = group["summary_chat_id"]
-                if not summary_id:
-                    tadabbur = get_tadabbur_group()
-                    if tadabbur:
-                        summary_id = tadabbur["chat_id"]
-                if summary_id and summary_id != chat_id:
-                    await send_message(
-                        summary_id,
-                        "📋 Сводка из про-группы " + (group["title"] or chat_id) + ":\n\n" + report_text
-                    )
+            # Все группы (кроме тадаббур) шлют сводку в summary_chat_id или тадаббур
+            summary_id = group["summary_chat_id"]
+            if not summary_id:
+                tadabbur = get_tadabbur_group()
+                if tadabbur:
+                    summary_id = tadabbur["chat_id"]
+            if summary_id and summary_id != chat_id:
+                label = "про-группы" if gtype == "pro" else "группы"
+                await send_message(
+                    summary_id,
+                    "📋 Сводка из " + label + " " + (group["title"] or chat_id) + ":\n\n" + report_text
+                )
 
             students = get_students(group["id"])
             full_done = [
