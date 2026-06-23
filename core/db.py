@@ -730,14 +730,18 @@ def get_today_report(uid):
 def get_days_since_last_report(uid):
     tz = pytz.timezone(TZ)
     with db() as c:
+        user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         rows = c.execute(
             "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 400", (uid,)
         ).fetchall()
     dates = {r["date"] for r in rows}
+    added = user["added_date"] if user else None
     today = datetime.now(tz).date()
     missed = 0
     for i in range(400):
         day = (today - timedelta(days=i)).isoformat()
+        if added and day < added:
+            break
         if day in dates:
             break
         missed += 1
