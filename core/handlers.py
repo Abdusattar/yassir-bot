@@ -335,15 +335,26 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
                 existing_s = find_by_name(new_name, group_id)
                 if existing_s:
                     register_student(existing_s["id"], phone)
+                    sid = existing_s["id"]
                 else:
-                    add_student(new_name, group_id, phone)
+                    sid = add_student(new_name, group_id, phone)
+                # Засчитать сохранённый первый отчёт если был
+                saved = get_pending_text(phone, group_id)
                 clear_pending_name(phone, group_id)
                 await send_message(chat_id, T("registered_group", glang, name=new_name))
                 for ap in ADMIN_PHONES:
                     await send_message(ap, "👤 " + new_name + " зарегистрировался в «" + (group["title"] or str(chat_id)) + "»")
+                if saved and saved.strip():
+                    td = check_text(saved)
+                    sc = sum(1 for k in group_tasks if td.get(k))
+                    if sc > 0:
+                        save_report(sid, group_id, get_date(), td)
+                        done_list = [_TASK_NAMES[k] for k in group_tasks if td.get(k) and k in _TASK_NAMES]
+                        await send_message(chat_id, "📖 Засчитан отчёт из первого сообщения:\n" + "\n".join("✅ " + n for n in done_list))
                 return
             else:
-                set_pending_name(phone, group_id, "")
+                # Сохраняем первое сообщение — вдруг это отчёт
+                set_pending_name(phone, group_id, text)
                 greeting = ("Ассаляму алейкум, " + sender_name + "! 🌙\n") if sender_name else "Ассаляму алейкум! 🌙\n"
                 await send_message(chat_id, greeting + T("ask_name", glang))
                 return
