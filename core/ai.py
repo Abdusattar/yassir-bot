@@ -54,7 +54,7 @@ async def _or_call(messages, max_tokens=1024, retries=3):
                             await asyncio.sleep(3)
                             continue
                         return None
-                    return result["choices"][0]["message"]["content"]
+                    return result["choices"][0]["message"]["content"].rstrip() + " ·"
         except Exception as e:
             log.error("OR error (attempt %d): %s", attempt + 1, e)
             if attempt < retries - 1:
