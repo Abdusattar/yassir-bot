@@ -331,14 +331,15 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await send_message(chat_id, "\n".join(lines))
             return
 
-    # ── Личка только для супер-админов ───────────────────────────────────────
+    # ── Личка ─────────────────────────────────────────────────────────────────
     if not is_group:
-        if not is_admin(phone):
+        known_user = is_admin(phone) or find_user_by_phone(phone)
+        if not known_user:
             await send_message(chat_id, "Ассаляму алейкум! 🕌\nПиши в своей группе.")
             return
         if text and not text.startswith("/"):
             answer = await ai.answer_question(
-                text, get_full_program_info(), "личка суперадмина", phone, None, sender_name
+                text, get_full_program_info(), "личка", phone, None, sender_name
             )
             await send_message(chat_id, answer)
         return
