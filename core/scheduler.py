@@ -76,6 +76,8 @@ async def evening_report():
     today = get_date()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
+        if gtype == "tadabbur":
+            continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
         glang = get_group_lang(group)
@@ -179,6 +181,8 @@ async def transfer_check():
 
 async def weekly_report():
     for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
         glang = get_group_lang(group)
@@ -200,6 +204,8 @@ async def weekly_report():
 
 async def monthly_report():
     for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
         glang = get_group_lang(group)
@@ -248,6 +254,8 @@ async def yassir_asks_admin():
 
 async def yearly_report():
     for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
         try:

@@ -328,6 +328,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     group_id = group["id"]
     group_tasks = get_group_tasks(group)
     glang = get_group_lang(group)
+    gtype = group["group_type"] or "relaxed"
+
+    # Тадаббур — только для админов, обычные сообщения игнорируем
+    if gtype == "tadabbur" and not is_group_admin(phone, group_id):
+        return
 
     # ── Регистрация в группе ──────────────────────────────────────────────────
     if not is_group_admin(phone, group_id) and not text.startswith("/"):

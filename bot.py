@@ -116,7 +116,8 @@ async def main():
                         # Суперадмины и устазы группы — не регистрируем как студентов
                         is_super = uid in ADMIN_PHONES
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
-                        if is_super or is_grp_admin:
+                        is_tadabbur = group_info and (group_info.get("group_type") or "relaxed") == "tadabbur"
+                        if is_super or is_grp_admin or is_tadabbur:
                             continue
                         with db() as c:
                             c.execute(
