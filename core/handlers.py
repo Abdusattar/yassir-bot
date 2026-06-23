@@ -865,11 +865,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             "\n".join("• " + n for n in marked))
         return
 
-    s = find_by_phone(phone, group_id)
-
-    # Admins who are not students in this group don't submit reports
-    if is_group_admin(phone, group_id) and not s:
+    # Устазы группы не сдают отчёты и не получают AI-ответов в своей группе
+    if is_group_admin(phone, group_id):
         return
+
+    s = find_by_phone(phone, group_id)
 
     if not s:
         return
