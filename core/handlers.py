@@ -297,6 +297,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if not is_group:
         if not is_admin(phone):
             await send_message(chat_id, "Ассаляму алейкум! 🕌\nПиши в своей группе.")
+            return
+        if text and not text.startswith("/"):
+            answer = await ai.answer_question(
+                text, get_full_program_info(), "личка суперадмина", phone, None, sender_name
+            )
+            await send_message(chat_id, answer)
         return
 
     group = get_group(chat_id)
