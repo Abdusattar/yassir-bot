@@ -352,12 +352,27 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         chat_info = await tg_call("getChat", {"chat_id": int(chat_id)})
         title = (chat_info or {}).get("result", {}).get("title", sender_name or chat_id)
         save_group(chat_id, title)
-        await send_message(chat_id,
-            "✅ Группа зарегистрирована: " + str(title) + "\n"
-            "По умолчанию тип: relaxed, 3 задания (m,r,t).\n"
-            "Сменить тип: /settype pro|relaxed|tadabbur\n"
-            "Сменить задания: /settasks m,r,t,j"
-        )
+        grp = get_group(chat_id)
+        # Авто-назначение устазов: все Telegram-админы группы кроме суперадминов и ботов
+        admins_resp = await tg_call("getChatAdministrators", {"chat_id": int(chat_id)})
+        auto_admins = []
+        for member in (admins_resp or {}).get("result", []):
+            u = member.get("user", {})
+            if u.get("is_bot"):
+                continue
+            uid = str(u.get("id", ""))
+            if uid in ADMIN_PHONES:
+                continue
+            add_group_admin(grp["id"], uid)
+            name = (u.get("first_name") or "").strip()
+            if u.get("last_name"):
+                name = (name + " " + u["last_name"]).strip()
+            auto_admins.append(name or uid)
+        msg = "✅ Группа зарегистрирована: " + str(title)
+        if auto_admins:
+            msg += "\n👤 Устазы: " + ", ".join(auto_admins)
+        msg += "\nТип: /settype pro|relaxed|tadabbur\nЗадания: /settasks m,r,t,j"
+        await send_message(chat_id, msg)
         return
 
     if not group:
