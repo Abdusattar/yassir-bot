@@ -740,59 +740,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
     if is_group_admin(phone, group_id) and not s:
         return
 
-    # ── Регистрация нового участника ───────────────────────────────────────────
+    # ── Незарегистрированный участник ─────────────────────────────────────────
     if not s:
-        if is_pending_name(phone, group_id):
-            new_name = text.strip()
-            if new_name.startswith("/") or len(new_name) > 40 or len(new_name) < 2:
-                await send_message(chat_id, T("name_only", glang))
-                return
-            saved_report = get_pending_text(phone, group_id)
-            add_student(new_name, group_id, phone)
-            clear_pending_name(phone, group_id)
-            for admin_phone in ADMIN_PHONES:
-                await send_message(admin_phone,
-                    "👤 Новый студент в " + (group["title"] or chat_id) + ": " + new_name)
-            if saved_report and saved_report.strip():
-                s = find_by_phone(phone, group_id)
-                try:
-                    classified = await asyncio.wait_for(
-                        ai.classify_message(saved_report, group_tasks), timeout=25)
-                except Exception:
-                    classified = None
-                td = {k: False for k in TASK_KEYS}
-                if classified and "report" in classified.get("type", ""):
-                    td = {k: classified["tasks"].get(k, False) for k in TASK_KEYS}
-                else:
-                    td = check_text(saved_report)
-                sc = sum(1 for k in group_tasks if td.get(k))
-                if sc > 0 and s:
-                    save_report(s["id"], group_id, get_date(), td)
-                    done_list = [DEFAULT_TASKS[k] for k in group_tasks if td.get(k)]
-                    await send_message(chat_id,
-                        T("welcome_report", glang, name=new_name) + "\n" +
-                        "\n".join("✅ " + n for n in done_list))
-                    return
-            await send_message(chat_id, T("welcome", glang, name=new_name))
-            return
-
-        students = get_students(group_id)
-        if text.strip().isdigit():
-            num = int(text.strip())
-            if 1 <= num <= len(students):
-                st = students[num - 1]
-                register_student(st["id"], phone)
-                await send_message(chat_id, T("registered", glang, name=st["name"]))
-                return
-
-        matched = find_by_name(text.strip(), group_id)
-        if matched and not matched["phone"]:
-            register_student(matched["id"], phone)
-            await send_message(chat_id, T("registered", glang, name=matched["name"]))
-            return
-
-        set_pending_name(phone, group_id, text)
-        await send_message(chat_id, T("ask_name", glang))
+        await send_message(chat_id,
+            "Ассаляму алейкум! 🌙\n"
+            "Чтобы сдавать отчёты — сначала зарегистрируйся.\n"
+            "Напиши боту в личку /start 👤")
         return
 
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
