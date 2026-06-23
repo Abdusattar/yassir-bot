@@ -394,16 +394,41 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     await send_message(chat_id, "Не нашёл " + arg + " — он должен написать хоть раз в группу. Или ответь реплаем на его сообщение и напиши /admin")
                     return
             else:
-                # 3. Числовой Telegram ID (fallback)
                 clean = arg.replace("+", "").replace(" ", "")
                 if clean.isdigit():
+                    # 3. Числовой Telegram ID
                     new_admin = clean
                     new_admin_label = "ID " + clean
+                elif arg:
+                    # 4. Поиск по имени — сначала в этой группе, потом во всех
+                    all_students = get_students(group_id)
+                    matches = [s for s in all_students
+                               if arg.lower() in s["name"].lower() and s["phone"]]
+                    if not matches:
+                        for g in get_all_groups():
+                            if g["id"] == group_id:
+                                continue
+                            for s in get_students(g["id"]):
+                                if arg.lower() in s["name"].lower() and s["phone"]:
+                                    matches.append(s)
+                    # убираем дубли по phone
+                    seen = set()
+                    matches = [s for s in matches if not (s["phone"] in seen or seen.add(s["phone"]))]
+                    if len(matches) == 1:
+                        new_admin = matches[0]["phone"]
+                        new_admin_label = matches[0]["name"]
+                    elif len(matches) > 1:
+                        names = ", ".join(s["name"] for s in matches)
+                        await send_message(chat_id, "Нашёл несколько: " + names + "\nУточни имя точнее.")
+                        return
+                    else:
+                        await send_message(chat_id, "Не нашёл «" + arg + "» ни в одной группе.\nПопробуй реплаем на его сообщение → /admin")
+                        return
         if new_admin:
             add_group_admin(group_id, new_admin)
             await send_message(chat_id, "✅ Назначен устазом группы (" + new_admin_label + ")")
         else:
-            await send_message(chat_id, "Как назначить устаза:\n• Ответь реплаем на его сообщение → /admin\n• /admin @username\n• /admin 123456789")
+            await send_message(chat_id, "Как назначить устаза:\n• Ответь реплаем на его сообщение → /admin\n• /admin @username\n• /admin Имя\n• /admin 123456789")
         return
 
     if text.startswith("/unadmin ") and phone in ADMIN_PHONES:
