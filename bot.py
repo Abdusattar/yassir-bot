@@ -75,6 +75,43 @@ async def main():
                 log.debug("getUpdates: %d updates", len(updates))
             for upd in updates:
                 offset = upd["update_id"] + 1
+
+                # Вступление по ссылке-приглашению (chat_member update)
+                cm = upd.get("chat_member")
+                if cm:
+                    new_m = cm.get("new_chat_member", {})
+                    old_m = cm.get("old_chat_member", {})
+                    user = new_m.get("user", {})
+                    joined = (
+                        new_m.get("status") == "member"
+                        and old_m.get("status") in ("left", "kicked")
+                        and not user.get("is_bot")
+                    )
+                    if joined:
+                        uid = str(user.get("id", ""))
+                        chat_id = str(cm.get("chat", {}).get("id", ""))
+                        group_info = get_group(chat_id)
+                        is_super = uid in ADMIN_PHONES
+                        is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
+                        is_tadabbur = group_info and (group_info.get("group_type") or "relaxed") == "tadabbur"
+                        if group_info and not is_super and not is_grp_admin and not is_tadabbur:
+                            tg_name = (user.get("first_name") or "").strip()
+                            if user.get("last_name"):
+                                tg_name = (tg_name + " " + user["last_name"]).strip()
+                            if not tg_name and user.get("username"):
+                                tg_name = user["username"]
+                            if user.get("username"):
+                                cache_username(user["username"], uid)
+                            glang = get_group_lang(group_info)
+                            existing_user = find_user_by_phone(uid)
+                            if existing_user:
+                                add_student(existing_user["name"], group_info["id"], uid)
+                            else:
+                                set_pending_name(uid, group_info["id"], "")
+                                greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
+                                await send_message(chat_id, greeting + T("ask_name", glang))
+                    continue
+
                 msg = upd.get("message")
                 if not msg:
                     continue
