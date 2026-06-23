@@ -110,6 +110,15 @@ async def main():
                                 "INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
                                 (uid, chat_id)
                             )
+                        tg_name = (nm.get("first_name") or "").strip()
+                        if nm.get("last_name"):
+                            tg_name = (tg_name + " " + nm["last_name"]).strip()
+                        if not tg_name and nm.get("username"):
+                            tg_name = nm["username"]
+                        greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
+                        await send_message(chat_id,
+                            greeting +
+                            "Чтобы сдавать отчёты — напиши мне в личку /start 👤")
 
                 if (text or is_media) and chat_id:
                     asyncio.create_task(
