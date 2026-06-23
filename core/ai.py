@@ -376,3 +376,21 @@ async def mystats_comment(name, streak, rank, total_score, days_done, lang="ru")
         + lang_instruction(lang) + " Объём: 2-3 строки."
     )
     return await ask_ai(prompt)
+
+
+async def extract_name(text: str) -> str | None:
+    """Извлекает имя из произвольного ввода пользователя."""
+    result = await ask_ai(
+        "Пользователь написал: «" + text + "»\n"
+        "Извлеки только имя человека. Верни ОДНО слово или несколько слов имени — без лишнего текста.\n"
+        "Если это не имя — верни: НЕТ",
+        system="Ты помощник по извлечению имён. Отвечай только именем или словом НЕТ."
+    )
+    if not result:
+        return None
+    result = result.strip().strip("«»\"'")
+    if result.upper() in ("НЕТ", "NET", "NO", "NONE", "—", "-"):
+        return None
+    if len(result) > 50:
+        return None
+    return result

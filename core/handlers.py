@@ -378,22 +378,17 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not s_reg:
             if is_pending_name(phone, group_id):
                 import re as _re
-                new_name = text.strip()
-                # Убираем вводные фразы: "меня зовут X", "мое имя X", "я X", "зовут X"
-                _intro = _re.match(
-                    r"^(?:меня\s+зовут|мое\s+имя|моё\s+имя|зовут|я|my\s+name\s+is|i\s+am|im)\s+(.+)$",
-                    new_name, _re.IGNORECASE
-                )
-                if _intro:
-                    new_name = _intro.group(1).strip()
+                raw_input = text.strip()
                 # Если ещё не сохранён отчёт — проверим, не отчёт ли это сообщение
                 if not get_pending_text(phone, group_id):
-                    td_pre = check_text(new_name)
+                    td_pre = check_text(raw_input)
                     if sum(1 for k in group_tasks if td_pre.get(k)) > 0:
-                        set_pending_name(phone, group_id, new_name)
+                        set_pending_name(phone, group_id, raw_input)
                         await send_message(chat_id, T("ask_name", glang))
                         return
-                if len(new_name) < 2 or len(new_name) > 40 or not _re.search(r"[a-zA-Zа-яА-ЯёЁЀ-ӿ؀-ۿЀ-ԯ]", new_name):
+                # Извлекаем имя через ИИ
+                new_name = await ai.extract_name(raw_input)
+                if not new_name:
                     await send_message(chat_id, T("ask_name_again", glang))
                     return
                 # Привязать к существующему студенту без ID, иначе создать нового
