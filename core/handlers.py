@@ -590,21 +590,21 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
                 GROUP BY s.id ORDER BY total DESC
             """, (week_ago, group_id, group_id)).fetchall()
         medals = ["🥇", "🥈", "🥉"]
-        lines = ["🏆 Рейтинг — " + (group["title"] or chat_id) + " (7 дней):\n"]
+        lines = [T("rating_header", glang, title=group["title"] or chat_id)]
         for i, r in enumerate(rows):
             medal = medals[i] if i < 3 else str(i + 1) + "."
-            lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " очков (" + str(r["days"]) + " дней)")
+            lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " " + T("rating_points", glang) + " (" + str(r["days"]) + " " + T("rating_days", glang) + ")")
         await send_message(chat_id, "\n".join(lines))
         return
 
     if text == "/help":
-        await send_message(chat_id, "Напиши мне в личку /help — покажу команды по твоей роли 👤")
+        await send_message(chat_id, T("help_redirect", glang))
         return
 
     if text == "/mystats":
         s_check = find_by_phone(phone, group_id)
         if not s_check:
-            await send_message(chat_id, "Ты ещё не зарегистрирован в группе 📝")
+            await send_message(chat_id, T("not_registered", glang))
             return
         streak = get_streak_days(s_check["id"])
         skips_month = get_skip_count_month(s_check["id"])
@@ -634,13 +634,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
         limit_days = 14 if gtype == "pro" else 30
 
         lines = [
-            "📊 Моя статистика — " + s_check["name"] + "\n",
-            "🔥 Серия: " + str(streak) + " дней подряд",
-            "🏆 Место в группе: #" + str(rank),
-            "💎 Всего баллов: " + str(total_score),
-            "📅 Дней сдано: " + str(days_done),
-            "⚠️ Пропусков в месяце: " + str(skips_month) + "/" + str(limit_days),
-            "✅ Сегодня: " + str(today_done) + "/" + str(len(group_tasks)) + " заданий",
+            T("mystats_title", glang, name=s_check["name"]),
+            T("mystats_streak", glang, n=streak),
+            T("mystats_rank", glang, n=rank),
+            T("mystats_points", glang, n=total_score),
+            T("mystats_days", glang, n=days_done),
+            T("mystats_skips", glang, n=skips_month, limit=limit_days),
+            T("mystats_today", glang, done=today_done, total=len(group_tasks)),
         ]
         await send_message(chat_id, "\n".join(lines))
         comment = await ai.mystats_comment(s_check["name"], streak, rank, total_score, days_done, glang)
@@ -742,10 +742,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
 
     # ── Незарегистрированный участник ─────────────────────────────────────────
     if not s:
-        await send_message(chat_id,
-            "Ассаляму алейкум! 🌙\n"
-            "Чтобы сдавать отчёты — сначала зарегистрируйся.\n"
-            "Напиши боту в личку /start 👤")
+        await send_message(chat_id, T("not_registered", glang))
         return
 
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
