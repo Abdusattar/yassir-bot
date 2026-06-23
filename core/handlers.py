@@ -294,6 +294,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
 
     # ── Личка только для супер-админов ───────────────────────────────────────
     if not is_group:
+        if not is_admin(phone):
+            await send_message(chat_id, "Ассаляму алейкум! 🕌\nПиши в своей группе.")
         return
 
     group = get_group(chat_id)
