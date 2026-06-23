@@ -407,7 +407,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     await send_message(chat_id, T("ask_name_again", glang))
                     return
                 # Проверяем: не студент ли уже в другой учебной группе
-                gtype = group.get("group_type") or "relaxed"
+                gtype = group["group_type"] or "relaxed"
                 if gtype != "tadabbur":
                     existing_lg = get_learning_group(phone)
                     if existing_lg and existing_lg["id"] != group_id:
