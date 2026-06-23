@@ -608,14 +608,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, "✅ " + old_name + " → " + new_name)
         return
 
-    if text == "/removeall" and is_group_admin(phone, group_id):
+    if text == "/removeall" and is_admin(phone):
         cnt = len(get_students(group_id))
         await send_message(chat_id,
             "⚠️ Удалить ВСЕХ студентов (" + str(cnt) + ")?\n"
             "Напиши: /removeall_да для подтверждения")
         return
 
-    if text == "/removeall_да" and is_group_admin(phone, group_id):
+    if text == "/removeall_да" and is_admin(phone):
         cnt = len(get_students(group_id))
         remove_all_students(group_id)
         await send_message(chat_id, "✅ Удалены все студенты (" + str(cnt) + ").")
