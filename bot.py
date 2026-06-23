@@ -93,7 +93,7 @@ async def main():
                         group_info = get_group(chat_id)
                         is_super = uid in ADMIN_PHONES
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
-                        is_tadabbur = group_info and (group_info.get("group_type") or "relaxed") == "tadabbur"
+                        is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
                         if group_info and not is_super and not is_grp_admin and not is_tadabbur:
                             tg_name = (user.get("first_name") or "").strip()
                             if user.get("last_name"):
@@ -153,7 +153,7 @@ async def main():
                         # Суперадмины и устазы группы — не регистрируем как студентов
                         is_super = uid in ADMIN_PHONES
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
-                        is_tadabbur = group_info and (group_info.get("group_type") or "relaxed") == "tadabbur"
+                        is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
                         if is_super or is_grp_admin or is_tadabbur:
                             continue
                         with db() as c:
