@@ -13,7 +13,7 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message
-from core.db import init, seed_default_knowledge, migrate_knowledge_fixes, get_all_groups, get_group_tasks, db, get_group, get_group_lang
+from core.db import init, seed_default_knowledge, migrate_knowledge_fixes, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name
 from core.i18n import T
 from core.handlers import process_message
 from core.scheduler import scheduler
@@ -118,6 +118,8 @@ async def main():
                             tg_name = nm["username"]
                         group_info = get_group(chat_id)
                         glang = get_group_lang(group_info) if group_info else "ru"
+                        if group_info:
+                            set_pending_name(uid, group_info["id"], "")
                         greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
                         await send_message(chat_id, greeting + T("ask_name", glang))
 

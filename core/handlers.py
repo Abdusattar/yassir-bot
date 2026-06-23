@@ -329,6 +329,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
             if is_pending_name(phone, group_id):
                 import re as _re
                 new_name = text.strip()
+                # Если ещё не сохранён отчёт — проверим, не отчёт ли это сообщение
+                if not get_pending_text(phone, group_id):
+                    td_pre = check_text(new_name)
+                    if sum(1 for k in group_tasks if td_pre.get(k)) > 0:
+                        set_pending_name(phone, group_id, new_name)
+                        await send_message(chat_id, T("ask_name", glang))
+                        return
                 if len(new_name) < 2 or len(new_name) > 40 or not _re.search(r"[a-zA-Zа-яА-ЯёЁЀ-ӿ؀-ۿЀ-ԯ]", new_name):
                     await send_message(chat_id, T("ask_name_again", glang))
                     return
