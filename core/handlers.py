@@ -459,27 +459,84 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False)
             "n": "Грамматика (или Нахв)",
             "h": "Хадис"
         }
-        task_lines = "\n".join(
-            str(i + 1) + ". " + task_names[k]
-            for i, k in enumerate(group_tasks) if k in task_names
-        )
         gtype = group["group_type"] or "relaxed"
-        type_info = ""
-        if gtype == "pro":
-            type_info = "\n\n⚠️ Это pro-группа: пропуск 14 дней → Тадаббур"
-        elif gtype == "relaxed":
-            type_info = "\n\n📅 Группа расслабленная: пропуск 30 дней → Тадаббур"
-        await send_message(chat_id,
-            "📚 КАК СДАВАТЬ ОТЧЁТ\n\n"
-            "Пиши что выполнил:\n\n" + task_lines +
-            "\n\nЗа каждое задание +1 балл 💎\n\n"
-            "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
-            "📡 Онлайн урок: напиши +\n"
-            "📊 Своя статистика: /mystats\n"
-            "🤖 Вопрос Ясиру: «Ясир, ...?»"
-            + type_info +
-            "\n\nБаракАллаху фийк! 🤲"
-        )
+        limit_days = 14 if gtype == "pro" else 30
+
+        role_is_student = bool(find_by_phone(phone, group_id))
+        role_is_grp_admin = is_group_admin(phone, group_id)
+        role_is_super = is_admin(phone)
+
+        sections = []
+
+        if role_is_student:
+            task_lines = "\n".join(
+                str(i + 1) + ". " + task_names[k]
+                for i, k in enumerate(group_tasks) if k in task_names
+            )
+            type_info = ""
+            if gtype == "pro":
+                type_info = "\n⚠️ Pro-группа: пропуск 14 дней → Тадаббур"
+            elif gtype == "relaxed":
+                type_info = "\n📅 Расслабленная: пропуск 30 дней → Тадаббур"
+            sections.append(
+                "📚 КАК СДАВАТЬ ОТЧЁТ\n"
+                "Пиши что выполнил:\n" + task_lines + "\n"
+                "За каждое задание +1 балл 💎\n\n"
+                "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
+                "📡 Онлайн урок: напиши +\n\n"
+                "/mystats — твоя статистика\n"
+                "/rating — рейтинг группы\n"
+                "Ясир, ...? — задай вопрос боту"
+                + type_info
+            )
+
+        if role_is_grp_admin:
+            sections.append(
+                "👤 КОМАНДЫ УСТАЗА\n"
+                "/add +996700123456 Имя — добавить студента с номером\n"
+                "/add Имя — добавить без номера (привяжется когда напишет)\n"
+                "/remove Имя — убрать студента\n"
+                "/rename Имя | Новое имя — переименовать\n"
+                "/students — список студентов\n\n"
+                "/report — отчёт за сегодня\n"
+                "/week — за 7 дней\n"
+                "/month — за 30 дней\n"
+                "/year — за год\n"
+                "/rating — рейтинг\n\n"
+                "/bonus Имя 5 причина — начислить баллы\n"
+                "/groupinfo — настройки группы\n"
+                "/settasks m,r,t — задать задания\n"
+                "/setlang ru — язык (ru/ky/ar)\n"
+                "/settype pro/relaxed/tadabbur — тип группы\n"
+                "/setfallback -chatid — группа для неактивных\n"
+                "/setsummary -chatid — куда слать сводки"
+            )
+
+        if role_is_super:
+            sections.append(
+                "🔧 КОМАНДЫ ГЛАВНОГО АДМИНА\n"
+                "/setgroup — зарегистрировать группу\n"
+                "/admin +телефон — назначить устаза группы\n"
+                "/unadmin +телефон — убрать устаза\n"
+                "/admins — список устазов\n"
+                "/removeall — удалить всех студентов\n\n"
+                "/teach текст — обучить бота\n"
+                "/knowledge — что знает бот\n"
+                "/forget N — удалить знание N\n\n"
+                "/отчёт Имя — засчитать отчёт вручную"
+            )
+
+        if not sections:
+            sections.append(
+                "📚 КАК СДАВАТЬ ОТЧЁТ\n"
+                "Пиши что выполнил из заданий группы.\n"
+                "За каждое +1 балл 💎\n\n"
+                "/mystats — твоя статистика\n"
+                "/rating — рейтинг\n"
+                "Ясир, ...? — задай вопрос боту"
+            )
+
+        await send_message(chat_id, ("\n\n" + "—" * 20 + "\n\n").join(sections))
         return
 
     if text == "/mystats":
