@@ -293,21 +293,6 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 await send_message(chat_id, "✅ Удалено из знаний Ясира")
             return
 
-        if text.startswith("/setalltypes "):
-            new_type = text[13:].strip().lower()
-            if new_type not in ("pro", "relaxed"):
-                await send_message(chat_id, "Доступно: /setalltypes pro или /setalltypes relaxed")
-                return
-            changed = []
-            for g in get_all_groups():
-                if (g["group_type"] or "relaxed") != "tadabbur":
-                    update_group_type(g["chat_id"], new_type)
-                    changed.append(g["title"] or g["chat_id"])
-            await send_message(chat_id,
-                "✅ Тип " + new_type + " установлен для групп:\n" +
-                "\n".join("• " + t for t in changed))
-            return
-
         if text == "/dbstats":
             with db() as c:
                 total_users = c.execute("SELECT COUNT(*) FROM users WHERE active=1").fetchone()[0]
