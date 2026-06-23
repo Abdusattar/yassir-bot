@@ -13,7 +13,7 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, add_student
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, add_student, get_learning_group
 from config import ADMIN_PHONES
 from core.i18n import T
 from core.handlers import process_message
@@ -105,7 +105,12 @@ async def main():
                             glang = get_group_lang(group_info)
                             existing_user = find_user_by_phone(uid)
                             if existing_user:
-                                add_student(existing_user["name"], group_info["id"], uid)
+                                existing_group = get_learning_group(uid)
+                                gtype = group_info["group_type"] or "relaxed"
+                                if existing_group and gtype != "tadabbur":
+                                    pass  # уже студент в другой учебной группе — не добавляем
+                                else:
+                                    add_student(existing_user["name"], group_info["id"], uid)
                             else:
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
@@ -170,7 +175,12 @@ async def main():
                         if group_info:
                             existing_user = find_user_by_phone(uid)
                             if existing_user:
-                                add_student(existing_user["name"], group_info["id"], uid)
+                                existing_group = get_learning_group(uid)
+                                gtype = group_info["group_type"] or "relaxed"
+                                if existing_group and gtype != "tadabbur":
+                                    pass  # уже студент в другой учебной группе — не добавляем
+                                else:
+                                    add_student(existing_user["name"], group_info["id"], uid)
                             else:
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"

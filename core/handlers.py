@@ -12,7 +12,7 @@ from core.db import (
     get_group, save_group, get_group_tasks, update_group_tasks, update_group_lang,
     update_group_type, update_group_fallback, update_group_summary,
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
-    register_student, deactivate_student, rename_student, remove_all_students,
+    register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
     add_group_admin, remove_group_admin, get_group_admins,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
@@ -391,6 +391,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 if not new_name:
                     await send_message(chat_id, T("ask_name_again", glang))
                     return
+                # Проверяем: не студент ли уже в другой учебной группе
+                gtype = group.get("group_type") or "relaxed"
+                if gtype != "tadabbur":
+                    existing_lg = get_learning_group(phone)
+                    if existing_lg and existing_lg["id"] != group_id:
+                        clear_pending_name(phone, group_id)
+                        await send_message(chat_id,
+                            new_name + ", ты уже студент группы «" + (existing_lg["title"] or "") + "». "
+                            "Студент может быть только в одной учебной группе.")
+                        return
                 # Привязать к существующему студенту без ID, иначе создать нового
                 existing_s = find_unlinked_by_name(new_name, group_id)
                 if existing_s:

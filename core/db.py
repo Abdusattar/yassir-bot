@@ -481,6 +481,18 @@ def find_user_by_phone(phone):
         ).fetchone()
 
 
+def get_learning_group(phone):
+    """Возвращает учебную группу (pro/relaxed) в которой студент уже состоит, или None."""
+    with db() as c:
+        return c.execute("""
+            SELECT g.id, g.title, g.group_type FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            JOIN groups g ON ug.group_id=g.id
+            WHERE u.phone=? AND ug.role='student' AND ug.active=1
+              AND (g.group_type='pro' OR g.group_type='relaxed' OR g.group_type IS NULL)
+        """, (phone,)).fetchone()
+
+
 def add_student(name, group_id, phone=None):
     """Найти или создать пользователя и добавить его в группу как студента."""
     with db() as c:
