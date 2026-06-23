@@ -15,11 +15,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-asyncio
+
       - name: Syntax check
         run: |
           find . -name "*.py" -not -path "./venv/*" -not -path "./.git/*" \
             | xargs python -m py_compile
           echo "Syntax OK"
+
+      - name: Run tests
+        run: python -m pytest tests/ -v
 
   deploy:
     needs: check
