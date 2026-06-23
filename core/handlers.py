@@ -652,7 +652,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, "\n".join(lines))
         comment = await ai.mystats_comment(s_check["name"], streak, rank, total_score, days_done, glang)
         if comment:
-            await send_message(chat_id, "🤖 Ясир: " + comment)
+            await send_message(chat_id, comment)
         return
 
     if text.startswith("/bonus ") and is_group_admin(phone, group_id):
