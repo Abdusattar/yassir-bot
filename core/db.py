@@ -184,6 +184,23 @@ def lookup_username(username: str):
     return get_setting("uid:" + username.lower().lstrip("@"))
 
 
+def cache_member_name(chat_id: str, name: str, user_id: str):
+    set_setting("name:" + str(chat_id) + ":" + name.lower().strip(), user_id)
+
+
+def lookup_by_name_in_chat(chat_id: str, name: str):
+    """Все участники чата чьё имя содержит подстроку name."""
+    key_prefix = "name:" + str(chat_id) + ":"
+    needle = name.lower().strip()
+    with db() as c:
+        rows = c.execute(
+            "SELECT key, value FROM bot_settings WHERE key LIKE ?",
+            (key_prefix + "%",)
+        ).fetchall()
+    return [(r["key"][len(key_prefix):], r["value"]) for r in rows
+            if needle in r["key"][len(key_prefix):]]
+
+
 # ── Knowledge ─────────────────────────────────────────────────────────────────
 
 def add_knowledge(text):

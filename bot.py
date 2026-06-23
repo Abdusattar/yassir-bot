@@ -13,7 +13,7 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name
 from core.i18n import T
 from core.handlers import process_message
 from core.scheduler import scheduler
@@ -101,6 +101,8 @@ async def main():
 
                 if frm.get("username") and sender:
                     cache_username(frm["username"], sender)
+                if sender_name and sender and chat_id.startswith("-"):
+                    cache_member_name(chat_id, sender_name, sender)
 
                 log.info("chat=%s from=%s(%s) text=%r media=%s",
                          chat_id, sender_name, sender, text, is_media)

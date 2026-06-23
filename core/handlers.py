@@ -19,7 +19,7 @@ from core.db import (
     get_streak_days, get_skip_count_month, add_bonus,
     start_online_lesson, mark_attendance,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
-    find_unlinked_by_name,
+    find_unlinked_by_name, lookup_by_name_in_chat,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db
 )
@@ -400,30 +400,34 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     new_admin = clean
                     new_admin_label = "ID " + clean
                 elif arg:
-                    # 4. Поиск по имени — сначала в этой группе, потом во всех
-                    all_students = get_students(group_id)
-                    matches = [s for s in all_students
-                               if arg.lower() in s["name"].lower() and s["phone"]]
-                    if not matches:
-                        for g in get_all_groups():
-                            if g["id"] == group_id:
-                                continue
-                            for s in get_students(g["id"]):
-                                if arg.lower() in s["name"].lower() and s["phone"]:
-                                    matches.append(s)
-                    # убираем дубли по phone
-                    seen = set()
-                    matches = [s for s in matches if not (s["phone"] in seen or seen.add(s["phone"]))]
-                    if len(matches) == 1:
-                        new_admin = matches[0]["phone"]
-                        new_admin_label = matches[0]["name"]
-                    elif len(matches) > 1:
-                        names = ", ".join(s["name"] for s in matches)
+                    # 4. Поиск по имени — сначала кэш участников этой группы
+                    cache_hits = lookup_by_name_in_chat(chat_id, arg)
+                    if len(cache_hits) == 1:
+                        new_admin = cache_hits[0][1]
+                        new_admin_label = cache_hits[0][0]
+                    elif len(cache_hits) > 1:
+                        names = ", ".join(h[0] for h in cache_hits)
                         await send_message(chat_id, "Нашёл несколько: " + names + "\nУточни имя точнее.")
                         return
                     else:
-                        await send_message(chat_id, "Не нашёл «" + arg + "» ни в одной группе.\nПопробуй реплаем на его сообщение → /admin")
-                        return
+                        # Кэша нет — ищем среди студентов БД
+                        seen = set()
+                        matches = []
+                        for g in [{"id": group_id}] + [g for g in get_all_groups() if g["id"] != group_id]:
+                            for s in get_students(g["id"]):
+                                if arg.lower() in s["name"].lower() and s["phone"] and s["phone"] not in seen:
+                                    seen.add(s["phone"])
+                                    matches.append(s)
+                        if len(matches) == 1:
+                            new_admin = matches[0]["phone"]
+                            new_admin_label = matches[0]["name"]
+                        elif len(matches) > 1:
+                            names = ", ".join(s["name"] for s in matches)
+                            await send_message(chat_id, "Нашёл несколько: " + names + "\nУточни имя точнее.")
+                            return
+                        else:
+                            await send_message(chat_id, "Не нашёл «" + arg + "».\nПусть напишет что-нибудь в группу, потом попробуй снова.")
+                            return
         if new_admin:
             add_group_admin(group_id, new_admin)
             await send_message(chat_id, "✅ Назначен устазом группы (" + new_admin_label + ")")
