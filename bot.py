@@ -13,7 +13,7 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, add_student
 from config import ADMIN_PHONES
 from core.i18n import T
 from core.handlers import process_message
@@ -131,9 +131,13 @@ async def main():
                             tg_name = nm["username"]
                         glang = get_group_lang(group_info) if group_info else "ru"
                         if group_info:
-                            set_pending_name(uid, group_info["id"], "")
-                        greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
-                        await send_message(chat_id, greeting + T("ask_name", glang))
+                            existing_user = find_user_by_phone(uid)
+                            if existing_user:
+                                add_student(existing_user["name"], group_info["id"], uid)
+                            else:
+                                set_pending_name(uid, group_info["id"], "")
+                                greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
+                                await send_message(chat_id, greeting + T("ask_name", glang))
 
                 if (text or is_media) and chat_id:
                     asyncio.create_task(

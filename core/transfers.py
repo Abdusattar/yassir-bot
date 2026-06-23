@@ -69,7 +69,7 @@ async def _transfer_to_tadabbur(student, group, fallback_id, days_absent, lang):
     sid = student["id"]
 
     # Деактивируем студента в текущей группе
-    deactivate_student(sid)
+    deactivate_student(sid, group["id"])
 
     # Целевая группа: явный fallback → иначе единственная tadabbur-группа профиля
     target_group = None

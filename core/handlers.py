@@ -19,7 +19,7 @@ from core.db import (
     get_streak_days, get_skip_count_month, add_bonus,
     start_online_lesson, mark_attendance,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
-    find_unlinked_by_name, lookup_by_name_in_chat,
+    find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db
 )
@@ -373,7 +373,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                         await send_message(chat_id, "📖 Засчитан отчёт из первого сообщения:\n" + "\n".join("✅ " + n for n in done_list))
                 return
             else:
-                # Сохраняем первое сообщение — вдруг это отчёт
+                # Уже зарегистрирован в другой группе — авторегистрация
+                existing_user = find_user_by_phone(phone)
+                if existing_user:
+                    add_student(existing_user["name"], group_id, phone)
+                    await send_message(chat_id, T("registered_group", glang, name=existing_user["name"]))
+                    return
+                # Первый раз в системе — спрашиваем имя
                 set_pending_name(phone, group_id, text)
                 greeting = ("Ассаляму алейкум, " + sender_name + "! 🌙\n") if sender_name else "Ассаляму алейкум! 🌙\n"
                 await send_message(chat_id, greeting + T("ask_name", glang))
@@ -580,7 +586,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         name = text[8:].strip()
         for s in get_students(group_id):
             if s["name"].lower() == name.lower():
-                deactivate_student(s["id"])
+                deactivate_student(s["id"], group_id)
                 await send_message(chat_id, "✅ " + name + " удалён!")
                 return
         await send_message(chat_id, "Студент не найден")
@@ -661,11 +667,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         week_ago = (__import__('datetime').datetime.now(pytz.timezone(TZ)).date() - timedelta(days=7)).isoformat()
         with db() as c:
             rows = c.execute("""
-                SELECT s.name, COALESCE(SUM(r.score),0) as total, COUNT(r.id) as days
-                FROM students s
-                LEFT JOIN reports r ON s.id=r.sid AND r.date>=? AND r.group_id=?
-                WHERE s.group_id=? AND s.active=1
-                GROUP BY s.id ORDER BY total DESC
+                SELECT u.name, COALESCE(SUM(r.score),0) as total, COUNT(r.id) as days
+                FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                LEFT JOIN reports r ON u.id=r.sid AND r.date>=? AND r.group_id=?
+                WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+                GROUP BY u.id ORDER BY total DESC
             """, (week_ago, group_id, group_id)).fetchall()
         medals = ["🥇", "🥈", "🥉"]
         lines = [T("rating_header", glang, title=group["title"] or chat_id)]
@@ -703,12 +710,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 (s_check["id"],)
             ).fetchone()
             rank_rows = c.execute("""
-                SELECT s.id, COALESCE(SUM(r.score),0)+COALESCE(b.bonus,0) as grand
-                FROM students s
-                LEFT JOIN reports r ON r.sid=s.id
-                LEFT JOIN (SELECT sid, SUM(points) as bonus FROM bonus_points GROUP BY sid) b ON b.sid=s.id
-                WHERE s.group_id=? AND s.active=1
-                GROUP BY s.id ORDER BY grand DESC
+                SELECT u.id, COALESCE(SUM(r.score),0)+COALESCE(b.bonus,0) as grand
+                FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                LEFT JOIN reports r ON r.sid=u.id
+                LEFT JOIN (SELECT sid, SUM(points) as bonus FROM bonus_points GROUP BY sid) b ON b.sid=u.id
+                WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+                GROUP BY u.id ORDER BY grand DESC
             """, (group_id,)).fetchall()
         total_score = (total_row["total"] or 0) + (bonus_row["bonus"] or 0)
         days_done = total_row["days"] or 0

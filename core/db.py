@@ -25,6 +25,26 @@ def init():
                 fallback_chat_id TEXT,
                 summary_chat_id TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS users(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                phone TEXT UNIQUE,
+                active INTEGER DEFAULT 1,
+                added_date TEXT DEFAULT (date('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS user_groups(
+                user_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                role TEXT NOT NULL DEFAULT 'student',
+                active INTEGER DEFAULT 1,
+                joined_date TEXT DEFAULT (date('now')),
+                PRIMARY KEY(user_id, group_id, role),
+                FOREIGN KEY(user_id) REFERENCES users(id),
+                FOREIGN KEY(group_id) REFERENCES groups(id)
+            );
+
             CREATE TABLE IF NOT EXISTS students(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -33,6 +53,7 @@ def init():
                 active INTEGER DEFAULT 1,
                 added_date TEXT DEFAULT (date('now'))
             );
+
             CREATE TABLE IF NOT EXISTS reports(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sid INTEGER NOT NULL,
@@ -147,6 +168,98 @@ def _run_migrations(c):
         c.execute("ALTER TABLE groups ADD COLUMN started_at TEXT")
         c.execute("UPDATE groups SET started_at = date('now') WHERE started_at IS NULL")
 
+    migrated = c.execute(
+        "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
+    ).fetchone()
+    if not migrated:
+        _migrate_to_users_table(c)
+        c.execute(
+            "INSERT OR REPLACE INTO bot_settings(key,value) VALUES('migrated_to_users','1')"
+        )
+
+
+def _migrate_to_users_table(c):
+    students = c.execute("SELECT * FROM students").fetchall()
+    if not students:
+        return
+
+    by_phone = {}
+    no_phone = []
+    for s in students:
+        if s["phone"]:
+            by_phone.setdefault(s["phone"], []).append(dict(s))
+        else:
+            no_phone.append(dict(s))
+
+    sid_to_uid = {}
+
+    for phone, slist in by_phone.items():
+        primary = min(slist, key=lambda x: x["id"])
+        c.execute(
+            "INSERT OR IGNORE INTO users(name, phone, active, added_date) VALUES(?,?,1,?)",
+            (primary["name"], phone, primary["added_date"])
+        )
+        uid = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()["id"]
+        for s in slist:
+            sid_to_uid[s["id"]] = uid
+            c.execute(
+                "INSERT OR IGNORE INTO user_groups(user_id, group_id, role, active, joined_date)"
+                " VALUES(?,?,'student',?,?)",
+                (uid, s["group_id"], s["active"], s["added_date"])
+            )
+
+    for s in no_phone:
+        c.execute(
+            "INSERT INTO users(name, phone, active, added_date) VALUES(?,NULL,?,?)",
+            (s["name"], s["active"], s["added_date"])
+        )
+        uid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        sid_to_uid[s["id"]] = uid
+        c.execute(
+            "INSERT OR IGNORE INTO user_groups(user_id, group_id, role, active, joined_date)"
+            " VALUES(?,?,'student',?,?)",
+            (uid, s["group_id"], s["active"], s["added_date"])
+        )
+
+    admins = c.execute("SELECT * FROM group_admins").fetchall()
+    for a in admins:
+        phone = a["phone"]
+        user = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
+        if user:
+            uid = user["id"]
+        else:
+            c.execute("INSERT INTO users(name, phone) VALUES(?,?)", ("", phone))
+            uid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        c.execute(
+            "INSERT OR IGNORE INTO user_groups(user_id, group_id, role) VALUES(?,?,'admin')",
+            (uid, a["group_id"])
+        )
+
+    for old_sid, new_uid in sid_to_uid.items():
+        if old_sid == new_uid:
+            continue
+        c.execute("""
+            INSERT INTO reports(sid, group_id, date, m, r, t, j, n, h, score)
+            SELECT ?, group_id, date, m, r, t, j, n, h, score FROM reports WHERE sid=?
+            ON CONFLICT(sid, date) DO UPDATE SET
+                m=MAX(m, excluded.m), r=MAX(r, excluded.r), t=MAX(t, excluded.t),
+                j=MAX(j, excluded.j), n=MAX(n, excluded.n), h=MAX(h, excluded.h),
+                score=MAX(score, excluded.score)
+        """, (new_uid, old_sid))
+        c.execute("DELETE FROM reports WHERE sid=?", (old_sid,))
+
+        c.execute("""
+            INSERT OR IGNORE INTO bonus_points(sid, group_id, date, points, reason)
+            SELECT ?, group_id, date, points, reason FROM bonus_points WHERE sid=?
+        """, (new_uid, old_sid))
+        c.execute("DELETE FROM bonus_points WHERE sid=?", (old_sid,))
+
+        c.execute("""
+            INSERT OR IGNORE INTO attendance(sid, lesson_id)
+            SELECT ?, lesson_id FROM attendance WHERE sid=?
+        """, (new_uid, old_sid))
+        c.execute("DELETE FROM attendance WHERE sid=?", (old_sid,))
+
 
 # ── Time ──────────────────────────────────────────────────────────────────────
 
@@ -189,7 +302,6 @@ def cache_member_name(chat_id: str, name: str, user_id: str):
 
 
 def lookup_by_name_in_chat(chat_id: str, name: str):
-    """Все участники чата чьё имя содержит подстроку name."""
     key_prefix = "name:" + str(chat_id) + ":"
     needle = name.lower().strip()
     with db() as c:
@@ -207,15 +319,16 @@ def get_students_not_in_tadabbur(group_id):
     if not tadabbur:
         return []
     with db() as c:
-        tadabbur_phones = {r["phone"] for r in c.execute(
-            "SELECT phone FROM students WHERE group_id=? AND active=1 AND phone IS NOT NULL",
+        tadabbur_uids = {r["user_id"] for r in c.execute(
+            "SELECT user_id FROM user_groups WHERE group_id=? AND role='student' AND active=1",
             (tadabbur["id"],)
         ).fetchall()}
-        students = c.execute(
-            "SELECT * FROM students WHERE group_id=? AND active=1 AND phone IS NOT NULL",
-            (group_id,)
-        ).fetchall()
-    return [s for s in students if s["phone"] not in tadabbur_phones]
+        students = c.execute("""
+            SELECT u.id, u.name, u.phone FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+        """, (group_id,)).fetchall()
+    return [s for s in students if s["id"] not in tadabbur_uids]
 
 
 # ── Knowledge ─────────────────────────────────────────────────────────────────
@@ -240,8 +353,6 @@ def get_yassir_knowledge():
 def delete_knowledge(kid):
     with db() as c:
         c.execute("DELETE FROM yassir_knowledge WHERE id=?", (kid,))
-
-
 
 
 # ── Groups ────────────────────────────────────────────────────────────────────
@@ -272,7 +383,6 @@ def get_groups_by_type(group_type):
 
 
 def get_tadabbur_group():
-    """Возвращает единственную Тадаббур-группу профиля (или None)."""
     rows = get_groups_by_type("tadabbur")
     return rows[0] if rows else None
 
@@ -292,7 +402,6 @@ def update_group_lang(chat_id, lang):
 
 
 def update_group_type(chat_id, group_type):
-    """group_type: 'pro' | 'relaxed' | 'tadabbur'"""
     with db() as c:
         c.execute("UPDATE groups SET group_type=? WHERE chat_id=?", (group_type, chat_id))
 
@@ -318,40 +427,100 @@ def get_group_lang(group):
 
 def add_group_admin(group_id, phone):
     with db() as c:
-        c.execute("INSERT OR IGNORE INTO group_admins(group_id,phone) VALUES(?,?)", (group_id, phone))
+        user = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
+        if user:
+            uid = user["id"]
+        else:
+            c.execute("INSERT INTO users(name, phone) VALUES(?,?)", ("", phone))
+            uid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        c.execute(
+            "INSERT OR IGNORE INTO user_groups(user_id, group_id, role) VALUES(?,?,'admin')",
+            (uid, group_id)
+        )
+        c.execute(
+            "UPDATE user_groups SET active=1 WHERE user_id=? AND group_id=? AND role='admin'",
+            (uid, group_id)
+        )
 
 
 def remove_group_admin(group_id, phone):
     with db() as c:
-        c.execute("DELETE FROM group_admins WHERE group_id=? AND phone=?", (group_id, phone))
+        c.execute("""
+            UPDATE user_groups SET active=0
+            WHERE group_id=? AND role='admin'
+              AND user_id=(SELECT id FROM users WHERE phone=?)
+        """, (group_id, phone))
 
 
 def get_group_admins(group_id):
     with db() as c:
-        rows = c.execute("SELECT phone FROM group_admins WHERE group_id=?", (group_id,)).fetchall()
-    return [r["phone"] for r in rows]
+        rows = c.execute("""
+            SELECT u.phone FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            WHERE ug.group_id=? AND ug.role='admin' AND ug.active=1
+        """, (group_id,)).fetchall()
+    return [r["phone"] for r in rows if r["phone"]]
 
 
-# ── Students ──────────────────────────────────────────────────────────────────
+# ── Users / Students ──────────────────────────────────────────────────────────
+
+def _student_row_sql():
+    """SELECT clause returning columns compatible with old students API."""
+    return """
+        SELECT u.id, u.name, u.phone, ug.active, u.added_date, ug.joined_date
+        FROM users u
+        JOIN user_groups ug ON u.id=ug.user_id
+    """
+
+
+def find_user_by_phone(phone):
+    """Найти пользователя в глобальном реестре (без привязки к группе)."""
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM users WHERE phone=? AND active=1", (phone,)
+        ).fetchone()
+
 
 def add_student(name, group_id, phone=None):
+    """Найти или создать пользователя и добавить его в группу как студента."""
     with db() as c:
-        existing = c.execute(
-            "SELECT id FROM students WHERE LOWER(name)=LOWER(?) AND group_id=? AND active=1",
-            (name, group_id)
-        ).fetchone()
-        if existing:
-            if phone:
-                c.execute("UPDATE students SET phone=? WHERE id=?", (phone, existing["id"]))
-            return existing["id"]
-        c.execute("INSERT INTO students(name,group_id,phone) VALUES(?,?,?)", (name, group_id, phone))
-        return c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        if phone:
+            user = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
+        else:
+            user = None
+
+        if user:
+            uid = user["id"]
+            c.execute("UPDATE users SET name=? WHERE id=? AND name=''", (name, uid))
+        else:
+            existing = c.execute(
+                "SELECT id FROM users WHERE LOWER(name)=LOWER(?) AND phone IS NULL",
+                (name,)
+            ).fetchone()
+            if existing:
+                uid = existing["id"]
+                if phone:
+                    c.execute("UPDATE users SET phone=? WHERE id=?", (phone, uid))
+            else:
+                c.execute("INSERT INTO users(name, phone) VALUES(?,?)", (name, phone))
+                uid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        c.execute(
+            "INSERT OR IGNORE INTO user_groups(user_id, group_id, role) VALUES(?,?,'student')",
+            (uid, group_id)
+        )
+        c.execute(
+            "UPDATE user_groups SET active=1 WHERE user_id=? AND group_id=? AND role='student'",
+            (uid, group_id)
+        )
+        return uid
 
 
 def get_students(group_id):
     with db() as c:
         return c.execute(
-            "SELECT * FROM students WHERE group_id=? AND active=1 ORDER BY name",
+            _student_row_sql() +
+            "WHERE ug.group_id=? AND ug.role='student' AND ug.active=1 ORDER BY u.name",
             (group_id,)
         ).fetchall()
 
@@ -359,7 +528,8 @@ def get_students(group_id):
 def find_by_phone(phone, group_id):
     with db() as c:
         return c.execute(
-            "SELECT * FROM students WHERE phone=? AND group_id=? AND active=1",
+            _student_row_sql() +
+            "WHERE u.phone=? AND ug.group_id=? AND ug.role='student' AND ug.active=1",
             (phone, group_id)
         ).fetchone()
 
@@ -367,38 +537,48 @@ def find_by_phone(phone, group_id):
 def find_by_name(name, group_id):
     with db() as c:
         return c.execute(
-            "SELECT * FROM students WHERE LOWER(name)=LOWER(?) AND group_id=? AND active=1",
+            _student_row_sql() +
+            "WHERE LOWER(u.name)=LOWER(?) AND ug.group_id=? AND ug.role='student' AND ug.active=1",
             (name, group_id)
         ).fetchone()
 
 
 def find_unlinked_by_name(name, group_id):
-    """Студент с таким именем и без Telegram ID (phone IS NULL) — для привязки."""
+    """Студент с таким именем и без Telegram ID — для привязки при регистрации."""
     with db() as c:
         return c.execute(
-            "SELECT * FROM students WHERE LOWER(name)=LOWER(?) AND group_id=? AND active=1 AND phone IS NULL",
+            _student_row_sql() +
+            "WHERE LOWER(u.name)=LOWER(?) AND ug.group_id=? AND ug.role='student'"
+            " AND ug.active=1 AND u.phone IS NULL",
             (name, group_id)
         ).fetchone()
 
 
-def register_student(sid, phone):
+def register_student(uid, phone):
+    """Привязать Telegram ID к существующему пользователю."""
     with db() as c:
-        c.execute("UPDATE students SET phone=? WHERE id=?", (phone, sid))
+        c.execute("UPDATE users SET phone=? WHERE id=?", (phone, uid))
 
 
-def deactivate_student(sid):
+def deactivate_student(uid, group_id):
+    """Деактивировать членство студента в конкретной группе."""
     with db() as c:
-        c.execute("UPDATE students SET active=0 WHERE id=?", (sid,))
+        c.execute(
+            "UPDATE user_groups SET active=0 WHERE user_id=? AND group_id=? AND role='student'",
+            (uid, group_id)
+        )
 
 
-def rename_student(sid, new_name):
+def rename_student(uid, new_name):
     with db() as c:
-        c.execute("UPDATE students SET name=? WHERE id=?", (new_name, sid))
+        c.execute("UPDATE users SET name=? WHERE id=?", (new_name, uid))
 
 
 def remove_all_students(group_id):
     with db() as c:
-        c.execute("UPDATE students SET active=0 WHERE group_id=?", (group_id,))
+        c.execute(
+            "UPDATE user_groups SET active=0 WHERE group_id=? AND role='student'", (group_id,)
+        )
 
 
 # ── Pending names ─────────────────────────────────────────────────────────────
@@ -493,7 +673,7 @@ def is_checkmarks_only(text):
     return count_checkmarks(text) > 0 and len(cleaned.strip()) == 0
 
 
-def save_report(sid, group_id, date, tasks_done):
+def save_report(uid, group_id, date, tasks_done):
     m = int(tasks_done.get("m", False))
     r = int(tasks_done.get("r", False))
     t = int(tasks_done.get("t", False))
@@ -508,19 +688,21 @@ def save_report(sid, group_id, date, tasks_done):
             m=MAX(m,excluded.m), r=MAX(r,excluded.r), t=MAX(t,excluded.t),
             j=MAX(j,excluded.j), n=MAX(n,excluded.n), h=MAX(h,excluded.h),
             score=MAX(score,excluded.score)
-        """, (sid, group_id, date, m, r, t, j, n, h, score))
+        """, (uid, group_id, date, m, r, t, j, n, h, score))
 
 
-def get_today_report(sid):
+def get_today_report(uid):
     with db() as c:
-        return c.execute("SELECT * FROM reports WHERE sid=? AND date=?", (sid, get_date())).fetchone()
+        return c.execute(
+            "SELECT * FROM reports WHERE sid=? AND date=?", (uid, get_date())
+        ).fetchone()
 
 
-def get_days_since_last_report(sid):
+def get_days_since_last_report(uid):
     tz = pytz.timezone(TZ)
     with db() as c:
         rows = c.execute(
-            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 400", (sid,)
+            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 400", (uid,)
         ).fetchall()
     dates = {r["date"] for r in rows}
     today = datetime.now(tz).date()
@@ -533,18 +715,20 @@ def get_days_since_last_report(sid):
     return missed
 
 
-def get_consecutive_skips(sid):
+def get_consecutive_skips(uid):
     with db() as c:
-        student = c.execute("SELECT added_date FROM students WHERE id=?", (sid,)).fetchone()
-        if not student:
+        user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
+        if not user:
             return 0
-        rows = c.execute("SELECT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 30", (sid,)).fetchall()
+        rows = c.execute(
+            "SELECT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 30", (uid,)
+        ).fetchall()
     dates = {r["date"] for r in rows}
     tz = pytz.timezone(TZ)
     skips = 0
     for i in range(1, 31):
         day = (datetime.now(tz).date() - timedelta(days=i)).isoformat()
-        if day < student["added_date"]:
+        if day < user["added_date"]:
             break
         if day not in dates:
             skips += 1
@@ -553,17 +737,19 @@ def get_consecutive_skips(sid):
     return skips
 
 
-def get_skip_count_month(sid):
+def get_skip_count_month(uid):
     tz = pytz.timezone(TZ)
     month_start = datetime.now(tz).replace(day=1).date().isoformat()
     today = datetime.now(tz).date()
     with db() as c:
-        student = c.execute("SELECT added_date FROM students WHERE id=?", (sid,)).fetchone()
-        if not student:
+        user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
+        if not user:
             return 0
-        rows = c.execute("SELECT date FROM reports WHERE sid=? AND date>=?", (sid, month_start)).fetchall()
+        rows = c.execute(
+            "SELECT date FROM reports WHERE sid=? AND date>=?", (uid, month_start)
+        ).fetchall()
     dates = {r["date"] for r in rows}
-    start = max(month_start, student["added_date"])
+    start = max(month_start, user["added_date"])
     skips = 0
     d = datetime.strptime(start, "%Y-%m-%d").date()
     while d < today:
@@ -573,33 +759,32 @@ def get_skip_count_month(sid):
     return skips
 
 
-def get_miss_count_last_30_days(sid):
-    """Сколько дней студент не сдавал за последние 30 дней (для upgrade-проверки)."""
+def get_miss_count_last_30_days(uid):
     tz = pytz.timezone(TZ)
     today = datetime.now(tz).date()
     with db() as c:
-        student = c.execute("SELECT added_date FROM students WHERE id=?", (sid,)).fetchone()
-        if not student:
+        user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
+        if not user:
             return 30
         rows = c.execute(
-            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 60", (sid,)
+            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 60", (uid,)
         ).fetchall()
     dates = {r["date"] for r in rows}
     misses = 0
     for i in range(30):
         day = (today - timedelta(days=i)).isoformat()
-        if day < student["added_date"]:
+        if day < user["added_date"]:
             break
         if day not in dates:
             misses += 1
     return misses
 
 
-def get_streak_days(sid):
+def get_streak_days(uid):
     tz = pytz.timezone(TZ)
     with db() as c:
         rows = c.execute(
-            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 400", (sid,)
+            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 400", (uid,)
         ).fetchall()
     dates = {r["date"] for r in rows}
     today = datetime.now(tz).date()
@@ -613,25 +798,27 @@ def get_streak_days(sid):
     return streak
 
 
-def check_no_skip_week(sid):
+def check_no_skip_week(uid):
     tz = pytz.timezone(TZ)
     with db() as c:
-        student = c.execute("SELECT added_date FROM students WHERE id=?", (sid,)).fetchone()
-        if not student:
+        user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
+        if not user:
             return False
-        rows = c.execute("SELECT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 7", (sid,)).fetchall()
+        rows = c.execute(
+            "SELECT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 7", (uid,)
+        ).fetchall()
     dates = {r["date"] for r in rows}
     today = datetime.now(tz).date()
     for i in range(7):
         day = (today - timedelta(days=i)).isoformat()
-        if day < student["added_date"]:
+        if day < user["added_date"]:
             return False
         if day not in dates:
             return False
     return True
 
 
-def get_lesson_skip_count_month(sid, group_id):
+def get_lesson_skip_count_month(uid, group_id):
     tz = pytz.timezone(TZ)
     month_start = datetime.now(tz).replace(day=1).date().isoformat()
     with db() as c:
@@ -639,16 +826,18 @@ def get_lesson_skip_count_month(sid, group_id):
             "SELECT id FROM online_lessons WHERE group_id=? AND date>=?",
             (group_id, month_start)
         ).fetchall()
-        attended = c.execute("SELECT lesson_id FROM attendance WHERE sid=?", (sid,)).fetchall()
+        attended = c.execute(
+            "SELECT lesson_id FROM attendance WHERE sid=?", (uid,)
+        ).fetchall()
     attended_ids = {a["lesson_id"] for a in attended}
     return sum(1 for l in lessons if l["id"] not in attended_ids)
 
 
-def add_bonus(sid, group_id, date, points, reason):
+def add_bonus(uid, group_id, date, points, reason):
     with db() as c:
         c.execute(
             "INSERT OR IGNORE INTO bonus_points(sid,group_id,date,points,reason) VALUES(?,?,?,?,?)",
-            (sid, group_id, date, points, reason)
+            (uid, group_id, date, points, reason)
         )
 
 
@@ -682,8 +871,9 @@ def get_cumulative_avg(group_id):
     with db() as c:
         result = c.execute("""
             SELECT ROUND(AVG(r.score), 2) as avg
-            FROM reports r JOIN students s ON s.id=r.sid
-            WHERE r.group_id=? AND s.active=1
+            FROM reports r
+            JOIN user_groups ug ON ug.user_id=r.sid AND ug.group_id=r.group_id
+            WHERE r.group_id=? AND ug.role='student' AND ug.active=1
         """, (group_id,)).fetchone()
     return result["avg"] if result and result["avg"] else 0
 
@@ -692,8 +882,9 @@ def get_today_avg(group_id):
     with db() as c:
         result = c.execute("""
             SELECT ROUND(AVG(r.score), 2) as avg
-            FROM reports r JOIN students s ON s.id=r.sid
-            WHERE r.group_id=? AND r.date=? AND s.active=1
+            FROM reports r
+            JOIN user_groups ug ON ug.user_id=r.sid AND ug.group_id=r.group_id
+            WHERE r.group_id=? AND r.date=? AND ug.role='student' AND ug.active=1
         """, (group_id, get_date())).fetchone()
     return result["avg"] if result and result["avg"] else 0
 
@@ -720,9 +911,9 @@ def get_active_lesson(group_id):
         ).fetchone()
 
 
-def mark_attendance(sid, lesson_id):
+def mark_attendance(uid, lesson_id):
     with db() as c:
-        c.execute("INSERT OR IGNORE INTO attendance(sid,lesson_id) VALUES(?,?)", (sid, lesson_id))
+        c.execute("INSERT OR IGNORE INTO attendance(sid,lesson_id) VALUES(?,?)", (uid, lesson_id))
 
 
 # ── Formatting ─────────────────────────────────────────────────────────────────
@@ -734,11 +925,12 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None):
     date_str = datetime.strptime(for_date, "%Y-%m-%d").strftime("%d.%m.%Y")
     with db() as c:
         rows = c.execute("""
-            SELECT s.name, s.phone, r.m, r.r, r.t, r.j, r.n, r.h, r.score
-            FROM students s
-            LEFT JOIN reports r ON s.id=r.sid AND r.date=?
-            WHERE s.group_id=? AND s.active=1
-            ORDER BY r.score DESC NULLS LAST, s.name
+            SELECT u.name, u.phone, r.m, r.r, r.t, r.j, r.n, r.h, r.score
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            LEFT JOIN reports r ON u.id=r.sid AND r.date=?
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+            ORDER BY r.score DESC NULLS LAST, u.name
         """, (for_date, group_id)).fetchall()
 
     total_tasks = len(group_tasks)
@@ -771,11 +963,12 @@ def get_period_winner(group_id, days):
     start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days)).isoformat()
     with db() as c:
         return c.execute("""
-            SELECT s.name, COALESCE(SUM(r.score),0) as points
-            FROM students s
-            LEFT JOIN reports r ON s.id=r.sid AND r.date>=? AND r.group_id=?
-            WHERE s.group_id=? AND s.active=1
-            GROUP BY s.id ORDER BY points DESC LIMIT 1
+            SELECT u.name, COALESCE(SUM(r.score),0) as points
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            LEFT JOIN reports r ON u.id=r.sid AND r.date>=? AND r.group_id=?
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+            GROUP BY u.id ORDER BY points DESC LIMIT 1
         """, (start, group_id, group_id)).fetchone()
 
 
@@ -784,20 +977,22 @@ def format_period_report(group_id, group_title, group_tasks, days):
     label = "неделю" if days == 7 else ("месяц" if days == 30 else "год")
     with db() as c:
         rows = c.execute("""
-            SELECT s.name,
+            SELECT u.name,
                    COALESCE(SUM(r.score),0) as total,
                    COUNT(r.id) as days_done
-            FROM students s
-            LEFT JOIN reports r ON s.id=r.sid AND r.date>=? AND r.group_id=?
-            WHERE s.group_id=? AND s.active=1
-            GROUP BY s.id ORDER BY total DESC
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            LEFT JOIN reports r ON u.id=r.sid AND r.date>=? AND r.group_id=?
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+            GROUP BY u.id ORDER BY total DESC
         """, (start, group_id, group_id)).fetchall()
         bonus_rows = c.execute("""
-            SELECT s.name, COALESCE(SUM(b.points),0) as bonus
-            FROM students s
-            LEFT JOIN bonus_points b ON b.sid=s.id AND b.date>=? AND b.group_id=?
-            WHERE s.group_id=? AND s.active=1
-            GROUP BY s.id
+            SELECT u.name, COALESCE(SUM(b.points),0) as bonus
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            LEFT JOIN bonus_points b ON b.sid=u.id AND b.date>=? AND b.group_id=?
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+            GROUP BY u.id
         """, (start, group_id, group_id)).fetchall()
 
     bonus_map = {b["name"]: b["bonus"] for b in bonus_rows}

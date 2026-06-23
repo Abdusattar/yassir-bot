@@ -69,7 +69,7 @@ def test_deactivate_student(test_db):
     save_group("-100337", "Группа Е")
     g = get_group("-100337")
     sid = add_student("Тимур", g["id"], phone="333444555")
-    deactivate_student(sid)
+    deactivate_student(sid, g["id"])
     assert find_by_phone("333444555", g["id"]) is None
 
 
