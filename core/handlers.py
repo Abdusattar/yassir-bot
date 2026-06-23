@@ -427,107 +427,19 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     # ── Управление группой (только группа-админ) ───────────────────────────────
     if (text.startswith("/admin") or text == "/admin") and phone in ADMIN_PHONES:
-        new_admin = None
-        new_admin_label = ""
-        # 1. Реплай → берём user_id из реплая
-        if reply_to_id:
-            new_admin = str(reply_to_id)
-            new_admin_label = "из реплая"
-        else:
-            arg = text[6:].strip()
-            if arg.startswith("@"):
-                # 2. @username → ищем в кеше
-                uid = lookup_username(arg)
-                if uid:
-                    new_admin = uid
-                    new_admin_label = arg
-                else:
-                    await send_message(chat_id, "Не нашёл " + arg + " — он должен написать хоть раз в группу. Или ответь реплаем на его сообщение и напиши /admin")
-                    return
-            else:
-                clean = arg.replace("+", "").replace(" ", "")
-                if clean.isdigit():
-                    # 3. Числовой Telegram ID
-                    new_admin = clean
-                    new_admin_label = "ID " + clean
-                elif arg:
-                    # 4. Поиск по имени — сначала кэш участников этой группы
-                    cache_hits = lookup_by_name_in_chat(chat_id, arg)
-                    if len(cache_hits) == 1:
-                        new_admin = cache_hits[0][1]
-                        new_admin_label = cache_hits[0][0]
-                    elif len(cache_hits) > 1:
-                        names = ", ".join(h[0] for h in cache_hits)
-                        await send_message(chat_id, "Нашёл несколько: " + names + "\nУточни имя точнее.")
-                        return
-                    else:
-                        # Кэша нет — ищем среди студентов БД
-                        seen = set()
-                        matches = []
-                        for g in [{"id": group_id}] + [g for g in get_all_groups() if g["id"] != group_id]:
-                            for s in get_students(g["id"]):
-                                if arg.lower() in s["name"].lower() and s["phone"] and s["phone"] not in seen:
-                                    seen.add(s["phone"])
-                                    matches.append(s)
-                        if len(matches) == 1:
-                            new_admin = matches[0]["phone"]
-                            new_admin_label = matches[0]["name"]
-                        elif len(matches) > 1:
-                            names = ", ".join(s["name"] for s in matches)
-                            await send_message(chat_id, "Нашёл несколько: " + names + "\nУточни имя точнее.")
-                            return
-                        else:
-                            await send_message(chat_id, "Не нашёл «" + arg + "».\nПусть напишет что-нибудь в группу, потом попробуй снова.")
-                            return
-        if new_admin:
-            add_group_admin(group_id, new_admin)
-            await send_message(chat_id, "✅ Назначен устазом группы (" + new_admin_label + ")")
-        else:
-            await send_message(chat_id, "Как назначить устаза:\n• Ответь реплаем на его сообщение → /admin\n• /admin @username\n• /admin Имя\n• /admin 123456789")
+        if not reply_to_id:
+            await send_message(chat_id, "Ответь реплаем на сообщение человека и напиши /admin")
+            return
+        add_group_admin(group_id, str(reply_to_id))
+        await send_message(chat_id, "✅ Назначен устазом группы")
         return
 
     if (text.startswith("/unadmin") or text == "/unadmin") and phone in ADMIN_PHONES:
-        target = None
-        label = ""
-        if reply_to_id:
-            target = str(reply_to_id)
-            label = "из реплая"
-        else:
-            arg = text[8:].strip()
-            if arg.startswith("@"):
-                uid = lookup_username(arg)
-                if uid:
-                    target = uid
-                    label = arg
-                else:
-                    await send_message(chat_id, "Не нашёл " + arg + " — он должен написать хоть раз в группу.")
-                    return
-            else:
-                clean = arg.replace("+", "").replace(" ", "")
-                if clean.isdigit():
-                    target = clean
-                    label = "ID " + clean
-                elif arg:
-                    cache_hits = lookup_by_name_in_chat(chat_id, arg)
-                    if len(cache_hits) == 1:
-                        target = cache_hits[0][1]
-                        label = cache_hits[0][0]
-                    elif len(cache_hits) > 1:
-                        await send_message(chat_id, "Нашёл несколько: " + ", ".join(h[0] for h in cache_hits) + "\nУточни имя.")
-                        return
-                    else:
-                        matches = [s for s in get_students(group_id) if arg.lower() in s["name"].lower() and s["phone"]]
-                        if len(matches) == 1:
-                            target = matches[0]["phone"]
-                            label = matches[0]["name"]
-                        else:
-                            await send_message(chat_id, "Не нашёл «" + arg + "».\nПопробуй реплаем или /unadmin @username")
-                            return
-        if target:
-            remove_group_admin(group_id, target)
-            await send_message(chat_id, "✅ Убран из устазов группы (" + label + ")")
-        else:
-            await send_message(chat_id, "Как убрать устаза:\n• Реплай на его сообщение → /unadmin\n• /unadmin @username\n• /unadmin Имя")
+        if not reply_to_id:
+            await send_message(chat_id, "Ответь реплаем на сообщение человека и напиши /unadmin")
+            return
+        remove_group_admin(group_id, str(reply_to_id))
+        await send_message(chat_id, "✅ Убран из устазов группы")
         return
 
     if text == "/admins":
