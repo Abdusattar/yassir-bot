@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytz
 
-from config import TZ, ADMIN_PHONES
+from config import TZ, SUPER_ADMIN_IDS
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
@@ -252,13 +252,13 @@ async def monthly_report():
 
     # Устазу — общая сводка по всем группам
     try:
-        if ADMIN_PHONES:
+        if SUPER_ADMIN_IDS:
             lines = ["📊 Итог месяца — все группы:"]
             for g in get_all_groups():
                 cnt = len(get_students(g["id"]))
                 lines.append("• " + (g["title"] or g["chat_id"]) + ": " + str(cnt) + " студентов")
             lines.append("\nАль-хамду лиллях! 🤲")
-            for admin_id in ADMIN_PHONES:
+            for admin_id in SUPER_ADMIN_IDS:
                 await send_message(admin_id, "\n".join(lines))
     except Exception as e:
         log.error("monthly_report admin summary error: %s", e)
@@ -270,7 +270,7 @@ async def yassir_asks_admin():
     try:
         question = await ai.ask_admin_improvement(get_all_groups())
         if question:
-            for ap in ADMIN_PHONES:
+            for ap in SUPER_ADMIN_IDS:
                 await send_message(ap,
                     "🤖 Ясир хочет стать лучше:\n\n" + question +
                     "\n\nОтветь: /teach твой ответ")

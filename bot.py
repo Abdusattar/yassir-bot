@@ -14,7 +14,7 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, add_student, get_learning_group
-from config import ADMIN_PHONES
+from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message
 from core.scheduler import scheduler
@@ -91,7 +91,7 @@ async def main():
                         uid = str(user.get("id", ""))
                         chat_id = str(cm.get("chat", {}).get("id", ""))
                         group_info = get_group(chat_id)
-                        is_super = uid in ADMIN_PHONES
+                        is_super = uid in SUPER_ADMIN_IDS
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
                         is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
                         if group_info and not is_super and not is_grp_admin and not is_tadabbur:
@@ -156,7 +156,7 @@ async def main():
                         uid = str(nm.get("id", ""))
                         group_info = get_group(chat_id)
                         # Суперадмины и устазы группы — не регистрируем как студентов
-                        is_super = uid in ADMIN_PHONES
+                        is_super = uid in SUPER_ADMIN_IDS
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
                         is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
                         if is_super or is_grp_admin or is_tadabbur:

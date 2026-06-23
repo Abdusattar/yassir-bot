@@ -18,7 +18,7 @@ from core.db import (
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message
-from config import ADMIN_PHONES
+from config import SUPER_ADMIN_IDS
 
 log = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ async def _transfer_to_tadabbur(student, group, fallback_id, days_absent, lang):
         "transfer_notify_admin", "ru",
         name=name, reason=reason_label, days=days_absent
     )
-    for admin_id in ADMIN_PHONES:
+    for admin_id in SUPER_ADMIN_IDS:
         await send_message(admin_id, admin_msg)
 
     log.info("Student %s transferred from %s to tadabbur (%d days absent)", name, chat_id, days_absent)
@@ -119,7 +119,7 @@ async def _suggest_upgrade(student, group, lang):
         "upgrade_notify_admin", "ru",
         name=name, group=group["title"] or chat_id, sid=sid
     )
-    for admin_id in ADMIN_PHONES:
+    for admin_id in SUPER_ADMIN_IDS:
         await send_message(admin_id, admin_msg)
 
     log.info("Upgrade suggested for student %s from group %s", name, chat_id)

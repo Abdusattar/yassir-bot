@@ -8,8 +8,8 @@ TELEGRAM_TOKEN = (
 )
 TG_API = "https://api.telegram.org/bot" + TELEGRAM_TOKEN
 
-# Telegram user_id администраторов (числа через запятую в ADMIN_IDS)
-ADMIN_PHONES = [s.strip() for s in os.getenv("ADMIN_IDS", "").split(",") if s.strip()]
+# Telegram user_id суперадминов (числа через запятую в SUPER_ADMIN_IDS)
+SUPER_ADMIN_IDS = [s.strip() for s in os.getenv("SUPER_ADMIN_IDS", os.getenv("ADMIN_IDS", "")).split(",") if s.strip()]
 
 TZ = os.getenv("TZ", "Asia/Bishkek")
 DB = os.getenv("DB_PATH", f"quran_{PROFILE}.db")

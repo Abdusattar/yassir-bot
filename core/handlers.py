@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from config import ADMIN_PHONES
+from config import SUPER_ADMIN_IDS
 from core.content import (
     TASK_KEYS, DEFAULT_TASKS, ONLINE_WORDS, EXCUSE_WORDS, PROGRAM_INFO
 )
@@ -108,11 +108,11 @@ def is_group_chat(chat_id):
 
 
 def is_admin(phone):
-    return phone in ADMIN_PHONES
+    return phone in SUPER_ADMIN_IDS
 
 
 def is_group_admin(phone, group_id):
-    if phone in ADMIN_PHONES:
+    if phone in SUPER_ADMIN_IDS:
         return True
     return phone in get_group_admins(group_id)
 
@@ -361,7 +361,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             if u.get("is_bot"):
                 continue
             uid = str(u.get("id", ""))
-            if uid in ADMIN_PHONES:
+            if uid in SUPER_ADMIN_IDS:
                 continue
             add_group_admin(grp["id"], uid)
             name = (u.get("first_name") or "").strip()
@@ -427,7 +427,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 saved = get_pending_text(phone, group_id)
                 clear_pending_name(phone, group_id)
                 await send_message(chat_id, T("registered_group", glang, name=new_name))
-                for ap in ADMIN_PHONES:
+                for ap in SUPER_ADMIN_IDS:
                     await send_message(ap, "👤 " + new_name + " зарегистрировался в «" + (group["title"] or str(chat_id)) + "»")
                 if saved and saved.strip():
                     td = check_text(saved)
@@ -451,7 +451,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 return
 
     # ── Управление группой (только группа-админ) ───────────────────────────────
-    if (text.startswith("/admin") or text == "/admin") and phone in ADMIN_PHONES:
+    if (text.startswith("/admin") or text == "/admin") and phone in SUPER_ADMIN_IDS:
         if not reply_to_id:
             await send_message(chat_id, "Ответь реплаем на сообщение человека и напиши /admin")
             return
@@ -459,7 +459,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, "✅ Назначен устазом группы")
         return
 
-    if (text.startswith("/unadmin") or text == "/unadmin") and phone in ADMIN_PHONES:
+    if (text.startswith("/unadmin") or text == "/unadmin") and phone in SUPER_ADMIN_IDS:
         if not reply_to_id:
             await send_message(chat_id, "Ответь реплаем на сообщение человека и напиши /unadmin")
             return
@@ -470,7 +470,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if text == "/admins":
         admins = get_group_admins(group_id)
         lines = ["👤 Админы группы:"]
-        lines.append("Главные: " + ", ".join(ADMIN_PHONES))
+        lines.append("Главные: " + ", ".join(SUPER_ADMIN_IDS))
         if admins:
             lines.append("Группы: " + ", ".join(admins))
         await send_message(chat_id, "\n".join(lines))
