@@ -2,7 +2,8 @@ from pathlib import Path as _Path
 
 
 def _load_knowledge(filename: str) -> str:
-    return (_Path(__file__).parent.parent / "knowledge" / filename).read_text(encoding="utf-8")
+    path = _Path(__file__).parent.parent / "knowledge" / filename
+    return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
 DEFAULT_TASKS = {
