@@ -8,6 +8,7 @@ from core.content import TASK_KEYS, TASK_WORDS, TASK_EMOJIS
 def db():
     c = sqlite3.connect(DB)
     c.row_factory = sqlite3.Row
+    c.execute("PRAGMA foreign_keys = ON")
     return c
 
 
@@ -66,7 +67,7 @@ def init():
                 n INTEGER DEFAULT 0,
                 h INTEGER DEFAULT 0,
                 score INTEGER DEFAULT 0,
-                UNIQUE(sid, date)
+                UNIQUE(sid, group_id, date)
             );
             CREATE TABLE IF NOT EXISTS bonus_points(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,6 +168,8 @@ def _run_migrations(c):
     if "started_at" not in gcols:
         c.execute("ALTER TABLE groups ADD COLUMN started_at TEXT")
         c.execute("UPDATE groups SET started_at = date('now') WHERE started_at IS NULL")
+    if "invite_link" not in gcols:
+        c.execute("ALTER TABLE groups ADD COLUMN invite_link TEXT")
 
     migrated = c.execute(
         "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
@@ -175,6 +178,15 @@ def _run_migrations(c):
         _migrate_to_users_table(c)
         c.execute(
             "INSERT OR REPLACE INTO bot_settings(key,value) VALUES('migrated_to_users','1')"
+        )
+
+    migrated_unique = c.execute(
+        "SELECT value FROM bot_settings WHERE key='migrated_reports_unique'"
+    ).fetchone()
+    if not migrated_unique:
+        _migrate_reports_unique(c)
+        c.execute(
+            "INSERT OR REPLACE INTO bot_settings(key,value) VALUES('migrated_reports_unique','1')"
         )
 
 
@@ -241,7 +253,7 @@ def _migrate_to_users_table(c):
         c.execute("""
             INSERT INTO reports(sid, group_id, date, m, r, t, j, n, h, score)
             SELECT ?, group_id, date, m, r, t, j, n, h, score FROM reports WHERE sid=?
-            ON CONFLICT(sid, date) DO UPDATE SET
+            ON CONFLICT(sid, group_id, date) DO UPDATE SET
                 m=MAX(m, excluded.m), r=MAX(r, excluded.r), t=MAX(t, excluded.t),
                 j=MAX(j, excluded.j), n=MAX(n, excluded.n), h=MAX(h, excluded.h),
                 score=MAX(score, excluded.score)
@@ -259,6 +271,31 @@ def _migrate_to_users_table(c):
             SELECT ?, lesson_id FROM attendance WHERE sid=?
         """, (new_uid, old_sid))
         c.execute("DELETE FROM attendance WHERE sid=?", (old_sid,))
+
+
+def _migrate_reports_unique(c):
+    """Rebuild reports table: UNIQUE(sid, date) → UNIQUE(sid, group_id, date)."""
+    c.execute("PRAGMA foreign_keys = OFF")
+    c.execute("""
+        CREATE TABLE reports_new(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sid INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            m INTEGER DEFAULT 0,
+            r INTEGER DEFAULT 0,
+            t INTEGER DEFAULT 0,
+            j INTEGER DEFAULT 0,
+            n INTEGER DEFAULT 0,
+            h INTEGER DEFAULT 0,
+            score INTEGER DEFAULT 0,
+            UNIQUE(sid, group_id, date)
+        )
+    """)
+    c.execute("INSERT OR IGNORE INTO reports_new SELECT * FROM reports")
+    c.execute("DROP TABLE reports")
+    c.execute("ALTER TABLE reports_new RENAME TO reports")
+    c.execute("PRAGMA foreign_keys = ON")
 
 
 # ── Time ──────────────────────────────────────────────────────────────────────
@@ -441,6 +478,11 @@ def add_group_admin(group_id, phone):
             "UPDATE user_groups SET active=1 WHERE user_id=? AND group_id=? AND role='admin'",
             (uid, group_id)
         )
+        # устаз не должен числиться студентом в той же группе
+        c.execute(
+            "UPDATE user_groups SET active=0 WHERE user_id=? AND group_id=? AND role='student'",
+            (uid, group_id)
+        )
 
 
 def remove_group_admin(group_id, phone):
@@ -460,6 +502,17 @@ def get_group_admins(group_id):
             WHERE ug.group_id=? AND ug.role='admin' AND ug.active=1
         """, (group_id,)).fetchall()
     return [r["phone"] for r in rows if r["phone"]]
+
+
+def is_any_group_admin(phone):
+    with db() as c:
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? AND ug.role='admin' AND ug.active=1
+            LIMIT 1
+        """, (phone,)).fetchone()
+    return row is not None
 
 
 # ── Users / Students ──────────────────────────────────────────────────────────
@@ -682,12 +735,37 @@ def get_student_memory(phone, group_id, limit=6):
 
 # ── Reports ───────────────────────────────────────────────────────────────────
 
-def check_text(text):
+def _has_arabic(text):
+    return any("؀" <= ch <= "ۿ" for ch in text)
+
+
+_NO_WORDS_PHRASES = [
+    "нет слов", "слов нет", "новых слов нет", "нет новых слов",
+    "забытых слов нет", "нет забытых слов", "не было новых слов",
+    "жаны сөздөр жок", "жок сөздөр", "созу жок",
+    "yangi so'z yo'q", "so'z yo'q",
+]
+
+# Слова отрицания — если стоят перед ключевым словом задания в том же предложении,
+# задание НЕ засчитывается ("не буду сдавать переводы" → t=False)
+_NEGATION_WORDS = ["не ", "нет ", "без ", "жок ", "yo'q ", "не буду", "не сдам", "не делал"]
+
+
+def _is_negated(t, idx):
+    # Ищем начало текущего предложения (после последнего знака препинания)
+    boundaries = [i for i, c in enumerate(t[:idx]) if c in ",.;!\n"]
+    clause_start = boundaries[-1] + 1 if boundaries else 0
+    context = t[clause_start:idx]
+    return any(neg in context for neg in _NEGATION_WORDS)
+
+
+def check_text(text, media=False):
     t = text.lower()
     result = {k: False for k in TASK_KEYS}
     for key, words in TASK_WORDS.items():
         for w in words:
-            if w in t:
+            idx = t.find(w)
+            if idx != -1 and not _is_negated(t, idx):
                 result[key] = True
                 break
     for key, emojis in TASK_EMOJIS.items():
@@ -696,6 +774,11 @@ def check_text(text):
                 if em in text:
                     result[key] = True
                     break
+    # "t" (mufradat): без арабских символов не засчитываем, если только не фото (media=True)
+    # или явная фраза "слов нет"
+    if result["t"] and not _has_arabic(text) and not any(p in t for p in _NO_WORDS_PHRASES):
+        if not media:
+            result["t"] = False
     return result
 
 
@@ -725,17 +808,23 @@ def save_report(uid, group_id, date, tasks_done):
     with db() as c:
         c.execute("""
             INSERT INTO reports(sid,group_id,date,m,r,t,j,n,h,score) VALUES(?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(sid,date) DO UPDATE SET
+            ON CONFLICT(sid,group_id,date) DO UPDATE SET
             m=MAX(m,excluded.m), r=MAX(r,excluded.r), t=MAX(t,excluded.t),
             j=MAX(j,excluded.j), n=MAX(n,excluded.n), h=MAX(h,excluded.h),
             score=MAX(score,excluded.score)
         """, (uid, group_id, date, m, r, t, j, n, h, score))
 
 
-def get_today_report(uid):
+def get_today_report(uid, group_id=None):
     with db() as c:
+        if group_id is not None:
+            return c.execute(
+                "SELECT * FROM reports WHERE sid=? AND date=? AND group_id=?",
+                (uid, get_date(), group_id)
+            ).fetchone()
         return c.execute(
-            "SELECT * FROM reports WHERE sid=? AND date=?", (uid, get_date())
+            "SELECT * FROM reports WHERE sid=? AND date=? ORDER BY id LIMIT 1",
+            (uid, get_date())
         ).fetchone()
 
 
@@ -815,13 +904,18 @@ def get_miss_count_last_30_days(uid):
             "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 60", (uid,)
         ).fetchall()
     dates = {r["date"] for r in rows}
+    added = user["added_date"]
     misses = 0
+    days_checked = 0
     for i in range(30):
         day = (today - timedelta(days=i)).isoformat()
-        if day < user["added_date"]:
+        if day < added:
             break
+        days_checked += 1
         if day not in dates:
             misses += 1
+    if days_checked < 30:
+        return 30
     return misses
 
 
@@ -890,7 +984,7 @@ def get_missing_students(group_id, group_tasks):
     students = get_students(group_id)
     result = []
     for s in students:
-        rep = get_today_report(s["id"])
+        rep = get_today_report(s["id"], group_id)
         missing = []
         for key in group_tasks:
             if not rep or not rep[key]:
@@ -908,6 +1002,68 @@ def log_transfer(student_id, from_chat_id, to_chat_id, reason):
             "INSERT INTO student_transfers(student_id,from_chat_id,to_chat_id,reason) VALUES(?,?,?,?)",
             (student_id, from_chat_id, to_chat_id, reason)
         )
+
+
+def get_overdue_unregistered(days=14):
+    """Возвращает (user_id, chat_id) незарегистрированных старше days дней."""
+    with db() as c:
+        return c.execute(
+            "SELECT user_id, chat_id FROM unregistered_members "
+            "WHERE julianday('now') - julianday(joined_date) >= ?",
+            (days,)
+        ).fetchall()
+
+
+def remove_unregistered(user_id, chat_id):
+    with db() as c:
+        c.execute(
+            "DELETE FROM unregistered_members WHERE user_id=? AND chat_id=?",
+            (user_id, chat_id)
+        )
+
+
+def set_group_invite_link(group_id, link):
+    with db() as c:
+        c.execute("UPDATE groups SET invite_link=? WHERE id=?", (link, group_id))
+
+
+def get_prep_students_due():
+    """Студенты prep-групп у кого прошло ровно 14 дней с joined_date."""
+    with db() as c:
+        return c.execute("""
+            SELECT u.id, u.name, u.phone, g.id as group_id, g.chat_id, g.title,
+                   g.fallback_chat_id, ug.joined_date
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            JOIN groups g ON ug.group_id=g.id
+            WHERE ug.role='student' AND ug.active=1
+              AND g.group_type='prep'
+              AND julianday('now','localtime') - julianday(ug.joined_date) >= 14
+        """).fetchall()
+
+
+def count_report_days_since(uid, group_id, since_date):
+    """Количество дней с отчётами начиная с даты (для prep проверки)."""
+    with db() as c:
+        row = c.execute(
+            "SELECT COUNT(DISTINCT date) as cnt FROM reports WHERE sid=? AND group_id=? AND date>=?",
+            (uid, group_id, since_date)
+        ).fetchone()
+        return row["cnt"] if row else 0
+
+
+def get_relaxed_groups_by_lang(lang):
+    """Relaxed-группы заданного языка, отсортированные по числу студентов (меньше → первая)."""
+    with db() as c:
+        return c.execute("""
+            SELECT g.id, g.chat_id, g.title, g.invite_link,
+                   COUNT(ug.user_id) as student_count
+            FROM groups g
+            LEFT JOIN user_groups ug ON ug.group_id=g.id AND ug.role='student' AND ug.active=1
+            WHERE g.group_type='relaxed' AND g.lang=? AND g.active=1 AND g.invite_link IS NOT NULL
+            GROUP BY g.id
+            ORDER BY student_count ASC
+        """, (lang,)).fetchall()
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────

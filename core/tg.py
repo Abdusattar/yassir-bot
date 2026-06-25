@@ -14,13 +14,16 @@ async def tg_call(method, payload=None, timeout=35):
                 url, json=(payload or {}),
                 timeout=aiohttp.ClientTimeout(total=timeout)
             ) as r:
-                return await r.json()
+                data = await r.json()
+                if data and not data.get("ok"):
+                    log.error("tg_call %s failed: %s", method, data.get("description", data))
+                return data
     except Exception as e:
         log.error("tg_call %s error: %s: %s", method, type(e).__name__, e)
         return None
 
 
-async def _raw_send(cid, text):
+async def _raw_send(cid, text, reply_to_message_id=None):
     parts = []
     t = text or ""
     while len(t) > 4096:
@@ -34,12 +37,16 @@ async def _raw_send(cid, text):
     for p in parts:
         if not p:
             continue
-        last = await tg_call("sendMessage", {"chat_id": cid, "text": p})
+        params = {"chat_id": cid, "text": p}
+        if reply_to_message_id:
+            params["reply_to_message_id"] = reply_to_message_id
+            params["allow_sending_without_reply"] = True
+        last = await tg_call("sendMessage", params)
         await asyncio.sleep(0.05)
     return last
 
 
-async def send_message(chat_id, text):
+async def send_message(chat_id, text, reply_to_message_id=None):
     try:
         cid = int(str(chat_id))
     except (ValueError, TypeError):
@@ -57,7 +64,7 @@ async def send_message(chat_id, text):
             await _raw_send(obs_id, shadow_text)
         return None  # в группу НЕ отправляем
 
-    return await _raw_send(cid, text or "")
+    return await _raw_send(cid, text or "", reply_to_message_id=reply_to_message_id)
 
 
 async def ban_member(chat_id, user_id):

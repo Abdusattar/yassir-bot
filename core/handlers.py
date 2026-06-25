@@ -3,17 +3,17 @@ import logging
 
 from config import SUPER_ADMIN_IDS
 from core.content import (
-    TASK_KEYS, DEFAULT_TASKS, ONLINE_WORDS, EXCUSE_WORDS, PROGRAM_INFO
+    TASK_KEYS, DEFAULT_TASKS, ONLINE_WORDS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
-from core.i18n import T, get_group_lang, LANG_NAMES
+from core.i18n import T, get_group_lang, LANG_NAMES, task_name, help_student, help_admin
 from core.tg import send_message
 import core.ai as ai
 from core.db import (
     get_group, save_group, get_group_tasks, update_group_tasks, update_group_lang,
-    update_group_type, update_group_fallback, update_group_summary,
+    update_group_type, update_group_fallback, update_group_summary, set_group_invite_link,
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
     register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
-    add_group_admin, remove_group_admin, get_group_admins,
+    add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_skip_count_month, add_bonus,
@@ -37,7 +37,7 @@ _TASK_NAMES = {
 
 _SECTION_GRP_ADMIN = (
     "👤 КОМАНДЫ УСТАЗА (пиши в группе)\n"
-    "/remove Имя — убрать студента\n"
+    "/remove Имя — убрать студента (или реплаем)\n"
     "/rename Имя | Новое имя — переименовать\n"
     "/students — список студентов\n\n"
     "/report — отчёт за сегодня\n"
@@ -59,8 +59,8 @@ _SECTION_GRP_ADMIN = (
 _SECTION_SUPER = (
     "🔧 КОМАНДЫ ГЛАВНОГО АДМИНА\n"
     "/setgroup — зарегистрировать группу\n"
-    "/admin +телефон — назначить устаза группы\n"
-    "/unadmin +телефон — убрать устаза\n"
+    "/admin — (реплаем) назначить устаза группы\n"
+    "/unadmin — (реплаем) убрать устаза\n"
     "/admins — список устазов\n"
     "/removeall — удалить всех студентов\n\n"
     "/teach текст — обучить бота\n"
@@ -70,27 +70,8 @@ _SECTION_SUPER = (
 )
 
 
-def _section_student(group_tasks, gtype):
-    task_lines = "\n".join(
-        str(i + 1) + ". " + _TASK_NAMES[k]
-        for i, k in enumerate(group_tasks) if k in _TASK_NAMES
-    )
-    limit_info = ""
-    if gtype == "pro":
-        limit_info = "\n⚠️ Pro-группа: пропуск 14 дней → Тадаббур"
-    elif gtype == "relaxed":
-        limit_info = "\n📅 Расслабленная: пропуск 30 дней → Тадаббур"
-    return (
-        "📚 КАК СДАВАТЬ ОТЧЁТ\n"
-        "Пиши что выполнил:\n" + task_lines + "\n"
-        "За каждое задание +1 балл 💎\n\n"
-        "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
-        "📡 Онлайн урок: напиши +\n\n"
-        "/mystats — твоя статистика\n"
-        "/rating — рейтинг группы\n"
-        "Ясир, ...? — задай вопрос боту"
-        + limit_info
-    )
+def _section_student(group_tasks, gtype, lang="ru"):
+    return help_student(group_tasks, gtype, lang)
 
 
 def extract_phone(sender):
@@ -126,80 +107,139 @@ def detect_yassir(text):
     return None
 
 
-def get_full_program_info():
+def _with_knowledge(base: str) -> str:
     extra = get_knowledge()
     if not extra:
-        return PROGRAM_INFO
-    lines = [PROGRAM_INFO, "\nДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ОТ УСТАЗА:"]
+        return base
+    lines = [base, "\nДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ОТ УСТАЗА:"]
     for row in extra:
         lines.append("- " + row["text"])
     return "\n".join(lines)
+
+
+def get_full_program_info():
+    return _with_knowledge(PROGRAM_INFO)
+
+
+# Ключевые слова для определения темы вопроса (НЕ для отчётов — отдельный словарь)
+_Q_KEYWORDS = {
+    "j": ["таджвид", "tajweed", "махрадж", "makraj", "مخرج", "мадд", "madd", "مد",
+          "нун сакина", "نون", "танвин", "idgham", "идгам", "ихфа", "ikhfa", "iqlab",
+          "гунна", "gunna", "غنة", "изхар", "izhaar", "калькала", "قلقلة",
+          "ташдид", "tashdid", "سكون", "сукун", "сифат", "sifat", "صفة",
+          "буква", "звук", "харф"],
+    "n":  ["нахв", "nahw", "грамматик", "grammar", "и'раб", "irab", "мубтада", "хабар",
+           "мرفوع", "منصوب", "مجرور", "فعل", "فاعل", "فاعل", "مبتدأ", "خبر",
+           "падеж", "глагол", "подлежащ", "сказуем", "мафуль", "насб", "джарр", "рафа"],
+    "t":  ["муфрадат", "mufradat", "كلمات", "слово", "слова", "словарь",
+           "значени", "перевод", "перевести", "переведи", "хамза", "hamza", "همزة"],
+}
+
+
+def _build_reference_for_question(text: str) -> str:
+    """Для ответа на вопрос: определяет тему и берёт нужную секцию.
+    При неуверенности — возвращает весь PROGRAM_INFO (безопаснее, чем пропустить секцию)."""
+    t = text.lower()
+    matched = {key for key, kws in _Q_KEYWORDS.items() if any(kw in t for kw in kws)}
+    if len(matched) == 1:
+        return _with_knowledge(PROG_SECTIONS[matched.pop()])
+    return _with_knowledge(PROGRAM_INFO)
 
 
 def _has_arabic(text):
     return any("؀" <= ch <= "ۿ" for ch in text)
 
 
-async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks):
+def _build_reference(checks):
+    """Собирает только нужные секции справочника по списку проверок."""
+    seen = set()
+    parts = []
+    for check in checks:
+        c = check.lower()
+        key = None
+        if "tajweed" in c:
+            key = "j"
+        elif "nahw" in c or "grammar" in c:
+            key = "n"
+        elif "mufradat" in c or "hadith" in c or "writing" in c:
+            key = "t"
+        if key and key not in seen:
+            seen.add(key)
+            parts.append(PROG_SECTIONS[key])
+    extra = get_knowledge()
+    if extra:
+        parts.append("\nДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ОТ УСТАЗА:")
+        for row in extra:
+            parts.append("- " + row["text"])
+    return "\n".join(parts)
+
+
+async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks, glang="ru", message_id=None):
     try:
+        from core.i18n import lang_instruction
         writing_section = ""
         if _has_arabic(text):
-            checks = list(checks) + ["письмо (хуруфы и соединение)"]
+            checks = list(checks) + ["arabic letter writing (hamza seat, letter connections, harakat)"]
             writing_section = (
-                "\n✍️ ПИСЬМО — ПОЛНАЯ ПРОВЕРКА НАПИСАНИЯ АРАБСКИХ СЛОВ:\n"
-                "Проверяй каждое арабское слово ЦЕЛИКОМ:\n"
-                "1. ХАМЗА — на правильной подставке (ئ ؤ أ إ آ ء) по огласовке\n"
-                "2. БУКВЫ — все ли буквы на месте, нет ли пропущенных/лишних\n"
-                "3. СОЕДИНЕНИЕ — буквы НЕ соединяющиеся слева: ا د ذ ر ز و — после них следующая буква пишется отдельно\n"
-                "4. ОГЛАСОВКИ (харакят) — фатха/кясра/дамма/сукун/шадда/танвин на правильных местах\n"
-                "5. ТА-МАРБУТА (ة) vs та обычная (ت) — в конце слова\n"
-                "6. АЛИФ-МАКСУРА (ى) vs йа (ي) — в конце слова\n"
-                "7. ХАРФЫ МАДДА — длинные гласные ا و ي на месте\n"
-                "8. ЛЯМ-АЛИФ (لا) — правильное написание\n"
-                "9. ПЕРЕВОД — точность значения слова\n\n"
-                "ПРИМЕРЫ ОШИБОК:\n"
-                "• جءت → правильно جِئْتَ (хамза на йа)\n"
-                "• الرحمن без алифа → الرَّحْمَٰن\n"
-                "• ة вместо ت: رحمة/رحمت\n"
-                "• ى вместо ي: علي/على (разные слова!)\n\n"
-                "ОГЛАСОВКИ (харакат) без арабского текста НЕ ТРЕБУЙ — студент может писать без них.\n"
-                "Если написание ВЕРНО — не упоминай раздел письмо вообще.\n"
+                "\nWRITING CHECK — verify each Arabic word fully:\n"
+                "1. HAMZA — correct seat (ئ ؤ أ إ آ ء) based on vowel\n"
+                "2. LETTERS — no missing or extra letters\n"
+                "3. CONNECTIONS — non-connecting letters: ا د ذ ر ز و — next letter must be separate\n"
+                "4. VOWELS (harakat) — fatha/kasra/damma/sukun/shadda/tanwin correct\n"
+                "5. TA-MARBUTA (ة) vs regular ta (ت) at end of word\n"
+                "6. ALIF-MAQSURA (ى) vs ya (ي) at end of word\n"
+                "7. MADD letters ا و ي in correct positions\n"
+                "8. LAM-ALIF (لا) written correctly\n"
+                "9. TRANSLATION — accurate meaning\n\n"
+                "NOTE: do NOT require harakat if student wrote without them — that is NOT an error.\n"
+                "If writing is correct — do NOT mention the writing section at all.\n"
             )
 
         system = (
-            "Ты учитель Корана Ясир. Проверь ТОЛЬКО " + ", ".join(checks) + " в сообщении студента.\n\n"
-            "🚨 ГЛАВНОЕ ПРАВИЛО ПРОВЕРКИ:\n"
-            "Прежде чем заявить об ошибке — НАЙДИ это правило в СПРАВОЧНИКЕ ниже и сверься БУКВА В БУКВУ.\n"
-            "Если ответ студента СОВПАДАЕТ со справочником — это ВЕРНО, НЕ исправляй.\n"
-            "НЕ полагайся на свою память — справочник ГЛАВНЕЕ твоих знаний.\n"
-            "Если правила нет в справочнике и ты не уверен на 100% — НЕ делай замечание.\n\n"
-            "СТРОГОЕ РАЗДЕЛЕНИЕ:\n"
-            "📖 ТАДЖВИД: проверяй ТОЛЬКО махрадж (место выхода буквы) и сифат (свойство). "
-            "⚠️ КРИТИЧЕСКИ ВАЖНО — не путай буквы:\n  ح (ха) → СЕРЕДИНА горла\n  خ (ха-кх) → КОНЕЦ горла. ح ≠ خ!\n\n"
-            "📝 МУФРАДАТ: проверяй ТОЛЬКО БУКВЫ арабского слова и точность перевода. "
-            "ОГЛАСОВКИ (харакат) НЕ ТРЕБУЙ — это НЕ ошибка! Проверяй только хуруф (согласные).\n\n"
-            "📚 НАХВ: проверяй ТОЛЬКО ИЪРАБ (конечную огласовку) и название члена предложения. "
-            "ТАБЛИЦА: فاعل→رفع, مفعول به→نصب, مضاف إليه→جر, اسم كان→رفع, خبر كان→نصب.\n\n"
+            "You are Quran teacher Yassir. Check ONLY the following in the student's message: "
+            + ", ".join(checks) + ".\n\n"
+            "🚨 CRITICAL RULE:\n"
+            "Before claiming an error — FIND the exact rule in the REFERENCE below and verify letter by letter.\n"
+            "If the student's answer MATCHES the reference — it is CORRECT, do NOT correct it.\n"
+            "Do NOT rely on your memory — the REFERENCE overrides your training.\n"
+            "If the rule is not in the reference and you are not 100% sure — do NOT make a remark.\n\n"
+            "STRICT SEPARATION:\n"
+            "📖 TAJWEED: check ONLY makhraj (exit point of letter) and sifat (property). "
+            "⚠️ CRITICAL — do not confuse:\n  ح (ha) → MIDDLE of throat\n  خ (kha) → END of throat. ح ≠ خ!\n\n"
+            "📝 MUFRADAT/HADITH: check ONLY the Arabic letter spelling and translation accuracy. "
+            "Do NOT require harakat — only check consonant letters (huruf).\n\n"
+            "📚 NAHW: check ONLY irab (final vowel) and name of the grammatical member. "
+            "TABLE: فاعل→رفع, مفعول به→نصب, مضاف إليه→جر, اسم كان→رفع, خبر كان→نصب.\n\n"
             + writing_section +
-            "ПРАВИЛА ОТВЕТА:\n"
-            "- Если всё ВЕРНО → ответь ровно одним словом: ВЕРНО\n"
-            "- Если есть ОШИБКА → МАКСИМУМ 3 строки: что неверно и как правильно\n"
-            "- ЗАПРЕЩЕНО: длинные объяснения, лекции, хвалебные фразы\n\n"
-            "СПРАВОЧНИК:\n" + get_full_program_info()
+            "RESPONSE RULES:\n"
+            "- If everything is CORRECT → reply with exactly one word: CORRECT\n"
+            "- If there is an ERROR → MAXIMUM 3 lines: what is wrong and how to fix it\n"
+            "- FORBIDDEN: long explanations, lectures, praise phrases\n\n"
+            + lang_instruction(glang) + "\n\n"
+            "REFERENCE:\n" + _build_reference(checks)
         )
-        prompt = "Сообщение студента " + name + ":\n" + text
+        prompt = "Student " + name + " wrote:\n" + text
         result = await ai.ask_ai(prompt, system=system)
-        if result and "ВЕРНО" not in result.upper()[:20]:
-            await send_message(chat_id, "🤖 Ясир (проверка):\n" + result)
-        elif result and "ВЕРНО" in result.upper()[:20]:
-            await send_message(chat_id, "✅")
+        if result and ("CORRECT" in result.upper()[:20] or "ВЕРНО" in result.upper()[:20]):
+            await send_message(chat_id, "✅", reply_to_message_id=message_id)
+        elif result:
+            await send_message(chat_id, "🤖 Ясир:\n" + result, reply_to_message_id=message_id)
     except Exception as e:
         log.error("verify error: %s", e)
 
 
-async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None):
+async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None):
     phone = extract_phone(sender)
     text = (text or "").strip()
+    # Telegram в группах добавляет @botname к командам: /help@yassirquranbot → /help
+    # Только для команд студентов — админские команды работают только при ручном вводе
+    _STUDENT_CMDS = {"/help", "/mystats", "/rating", "/id"}
+    if text.startswith("/"):
+        at = text.find("@")
+        if at != -1 and " " not in text[:at]:
+            cmd = text[:at]
+            if cmd in _STUDENT_CMDS:
+                text = cmd + text[text.find(" ", at) if " " in text[at:] else len(text):]
     if not text and not is_media:
         return
 
@@ -254,7 +294,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 "👤 СТУДЕНТЫ\n"
                 "/add Имя — добавить\n"
                 "/add 996XXX Имя — с номером\n"
-                "/remove Имя — удалить\n"
+                "/remove Имя — удалить (или реплаем)\n"
                 "/students — список\n\n"
                 "📊 ОТЧЁТЫ\n"
                 "/report — сегодня\n"
@@ -331,16 +371,39 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await send_message(chat_id, "\n".join(lines))
             return
 
-    # ── Личка только для супер-админов ───────────────────────────────────────
-    if not is_group:
-        if not is_admin(phone):
-            await send_message(chat_id, "Ассаляму алейкум! 🕌\nПиши в своей группе.")
+        if text == "/morning_report":
+            from core.scheduler import morning_tadabbur_report
+            await send_message(chat_id, "⏳ Отправляю итоги вчера в тадаббур...")
+            await morning_tadabbur_report()
+            await send_message(chat_id, "✅ Готово.")
             return
-        if text and not text.startswith("/"):
-            answer = await ai.answer_question(
-                text, get_full_program_info(), "личка суперадмина", phone, None, sender_name
-            )
-            await send_message(chat_id, answer)
+
+    # ── Личка ────────────────────────────────────────────────────────────────
+    if not is_group:
+        if is_admin(phone):
+            if text and not text.startswith("/"):
+                answer = await ai.answer_question(
+                    text, _build_reference_for_question(text), "личка суперадмина", phone, None, sender_name
+                )
+                await send_message(chat_id, answer)
+            return
+        if is_any_group_admin(phone):
+            if text and not text.startswith("/"):
+                answer = await ai.answer_ustaz_question(
+                    text, _build_reference_for_question(text), sender_name
+                )
+                await send_message(chat_id, answer)
+            elif text == "/start":
+                await send_message(chat_id,
+                    "👋 Ассаляму алейкум, Устаз! 🕌\n"
+                    "Пиши мне в личку любой вопрос по таджвиду, нахву или программе — отвечу 🤲"
+                )
+            return
+        await send_message(chat_id,
+            "Ассаляму алейкум! 🕌\n"
+            "Чтобы зарегистрироваться — напиши любое сообщение в своей учебной группе, "
+            "и бот попросит твоё имя 📝"
+        )
         return
 
     group = get_group(chat_id)
@@ -388,12 +451,25 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Регистрация в группе ──────────────────────────────────────────────────
-    if not is_group_admin(phone, group_id) and not text.startswith("/"):
+    if not is_group_admin(phone, group_id):
         s_reg = find_by_phone(phone, group_id)
         if not s_reg:
+            if text.startswith("/"):
+                if is_pending_name(phone, group_id):
+                    await send_message(chat_id, T("ask_name", glang))
+                else:
+                    greeting = ("Ассаляму алейкум, " + sender_name + "! 🌙\n") if sender_name else "Ассаляму алейкум! 🌙\n"
+                    set_pending_name(phone, group_id, "")
+                    await send_message(chat_id, greeting + T("ask_name", glang))
+                return
             if is_pending_name(phone, group_id):
                 import re as _re
                 raw_input = text.strip()
+                # Служебные слова во время ожидания имени — напомнить попросить имя
+                _SKIP_WORDS = {"help", "хелп", "помощь", "start", "старт", "hi", "привет", "салам", "salam"}
+                if raw_input.lower() in _SKIP_WORDS:
+                    await send_message(chat_id, T("ask_name", glang))
+                    return
                 # Если ещё не сохранён отчёт — проверим, не отчёт ли это сообщение
                 if not get_pending_text(phone, group_id):
                     td_pre = check_text(raw_input)
@@ -401,10 +477,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                         set_pending_name(phone, group_id, raw_input)
                         await send_message(chat_id, T("ask_name", glang))
                         return
-                # Извлекаем имя через ИИ
-                new_name = await ai.extract_name(raw_input)
+                # Извлекаем имя через ИИ; если не получилось — пробуем Telegram-имя
+                new_name = (await ai.extract_name(raw_input) or "").strip() or None
+                if not new_name and sender_name:
+                    new_name = (await ai.extract_name(sender_name) or "").strip() or None
                 if not new_name:
                     await send_message(chat_id, T("ask_name_again", glang))
+                    return
+                # Проверяем что это действительно имя человека
+                if not await ai.is_valid_name(new_name):
+                    await send_message(chat_id, T("ask_name_confirm", glang, name=new_name))
                     return
                 # Проверяем: не студент ли уже в другой учебной группе
                 gtype = group["group_type"] or "relaxed"
@@ -434,7 +516,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     sc = sum(1 for k in group_tasks if td.get(k))
                     if sc > 0:
                         save_report(sid, group_id, get_date(), td)
-                        done_list = [_TASK_NAMES[k] for k in group_tasks if td.get(k) and k in _TASK_NAMES]
+                        done_list = [task_name(k, glang) for k in group_tasks if td.get(k)]
                         await send_message(chat_id, "📖 Засчитан отчёт из первого сообщения:\n" + "\n".join("✅ " + n for n in done_list))
                 return
             else:
@@ -444,7 +526,33 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     add_student(existing_user["name"], group_id, phone)
                     await send_message(chat_id, T("registered_group", glang, name=existing_user["name"]))
                     return
-                # Первый раз в системе — спрашиваем имя
+                # Первый раз в системе — пробуем авто-матч по Telegram-имени
+                # Только если точное совпадение И ровно один такой незарегистрированный
+                if sender_name:
+                    tg_name = (await ai.extract_name(sender_name) or "").strip() or None
+                    if tg_name:
+                        gtype_chk = group["group_type"] or "relaxed"
+                        if gtype_chk != "tadabbur":
+                            existing_lg = get_learning_group(phone)
+                            if existing_lg and existing_lg["id"] != group_id:
+                                tg_name = None
+                        if tg_name:
+                            with db() as _c:
+                                exact_count = _c.execute(
+                                    "SELECT COUNT(*) FROM users u JOIN user_groups ug ON u.id=ug.user_id "
+                                    "WHERE LOWER(u.name)=LOWER(?) AND ug.group_id=? AND ug.active=1 AND u.phone IS NULL",
+                                    (tg_name, group_id)
+                                ).fetchone()[0]
+                            if exact_count == 1:
+                                existing_s = find_unlinked_by_name(tg_name, group_id)
+                                if existing_s:
+                                    register_student(existing_s["id"], phone)
+                                    sid = existing_s["id"]
+                                    greeting = "Ассаляму алейкум, " + tg_name + "! 🌙\n"
+                                    await send_message(chat_id, greeting + T("registered_group", glang, name=tg_name))
+                                    for ap in SUPER_ADMIN_IDS:
+                                        await send_message(ap, "👤 " + tg_name + " авторегистрация в «" + (group["title"] or str(chat_id)) + "»")
+                                    return
                 set_pending_name(phone, group_id, text)
                 greeting = ("Ассаляму алейкум, " + sender_name + "! 🌙\n") if sender_name else "Ассаляму алейкум! 🌙\n"
                 await send_message(chat_id, greeting + T("ask_name", glang))
@@ -510,16 +618,26 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # ── Управление типом группы (новые команды) ───────────────────────────────
     if text.startswith("/settype ") and is_group_admin(phone, group_id):
         gtype = text[9:].strip().lower()
-        if gtype in ("pro", "relaxed", "tadabbur"):
+        if gtype in ("pro", "relaxed", "tadabbur", "prep"):
             update_group_type(chat_id, gtype)
             type_desc = {
-                "pro": "Про-группа (14 дней без отчёта → Тадаббур)",
-                "relaxed": "Расслабленная (30 дней → Тадаббур)",
-                "tadabbur": "Тадаббур — пространство красоты и смыслов Корана (не учебная группа)"
+                "pro": "Про-группа (10 дней без отчёта → Тадаббур)",
+                "relaxed": "Расслабленная (20 дней подряд → Тадаббур)",
+                "tadabbur": "Тадаббур — пространство красоты и смыслов Корана (не учебная группа)",
+                "prep": "Подготовительная (14 дней, ≥5 сдал → выбор relaxed-группы)",
             }
             await send_message(chat_id, "✅ Тип группы: " + type_desc[gtype])
         else:
-            await send_message(chat_id, "Доступные типы:\n/settype pro\n/settype relaxed\n/settype tadabbur")
+            await send_message(chat_id, "Доступные типы:\n/settype pro\n/settype relaxed\n/settype tadabbur\n/settype prep")
+        return
+
+    if text.startswith("/setlink ") and is_group_admin(phone, group_id):
+        link = text[9:].strip()
+        if link.startswith("https://t.me/"):
+            set_group_invite_link(group["id"], link)
+            await send_message(chat_id, "✅ Ссылка-приглашение сохранена для этой группы.")
+        else:
+            await send_message(chat_id, "Напиши: /setlink https://t.me/+xxxx")
         return
 
     if text.startswith("/setfallback ") and is_group_admin(phone, group_id):
@@ -585,6 +703,15 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Студенты ──────────────────────────────────────────────────────────────
+    if text == "/remove" and reply_to_id and is_group_admin(phone, group_id):
+        for s in get_students(group_id):
+            if s["phone"] == str(reply_to_id):
+                deactivate_student(s["id"], group_id)
+                await send_message(chat_id, "✅ " + s["name"] + " удалён!")
+                return
+        await send_message(chat_id, "Студент не найден в этой группе")
+        return
+
     if text.startswith("/remove ") and is_group_admin(phone, group_id):
         name = text[8:].strip()
         for s in get_students(group_id):
@@ -689,9 +816,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         s_h = find_by_phone(phone, group_id)
         sections = []
         if s_h:
-            sections.append(_section_student(group_tasks, group["group_type"] or "relaxed"))
+            sections.append(_section_student(group_tasks, group["group_type"] or "relaxed", glang))
         if is_group_admin(phone, group_id):
-            sections.append(_SECTION_GRP_ADMIN)
+            sections.append(help_admin(glang))
+        if phone in SUPER_ADMIN_IDS:
+            sections.append(_SECTION_SUPER)
         if sections:
             await send_message(chat_id, ("\n\n" + "─" * 20 + "\n\n").join(sections))
         return
@@ -724,7 +853,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         total_score = (total_row["total"] or 0) + (bonus_row["bonus"] or 0)
         days_done = total_row["days"] or 0
         rank = next((i + 1 for i, r in enumerate(rank_rows) if r["id"] == s_check["id"]), "?")
-        today_rep = get_today_report(s_check["id"])
+        today_rep = get_today_report(s_check["id"], group_id)
         today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
         gtype = group["group_type"] or "relaxed"
         limit_days = 14 if gtype == "pro" else 30
@@ -838,7 +967,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     s = find_by_phone(phone, group_id)
 
-    # Устаз без активной студенческой роли в этой группе — игнорируем
+    # Устаз не проходит через студенческий флоу — если он также студент, пропускаем
     if is_group_admin(phone, group_id) and not s:
         return
 
@@ -852,7 +981,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await send_message(chat_id, T("yassir_listening", glang))
             return
         answer = await ai.answer_question(
-            yassir_question, get_full_program_info(),
+            yassir_question, _build_reference_for_question(yassir_question),
             group["title"] or chat_id, phone, group_id, s["name"]
         )
         await send_message(chat_id, "🤖 Ясир:\n" + answer)
@@ -860,13 +989,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     # ── Определяем тип сообщения и задания ────────────────────────────────────
     tasks_done = {k: False for k in TASK_KEYS}
-    legend = "\n".join(DEFAULT_TASKS[k] for k in group_tasks)
+    legend = "\n".join(task_name(k, glang) for k in group_tasks)
 
     if is_media:
-        if text and not is_checkmarks_only(text) and len(text.strip()) > 3:
-            tasks_done = check_text(text)
-        else:
+        if not text or is_checkmarks_only(text):
             return
+        # Для фото/медиа: caption может быть коротким ("слова", "т"), и арабику
+        # не требуем — студент сфотографировал написанное от руки
+        tasks_done = check_text(text, media=True)
     elif is_checkmarks_only(text):
         await send_message(chat_id, T("ask_words", glang, name=s["name"], legend=legend))
         return
@@ -879,7 +1009,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     is_question = ("?" in text and score == 0)
     if is_question and not is_media:
         answer = await ai.answer_question(
-            text, get_full_program_info(),
+            text, _build_reference_for_question(text),
             group["title"] or chat_id, phone, group_id, s["name"]
         )
         await send_message(chat_id, "🤖 Ясир:\n" + answer)
@@ -892,18 +1022,20 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if not is_media and len(text.strip()) > 10:
         checks = []
         if tasks_done.get("j"):
-            checks.append("таджвид")
+            checks.append("tajweed (mahraj and sifat of letters)")
         if tasks_done.get("n"):
-            checks.append("грамматику (нахв)")
+            checks.append("arabic grammar (nahw/irab)")
         if tasks_done.get("t"):
-            checks.append("муфрадат (написание арабских слов и перевод)")
-        # Письмо проверяется всегда когда есть арабский текст
+            checks.append("mufradat (arabic word spelling and translation accuracy)")
+        if tasks_done.get("h"):
+            checks.append("hadith (arabic word spelling and translation accuracy)")
+        # Writing check always fires when Arabic text is present
         if checks or _has_arabic(text):
             asyncio.create_task(_verify_and_reply(
-                chat_id, text, group["title"] or chat_id, phone, group_id, s["name"], checks))
+                chat_id, text, group["title"] or chat_id, phone, group_id, s["name"], checks, glang, message_id))
 
     # ── Засчитываем отчёт ─────────────────────────────────────────────────────
-    prev = get_today_report(s["id"])
+    prev = get_today_report(s["id"], group_id)
     prev_done = set()
     if prev:
         prev_done = {k for k in group_tasks if prev[k]}

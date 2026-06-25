@@ -18,6 +18,7 @@ from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message
 from core.scheduler import scheduler
+from core.prep import handle_prep_callback
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ log = logging.getLogger(__name__)
 _sender_locks: dict = {}
 
 
-async def queued_process_message(chat_id, sender, text, sender_name, is_media=False, reply_to_id=None):
+async def queued_process_message(chat_id, sender, text, sender_name, is_media=False, reply_to_id=None, message_id=None):
     key = (chat_id, sender)
     lock = _sender_locks.get(key)
     if lock is None:
@@ -35,7 +36,7 @@ async def queued_process_message(chat_id, sender, text, sender_name, is_media=Fa
         _sender_locks[key] = lock
     async with lock:
         try:
-            await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id)
+            await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id)
         except Exception as e:
             log.error("process_message error chat=%s sender=%s: %s", chat_id, sender, e)
         await asyncio.sleep(0.3)
@@ -62,7 +63,7 @@ async def main():
         try:
             resp = await tg_call(
                 "getUpdates",
-                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member"]},
+                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "callback_query"]},
                 timeout=40
             )
             if not resp or not resp.get("ok"):
@@ -82,6 +83,9 @@ async def main():
                     new_m = cm.get("new_chat_member", {})
                     old_m = cm.get("old_chat_member", {})
                     user = new_m.get("user", {})
+                    log.info("chat_member: chat=%s user=%s(%s) %s→%s",
+                             cm.get("chat", {}).get("id"), user.get("first_name"), user.get("id"),
+                             old_m.get("status"), new_m.get("status"))
                     joined = (
                         new_m.get("status") == "member"
                         and old_m.get("status") in ("left", "kicked")
@@ -94,6 +98,8 @@ async def main():
                         is_super = uid in SUPER_ADMIN_IDS
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
                         is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
+                        log.info("chat_member join: uid=%s group=%s super=%s grp_admin=%s tadabbur=%s",
+                                 uid, group_info and group_info["id"], is_super, is_grp_admin, is_tadabbur)
                         if group_info and not is_super and not is_grp_admin and not is_tadabbur:
                             tg_name = (user.get("first_name") or "").strip()
                             if user.get("last_name"):
@@ -108,13 +114,20 @@ async def main():
                                 existing_group = get_learning_group(uid)
                                 gtype = group_info["group_type"] or "relaxed"
                                 if existing_group and gtype != "tadabbur":
-                                    pass  # уже студент в другой учебной группе — не добавляем
+                                    log.info("chat_member: %s already in another group, skip", uid)
                                 else:
                                     add_student(existing_user["name"], group_info["id"], uid)
+                                    log.info("chat_member: added existing user %s to group %s", existing_user["name"], group_info["id"])
                             else:
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
+                                log.info("chat_member: greeting new user %s in chat %s", uid, chat_id)
                                 await send_message(chat_id, greeting + T("ask_name", glang))
+                    continue
+
+                cq = upd.get("callback_query")
+                if cq:
+                    asyncio.create_task(handle_prep_callback(cq))
                     continue
 
                 msg = upd.get("message")
@@ -150,10 +163,11 @@ async def main():
                 log.info("chat=%s from=%s(%s) text=%r media=%s",
                          chat_id, sender_name, sender, text, is_media)
 
-                # Новый участник
+                # Новый участник (new_chat_members — добавлен кем-то или в старых группах)
                 for nm in msg.get("new_chat_members", []):
                     if not nm.get("is_bot"):
                         uid = str(nm.get("id", ""))
+                        log.info("new_chat_members: uid=%s name=%s in chat=%s", uid, nm.get("first_name"), chat_id)
                         group_info = get_group(chat_id)
                         # Суперадмины и устазы группы — не регистрируем как студентов
                         is_super = uid in SUPER_ADMIN_IDS
@@ -187,8 +201,9 @@ async def main():
                                 await send_message(chat_id, greeting + T("ask_name", glang))
 
                 if (text or is_media) and chat_id:
+                    message_id = msg.get("message_id")
                     asyncio.create_task(
-                        queued_process_message(chat_id, sender, text, sender_name, is_media, reply_to_id)
+                        queued_process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id)
                     )
 
         except Exception as e:

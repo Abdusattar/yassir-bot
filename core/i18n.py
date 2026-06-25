@@ -1,14 +1,14 @@
 import random
 
 LANG_NAMES = {
-    "ru": "русский",
-    "ky": "кыргызский",
-    "uz": "узбекский",
-    "kk": "казахский",
-    "tr": "турецкий",
-    "ar": "арабский",
-    "en": "английский",
-    "zh": "китайский",
+    "ru": "Russian",
+    "ky": "Kyrgyz",
+    "uz": "Uzbek",
+    "kk": "Kazakh",
+    "tr": "Turkish",
+    "ar": "Arabic",
+    "en": "English",
+    "zh": "Chinese",
 }
 
 TR = {
@@ -235,12 +235,85 @@ TR = {
         "kk": "📿 {name}, {days} күн есеп жоқтан Тадаббур тобына ауыстырылдың.\nОнда міндетті тапсырмалар жоқ — оқы, ойлан, дайын болғанда қайт 🤲",
         "en": "📿 {name}, after {days} days without reports you've been moved to Tadabbur group.\nNo mandatory tasks there — read, reflect, return when ready 🤲",
     },
+    "transfer_to_tadabbur_lessons": {
+        "ru": "📿 {name}, ты пропустил {misses} онлайн урока в этом месяце и переведён в группу Тадаббур.\nТам нет обязательных заданий — можешь читать, размышлять, возвращаться когда будешь готов 🤲",
+        "ky": "📿 {name}, бул айда {misses} онлайн сабакты өткөрүп жибердиң жана Тадаббур тобуна которулдуң.\nАнда милдеттүү тапшырмалар жок — окуй бер, ойлон, даяр болгондо кайт 🤲",
+        "uz": "📿 {name}, bu oyda {misses} ta onlayn darsni o'tkazib yubording va Tadabbur guruhiga o'tkazilding.\nU yerda majburiy vazifalar yo'q — o'qi, fikr yurgiz, tayyor bo'lganda qait 🤲",
+        "kk": "📿 {name}, осы айда {misses} онлайн сабақты өткізіп жібердің және Тадаббур тобына ауыстырылдың.\nОнда міндетті тапсырмалар жоқ — оқы, ойлан, дайын болғанда қайт 🤲",
+        "en": "📿 {name}, you missed {misses} online lessons this month and have been moved to Tadabbur group.\nNo mandatory tasks there — read, reflect, return when ready 🤲",
+    },
     "upgrade_suggestion": {
         "ru": "🌟 {name}, МашаАллах! Ты 30 дней сдавал почти без пропусков.\nУстаз предлагает перейти в продвинутую (pro) группу — хочешь?",
         "ky": "🌟 {name}, МашаАллах! 30 күн дээрлик тынымсыз тапшырдың.\nУстаз сени pro-топко өтүүнү сунуштайт — каалайсыңбы?",
         "uz": "🌟 {name}, MashaAlloh! 30 kun deyarli uzluksiz topshirding.\nUstoz seni pro guruhga o'tishni tavsiya qiladi — xohlaysanmi?",
         "kk": "🌟 {name}, МашаАллах! 30 күн дерлік үздіксіз тапсырдың.\nҰстаз сені pro тобына ауысуды ұсынады — қалайсың ба?",
         "en": "🌟 {name}, MashaAllah! You've submitted almost every day for 30 days.\nUstaz suggests moving to a pro group — do you want to?",
+    },
+    "prep_congrats": {
+        "ru": (
+            "🎉 МашаАллах, {name}!\n\n"
+            "Ты прошёл подготовительный период — {days} дней отчётов за 14 дней. Отличный старт!\n\n"
+            "Теперь ты можешь перейти в основную учебную группу. Выбери язык группы:"
+        ),
+        "ky": (
+            "🎉 МашаАллах, {name}!\n\n"
+            "Сен даярдык мезгилин өттүң — 14 күндүн ичинде {days} күн тапшырдың. Мыкты башталыш!\n\n"
+            "Эми негизги окуу тобуна өтсөң болот. Топтун тилин тандагын:"
+        ),
+    },
+    "prep_failed": {
+        "ru": (
+            "Ассаляму алейкум, {name}.\n\n"
+            "Подготовительный период завершился. За 14 дней ты сдавал отчёты {days} дней — "
+            "этого недостаточно для перехода в учебную группу.\n\n"
+            "Ты остаёшься в группе Тадаббур. Когда будешь готов начать регулярно — напиши устазу 🤲"
+        ),
+        "ky": (
+            "Ассалааму алейкум, {name}.\n\n"
+            "Даярдык мезгили аяктады. 14 күндүн ичинде {days} күн тапшырдың — "
+            "бул окуу тобуна өтүү үчүн жетишсиз.\n\n"
+            "Сен Тадаббур тобунда каласың. Туруктуу баштоого даяр болгондо — устазга жаз 🤲"
+        ),
+    },
+    "prep_link_ru": {
+        "ru": "📖 Русскоязычная группа",
+        "ky": "📖 Орусча топ",
+    },
+    "prep_link_ky": {
+        "ru": "📖 Кыргызскоязычная группа",
+        "ky": "📖 Кыргызча топ",
+    },
+    "prep_group_link": {
+        "ru": "✅ Отлично! Вот твоя ссылка на группу «{title}»:\n{link}\n\nДобро пожаловать — увидимся там 🤲",
+        "ky": "✅ Жакшы! Мына «{title}» тобунун шилтемеси:\n{link}\n\nКош келиңиз — ошол жерде көрүшөбүз 🤲",
+    },
+    "prep_no_group": {
+        "ru": "К сожалению, подходящая группа не найдена. Напиши устазу — он добавит тебя вручную.",
+        "ky": "Тилекке каршы, ылайыктуу топ табылган жок. Устазга жаз — ал колдон кошот.",
+    },
+    "prep_reminder_active": {
+        "ru": (
+            "📖 {name}, МашаАллах! Ты уже сдал {days_done} из 14 дней — так держать! 💪\n"
+            "Осталось {days_left} дней до конца подготовительного периода.\n"
+            "Продолжай — и перейдёшь в основную группу 🤲"
+        ),
+        "ky": (
+            "📖 {name}, МашаАллах! Сен буга чейин 14 күндүн ичинен {days_done} күн тапшырдың — ошондой уланта бер! 💪\n"
+            "Даярдык мезгилине {days_left} күн калды.\n"
+            "Улантсаң — негизги топко өтөсүң 🤲"
+        ),
+    },
+    "prep_reminder_inactive": {
+        "ru": (
+            "📖 {name}, подготовительный период идёт — осталось {days_left} дней.\n"
+            "Пока ты сдал только {days_done} из нужных 5 дней для перехода в учебную группу.\n"
+            "Каждый день на счету — напиши отчёт сегодня 📝"
+        ),
+        "ky": (
+            "📖 {name}, даярдык мезгили жүрүп жатат — {days_left} күн калды.\n"
+            "Азыр сен окуу тобуна өтүү үчүн керектүү 5 күндүн ичинен {days_done} күн тапшырдың.\n"
+            "Ар бир күн маанилүү — бүгүн отчёт тапшыр 📝"
+        ),
     },
     "transfer_notify_admin": {
         "ru": "⚠️ Студент {name} переведён в Тадаббур (причина: {reason}, дней без отчётов: {days})",
@@ -266,6 +339,14 @@ TR = {
         "ar": "اكتب اسمك فقط (مثلاً: باكيت) 📝",
         "en": "Write only your name (e.g. Bakyt) 📝",
     },
+    "ask_name_confirm": {
+        "ru": "Вас так и зовут — «{name}»? Напишите своё настоящее имя 🙂",
+        "ky": "Атыңыз «{name}» деп жазылдыбы? Чыныгы атыңызды жазыңыз 🙂",
+        "uz": "Ismingiz «{name}» deb yozilganmi? Haqiqiy ismingizni yozing 🙂",
+        "kk": "Атыңыз «{name}» деп жазылды ма? Шын атыңызды жазыңыз 🙂",
+        "ar": "هل اسمك «{name}»؟ اكتب اسمك الحقيقي 🙂",
+        "en": "Is your name «{name}»? Please write your real name 🙂",
+    },
     "registered_group": {
         "ru": "✅ Зарегистрирован как «{name}»!\nТеперь можешь сдавать отчёты 📖\nНапиши /help чтобы узнать как.",
         "ky": "✅ «{name}» катары катталдың!\nЭми отчёт бере аласың 📖\nКомандаларды билүү үчүн /help жаз.",
@@ -275,12 +356,12 @@ TR = {
         "en": "✅ Registered as «{name}»!\nYou can now submit reports 📖\nWrite /help to see commands.",
     },
     "not_registered": {
-        "ru": "Ты ещё не зарегистрирован. Напиши боту в личку /start 👤",
-        "ky": "Сен дагы катталган эмессиң. Ботко жеке /start жаз 👤",
-        "uz": "Siz hali ro'yxatdan o'tmagansiz. Botga shaxsiy /start yozing 👤",
-        "kk": "Сен әлі тіркелмегенсің. Ботқа жеке /start жаз 👤",
-        "ar": "لم تسجل بعد. اكتب /start للبوت في الخاص 👤",
-        "en": "You are not registered yet. Write /start to the bot in DM 👤",
+        "ru": "Ты ещё не зарегистрирован. Напиши любое сообщение в группе — бот попросит твоё имя 📝",
+        "ky": "Сен дагы катталган эмессиң. Топто каалаган сөздү жаз — бот атыңды сурайт 📝",
+        "uz": "Siz hali ro'yxatdan o'tmagansiz. Guruhda istalgan xabar yozing — bot ismingizni so'raydi 📝",
+        "kk": "Сен әлі тіркелмегенсің. Топта кез келген хабар жаз — бот атыңды сұрайды 📝",
+        "ar": "لم تسجل بعد. اكتب أي رسالة في المجموعة — سيطلب البوت اسمك 📝",
+        "en": "You are not registered yet. Write any message in the group — the bot will ask your name 📝",
     },
     "help_redirect": {
         "ru": "Напиши мне в личку /help — покажу команды по твоей роли 👤",
@@ -387,6 +468,198 @@ def T(key, lang="ru", **kwargs):
     return text
 
 
+# ── Названия заданий (для help, легенд, отчётов) ──────────────────────────────
+
+TASK_NAMES_I18N = {
+    "m": {"ru": "Заучивание (или 40+40)", "ky": "Жаттоо (же 40+40)", "uz": "Yodlash (yoki 40+40)", "kk": "Жаттау (немесе 40+40)", "en": "Memorization (or 40+40)"},
+    "r": {"ru": "Повторение",             "ky": "Кайталоо",           "uz": "Takrorlash",          "kk": "Қайталау",              "en": "Revision"},
+    "t": {"ru": "Слова (или Перевод)",    "ky": "Сөздөр (же Котормо)","uz": "So'zlar (yoki Tarjima)","kk": "Сөздер (немесе Аударма)","en": "Words (or Translation)"},
+    "j": {"ru": "Таджвид",               "ky": "Таджвид",            "uz": "Tajvid",              "kk": "Тәжуид",                "en": "Tajweed"},
+    "n": {"ru": "Грамматика (или Нахв)", "ky": "Грамматика (же Нахв)","uz": "Grammatika (yoki Nahv)","kk": "Грамматика (немесе Нахв)","en": "Grammar (or Nahw)"},
+    "h": {"ru": "Хадис",                 "ky": "Хадис",              "uz": "Hadis",               "kk": "Хадис",                 "en": "Hadith"},
+}
+
+def task_name(key, lang="ru"):
+    return TASK_NAMES_I18N.get(key, {}).get(lang) or TASK_NAMES_I18N.get(key, {}).get("ru", key)
+
+
+# ── Help-секции ───────────────────────────────────────────────────────────────
+
+_HELP_STUDENT = {
+    "ru": {
+        "header": "📚 КАК СДАВАТЬ ОТЧЁТ\nПиши что выполнил:\n{tasks}\nЗа каждое задание +1 балл 💎\n\n"
+                  "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
+                  "📡 Онлайн урок: напиши +\n\n"
+                  "/mystats — твоя статистика\n/rating — рейтинг группы\nЯсир, ...? — задай вопрос боту",
+        "pro":     "\n⚠️ Pro-группа: пропуск 10 дней → Тадаббур",
+        "relaxed": "\n📅 Расслабленная: пропуск 20 дней → Тадаббур",
+        "prep":    "\n🔰 Подготовительная: 14 дней. Сдай ≥5 дней — перейдёшь в основную группу.",
+    },
+    "ky": {
+        "header": "📚 ОТЧЁТ КАНТИП ТАПШЫРЫЛАТ\nЭмнени аткаргандыгыңды жаз:\n{tasks}\nАр бир тапшырма үчүн +1 упай 💎\n\n"
+                  "⛔ Узактуу себеп:\nооруп жатам / себебим бар / узр\n"
+                  "📡 Онлайн сабак: + деп жаз\n\n"
+                  "/mystats — сенин статистикаң\n/rating — топтун рейтинги\nЯсир, ...? — боттон суроо бер",
+        "pro":     "\n⚠️ Pro-топ: 10 күн өткөрүп жиберсең → Тадаббурга",
+        "relaxed": "\n📅 Жеңил топ: 20 күн өткөрүп жиберсең → Тадаббурга",
+        "prep":    "\n🔰 Даярдык топ: 14 күн. ≥5 күн тапшырсаң — негизги топко өтөсүң.",
+    },
+    "uz": {
+        "header": "📚 HISOBOT QANDAY TOPSHIRILADI\nNimani bajarganingni yoz:\n{tasks}\nHar bir topshiriq uchun +1 ball 💎\n\n"
+                  "⛔ Uzrli sabab:\nkasalman / sabab bor / uzr\n"
+                  "📡 Onlayn dars: + deb yoz\n\n"
+                  "/mystats — sening statistikang\n/rating — guruh reytingi\nYassir, ...? — botdan so'ra",
+        "pro":     "\n⚠️ Pro-guruh: 10 kun o'tkazib yuborsang → Tadabbur",
+        "relaxed": "\n📅 Yengil guruh: 20 kun o'tkazib yuborsang → Tadabbur",
+        "prep":    "\n🔰 Tayyorlov guruhi: 14 kun. ≥5 kun topshirsang — asosiy guruhga o'tasan.",
+    },
+    "kk": {
+        "header": "📚 ЕСЕПТІ ҚАЛАЙ ТАПСЫРУ КЕРЕК\nНені орындағаныңды жаз:\n{tasks}\nӘр тапсырма үшін +1 ұпай 💎\n\n"
+                  "⛔ Дәлелді себеп:\nауырып жатырмын / себебім бар / узр\n"
+                  "📡 Онлайн сабақ: + деп жаз\n\n"
+                  "/mystats — сенің статистикаң\n/rating — топ рейтингі\nЯсир, ...? — боттан сұра",
+        "pro":     "\n⚠️ Pro-топ: 10 күн өткізіп жіберсең → Тадаббур",
+        "relaxed": "\n📅 Жеңіл топ: 20 күн өткізіп жіберсең → Тадаббур",
+        "prep":    "\n🔰 Дайындық тобы: 14 күн. ≥5 күн тапсырсаң — негізгі топқа өтесің.",
+    },
+    "en": {
+        "header": "📚 HOW TO SUBMIT A REPORT\nWrite what you completed:\n{tasks}\n+1 point per task 💎\n\n"
+                  "⛔ Valid excuse:\nI'm sick / valid reason / uzr\n"
+                  "📡 Online lesson: write +\n\n"
+                  "/mystats — your stats\n/rating — group rating\nYassir, ...? — ask the bot",
+        "pro":     "\n⚠️ Pro group: 10 days missed → Tadabbur",
+        "relaxed": "\n📅 Relaxed group: 20 days missed → Tadabbur",
+        "prep":    "\n🔰 Prep group: 14 days. Submit ≥5 days — move to main group.",
+    },
+}
+
+_HELP_ADMIN = {
+    "ru": (
+        "👤 КОМАНДЫ УСТАЗА (пиши в группе)\n"
+        "/remove Имя — убрать студента\n"
+        "/rename Имя | Новое имя — переименовать\n"
+        "/students — список студентов\n\n"
+        "/report — отчёт за сегодня\n"
+        "/week — за 7 дней\n"
+        "/month — за 30 дней\n"
+        "/year — за год\n"
+        "/rating — рейтинг\n\n"
+        "/bonus Имя 5 причина — начислить баллы\n"
+        "/groupinfo — настройки группы\n"
+        "/settasks m,r,t,j,n,h — задания\n"
+        "  m-заучивание r-повторение t-слова\n"
+        "  j-таджвид n-грамматика h-хадис\n"
+        "/setlang ru — язык (ru/ky/uz/kk/ar)\n"
+        "/settype pro/relaxed/tadabbur/prep — тип группы\n"
+        "/setlink https://t.me/+xxx — ссылка-приглашение группы\n"
+        "/lesson — открыть онлайн урок\n"
+        "/endlesson — завершить урок"
+    ),
+    "ky": (
+        "👤 УСТАЗДЫН БУЙРУКТАРЫ (топто жаз)\n"
+        "/remove Аты — студентти алып салуу\n"
+        "/rename Аты | Жаңы аты — атын өзгөртүү\n"
+        "/students — студенттердин тизмеси\n\n"
+        "/report — бүгүнкү отчёт\n"
+        "/week — 7 күн\n"
+        "/month — 30 күн\n"
+        "/year — жыл үчүн\n"
+        "/rating — рейтинг\n\n"
+        "/bonus Аты 5 себеп — упай кошуу\n"
+        "/groupinfo — топтун жөндөөлөрү\n"
+        "/settasks m,r,t,j,n,h — тапшырмалар\n"
+        "  m-жаттоо r-кайталоо t-сөздөр\n"
+        "  j-таджвид n-грамматика h-хадис\n"
+        "/setlang ky — тил (ru/ky/uz/kk/ar)\n"
+        "/settype pro/relaxed/tadabbur/prep — топ түрү\n"
+        "/setlink https://t.me/+xxx — топтун чакыруу шилтемеси\n"
+        "/lesson — онлайн сабакты ачуу\n"
+        "/endlesson — сабакты аяктоо"
+    ),
+    "uz": (
+        "👤 USTOZ BUYRUQLARI (guruhda yoz)\n"
+        "/remove Ism — talabani o'chirish\n"
+        "/rename Ism | Yangi ism — ismni o'zgartirish\n"
+        "/students — talabalar ro'yxati\n\n"
+        "/report — bugungi hisobot\n"
+        "/week — 7 kun\n"
+        "/month — 30 kun\n"
+        "/year — yil uchun\n"
+        "/rating — reyting\n\n"
+        "/bonus Ism 5 sabab — ball qo'shish\n"
+        "/groupinfo — guruh sozlamalari\n"
+        "/settasks m,r,t,j,n,h — topshiriqlar\n"
+        "  m-yodlash r-takrorlash t-so'zlar\n"
+        "  j-tajvid n-grammatika h-hadis\n"
+        "/setlang uz — til (ru/ky/uz/kk/ar)\n"
+        "/settype pro/relaxed/tadabbur — guruh turi\n"
+        "/lesson — onlayn darsni ochish\n"
+        "/endlesson — darsni yakunlash"
+    ),
+    "kk": (
+        "👤 ҰСТАЗ КОМАНДАЛАРЫ (топта жаз)\n"
+        "/remove Аты — студентті алу\n"
+        "/rename Аты | Жаңа аты — атын өзгерту\n"
+        "/students — студенттер тізімі\n\n"
+        "/report — бүгінгі есеп\n"
+        "/week — 7 күн\n"
+        "/month — 30 күн\n"
+        "/year — жыл үшін\n"
+        "/rating — рейтинг\n\n"
+        "/bonus Аты 5 себеп — ұпай қосу\n"
+        "/groupinfo — топ баптаулары\n"
+        "/settasks m,r,t,j,n,h — тапсырмалар\n"
+        "  m-жаттау r-қайталау t-сөздер\n"
+        "  j-тәжуид n-грамматика h-хадис\n"
+        "/setlang kk — тіл (ru/ky/uz/kk/ar)\n"
+        "/settype pro/relaxed/tadabbur — топ түрі\n"
+        "/lesson — онлайн сабақ ашу\n"
+        "/endlesson — сабақты аяқтау"
+    ),
+    "en": (
+        "👤 USTAZ COMMANDS (write in group)\n"
+        "/remove Name — remove student\n"
+        "/rename Name | New name — rename\n"
+        "/students — student list\n\n"
+        "/report — today's report\n"
+        "/week — 7 days\n"
+        "/month — 30 days\n"
+        "/year — yearly\n"
+        "/rating — rating\n\n"
+        "/bonus Name 5 reason — add points\n"
+        "/groupinfo — group settings\n"
+        "/settasks m,r,t,j,n,h — tasks\n"
+        "  m-memorization r-revision t-words\n"
+        "  j-tajweed n-grammar h-hadith\n"
+        "/setlang en — language (ru/ky/uz/kk/ar)\n"
+        "/settype pro/relaxed/tadabbur — group type\n"
+        "/lesson — open online lesson\n"
+        "/endlesson — end lesson"
+    ),
+}
+
+def help_student(group_tasks, gtype, lang="ru"):
+    """Возвращает help-текст для студента на нужном языке."""
+    block = _HELP_STUDENT.get(lang) or _HELP_STUDENT["ru"]
+    from core.i18n import task_name as _tn
+    task_lines = "\n".join(
+        str(i + 1) + ". " + _tn(k, lang)
+        for i, k in enumerate(group_tasks)
+    )
+    text = block["header"].format(tasks=task_lines)
+    if gtype == "pro":
+        text += block.get("pro", "")
+    elif gtype == "relaxed":
+        text += block.get("relaxed", "")
+    elif gtype == "prep":
+        text += block.get("prep", "")
+    return text
+
+def help_admin(lang="ru"):
+    """Возвращает help-текст для устаза на нужном языке."""
+    return _HELP_ADMIN.get(lang) or _HELP_ADMIN["ru"]
+
+
 def get_group_lang(group):
     try:
         return group["lang"] or "ru"
@@ -395,5 +668,5 @@ def get_group_lang(group):
 
 
 def lang_instruction(lang):
-    name = LANG_NAMES.get(lang, "русский")
-    return "ВАЖНО: пиши ВЕСЬ ответ на языке: " + name + " (" + lang + ")."
+    name = LANG_NAMES.get(lang, "Russian")
+    return "IMPORTANT: write the ENTIRE response in " + name + " language (code: " + lang + "). Do not mix languages."
