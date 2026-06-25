@@ -63,6 +63,7 @@ _SECTION_SUPER = (
     "/unadmin — (реплаем) убрать устаза\n"
     "/admins — список устазов\n"
     "/removeall — удалить всех студентов\n\n"
+    "/remind — напомнить несдавшим прямо сейчас\n\n"
     "/teach текст — обучить бота\n"
     "/knowledge — что знает бот\n"
     "/forget N — удалить знание N\n\n"
@@ -376,6 +377,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await send_message(chat_id, "⏳ Отправляю итоги вчера в тадаббур...")
             await morning_tadabbur_report()
             await send_message(chat_id, "✅ Готово.")
+            return
+
+        if text == "/remind":
+            from core.scheduler import personal_reminders
+            groups = get_all_groups()
+            non_tad = [g for g in groups if (g["group_type"] or "relaxed") != "tadabbur"]
+            await send_message(chat_id, "📖 Запускаю напоминания — " + str(len(non_tad)) + " групп...")
+            asyncio.create_task(personal_reminders())
             return
 
     # ── Личка ────────────────────────────────────────────────────────────────
