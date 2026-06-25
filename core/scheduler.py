@@ -10,12 +10,15 @@ from core.db import (
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
-    get_setting, add_student
+    get_setting, add_student, get_streak_days, add_bonus, db,
+    get_days_since_last_report
 )
 from core.tg import send_message, tg_call
 from core.i18n import T
 from core.transfers import run_transfer_checks
+from core.prep import check_prep_students, send_prep_reminders
 import core.ai as ai
+import core.sampler as sampler
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +30,13 @@ def _now():
 # ── Утреннее напоминание (07:00) ──────────────────────────────────────────────
 
 async def morning_reminder():
+    hadith_pro     = sampler.sample_hadith()
+    ayah_pro       = sampler.sample_ayah()
+    hadith_relaxed = sampler.sample_hadith()
+    ayah_relaxed   = sampler.sample_ayah()
+
+    base_cache: dict = {}  # (gtype, lang) -> base_text
+
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
         if gtype == "tadabbur":
@@ -34,22 +44,101 @@ async def morning_reminder():
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
         glang = get_group_lang(group)
+        hadith = hadith_pro if gtype == "pro" else hadith_relaxed
+        ayah   = ayah_pro   if gtype == "pro" else ayah_relaxed
         try:
             missing = get_missing_students(group["id"], group_tasks)
             if not missing:
                 continue
             missing_names = [s["name"] for s, _ in missing]
-            msg = await ai.group_motivation(missing_names, group["title"] or chat_id, glang)
-            if msg:
+
+            cache_key = (gtype, glang)
+            if cache_key not in base_cache:
+                base = await ai.group_motivation_base(glang, gtype, hadith=hadith, ayah=ayah)
+                base_cache[cache_key] = base or ""
+            base = base_cache[cache_key]
+
+            if base and len(base) >= 30:
+                names_str = ", ".join(missing_names)
+                closing = ai.SUBMIT_TODAY.get(glang, ai.SUBMIT_TODAY["ru"])
+                msg = base + "\n\n" + names_str + " " + closing
                 await send_message(chat_id, "☀️ " + msg)
             await asyncio.sleep(1)
         except Exception as e:
             log.error("morning_reminder error in %s: %s", chat_id, e)
 
 
+# ── Утренний отчёт в Тадаббур (07:00) — итоги вчера по всем группам ──────────
+
+async def morning_tadabbur_report():
+    tadabbur = get_tadabbur_group()
+    if not tadabbur:
+        return
+    from datetime import timedelta
+    yesterday = (datetime.now(pytz.timezone(TZ)) - timedelta(days=1)).strftime("%Y-%m-%d")
+    for group in get_all_groups():
+        gtype = group["group_type"] or "relaxed"
+        if gtype == "tadabbur":
+            continue
+        try:
+            group_tasks = get_group_tasks(group)
+            report = format_daily_report(group["id"], group["title"] or group["chat_id"], group_tasks, yesterday)
+            label = "про-группы" if gtype == "pro" else "группы"
+            msg = "📋 Итоги вчера — " + label + " " + (group["title"] or str(group["chat_id"])) + ":\n\n" + report
+            await send_message(tadabbur["chat_id"], msg)
+            await asyncio.sleep(1)
+        except Exception as e:
+            log.error("morning_tadabbur_report error in %s: %s", group["chat_id"], e)
+
+
+# ── Бонус +5 за 7 дней стрика (07:00) ────────────────────────────────────────
+
+async def streak_bonuses():
+    today = get_date()
+    for group in get_all_groups():
+        gtype = group["group_type"] or "relaxed"
+        if gtype == "tadabbur":
+            continue
+        try:
+            bonus_names = []
+            for s in get_students(group["id"]):
+                streak = get_streak_days(s["id"])
+                if streak > 0 and streak % 7 == 0:
+                    reason = "streak_week_" + str(streak // 7)
+                    with db() as c:
+                        exists = c.execute(
+                            "SELECT 1 FROM bonus_points WHERE sid=? AND reason=?",
+                            (s["id"], reason)
+                        ).fetchone()
+                    if not exists:
+                        add_bonus(s["id"], group["id"], today, 5, reason)
+                        bonus_names.append((s["name"], streak))
+                    # AI-похвала на ключевых рубежах
+                    if streak in (7, 14, 30):
+                        praise = await ai.personal_streak_praise(s["name"], streak, glang)
+                        if praise:
+                            await send_message(group["chat_id"], "🌟 " + praise)
+                        await asyncio.sleep(1)
+            if bonus_names:
+                lines = ["🌟 Бонус +5 очков за серию без пропусков:"]
+                for name, days in bonus_names:
+                    lines.append("• " + name + " — " + str(days) + " дней подряд!")
+                await send_message(group["chat_id"], "\n".join(lines))
+            await asyncio.sleep(1)
+        except Exception as e:
+            log.error("streak_bonuses error in %s: %s", group["chat_id"], e)
+
+
 # ── Личные напоминания (18:00) ─────────────────────────────────────────────────
 
 async def personal_reminders():
+    hadith_pro     = sampler.sample_hadith()
+    ayah_pro       = sampler.sample_ayah()
+    hadith_relaxed = sampler.sample_hadith()
+    ayah_relaxed   = sampler.sample_ayah()
+
+    base_cache: dict = {}  # (gtype, lang) -> base_text
+
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
         if gtype == "tadabbur":
@@ -57,13 +146,32 @@ async def personal_reminders():
         group_tasks = get_group_tasks(group)
         glang = get_group_lang(group)
         chat_id = group["chat_id"]
+        hadith = hadith_pro if gtype == "pro" else hadith_relaxed
+        ayah   = ayah_pro   if gtype == "pro" else ayah_relaxed
         try:
+            for s in get_students(group["id"]):
+                missed = get_days_since_last_report(s["id"])
+                if missed == 3:
+                    msg = await ai.absent_motivation(s["name"], missed, glang)
+                    if msg and len(msg) >= 30:
+                        await send_message(chat_id, "🤲 " + msg)
+                    await asyncio.sleep(1)
+
             missing = get_missing_students(group["id"], group_tasks)
             if not missing:
                 continue
             missing_names = [s["name"] for s, _ in missing]
-            msg = await ai.group_motivation(missing_names, group["title"] or chat_id, glang)
-            if msg:
+
+            cache_key = (gtype, glang)
+            if cache_key not in base_cache:
+                base = await ai.group_motivation_base(glang, gtype, hadith=hadith, ayah=ayah)
+                base_cache[cache_key] = base or ""
+            base = base_cache[cache_key]
+
+            if base and len(base) >= 30:
+                names_str = ", ".join(missing_names)
+                closing = ai.SUBMIT_TODAY.get(glang, ai.SUBMIT_TODAY["ru"])
+                msg = base + "\n\n" + names_str + " " + closing
                 await send_message(chat_id, "📖 " + msg)
             await asyncio.sleep(1)
         except Exception as e:
@@ -85,23 +193,10 @@ async def evening_report():
             report_text = format_daily_report(group["id"], group["title"] or chat_id, group_tasks, today)
             await send_message(chat_id, report_text)
 
-            # Все группы (кроме тадаббур) шлют сводку в summary_chat_id или тадаббур
-            summary_id = group["summary_chat_id"]
-            if not summary_id:
-                tadabbur = get_tadabbur_group()
-                if tadabbur:
-                    summary_id = tadabbur["chat_id"]
-            if summary_id and summary_id != chat_id:
-                label = "про-группы" if gtype == "pro" else "группы"
-                await send_message(
-                    summary_id,
-                    "📋 Сводка из " + label + " " + (group["title"] or chat_id) + ":\n\n" + report_text
-                )
-
             students = get_students(group["id"])
             full_done = [
                 s for s in students
-                if (rep := get_today_report(s["id"])) and all(rep[k] for k in group_tasks)
+                if (rep := get_today_report(s["id"], group["id"])) and all(rep[k] for k in group_tasks)
             ]
             if full_done:
                 names = [s["name"] for s in full_done]
@@ -323,7 +418,10 @@ async def scheduler():
 
             if h == 7 and m == 0:
                 await maybe_run("morning_reminder", morning_reminder)
+                await maybe_run("morning_tadabbur_report", morning_tadabbur_report)
+                await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
+                await maybe_run("prep_reminders", send_prep_reminders)
             elif h == 18 and m == 0:
                 await maybe_run("personal_reminders", personal_reminders)
             elif h == 20 and m == 0:
@@ -333,6 +431,7 @@ async def scheduler():
                 await maybe_run("skip_warnings", skip_warnings)
             elif h == 21 and m == 0:
                 await maybe_run("transfer_check", transfer_check)
+                await maybe_run("prep_check", check_prep_students)
             elif wd == 6 and h == 19 and m == 0:
                 await maybe_run("weekly_report", weekly_report)
             elif wd == 6 and h == 20 and m == 30:

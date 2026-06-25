@@ -15,11 +15,10 @@ log = logging.getLogger(__name__)
 _IS_FEMALE = PROFILE == "female"
 
 _HUMAN_STYLE = (
-    "СТИЛЬ: пиши как живой человек в Telegram, не как ИИ. "
-    "Обычный текст без форматирования — никаких маркеров (- • *), "
-    "нумерованных списков, заголовков, **жирного** или _курсива_. "
-    "Максимум 1-2 эмодзи на всё сообщение, только если уместно. "
-    "Короткие естественные предложения, как устаз пишет с телефона."
+    "STYLE: write like a real person in Telegram, not like an AI. "
+    "Plain text only — no bullet points (- • *), no numbered lists, no headers, no **bold** or _italic_. "
+    "At most 1-2 emojis total, only if natural. "
+    "Short natural sentences, like a teacher typing on a phone."
 )
 
 
@@ -62,12 +61,12 @@ async def _or_call(messages, max_tokens=1024, retries=3):
     return None
 
 
-async def ask_ai(prompt, system="", retries=3):
+async def ask_ai(prompt, system="", retries=3, max_tokens=1024):
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    return await _or_call(messages, retries=retries)
+    return await _or_call(messages, max_tokens=max_tokens, retries=retries)
 
 
 async def ask_ai_messages(messages, system="", retries=3):
@@ -196,18 +195,17 @@ def _variety_hint():
 async def check_report(name, tasks_done, lang="ru"):
     all_done = len(tasks_done) >= 3
     prompt = (
-        "Ты помощник учителя Корана. Студент *" + name + "* сдал отчёт!\n"
-        "Выполненные задания: " + ", ".join(tasks_done) + "\n"
-        "Все задания выполнены: " + ("ДА!" if all_done else "нет, частично") + "\n\n"
-        "НЕ придумывай детали которых нет в отчёте! "
-        "Если написано '40+40' — это значит 40 раз новое + 40 раз старое, "
-        "НЕ говори 'выучил 80 аятов'. Просто похвали за выполнение заучивания.\n\n"
+        "A Quran student named *" + name + "* submitted their daily report.\n"
+        "Completed tasks: " + ", ".join(tasks_done) + "\n"
+        "All tasks done: " + ("YES!" if all_done else "no, partial") + "\n\n"
+        "Do NOT invent details not in the report! "
+        "If '40+40' is mentioned — it means the memorization method, do NOT say 'memorized 80 verses'.\n\n"
         + _variety_hint() + "\n\n"
         + _HUMAN_STYLE + "\n\n"
-        "Напиши: «БаракАллаху фик, " + name + "!» — короткая похвала за задания — "
-        "один аят или хадис с источником — "
-        + ("скажи что выполнил всё." if all_done else "мягко подбодри закончить.") + "\n"
-        + lang_instruction(lang) + " Всего 3-4 строки."
+        "Write: 'BarakAllahu fik, " + name + "!' — brief praise for the tasks — "
+        "one ayah or hadith with source — "
+        + ("say they completed everything." if all_done else "gently encourage to finish.") + "\n"
+        + lang_instruction(lang) + " Total: 3-4 lines."
     )
     return await ask_ai(prompt)
 
@@ -245,49 +243,239 @@ async def answer_question(question, program_info, group_title, phone=None, group
     )
 
 
+async def answer_ustaz_question(question, program_info, ustaz_name=""):
+    system = (
+        "You are Yassir — an AI assistant for Quran teachers (ustaz) of the Yassir project.\n"
+        "Answer questions about the project methodology, student management, bot commands, and Islamic studies.\n"
+        "Base answers strictly on the project info below.\n\n"
+        "RESPONSE RULES:\n"
+        "- Answer in the same language the question is asked in.\n"
+        "- Be concise and clear — the reader is a teacher, not a student.\n"
+        "- If the question is about bot settings, technical setup, or something outside your knowledge → "
+        "say: 'Это нужно уточнить у супер-админов (Абдусаттар или Умар).'\n"
+        "- Do not guess or make up answers. If uncertain → redirect to super admins.\n\n"
+        + PROJECT_INFO + "\n\n"
+        "ACADEMIC REFERENCE:\n" + program_info
+    )
+    name_prefix = ("Устаз " + ustaz_name + ": ") if ustaz_name else ""
+    result = await ask_ai(name_prefix + question, system=system)
+    return result or "Уточните этот вопрос у супер-админов (Абдусаттар или Умар). 🕌"
+
+
 # ── Планировщик / мотивация ───────────────────────────────────────────────────
 
 async def reminder(name, missed_tasks, day, lang="ru"):
     tasks_str = ", ".join(missed_tasks)
     if day == 1:
-        urgency, tone = "вчера не успел сдать", "мягко напомни"
+        urgency, tone = "missed yesterday", "gentle reminder"
     elif day <= 3:
-        urgency, tone = str(day) + " дня подряд не сдаёт", "с заботой о важности регулярности"
+        urgency, tone = str(day) + " days in a row missed", "caring, emphasize importance of consistency"
     elif day <= 7:
-        urgency, tone = str(day) + " дней подряд не сдаёт", "настойчиво о потере хифза"
+        urgency, tone = str(day) + " days in a row missed", "firm, about losing memorization"
     else:
-        urgency, tone = str(day) + " дней подряд не сдаёт", "как " + _g("старший брат", "старшая сестра") + " об ответственности перед Аллахом"
+        urgency, tone = str(day) + " days in a row missed", "like an older sibling, about responsibility before Allah"
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Напиши напоминание для " + _g("студента", "студентки") + " «" + name + "».\n"
-        "Ситуация: " + urgency + ". Не сданные: " + tasks_str + ". Тон: " + tone + ".\n"
-        "Начни с «Ассаляму алейкум, " + name + "!», потом аят о важности знания, "
-        "хадис о заучивании, слова учёного, дуа.\n"
-        + lang_instruction(lang) + " Объём: 5-7 строк."
+        "Write a reminder for Quran student «" + name + "».\n"
+        "Situation: " + urgency + ". Missed tasks: " + tasks_str + ". Tone: " + tone + ".\n"
+        "Start with 'Assalamu alaykum, " + name + "!', then one ayah about seeking knowledge, "
+        "one hadith about memorization, a brief dua.\n"
+        + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt) or "📖 Ассаляму алейкум, " + name + "! Не забудь сдать уроки, ИншаАллах."
+    return await ask_ai(prompt) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
 
 
-async def group_motivation(missing_names, group_title, lang="ru"):
-    names_str = ", ".join(missing_names)
+async def _get_hadith_translation(hadith: dict, lang: str) -> str:
+    """Возвращает перевод хадиса на целевой язык (из кеша или генерирует)."""
+    import core.sampler as sampler
+    cached = sampler.get_cached_translation(hadith["id"], lang)
+    if cached:
+        return cached
+    english = hadith.get("english_text") or ""
+    if not english:
+        return ""
+    result = await ask_ai(
+        "Translate the following hadith narration into " + lang + " (only the translation, no extra text):\n\n" + english,
+        max_tokens=300,
+    )
+    if result:
+        text = result.strip().rstrip(" ·")
+        sampler.save_translation(hadith["id"], lang, text)
+        return text
+    return english
+
+
+async def _get_ayah_translation(ayah: dict, lang: str) -> str:
+    """Возвращает перевод аята на целевой язык (из кеша или генерирует)."""
+    import core.sampler as sampler
+    sura = int(ayah["sura"])
+    aya  = int(ayah["aya"])
+    cached = sampler.get_cached_ayah_translation(sura, aya, lang)
+    if cached:
+        return cached
+    arabic = ayah.get("arabic", "")
+    if not arabic:
+        return ""
+    result = await ask_ai(
+        f"Translate this Quran ayah (Surah {sura}, Ayah {aya}) into {lang}.\n"
+        f"Arabic text: {arabic}\n"
+        "Provide ONLY the translation — no introduction, no Arabic, no transliteration, no footnotes.",
+        max_tokens=200,
+    )
+    if result:
+        text = result.strip().rstrip(" ·")
+        sampler.save_ayah_translation(sura, aya, lang, text)
+        return text
+    return ""
+
+
+async def group_motivation(missing_names, group_title, lang="ru",
+                           gtype="relaxed", hadith=None, ayah=None):
+    names_str = ", ".join(missing_names) if missing_names else ""
+
+    source_block = ""
+    if ayah:
+        meaning = ayah.get("meaning_en") or await _get_ayah_translation(ayah, lang)
+        source_block += (
+            "АЯТ (используй только смысл — арабский текст в сообщении не писать):\n"
+            "Смысл: " + meaning + "\n"
+            "Ссылка: (Сура " + ayah["sura"] + ", аят " + ayah["aya"] + ")\n\n"
+        )
+    if hadith:
+        translation = await _get_hadith_translation(hadith, lang) if lang != "ar" else ""
+        english = (hadith.get("english_text") or "").strip()
+        hadith_meaning = (translation or english).strip()
+        source_block += (
+            "ХАДИС (используй только смысл — арабский и английский текст не писать):\n"
+            "Смысл: " + hadith_meaning + "\n"
+            "Ссылка: ("
+            + hadith.get("label", hadith.get("collection", ""))
+            + ", №" + str(hadith.get("hadith_number", "")) + ")\n\n"
+        )
+
+    if gtype == "pro":
+        tone_instr = (
+            "Тон: собранный, мотивирующий. Группа с строгим расписанием хифза. "
+            "Акцент на постоянстве и ответственности перед Аллахом."
+        )
+    else:
+        tone_instr = (
+            "Тон: тёплый, мягкий, вдохновляющий. Группа занимается в своём темпе. "
+            "Акцент на милости Аллаха к тем, кто занимается Его Книгой."
+        )
+
+    system = (
+        "Ты пишешь насыха (наставление) для студентов, заучивающих Коран, "
+        "в стиле учёных и таалибуль-'ильм: искренне, мягко, опираясь ТОЛЬКО "
+        "на смысл переданного аята и хадиса. "
+        "Строго запрещено: придумывать образы и метафоры, которых нет в тексте; "
+        "приписывать Аллаху или Пророку ﷺ ничего сверх приведённого; "
+        "использовать выражения вроде «небо открыто», «день благословлён на аяты» "
+        "и подобную отсебятину. "
+        "Арабский и английский текст в сообщении не писать — только перевод смысла."
+    )
+
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Напиши мотивационное напоминание для группы «" + group_title + "».\n"
-        "Не сдали: " + names_str + ". "
-        "Перечисли имена, напомни аят о времени, хадис о регулярности, призови сдать до конца дня.\n"
-        + lang_instruction(lang) + " Объём: 5-7 строк."
+        "Напиши утреннее мотивационное сообщение для группы «" + group_title + "».\n"
+        + ("Студенты, не сдавшие сегодня: " + names_str + ".\n" if names_str else "")
+        + "\n"
+        + source_block
+        + tone_instr + "\n\n"
+        "ПРАВИЛА ОФОРМЛЕНИЯ:\n"
+        "- После упоминания смысла аята сразу в скобках: (Сура N, аят M)\n"
+        "- После упоминания смысла хадиса сразу в скобках: (Сборник, №N)\n"
+        "- Арабский и английский текст не включать.\n"
+        "- Только то, что есть в переданном смысле — никаких добавлений от себя.\n"
+        + ("- Обратиться к студентам по именам и призвать сдать сегодня.\n" if names_str else "")
+        + lang_instruction(lang) + " Длина: 5-7 строк."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=system)
+
+
+# ── Закрывающие строки по языкам (добавляются механически после base-текста) ──
+
+SUBMIT_TODAY = {
+    "ru": "— сдайте сегодня, ин ша Аллах! 🤲",
+    "ky": "— бүгүн тапшырыңыздар, ин ша Аллах! 🤲",
+    "uz": "— bugun topshiring, in sha Alloh! 🤲",
+    "kk": "— бүгін тапсырыңыздар, ин ша Аллах! 🤲",
+    "tr": "— bugün teslim edin, inşallah! 🤲",
+    "ar": "— سلّموا اليوم، إن شاء الله! 🤲",
+    "en": "— submit today, inshAllah! 🤲",
+}
+
+
+async def group_motivation_base(lang: str, gtype: str,
+                                hadith=None, ayah=None) -> str | None:
+    """Насыха без имён. Один вызов на (gtype, lang); имена добавляет планировщик."""
+    source_block = ""
+    if ayah:
+        meaning = ayah.get("meaning_en") or await _get_ayah_translation(ayah, lang)
+        source_block += (
+            "АЯТ (используй только смысл — арабский текст в сообщении не писать):\n"
+            "Смысл: " + meaning + "\n"
+            "Ссылка: (Сура " + ayah["sura"] + ", аят " + ayah["aya"] + ")\n\n"
+        )
+    if hadith:
+        translation = await _get_hadith_translation(hadith, lang) if lang != "ar" else ""
+        english = (hadith.get("english_text") or "").strip()
+        hadith_meaning = (translation or english).strip()
+        source_block += (
+            "ХАДИС (используй только смысл — арабский и английский текст не писать):\n"
+            "Смысл: " + hadith_meaning + "\n"
+            "Ссылка: ("
+            + hadith.get("label", hadith.get("collection", ""))
+            + ", №" + str(hadith.get("hadith_number", "")) + ")\n\n"
+        )
+
+    if gtype == "pro":
+        tone_instr = (
+            "Тон: собранный, мотивирующий. Группа с строгим расписанием хифза. "
+            "Акцент на постоянстве и ответственности перед Аллахом."
+        )
+    else:
+        tone_instr = (
+            "Тон: тёплый, мягкий, вдохновляющий. Группа занимается в своём темпе. "
+            "Акцент на милости Аллаха к тем, кто занимается Его Книгой."
+        )
+
+    system = (
+        "Ты пишешь насыха (наставление) для студентов, заучивающих Коран, "
+        "в стиле учёных и таалибуль-'ильм: искренне, мягко, опираясь ТОЛЬКО "
+        "на смысл переданного аята и хадиса. "
+        "Строго запрещено: придумывать образы и метафоры, которых нет в тексте; "
+        "приписывать Аллаху или Пророку ﷺ ничего сверх приведённого; "
+        "использовать выражения вроде «небо открыто», «день благословлён на аяты» "
+        "и подобную отсебятину. "
+        "Арабский и английский текст в сообщении не писать — только перевод смысла."
+    )
+
+    prompt = (
+        _HUMAN_STYLE + "\n\n"
+        "Напиши мотивационное насыха для студентов, заучивающих Коран.\n"
+        "Не обращайся по именам — только общий текст.\n\n"
+        + source_block
+        + tone_instr + "\n\n"
+        "ПРАВИЛА ОФОРМЛЕНИЯ:\n"
+        "- После упоминания смысла аята сразу в скобках: (Сура N, аят M)\n"
+        "- После упоминания смысла хадиса сразу в скобках: (Сборник, №N)\n"
+        "- Арабский и английский текст не включать.\n"
+        "- Только то, что есть в переданном смысле — никаких добавлений от себя.\n"
+        "- Завершай мягким общим напоминанием, без призыва по именам.\n"
+        + lang_instruction(lang) + " Длина: 4-6 строк."
+    )
+    return await ask_ai(prompt, system=system)
 
 
 async def personal_streak_praise(name, streak_days, lang="ru"):
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Напиши поздравление " + _g("студенту", "студентке") + " «" + name + "» — "
-        + str(streak_days) + " дней подряд без пропуска! "
-        "Начни с «Ассаляму алейкум, " + name + "! МашаАллах!», поздравь, "
-        "аят о терпении и постоянстве, хадис о постоянстве, дуа.\n"
-        + lang_instruction(lang) + " Объём: 5-7 строк."
+        "Write a congratulation for Quran student «" + name + "» — "
+        + str(streak_days) + " days in a row without missing! "
+        "Start with 'Assalamu alaykum, " + name + "! MashaAllah!', congratulate, "
+        "one ayah about patience and consistency, one hadith about consistency, a dua.\n"
+        + lang_instruction(lang) + " Length: 5-7 lines."
     )
     return await ask_ai(prompt)
 
@@ -295,12 +483,11 @@ async def personal_streak_praise(name, streak_days, lang="ru"):
 async def praise_completed(name, lang="ru"):
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Напиши тёплую похвалу " + _g("студенту", "студентке") + " Корана «" + name + "», "
-        + _g("который", "которая") + " СЕГОДНЯ выполнил" + _g("", "а") + " все задания.\n"
+        "Write warm praise for Quran student «" + name + "» who completed ALL tasks TODAY.\n"
         + _variety_hint() + "\n"
-        "Начни с «БаракАллаху фик, " + name + "!», похвали за усердие, "
-        "один аят из Корана с сурой, один хадис с источником, краткое дуа.\n"
-        + lang_instruction(lang) + " Тон: радостный, искренний. Объём: 4-6 строк."
+        "Start with 'BarakAllahu fik, " + name + "!', praise their dedication, "
+        "one ayah from Quran with surah name, one hadith with source, a brief dua.\n"
+        + lang_instruction(lang) + " Tone: joyful, sincere. Length: 4-6 lines."
     )
     return await ask_ai(prompt)
 
@@ -308,11 +495,11 @@ async def praise_completed(name, lang="ru"):
 async def absent_motivation(name, days, lang="ru"):
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        + _g("Студент", "Студентка") + " Корана «" + name + "» уже " + str(days) + " дня не сдавал" + _g("", "а") + " отчёт.\n"
+        "Quran student «" + name + "» has not submitted a report for " + str(days) + " days.\n"
         + _variety_hint() + "\n"
-        "Напиши мягкое тёплое напоминание (не ругай!): обратись по имени с теплотой, "
-        "скажи что не хватает и зови вернуться, один аят или хадис о возвращении к благому, дуа.\n"
-        + lang_instruction(lang) + " Тон: добрый, без упрёка. 3-4 строки."
+        "Write a gentle warm reminder (do NOT scold!): address them by name with warmth, "
+        "say they are missed, invite them to return, one ayah or hadith about returning to good deeds, a dua.\n"
+        + lang_instruction(lang) + " Tone: kind, no blame. 3-4 lines."
     )
     return await ask_ai(prompt)
 
@@ -320,12 +507,12 @@ async def absent_motivation(name, days, lang="ru"):
 async def winner_praise(name, period_label, points, lang="ru"):
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Напиши поздравление " + _g("студенту", "студентке") + " Корана «" + name + "» — "
-        + _g("он ЛУЧШИЙ", "она ЛУЧШАЯ") + " за " + period_label + " с " + str(points) + " очками!\n"
+        "Write a congratulation for Quran student «" + name + "» — "
+        "top student of the " + period_label + " with " + str(points) + " points!\n"
         + _variety_hint() + "\n"
-        "Начни с «МашаАллах, " + name + "!», поздравь с первым местом за " + period_label + ", "
-        "один аят или хадис об усердии/награде, краткое дуа.\n"
-        + lang_instruction(lang) + " Кратко, тепло: 3-4 строки."
+        "Start with 'MashaAllah, " + name + "!', congratulate on first place, "
+        "one ayah or hadith about effort and reward, a brief dua.\n"
+        + lang_instruction(lang) + " Short and warm: 3-4 lines."
     )
     return await ask_ai(prompt)
 
@@ -334,10 +521,10 @@ async def group_praise(names, lang="ru"):
     names_str = ", ".join(names)
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Напиши похвалу в группу для студентов Корана которые СЕГОДНЯ выполнили задания: " + names_str + ".\n"
-        "Начни с «МашаАллах! Табаракаллах!», перечисли имена и похвали, "
-        "один аят о награде за усердие, один хадис о достоинстве изучающих Коран, дуа за всех.\n"
-        + lang_instruction(lang) + " Тон: вдохновляющий. Объём: 5-7 строк."
+        "Write group praise for Quran students who completed all tasks TODAY: " + names_str + ".\n"
+        "Start with 'MashaAllah! TabarakAllah!', list the names and praise them, "
+        "one ayah about reward for effort, one hadith about the virtue of Quran learners, a dua for all.\n"
+        + lang_instruction(lang) + " Tone: inspiring. Length: 5-7 lines."
     )
     return await ask_ai(prompt)
 
@@ -345,52 +532,65 @@ async def group_praise(names, lang="ru"):
 async def warning_skips(name, skip_count, lang="ru"):
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Напиши серьёзное предупреждение " + _g("студенту", "студентке") + " «" + name + "».\n"
-        "Ситуация: " + str(skip_count) + " дней пропусков в этом месяце, осталось "
-        + str(14 - skip_count) + " до перевода в Тадаббур.\n"
-        "Начни с «Ассаляму алейкум, " + name + "!», предупреди о переводе, "
-        "строгий аят о потере знания, хадис о постоянстве, призыв вернуться.\n"
-        + lang_instruction(lang) + " Тон: серьёзный, но без грубости. 4-6 строк."
+        "Write a serious warning for Quran student «" + name + "».\n"
+        "Situation: " + str(skip_count) + " missed days this month, "
+        + str(14 - skip_count) + " days left before transfer to Tadabbur group.\n"
+        "Start with 'Assalamu alaykum, " + name + "!', warn about the transfer, "
+        "a strong ayah about losing knowledge, a hadith about consistency, a call to return.\n"
+        + lang_instruction(lang) + " Tone: serious but not harsh. 4-6 lines."
     )
     return await ask_ai(prompt)
 
 
 async def ask_admin_improvement(groups):
-    group_titles = ", ".join(g["title"] for g in groups) if groups else "нет групп"
+    group_titles = ", ".join(g["title"] for g in groups) if groups else "no groups"
     prompt = (
-        "Ты ИИ-ассистент Ясир.\n"
-        "Группы: " + group_titles + "\n"
-        "Задай Устазу ОДИН вопрос чтобы лучше помогать студентам.\n"
-        "Начни с «Устаз, хочу стать лучше...»\n"
-        "Язык: русский. Объём: 3-4 строки."
+        "You are AI assistant Yassir.\n"
+        "Groups: " + group_titles + "\n"
+        "Ask the Ustaz ONE question to better help students.\n"
+        "Start with 'Ustaz, I want to improve...'\n"
+        "Language: Russian. Length: 3-4 lines."
     )
     return await ask_ai(prompt)
 
 
 async def mystats_comment(name, streak, rank, total_score, days_done, lang="ru"):
     prompt = (
-        "Напиши краткий мотивационный комментарий для студента «" + name + "».\n"
-        "Его статистика: серия " + str(streak) + " дней подряд, место в рейтинге #" + str(rank) +
-        ", всего " + str(total_score) + " баллов за " + str(days_done) + " дней.\n"
-        "1 предложение поддержки + 1 дуа.\n"
-        + lang_instruction(lang) + " Объём: 2-3 строки."
+        "Write a brief motivational comment for Quran student «" + name + "».\n"
+        "Their stats: " + str(streak) + " day streak, rank #" + str(rank) +
+        ", total " + str(total_score) + " points over " + str(days_done) + " days.\n"
+        "1 sentence of encouragement + 1 dua.\n"
+        + lang_instruction(lang) + " Length: 2-3 lines."
     )
     return await ask_ai(prompt)
 
 
 async def extract_name(text: str) -> str | None:
-    """Извлекает имя из произвольного ввода пользователя."""
+    """Extracts a person's name from arbitrary user input."""
     result = await ask_ai(
-        "Пользователь написал: «" + text + "»\n"
-        "Извлеки только имя человека. Верни ОДНО слово или несколько слов имени — без лишнего текста.\n"
-        "Если это не имя — верни: НЕТ",
-        system="Ты помощник по извлечению имён. Отвечай только именем или словом НЕТ."
+        "The user wrote: «" + text + "»\n"
+        "Extract only the person's name. Return ONE word or a few words (the name only) — no extra text.\n"
+        "If it is not a name — return: NO",
+        system="You are a name extraction assistant. Reply only with the name or the word NO."
     )
     if not result:
         return None
-    result = result.strip().strip("«»\"'")
-    if result.upper() in ("НЕТ", "NET", "NO", "NONE", "—", "-"):
+    result = result.strip().strip("«»\"'·—-")
+    first_word = result.upper().split()[0].strip("·—-.") if result else ""
+    if first_word in ("НЕТ", "NET", "NO", "NONE") or not result:
         return None
     if len(result) > 50:
         return None
     return result
+
+
+async def is_valid_name(name: str) -> bool:
+    """Checks if the extracted string is actually a real person's name."""
+    result = await ask_ai(
+        "Is «" + name + "» a real person's name (first name or full name)? "
+        "Reply only YES or NO.",
+        system="You are a name validation assistant. Reply only YES or NO."
+    )
+    if not result:
+        return True  # сомнения — пропускаем, не блокируем
+    return result.strip().upper().startswith("YES")
