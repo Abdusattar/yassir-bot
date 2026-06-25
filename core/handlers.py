@@ -1002,6 +1002,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     if is_media:
         if not text or is_checkmarks_only(text):
+            if not text:
+                await send_message(chat_id, T("photo_needs_caption", glang, name=s["name"], legend=legend))
             return
         # Для фото/медиа: caption может быть коротким ("слова", "т"), и арабику
         # не требуем — студент сфотографировал написанное от руки

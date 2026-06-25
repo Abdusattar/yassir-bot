@@ -451,6 +451,16 @@ TR = {
         "ar": "أيام",
         "en": "days",
     },
+    "photo_needs_caption": {
+        "ru": "📸 {name}, фото без подписи не засчитывается.\nПришли снова с caption — что прописывал:\n\n{legend}",
+        "ky": "📸 {name}, сүрөт подписьсиз кабыл алынбайт.\nКайра жибер жана caption жаз — эмнени жаздыгыңды:\n\n{legend}",
+        "uz": "📸 {name}, captionsiz rasm qabul qilinmaydi.\nQayta yubor va caption yoz — nima yozganingni:\n\n{legend}",
+        "kk": "📸 {name}, подписьсіз сурет есептелмейді.\nҚайта жібер және caption жаз — нені жазғаныңды:\n\n{legend}",
+        "tr": "📸 {name}, başlıksız fotoğraf sayılmaz.\nTekrar gönder ve caption ekle — neyi yazdığını:\n\n{legend}",
+        "ar": "📸 {name}، الصورة بدون تعليق لا تُحتسب.\nأرسلها مجدداً مع caption — ماذا كتبت:\n\n{legend}",
+        "en": "📸 {name}, photo without caption won't be counted.\nResend with a caption — what you wrote:\n\n{legend}",
+        "zh": "📸 {name}，没有说明的照片不计入。\n请重新发送并加上 caption——你写的是什么：\n\n{legend}",
+    },
 }
 
 

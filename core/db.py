@@ -1,4 +1,5 @@
 import sqlite3
+import re
 from datetime import datetime, timedelta
 import pytz
 from config import DB, TZ
@@ -779,6 +780,11 @@ def check_text(text, media=False):
     if result["t"] and not _has_arabic(text) and not any(p in t for p in _NO_WORDS_PHRASES):
         if not media:
             result["t"] = False
+    # Авто-определение словарных пар: 2+ паттернов «арабское_слово — перевод»
+    # без ключевого слова (студент шлёт пары напрямую, без заголовка «слова:»)
+    if not result["t"] and not media and _has_arabic(text):
+        if len(re.findall(r'[؀-ۿ]{2,}\s*[-–—]\s*\S', text)) >= 2:
+            result["t"] = True
     return result
 
 
