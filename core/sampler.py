@@ -61,30 +61,33 @@ def sample_hadith() -> dict | None:
         return None
 
 
+_AYAH_TAGS_FILTER = (
+    "topic_tags LIKE '%quran%' OR topic_tags LIKE '%knowledge%' OR "
+    "topic_tags LIKE '%patience%' OR topic_tags LIKE '%striving%' OR "
+    "topic_tags LIKE '%reward%' OR topic_tags LIKE '%remembrance%'"
+)
+
+
 def sample_ayah() -> dict | None:
-    """Возвращает случайный мотивационный аят из quran_ayahs (по тегам Хайку)."""
+    """Возвращает случайный аят по позитивному фильтру сильных тем."""
     if not HADITHS_DB.exists():
         return None
     try:
         with sqlite3.connect(HADITHS_DB) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute("""
+            row = conn.execute(f"""
                 SELECT sura, aya, arabic, topic_tags
                 FROM quran_ayahs
-                WHERE topic_tags IS NOT NULL
-                  AND topic_tags != 'other'
-                  AND (hifz_relevant IS NULL OR hifz_relevant = 1)
+                WHERE ({_AYAH_TAGS_FILTER})
                   AND used_at IS NULL
                 ORDER BY RANDOM()
                 LIMIT 1
             """).fetchone()
             if not row:
-                row = conn.execute("""
+                row = conn.execute(f"""
                     SELECT sura, aya, arabic, topic_tags
                     FROM quran_ayahs
-                    WHERE topic_tags IS NOT NULL
-                      AND topic_tags != 'other'
-                      AND (hifz_relevant IS NULL OR hifz_relevant = 1)
+                    WHERE ({_AYAH_TAGS_FILTER})
                     ORDER BY used_at ASC
                     LIMIT 1
                 """).fetchone()
