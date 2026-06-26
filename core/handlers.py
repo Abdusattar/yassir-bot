@@ -179,7 +179,8 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
     try:
         from core.i18n import lang_instruction
         writing_section = ""
-        if _has_arabic(text):
+        has_nahw = any("nahw" in c or "grammar" in c for c in checks)
+        if _has_arabic(text) and has_nahw:
             checks = list(checks) + ["arabic letter writing (hamza seat, letter connections, harakat)"]
             writing_section = (
                 "\nWRITING CHECK — verify each Arabic word fully:\n"
