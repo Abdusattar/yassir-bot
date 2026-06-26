@@ -6,6 +6,13 @@ from datetime import datetime
 import pytz
 
 from config import OR_API_KEY, OR_URL, AI_MODEL, TZ, PROFILE
+
+_GEMINI_FLASH = "google/gemini-2.5-flash"
+_LANG_MODEL   = {"ky": _GEMINI_FLASH}
+
+
+def _model_for_lang(lang: str) -> str:
+    return _LANG_MODEL.get(lang, AI_MODEL)
 from core.i18n import lang_instruction
 from core.db import get_student_memory, save_chat
 from core.content import PROJECT_INFO
@@ -52,7 +59,7 @@ _MOTIVATIONAL_SYSTEM = (
 )
 
 
-async def _or_call(messages, max_tokens=1024, retries=3):
+async def _or_call(messages, max_tokens=1024, retries=3, model=None):
     """Базовый вызов OpenRouter API (OpenAI-совместимый формат)."""
     headers = {
         "Authorization": "Bearer " + OR_API_KEY,
@@ -60,7 +67,7 @@ async def _or_call(messages, max_tokens=1024, retries=3):
         "HTTP-Referer": "https://github.com/Abdusattar/yassir-bot",
     }
     data = {
-        "model": AI_MODEL,
+        "model": model or AI_MODEL,
         "max_tokens": max_tokens,
         "messages": messages,
     }
@@ -86,20 +93,20 @@ async def _or_call(messages, max_tokens=1024, retries=3):
     return None
 
 
-async def ask_ai(prompt, system="", retries=3, max_tokens=1024):
+async def ask_ai(prompt, system="", retries=3, max_tokens=1024, model=None):
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    return await _or_call(messages, max_tokens=max_tokens, retries=retries)
+    return await _or_call(messages, max_tokens=max_tokens, retries=retries, model=model)
 
 
-async def ask_ai_messages(messages, system="", retries=3):
+async def ask_ai_messages(messages, system="", retries=3, model=None):
     msgs = []
     if system:
         msgs.append({"role": "system", "content": system})
     msgs.extend(messages)
-    return await _or_call(msgs, retries=retries)
+    return await _or_call(msgs, retries=retries, model=model)
 
 
 # ── Классификация ─────────────────────────────────────────────────────────────
@@ -218,7 +225,7 @@ async def check_report(name, tasks_done, lang="ru", hadith=None, ayah=None):
         + ("say they completed everything." if all_done else "gently encourage to finish.") + "\n"
         + lang_instruction(lang) + " Total: 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
 async def answer_question(question, program_info, group_title, phone=None, group_id=None, student_name=""):
@@ -296,7 +303,7 @@ async def reminder(name, missed_tasks, day, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang)) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
 
 
 async def _get_hadith_translation(hadith: dict, lang: str) -> str:
@@ -311,6 +318,7 @@ async def _get_hadith_translation(hadith: dict, lang: str) -> str:
     result = await ask_ai(
         "Translate the following hadith narration into " + lang + " (only the translation, no extra text):\n\n" + english,
         max_tokens=300,
+        model=_model_for_lang(lang),
     )
     if result:
         text = result.strip().rstrip(" ·")
@@ -335,6 +343,7 @@ async def _get_ayah_translation(ayah: dict, lang: str) -> str:
         f"Arabic text: {arabic}\n"
         "Provide ONLY the translation — no introduction, no Arabic, no transliteration, no footnotes.",
         max_tokens=200,
+        model=_model_for_lang(lang),
     )
     if result:
         text = result.strip().rstrip(" ·")
@@ -430,7 +439,7 @@ async def group_motivation(missing_names, group_title, lang="ru",
         + ("- Обратиться к студентам по именам и призвать сдать сегодня.\n" if names_str else "")
         + lang_instruction(lang) + " Длина: 5-7 строк."
     )
-    return await ask_ai(prompt, system=system)
+    return await ask_ai(prompt, system=system, model=_model_for_lang(lang))
 
 
 # ── Закрывающие строки по языкам (добавляются механически после base-текста) ──
@@ -507,7 +516,7 @@ async def group_motivation_base(lang: str, gtype: str,
         "- Завершай мягким общим напоминанием, без призыва по именам.\n"
         + lang_instruction(lang) + " Длина: 4-6 строк."
     )
-    return await ask_ai(prompt, system=system)
+    return await ask_ai(prompt, system=system, model=_model_for_lang(lang))
 
 
 async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah=None):
@@ -522,7 +531,7 @@ async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah
         + "a dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
 async def praise_completed(name, lang="ru", hadith=None, ayah=None):
@@ -536,7 +545,7 @@ async def praise_completed(name, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: joyful, sincere. Length: 4-6 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
 async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
@@ -551,7 +560,7 @@ async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: kind, no blame. 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
 async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah=None):
@@ -566,7 +575,7 @@ async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah
         + "a brief dua.\n"
         + lang_instruction(lang) + " Short and warm: 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
 async def group_praise(names, lang="ru", hadith=None, ayah=None):
@@ -581,7 +590,7 @@ async def group_praise(names, lang="ru", hadith=None, ayah=None):
         + "a dua for all.\n"
         + lang_instruction(lang) + " Tone: inspiring. Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
 async def warning_skips(name, skip_count, lang="ru", hadith=None, ayah=None):
@@ -597,7 +606,7 @@ async def warning_skips(name, skip_count, lang="ru", hadith=None, ayah=None):
         + "a call to return.\n"
         + lang_instruction(lang) + " Tone: serious but not harsh. 4-6 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
 async def ask_admin_improvement(groups):
