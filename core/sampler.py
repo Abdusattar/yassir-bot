@@ -28,6 +28,7 @@ _HADITH_BASE_SQL = """
       AND h.english_text NOT LIKE 'This hadith has been%'
       AND h.english_text NOT LIKE '%same chain of transmitters%'
       AND h.english_text NOT LIKE '%same as above%'
+      AND (h.hifz_relevant IS NULL OR h.hifz_relevant = 1)
 """
 
 
@@ -72,6 +73,7 @@ def sample_ayah() -> dict | None:
                 FROM quran_ayahs
                 WHERE topic_tags IS NOT NULL
                   AND topic_tags != 'other'
+                  AND (hifz_relevant IS NULL OR hifz_relevant = 1)
                   AND used_at IS NULL
                 ORDER BY RANDOM()
                 LIMIT 1
@@ -80,7 +82,9 @@ def sample_ayah() -> dict | None:
                 row = conn.execute("""
                     SELECT sura, aya, arabic, topic_tags
                     FROM quran_ayahs
-                    WHERE topic_tags IS NOT NULL AND topic_tags != 'other'
+                    WHERE topic_tags IS NOT NULL
+                      AND topic_tags != 'other'
+                      AND (hifz_relevant IS NULL OR hifz_relevant = 1)
                     ORDER BY used_at ASC
                     LIMIT 1
                 """).fetchone()
