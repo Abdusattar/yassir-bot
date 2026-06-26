@@ -134,7 +134,39 @@ async def streak_bonuses():
 
 # ── Личные напоминания (18:00) ─────────────────────────────────────────────────
 
+async def individual_reminders():
+    """15:00 — личное сообщение братьям/сёстрам, пропустившим 3+ дней. Только в личку."""
+    hadith_pro     = sampler.sample_hadith()
+    ayah_pro       = sampler.sample_ayah()
+    hadith_relaxed = sampler.sample_hadith()
+    ayah_relaxed   = sampler.sample_ayah()
+
+    for group in get_all_groups():
+        gtype = group["group_type"] or "relaxed"
+        if gtype == "tadabbur":
+            continue
+        glang = get_group_lang(group)
+        hadith = hadith_pro if gtype == "pro" else hadith_relaxed
+        ayah   = ayah_pro   if gtype == "pro" else ayah_relaxed
+        try:
+            for s in get_students(group["id"]):
+                if not s.get("phone"):
+                    continue
+                missed = get_days_since_last_report(s["id"])
+                if missed >= 3:
+                    msg = await ai.absent_motivation(s["name"], missed, glang, hadith=hadith, ayah=ayah)
+                    if msg and len(msg) >= 30:
+                        try:
+                            await send_message(s["phone"], "🤲 " + msg)
+                        except Exception:
+                            pass
+                    await asyncio.sleep(1)
+        except Exception as e:
+            log.error("individual_reminders error in %s: %s", group["chat_id"], e)
+
+
 async def personal_reminders():
+    """18:00 — групповой призыв несдавшим сегодня."""
     hadith_pro     = sampler.sample_hadith()
     ayah_pro       = sampler.sample_ayah()
     hadith_relaxed = sampler.sample_hadith()
@@ -152,14 +184,6 @@ async def personal_reminders():
         hadith = hadith_pro if gtype == "pro" else hadith_relaxed
         ayah   = ayah_pro   if gtype == "pro" else ayah_relaxed
         try:
-            for s in get_students(group["id"]):
-                missed = get_days_since_last_report(s["id"])
-                if missed == 3:
-                    msg = await ai.absent_motivation(s["name"], missed, glang, hadith=hadith, ayah=ayah)
-                    if msg and len(msg) >= 30:
-                        await send_message(chat_id, "🤲 " + msg)
-                    await asyncio.sleep(1)
-
             missing = get_missing_students(group["id"], group_tasks)
             if not missing:
                 continue
@@ -433,6 +457,8 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
+            elif h == 15 and m == 0:
+                await maybe_run("individual_reminders", individual_reminders)
             elif h == 18 and m == 0:
                 await maybe_run("personal_reminders", personal_reminders)
             elif h == 20 and m == 0:
