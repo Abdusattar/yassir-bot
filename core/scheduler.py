@@ -94,11 +94,14 @@ async def morning_tadabbur_report():
 # ── Бонус +5 за 7 дней стрика (07:00) ────────────────────────────────────────
 
 async def streak_bonuses():
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
     today = get_date()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
         if gtype == "tadabbur":
             continue
+        glang = get_group_lang(group)
         try:
             bonus_names = []
             for s in get_students(group["id"]):
@@ -115,7 +118,7 @@ async def streak_bonuses():
                         bonus_names.append((s["name"], streak))
                     # AI-похвала на ключевых рубежах
                     if streak in (7, 14, 30):
-                        praise = await ai.personal_streak_praise(s["name"], streak, glang)
+                        praise = await ai.personal_streak_praise(s["name"], streak, glang, hadith=hadith, ayah=ayah)
                         if praise:
                             await send_message(group["chat_id"], "🌟 " + praise)
                         await asyncio.sleep(1)
@@ -152,7 +155,7 @@ async def personal_reminders():
             for s in get_students(group["id"]):
                 missed = get_days_since_last_report(s["id"])
                 if missed == 3:
-                    msg = await ai.absent_motivation(s["name"], missed, glang)
+                    msg = await ai.absent_motivation(s["name"], missed, glang, hadith=hadith, ayah=ayah)
                     if msg and len(msg) >= 30:
                         await send_message(chat_id, "🤲 " + msg)
                     await asyncio.sleep(1)
@@ -181,6 +184,8 @@ async def personal_reminders():
 # ── Вечерний отчёт (20:00) ────────────────────────────────────────────────────
 
 async def evening_report():
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
     today = get_date()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
@@ -200,7 +205,7 @@ async def evening_report():
             ]
             if full_done:
                 names = [s["name"] for s in full_done]
-                praise = await ai.group_praise(names, glang)
+                praise = await ai.group_praise(names, glang, hadith=hadith, ayah=ayah)
                 if praise:
                     await send_message(chat_id, "🌟 " + praise)
             await asyncio.sleep(1)
@@ -211,6 +216,8 @@ async def evening_report():
 # ── Предупреждение о пропусках (20:30) ───────────────────────────────────────
 
 async def skip_warnings():
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
         if gtype == "tadabbur":
@@ -228,7 +235,7 @@ async def skip_warnings():
                     skips = get_consecutive_skips(s["id"])
                     warn_threshold = 15  # предупреждаем при 15+ подряд из 30
                 if skips >= warn_threshold:
-                    warn = await ai.warning_skips(s["name"], skips, glang)
+                    warn = await ai.warning_skips(s["name"], skips, glang, hadith=hadith, ayah=ayah)
                     if warn:
                         await send_message(chat_id, "⚠️ " + warn)
                     await asyncio.sleep(0.8)
@@ -303,6 +310,8 @@ async def transfer_check():
 # ── Еженедельный отчёт (воскресенье 19:00) ────────────────────────────────────
 
 async def weekly_report():
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
     for group in get_all_groups():
         if (group["group_type"] or "relaxed") == "tadabbur":
             continue
@@ -315,7 +324,7 @@ async def weekly_report():
 
             winner = get_period_winner(group["id"], 7)
             if winner and winner["points"] > 0:
-                praise = await ai.winner_praise(winner["name"], "неделю", winner["points"], glang)
+                praise = await ai.winner_praise(winner["name"], "неделю", winner["points"], glang, hadith=hadith, ayah=ayah)
                 if praise:
                     await send_message(chat_id, praise)
             await asyncio.sleep(1)
@@ -326,6 +335,8 @@ async def weekly_report():
 # ── Ежемесячный отчёт (1-е число 19:00) ──────────────────────────────────────
 
 async def monthly_report():
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
     for group in get_all_groups():
         if (group["group_type"] or "relaxed") == "tadabbur":
             continue
@@ -338,7 +349,7 @@ async def monthly_report():
 
             winner = get_period_winner(group["id"], 30)
             if winner and winner["points"] > 0:
-                praise = await ai.winner_praise(winner["name"], "месяц", winner["points"], glang)
+                praise = await ai.winner_praise(winner["name"], "месяц", winner["points"], glang, hadith=hadith, ayah=ayah)
                 if praise:
                     await send_message(chat_id, praise)
             await asyncio.sleep(1)

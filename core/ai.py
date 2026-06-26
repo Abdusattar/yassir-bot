@@ -21,6 +21,12 @@ _HUMAN_STYLE = (
     "Short natural sentences, like a teacher typing on a phone."
 )
 
+_NO_HALLUCINATE = (
+    "СТРОГО ЗАПРЕЩЕНО: придумывать, выдумывать или угадывать номера аятов, сур, хадисов или названия сборников. "
+    "Если аят или хадис переданы в этом промпте — используй ТОЛЬКО их смысл и ссылку. "
+    "Если не переданы — пиши без конкретных ссылок вообще."
+)
+
 
 def _g(m: str, f: str) -> str:
     """Выбирает мужскую или женскую форму в зависимости от профиля бота."""
@@ -177,37 +183,23 @@ async def parse_report(text, group_tasks):
 
 # ── ИИ-проверка отчёта ────────────────────────────────────────────────────────
 
-def _variety_hint():
-    topics = [
-        "терпение (сабр)", "искренность (ихляс)", "награда за Коран",
-        "польза знания", "богобоязненность (таква)", "постоянство в делах",
-        "любовь Аллаха к ищущим знание", "достоинство хафиза Корана",
-        "важность времени", "благодарность (шукр)", "усердие в поклонении",
-        "высокое положение учёных", "Коран как заступник в Судный день",
-        "лёгкость после трудности", "дуа за приобретающего знание"
-    ]
-    today = datetime.now(pytz.timezone(TZ)).strftime("%Y-%m-%d")
-    topic = random.choice(topics)
-    return ("Сегодня: " + today + ". Возьми НОВЫЙ аят или хадис на тему «" + topic +
-            "» — не повторяй те что использовал раньше. Каждый раз разные аяты и хадисы.")
-
-
-async def check_report(name, tasks_done, lang="ru"):
+async def check_report(name, tasks_done, lang="ru", hadith=None, ayah=None):
     all_done = len(tasks_done) >= 3
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         "A Quran student named *" + name + "* submitted their daily report.\n"
         "Completed tasks: " + ", ".join(tasks_done) + "\n"
         "All tasks done: " + ("YES!" if all_done else "no, partial") + "\n\n"
         "Do NOT invent details not in the report! "
         "If '40+40' is mentioned — it means the memorization method, do NOT say 'memorized 80 verses'.\n\n"
-        + _variety_hint() + "\n\n"
+        + source_block
         + _HUMAN_STYLE + "\n\n"
         "Write: 'BarakAllahu fik, " + name + "!' — brief praise for the tasks — "
-        "one ayah or hadith with source — "
+        + ("mention the meaning of the ayah/hadith above with its reference — " if source_block else "")
         + ("say they completed everything." if all_done else "gently encourage to finish.") + "\n"
         + lang_instruction(lang) + " Total: 3-4 lines."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=_NO_HALLUCINATE)
 
 
 async def answer_question(question, program_info, group_title, phone=None, group_id=None, student_name=""):
@@ -264,7 +256,7 @@ async def answer_ustaz_question(question, program_info, ustaz_name=""):
 
 # ── Планировщик / мотивация ───────────────────────────────────────────────────
 
-async def reminder(name, missed_tasks, day, lang="ru"):
+async def reminder(name, missed_tasks, day, lang="ru", hadith=None, ayah=None):
     tasks_str = ", ".join(missed_tasks)
     if day == 1:
         urgency, tone = "missed yesterday", "gentle reminder"
@@ -274,15 +266,18 @@ async def reminder(name, missed_tasks, day, lang="ru"):
         urgency, tone = str(day) + " days in a row missed", "firm, about losing memorization"
     else:
         urgency, tone = str(day) + " days in a row missed", "like an older sibling, about responsibility before Allah"
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         _HUMAN_STYLE + "\n\n"
         "Write a reminder for Quran student «" + name + "».\n"
         "Situation: " + urgency + ". Missed tasks: " + tasks_str + ". Tone: " + tone + ".\n"
-        "Start with 'Assalamu alaykum, " + name + "!', then one ayah about seeking knowledge, "
-        "one hadith about memorization, a brief dua.\n"
+        + source_block
+        + "Start with 'Assalamu alaykum, " + name + "!', "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "a brief dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
+    return await ask_ai(prompt, system=_NO_HALLUCINATE) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
 
 
 async def _get_hadith_translation(hadith: dict, lang: str) -> str:
@@ -327,6 +322,30 @@ async def _get_ayah_translation(ayah: dict, lang: str) -> str:
         sampler.save_ayah_translation(sura, aya, lang, text)
         return text
     return ""
+
+
+async def _build_source_block(hadith: dict | None, ayah: dict | None, lang: str) -> str:
+    """Формирует блок с аятом/хадисом для передачи в промпт DeepSeek."""
+    block = ""
+    if ayah:
+        meaning = ayah.get("meaning_en") or await _get_ayah_translation(ayah, lang)
+        block += (
+            "АЯТ (используй только смысл — арабский текст в сообщении не писать):\n"
+            "Смысл: " + meaning + "\n"
+            "Ссылка: (Сура " + str(ayah["sura"]) + ", аят " + str(ayah["aya"]) + ")\n\n"
+        )
+    if hadith:
+        translation = await _get_hadith_translation(hadith, lang) if lang != "ar" else ""
+        english = (hadith.get("english_text") or "").strip()
+        hadith_meaning = (translation or english).strip()
+        block += (
+            "ХАДИС (используй только смысл — арабский и английский текст не писать):\n"
+            "Смысл: " + hadith_meaning + "\n"
+            "Ссылка: ("
+            + hadith.get("label", hadith.get("collection", ""))
+            + ", №" + str(hadith.get("hadith_number", "")) + ")\n\n"
+        )
+    return block
 
 
 async def group_motivation(missing_names, group_title, lang="ru",
@@ -468,78 +487,94 @@ async def group_motivation_base(lang: str, gtype: str,
     return await ask_ai(prompt, system=system)
 
 
-async def personal_streak_praise(name, streak_days, lang="ru"):
+async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah=None):
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         _HUMAN_STYLE + "\n\n"
         "Write a congratulation for Quran student «" + name + "» — "
-        + str(streak_days) + " days in a row without missing! "
-        "Start with 'Assalamu alaykum, " + name + "! MashaAllah!', congratulate, "
-        "one ayah about patience and consistency, one hadith about consistency, a dua.\n"
+        + str(streak_days) + " days in a row without missing!\n"
+        + source_block
+        + "Start with 'Assalamu alaykum, " + name + "! MashaAllah!', congratulate, "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "a dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=_NO_HALLUCINATE)
 
 
-async def praise_completed(name, lang="ru"):
+async def praise_completed(name, lang="ru", hadith=None, ayah=None):
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         _HUMAN_STYLE + "\n\n"
         "Write warm praise for Quran student «" + name + "» who completed ALL tasks TODAY.\n"
-        + _variety_hint() + "\n"
-        "Start with 'BarakAllahu fik, " + name + "!', praise their dedication, "
-        "one ayah from Quran with surah name, one hadith with source, a brief dua.\n"
+        + source_block
+        + "Start with 'BarakAllahu fik, " + name + "!', praise their dedication, "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: joyful, sincere. Length: 4-6 lines."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=_NO_HALLUCINATE)
 
 
-async def absent_motivation(name, days, lang="ru"):
+async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         _HUMAN_STYLE + "\n\n"
         "Quran student «" + name + "» has not submitted a report for " + str(days) + " days.\n"
-        + _variety_hint() + "\n"
-        "Write a gentle warm reminder (do NOT scold!): address them by name with warmth, "
-        "say they are missed, invite them to return, one ayah or hadith about returning to good deeds, a dua.\n"
+        + source_block
+        + "Write a gentle warm reminder (do NOT scold!): address them by name with warmth, "
+        "say they are missed, invite them to return, "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: kind, no blame. 3-4 lines."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=_NO_HALLUCINATE)
 
 
-async def winner_praise(name, period_label, points, lang="ru"):
+async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah=None):
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         _HUMAN_STYLE + "\n\n"
         "Write a congratulation for Quran student «" + name + "» — "
         "top student of the " + period_label + " with " + str(points) + " points!\n"
-        + _variety_hint() + "\n"
-        "Start with 'MashaAllah, " + name + "!', congratulate on first place, "
-        "one ayah or hadith about effort and reward, a brief dua.\n"
+        + source_block
+        + "Start with 'MashaAllah, " + name + "!', congratulate on first place, "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "a brief dua.\n"
         + lang_instruction(lang) + " Short and warm: 3-4 lines."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=_NO_HALLUCINATE)
 
 
-async def group_praise(names, lang="ru"):
+async def group_praise(names, lang="ru", hadith=None, ayah=None):
     names_str = ", ".join(names)
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         _HUMAN_STYLE + "\n\n"
         "Write group praise for Quran students who completed all tasks TODAY: " + names_str + ".\n"
-        "Start with 'MashaAllah! TabarakAllah!', list the names and praise them, "
-        "one ayah about reward for effort, one hadith about the virtue of Quran learners, a dua for all.\n"
+        + source_block
+        + "Start with 'MashaAllah! TabarakAllah!', list the names and praise them, "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "a dua for all.\n"
         + lang_instruction(lang) + " Tone: inspiring. Length: 5-7 lines."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=_NO_HALLUCINATE)
 
 
-async def warning_skips(name, skip_count, lang="ru"):
+async def warning_skips(name, skip_count, lang="ru", hadith=None, ayah=None):
+    source_block = await _build_source_block(hadith, ayah, lang)
     prompt = (
         _HUMAN_STYLE + "\n\n"
         "Write a serious warning for Quran student «" + name + "».\n"
         "Situation: " + str(skip_count) + " missed days this month, "
         + str(14 - skip_count) + " days left before transfer to Tadabbur group.\n"
-        "Start with 'Assalamu alaykum, " + name + "!', warn about the transfer, "
-        "a strong ayah about losing knowledge, a hadith about consistency, a call to return.\n"
+        + source_block
+        + "Start with 'Assalamu alaykum, " + name + "!', warn about the transfer, "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "a call to return.\n"
         + lang_instruction(lang) + " Tone: serious but not harsh. 4-6 lines."
     )
-    return await ask_ai(prompt)
+    return await ask_ai(prompt, system=_NO_HALLUCINATE)
 
 
 async def ask_admin_improvement(groups):
