@@ -220,11 +220,17 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             "OUTPUT FORMAT (strict):\n"
             "→ All correct: write only the single word CORRECT\n"
             "→ Error found: max 2 lines — name the wrong word, show correct form\n"
-            "FORBIDDEN: numbered lists, praise per word, greeting headers, long explanations\n\n"
+            "FORBIDDEN: JSON, code blocks (```), numbered lists, praise per word, greeting headers, long explanations\n\n"
             "REFERENCE (tajweed/nahw rules):\n" + _build_reference(checks)
         )
         prompt = "Student " + name + " wrote:\n" + text
         result = await ai.ask_ai(prompt, system=system)
+        if result:
+            # Убираем code-блоки и JSON если модель проигнорировала формат
+            import re as _re
+            result = _re.sub(r"```[a-z]*\n?", "", result).strip().rstrip("`").strip()
+            if result.startswith("[") or result.startswith("{"):
+                result = None
         if result and ("CORRECT" in result.upper()[:20] or "ВЕРНО" in result.upper()[:20]):
             await send_message(chat_id, "✅", reply_to_message_id=message_id)
         elif result:
