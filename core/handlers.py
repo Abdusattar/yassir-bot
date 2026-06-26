@@ -566,6 +566,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                                     for ap in SUPER_ADMIN_IDS:
                                         await send_message(ap, "👤 " + tg_name + " авторегистрация в «" + (group["title"] or str(chat_id)) + "»")
                                     return
+                # Повторная проверка: chat_member-апдейт мог уже поставить pending до нас
+                if is_pending_name(phone, group_id):
+                    await send_message(chat_id, T("ask_name", glang))
+                    return
                 set_pending_name(phone, group_id, text)
                 greeting = ("Ассаляму алейкум, " + sender_name + "! 🌙\n") if sender_name else "Ассаляму алейкум! 🌙\n"
                 await send_message(chat_id, greeting + T("ask_name", glang))
