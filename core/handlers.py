@@ -198,6 +198,7 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             )
 
         system = (
+            lang_instruction(glang) + "\n\n"
             "You are Quran teacher Yassir. Check ONLY: " + ", ".join(checks) + ".\n\n"
             "📖 TAJWEED (if checked):\n"
             "Check makhraj (exit point) and sifat (property) only.\n"
@@ -209,7 +210,7 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             "1. Arabic spelling — consonant letters (huruf) only, NOT harakat.\n"
             "   ⚠️ Alif (ا) IS a consonant — missing alif IS an error.\n"
             "   Example: ولسلوى is WRONG, correct is والسلوى (ا missing after و).\n"
-            "2. Translation — Russian/target meaning must accurately match the Arabic word.\n"
+            "2. Translation — the meaning must accurately match the Arabic word.\n"
             "Do NOT defer to REFERENCE for mufradat spelling — use Quran knowledge directly.\n\n"
             "📚 NAHW (if checked):\n"
             "Check irab (final vowel) and grammatical member name only.\n"
@@ -220,7 +221,6 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             "→ All correct: write only the single word CORRECT\n"
             "→ Error found: max 2 lines — name the wrong word, show correct form\n"
             "FORBIDDEN: numbered lists, praise per word, greeting headers, long explanations\n\n"
-            + lang_instruction(glang) + "\n\n"
             "REFERENCE (tajweed/nahw rules):\n" + _build_reference(checks)
         )
         prompt = "Student " + name + " wrote:\n" + text
