@@ -21,16 +21,29 @@ _HUMAN_STYLE = (
     "Short natural sentences, like a teacher typing on a phone."
 )
 
-_NO_HALLUCINATE = (
-    "СТРОГО ЗАПРЕЩЕНО: придумывать, выдумывать или угадывать номера аятов, сур, хадисов или названия сборников. "
-    "Если аят или хадис переданы в этом промпте — используй ТОЛЬКО их смысл и ссылку. "
-    "Если не переданы — пиши без конкретных ссылок вообще."
-)
-
 
 def _g(m: str, f: str) -> str:
     """Выбирает мужскую или женскую форму в зависимости от профиля бота."""
     return f if _IS_FEMALE else m
+
+
+_MOTIVATIONAL_SYSTEM = (
+    "Ты пишешь насыха (наставление) для студентов, заучивающих Коран, "
+    "в стиле учёных и таалибуль-'ильм: искренне, мягко, опираясь ТОЛЬКО "
+    "на смысл переданного аята и хадиса. "
+    "Строго запрещено: придумывать образы и метафоры, которых нет в тексте; "
+    "приписывать Аллаху или Пророку ﷺ ничего сверх приведённого; "
+    "использовать выражения вроде «небо открыто», «день благословлён на аяты» "
+    "и подобную отсебятину. "
+    "Арабский и английский текст в сообщении не писать — только перевод смысла.\n\n"
+    "АДАБ ОБРАЩЕНИЯ: пиши как мусульманский устаз к своему студенту — тепло, но с достоинством. "
+    "Приветствие только исламское: «Ассаляму алейкум», «БаракАллаху фийк», «МашааАллах». "
+    f"Обращение к одному: «{_g('Брат [имя]', 'Сестра [имя]')}». "
+    f"К нескольким: «{_g('Братья', 'Сёстры')}». "
+    "Никакого светского панибратства: уменьшительно-ласкательных прозвищ, "
+    "фамильярных выражений, неисламских приветствий. "
+    "Для ду'а — только 🤲, не 🙏."
+)
 
 
 async def _or_call(messages, max_tokens=1024, retries=3):
@@ -199,7 +212,7 @@ async def check_report(name, tasks_done, lang="ru", hadith=None, ayah=None):
         + ("say they completed everything." if all_done else "gently encourage to finish.") + "\n"
         + lang_instruction(lang) + " Total: 3-4 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
 
 
 async def answer_question(question, program_info, group_title, phone=None, group_id=None, student_name=""):
@@ -277,7 +290,7 @@ async def reminder(name, missed_tasks, day, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
 
 
 async def _get_hadith_translation(hadith: dict, lang: str) -> str:
@@ -499,7 +512,7 @@ async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah
         + "a dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
 
 
 async def praise_completed(name, lang="ru", hadith=None, ayah=None):
@@ -513,7 +526,7 @@ async def praise_completed(name, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: joyful, sincere. Length: 4-6 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
 
 
 async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
@@ -528,7 +541,7 @@ async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: kind, no blame. 3-4 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
 
 
 async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah=None):
@@ -543,7 +556,7 @@ async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah
         + "a brief dua.\n"
         + lang_instruction(lang) + " Short and warm: 3-4 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
 
 
 async def group_praise(names, lang="ru", hadith=None, ayah=None):
@@ -558,7 +571,7 @@ async def group_praise(names, lang="ru", hadith=None, ayah=None):
         + "a dua for all.\n"
         + lang_instruction(lang) + " Tone: inspiring. Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
 
 
 async def warning_skips(name, skip_count, lang="ru", hadith=None, ayah=None):
@@ -574,7 +587,7 @@ async def warning_skips(name, skip_count, lang="ru", hadith=None, ayah=None):
         + "a call to return.\n"
         + lang_instruction(lang) + " Tone: serious but not harsh. 4-6 lines."
     )
-    return await ask_ai(prompt, system=_NO_HALLUCINATE)
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM)
 
 
 async def ask_admin_improvement(groups):
