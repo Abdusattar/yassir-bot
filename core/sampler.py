@@ -18,7 +18,9 @@ COLLECTION_LABELS = {
     "darimi":   "Дарими",
 }
 
-_HADITH_BASE_SQL = """
+_HADITH_SCORE_MIN = 3
+
+_HADITH_BASE_SQL = f"""
     SELECT h.id, h.collection, h.hadith_number, h.arabic, h.english_narrator, h.english_text
     FROM hadiths h
     JOIN motivational_chapters mc ON mc.collection = h.collection AND mc.chapter_id = h.chapter_id
@@ -28,7 +30,7 @@ _HADITH_BASE_SQL = """
       AND h.english_text NOT LIKE 'This hadith has been%'
       AND h.english_text NOT LIKE '%same chain of transmitters%'
       AND h.english_text NOT LIKE '%same as above%'
-      AND (h.hifz_relevant IS NULL OR h.hifz_relevant = 1)
+      AND (h.motiv_score IS NULL OR h.motiv_score >= {_HADITH_SCORE_MIN})
 """
 
 
