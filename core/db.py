@@ -1,9 +1,8 @@
 import sqlite3
-import re
 from datetime import datetime, timedelta
 import pytz
 from config import DB, TZ
-from core.content import TASK_KEYS, TASK_WORDS, TASK_EMOJIS
+from core.content import TASK_KEYS, TASK_WORDS
 
 
 def db():
@@ -736,55 +735,14 @@ def get_student_memory(phone, group_id, limit=6):
 
 # ── Reports ───────────────────────────────────────────────────────────────────
 
-def _has_arabic(text):
-    return any("؀" <= ch <= "ۿ" for ch in text)
-
-
-_NO_WORDS_PHRASES = [
-    "нет слов", "слов нет", "новых слов нет", "нет новых слов",
-    "забытых слов нет", "нет забытых слов", "не было новых слов",
-    "жаны сөздөр жок", "жок сөздөр", "созу жок",
-    "yangi so'z yo'q", "so'z yo'q",
-]
-
-# Слова отрицания — если стоят перед ключевым словом задания в том же предложении,
-# задание НЕ засчитывается ("не буду сдавать переводы" → t=False)
-_NEGATION_WORDS = ["не ", "нет ", "без ", "жок ", "yo'q ", "не буду", "не сдам", "не делал"]
-
-
-def _is_negated(t, idx):
-    # Ищем начало текущего предложения (после последнего знака препинания)
-    boundaries = [i for i, c in enumerate(t[:idx]) if c in ",.;!\n"]
-    clause_start = boundaries[-1] + 1 if boundaries else 0
-    context = t[clause_start:idx]
-    return any(neg in context for neg in _NEGATION_WORDS)
-
-
-def check_text(text, media=False):
+def check_text(text):
     t = text.lower()
     result = {k: False for k in TASK_KEYS}
     for key, words in TASK_WORDS.items():
         for w in words:
-            idx = t.find(w)
-            if idx != -1 and not _is_negated(t, idx):
+            if w in t:
                 result[key] = True
                 break
-    for key, emojis in TASK_EMOJIS.items():
-        if not result[key]:
-            for em in emojis:
-                if em in text:
-                    result[key] = True
-                    break
-    # "t" (mufradat): без арабских символов не засчитываем, если только не фото (media=True)
-    # или явная фраза "слов нет"
-    if result["t"] and not _has_arabic(text) and not any(p in t for p in _NO_WORDS_PHRASES):
-        if not media:
-            result["t"] = False
-    # Авто-определение словарных пар: 2+ паттернов «арабское_слово — перевод»
-    # без ключевого слова (студент шлёт пары напрямую, без заголовка «слова:»)
-    if not result["t"] and not media and _has_arabic(text):
-        if len(re.findall(r'[؀-ۿ]{2,}\s*[-–—]\s*\S', text)) >= 2:
-            result["t"] = True
     return result
 
 
