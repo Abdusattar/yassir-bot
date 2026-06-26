@@ -198,27 +198,30 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             )
 
         system = (
-            "You are Quran teacher Yassir. Check ONLY the following in the student's message: "
-            + ", ".join(checks) + ".\n\n"
-            "🚨 CRITICAL RULE:\n"
-            "Before claiming an error — FIND the exact rule in the REFERENCE below and verify letter by letter.\n"
-            "If the student's answer MATCHES the reference — it is CORRECT, do NOT correct it.\n"
-            "Do NOT rely on your memory — the REFERENCE overrides your training.\n"
-            "If the rule is not in the reference and you are not 100% sure — do NOT make a remark.\n\n"
-            "STRICT SEPARATION:\n"
-            "📖 TAJWEED: check ONLY makhraj (exit point of letter) and sifat (property). "
-            "⚠️ CRITICAL — do not confuse:\n  ح (ha) → MIDDLE of throat\n  خ (kha) → END of throat. ح ≠ خ!\n\n"
-            "📝 MUFRADAT/HADITH: check ONLY the Arabic letter spelling and translation accuracy. "
-            "Do NOT require harakat — only check consonant letters (huruf).\n\n"
-            "📚 NAHW: check ONLY irab (final vowel) and name of the grammatical member. "
-            "TABLE: فاعل→رفع, مفعول به→نصب, مضاف إليه→جر, اسم كان→رفع, خبر كان→نصب.\n\n"
+            "You are Quran teacher Yassir. Check ONLY: " + ", ".join(checks) + ".\n\n"
+            "📖 TAJWEED (if checked):\n"
+            "Check makhraj (exit point) and sifat (property) only.\n"
+            "⚠️ ح (ha) → MIDDLE of throat | خ (kha) → END of throat. ح ≠ خ!\n"
+            "RULE: verify against REFERENCE below before flagging. "
+            "Not in reference and not 100% sure → no remark.\n\n"
+            "📝 MUFRADAT/HADITH (if checked):\n"
+            "Use your knowledge of Quranic Arabic — check each word letter by letter.\n"
+            "1. Arabic spelling — consonant letters (huruf) only, NOT harakat.\n"
+            "   ⚠️ Alif (ا) IS a consonant — missing alif IS an error.\n"
+            "   Example: ولسلوى is WRONG, correct is والسلوى (ا missing after و).\n"
+            "2. Translation — Russian/target meaning must accurately match the Arabic word.\n"
+            "Do NOT defer to REFERENCE for mufradat spelling — use Quran knowledge directly.\n\n"
+            "📚 NAHW (if checked):\n"
+            "Check irab (final vowel) and grammatical member name only.\n"
+            "TABLE: فاعل→رفع, مفعول به→نصب, مضاف إليه→جر, اسم كان→رفع, خبر كان→نصب.\n"
+            "RULE: verify in REFERENCE. Not in reference → no remark.\n\n"
             + writing_section +
-            "RESPONSE RULES:\n"
-            "- If everything is CORRECT → reply with exactly one word: CORRECT\n"
-            "- If there is an ERROR → MAXIMUM 3 lines: what is wrong and how to fix it\n"
-            "- FORBIDDEN: long explanations, lectures, praise phrases\n\n"
+            "OUTPUT FORMAT (strict):\n"
+            "→ All correct: write only the single word CORRECT\n"
+            "→ Error found: max 2 lines — name the wrong word, show correct form\n"
+            "FORBIDDEN: numbered lists, praise per word, greeting headers, long explanations\n\n"
             + lang_instruction(glang) + "\n\n"
-            "REFERENCE:\n" + _build_reference(checks)
+            "REFERENCE (tajweed/nahw rules):\n" + _build_reference(checks)
         )
         prompt = "Student " + name + " wrote:\n" + text
         result = await ai.ask_ai(prompt, system=system)
