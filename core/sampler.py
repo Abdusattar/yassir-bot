@@ -67,9 +67,11 @@ _AYAH_TAGS_FILTER = (
     "topic_tags LIKE '%reward%' OR topic_tags LIKE '%remembrance%'"
 )
 
+_AYAH_SCORE_MIN = 3
+
 
 def sample_ayah() -> dict | None:
-    """Возвращает случайный аят по позитивному фильтру сильных тем."""
+    """Возвращает случайный аят с motiv_score >= 3 по позитивным тегам."""
     if not HADITHS_DB.exists():
         return None
     try:
@@ -79,6 +81,7 @@ def sample_ayah() -> dict | None:
                 SELECT sura, aya, arabic, topic_tags
                 FROM quran_ayahs
                 WHERE ({_AYAH_TAGS_FILTER})
+                  AND (motiv_score IS NULL OR motiv_score >= {_AYAH_SCORE_MIN})
                   AND used_at IS NULL
                 ORDER BY RANDOM()
                 LIMIT 1
@@ -88,6 +91,7 @@ def sample_ayah() -> dict | None:
                     SELECT sura, aya, arabic, topic_tags
                     FROM quran_ayahs
                     WHERE ({_AYAH_TAGS_FILTER})
+                      AND (motiv_score IS NULL OR motiv_score >= {_AYAH_SCORE_MIN})
                     ORDER BY used_at ASC
                     LIMIT 1
                 """).fetchone()
