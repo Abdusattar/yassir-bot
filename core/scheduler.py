@@ -107,14 +107,15 @@ async def streak_bonuses():
             for s in get_students(group["id"]):
                 streak = get_streak_days(s["id"])
                 if streak > 0 and streak % 7 == 0:
-                    reason = "streak_week_" + str(streak // 7)
+                    subcat = "week_" + str(streak // 7)
                     with db() as c:
                         exists = c.execute(
-                            "SELECT 1 FROM bonus_points WHERE sid=? AND reason=?",
-                            (s["id"], reason)
+                            "SELECT 1 FROM score_events"
+                            " WHERE student_id=? AND category='streak' AND subcategory=?",
+                            (s["id"], subcat)
                         ).fetchone()
                     if not exists:
-                        add_bonus(s["id"], group["id"], today, 5, reason)
+                        add_bonus(s["id"], group["id"], today, 5, "streak", subcat)
                         bonus_names.append((s["name"], streak))
                     # AI-похвала на ключевых рубежах
                     if streak in (7, 14, 30):
@@ -265,6 +266,22 @@ async def skip_warnings():
                     await asyncio.sleep(0.8)
         except Exception as e:
             log.error("skip_warnings error in %s: %s", chat_id, e)
+
+
+# ── Ежедневная насыха в Тадаббур (09:00) ─────────────────────────────────────
+
+async def tadabbur_nasiha():
+    tadabbur = get_tadabbur_group()
+    if not tadabbur:
+        return
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
+    try:
+        text = await ai.daily_nasiha(hadith=hadith, ayah=ayah)
+        if text and len(text) >= 50:
+            await send_message(tadabbur["chat_id"], "📖\n\n" + text)
+    except Exception as e:
+        log.error("tadabbur_nasiha error: %s", e)
 
 
 # ── Приглашение в Тадаббур (10:00) ───────────────────────────────────────────
@@ -457,6 +474,8 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
+            elif h == 9 and m == 0:
+                await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
             elif h == 18 and m == 0:
