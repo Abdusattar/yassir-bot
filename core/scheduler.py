@@ -270,14 +270,12 @@ async def skip_warnings():
 
 # ── Ежедневная насыха в Тадаббур (09:00) ─────────────────────────────────────
 
-async def tadabbur_nasiha():
+async def tadabbur_nasiha(slot: str = "fajr"):
     tadabbur = get_tadabbur_group()
     if not tadabbur:
         return
-    hadith = sampler.sample_hadith()
-    ayah   = sampler.sample_ayah()
     try:
-        text = await ai.daily_nasiha(hadith=hadith, ayah=ayah)
+        text = await ai.daily_nasiha(slot=slot)
         if text and len(text) >= 50:
             await send_message(tadabbur["chat_id"], "📖\n\n" + text)
     except Exception as e:
