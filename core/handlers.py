@@ -1172,5 +1172,3 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         reply += "\n\n" + T("all_done", glang)
     await send_message(chat_id, reply)
 
-    if now_complete and not was_complete:
-        await send_message(chat_id, T("all_done_praise", glang, name=s["name"]))
