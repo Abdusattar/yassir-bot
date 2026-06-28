@@ -711,3 +711,59 @@ async def is_valid_name(name: str) -> bool:
     if not result:
         return True  # сомнения — пропускаем, не блокируем
     return result.strip().upper().startswith("YES")
+
+
+# ── Ежедневная насыха (мощное наставление) ────────────────────────────────────
+
+_NASIHA_MODEL = "z-ai/glm-5.2"
+
+_NASIHA_SYSTEM = (
+    "You write a daily nasiha — one deeply moving spiritual reminder for brothers memorizing the Quran.\n\n"
+    "This is not a general motivational message. This is a moment of stillness and awe.\n\n"
+    "CONTEXT:\n"
+    "These are ordinary people — not scholars — who wake up each day and memorize the speech of Allah. "
+    "They may feel tired, small, ordinary. Your task: help them feel what is actually happening to them.\n\n"
+    "THE TRUTHS TO DRAW FROM (your model already knows these deeply):\n"
+    "- Allah chose these people, from billions alive today, to carry His uncreated speech in their chests. "
+    "Quran 29:49 says: 'clear signs in the chests of those given knowledge'.\n"
+    "- The Quran is the literal uncreated speech of the Creator of the universe. These people are memorizing it.\n"
+    "- 'Read and ascend' — each verse memorized is a permanent rising station in Paradise (Abu Dawud, Tirmidhi).\n"
+    "- A crown brighter than the sun will be placed on the parents of the one who learned the Quran (Abu Dawud).\n"
+    "- The Quran will come on the Day of Judgment as an intercessor, advocate and witness (Muslim).\n"
+    "- When they sit to memorize: sakina descends, angels surround them, mercy covers them, "
+    "and Allah mentions them to those with Him (Muslim).\n"
+    "- Al-Fatiha is munajat — when they say 'Alhamdulillah', Allah says 'My servant has praised Me' "
+    "— they are in dialogue with the Lord right now (Muslim).\n\n"
+    "HOW TO WRITE:\n"
+    "- Second person ('ты'), direct, personal — like a wise older brother whispering something that stops time.\n"
+    "- Build everything to ONE single point. Choose the most powerful angle from the provided ayah/hadith "
+    "and go deep into it. Not a list.\n"
+    "- Cosmic scale, sensory language. Help them feel the weight of what they are carrying.\n"
+    "- Contrast: a tiny, humble, daily effort — but Allah Himself is watching, naming them, marking them.\n"
+    "- Do NOT open with a generic greeting like 'Brothers!' — go straight into the moment.\n"
+    "- End with longing — a pull toward returning to the Quran — and a short du'a (🤲).\n\n"
+    "CITATION RULES (strictly enforced):\n"
+    "- Cite ONLY the provided ayah and hadith with their references in parentheses.\n"
+    "- Do NOT invent hadith numbers or attribute words to the Prophet ﷺ beyond what is given.\n"
+    "- Do NOT write Arabic or English text — only the meaning in Russian.\n\n"
+    "FORMAT:\n"
+    "- Plain text, no bullet points, no headers, no bold.\n"
+    "- 7-10 flowing lines. One idea, going deep.\n"
+    "- Language: Russian.\n"
+    + _GENDER_ADDR
+)
+
+
+async def daily_nasiha(hadith: dict | None = None, ayah: dict | None = None) -> str | None:
+    source_block = await _build_source_block(hadith, ayah, "ru")
+    prompt = (
+        "Today's anchor:\n\n"
+        + (source_block if source_block else "(use your deep knowledge of Quran and sunnah)\n\n")
+        + "Write today's nasiha. ONE truth. Go deep into it. "
+        "Build slowly to the moment where the reader feels it in the chest. "
+        "End with longing and du'a 🤲"
+    )
+    result = await ask_ai(prompt, system=_NASIHA_SYSTEM, model=_NASIHA_MODEL, max_tokens=900)
+    if result:
+        result = result.rstrip(" ·").strip()
+    return result
