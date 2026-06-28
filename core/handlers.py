@@ -1012,7 +1012,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # ── Отметка присутствия (+) ────────────────────────────────────────────────
     text_lower = text.strip().lower()
     is_online_word = text_lower in [w.lower() for w in ONLINE_WORDS] or text.strip() == "+"
-    if is_online_word and not is_group_admin(phone, group_id):
+    if is_online_word:
         s_self = find_by_phone(phone, group_id)
         if s_self:
             lesson = get_open_lesson(group_id)
