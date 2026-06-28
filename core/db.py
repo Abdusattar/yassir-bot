@@ -78,6 +78,20 @@ def init():
                 reason TEXT,
                 UNIQUE(sid, date, reason)
             );
+            CREATE TABLE IF NOT EXISTS score_events(
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id  INTEGER NOT NULL,
+                group_id    INTEGER NOT NULL,
+                date        TEXT NOT NULL,
+                category    TEXT NOT NULL,
+                subcategory TEXT NOT NULL DEFAULT '',
+                points      INTEGER NOT NULL DEFAULT 1,
+                note        TEXT,
+                created_at  TEXT DEFAULT (datetime('now')),
+                UNIQUE(student_id, group_id, date, category, subcategory)
+            );
+            CREATE INDEX IF NOT EXISTS idx_se_student_date ON score_events(student_id, date);
+            CREATE INDEX IF NOT EXISTS idx_se_group_date   ON score_events(group_id, date);
             CREATE TABLE IF NOT EXISTS online_lessons(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 group_id INTEGER NOT NULL,
@@ -189,6 +203,15 @@ def _run_migrations(c):
             "INSERT OR REPLACE INTO bot_settings(key,value) VALUES('migrated_reports_unique','1')"
         )
 
+    migrated_se = c.execute(
+        "SELECT value FROM bot_settings WHERE key='migrated_to_score_events'"
+    ).fetchone()
+    if not migrated_se:
+        _migrate_to_score_events(c)
+        c.execute(
+            "INSERT OR REPLACE INTO bot_settings(key,value) VALUES('migrated_to_score_events','1')"
+        )
+
 
 def _migrate_to_users_table(c):
     students = c.execute("SELECT * FROM students").fetchall()
@@ -296,6 +319,35 @@ def _migrate_reports_unique(c):
     c.execute("DROP TABLE reports")
     c.execute("ALTER TABLE reports_new RENAME TO reports")
     c.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_to_score_events(c):
+    """Копирует reports + bonus_points в score_events."""
+    for r in c.execute("SELECT * FROM reports").fetchall():
+        for key in ("m", "r", "t", "j", "n", "h"):
+            if r[key]:
+                c.execute(
+                    "INSERT OR IGNORE INTO score_events"
+                    "(student_id,group_id,date,category,subcategory,points)"
+                    " VALUES(?,?,?,'task',?,1)",
+                    (r["sid"], r["group_id"], r["date"], key)
+                )
+    for b in c.execute("SELECT * FROM bonus_points").fetchall():
+        reason = b["reason"] or ""
+        if reason == "excuse":
+            cat, sub, note = "excuse", "", None
+        elif reason == "online_lesson":
+            cat, sub, note = "attendance", "online", None
+        elif reason.startswith("streak_week_"):
+            cat, sub, note = "streak", reason[len("streak_"):], None
+        else:
+            cat, sub, note = "bonus", (reason[:50] if reason else ""), reason or None
+        c.execute(
+            "INSERT OR IGNORE INTO score_events"
+            "(student_id,group_id,date,category,subcategory,points,note)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (b["sid"], b["group_id"], b["date"], cat, sub, b["points"], note)
+        )
 
 
 # ── Time ──────────────────────────────────────────────────────────────────────
@@ -761,45 +813,68 @@ def is_checkmarks_only(text):
     return count_checkmarks(text) > 0 and len(cleaned.strip()) == 0
 
 
-def save_report(uid, group_id, date, tasks_done):
-    m = int(tasks_done.get("m", False))
-    r = int(tasks_done.get("r", False))
-    t = int(tasks_done.get("t", False))
-    j = int(tasks_done.get("j", False))
-    n = int(tasks_done.get("n", False))
-    h = int(tasks_done.get("h", False))
-    score = m + r + t + j + n + h
+def cancel_task(student_id, group_id, task_code):
+    today = get_date()
     with db() as c:
-        c.execute("""
-            INSERT INTO reports(sid,group_id,date,m,r,t,j,n,h,score) VALUES(?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(sid,group_id,date) DO UPDATE SET
-            m=MAX(m,excluded.m), r=MAX(r,excluded.r), t=MAX(t,excluded.t),
-            j=MAX(j,excluded.j), n=MAX(n,excluded.n), h=MAX(h,excluded.h),
-            score=MAX(score,excluded.score)
-        """, (uid, group_id, date, m, r, t, j, n, h, score))
+        c.execute(
+            "DELETE FROM score_events"
+            " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
+            (student_id, group_id, today, task_code)
+        )
+
+
+def save_report(uid, group_id, date, tasks_done):
+    with db() as c:
+        for key in ("m", "r", "t", "j", "n", "h"):
+            if tasks_done.get(key):
+                c.execute(
+                    "INSERT OR IGNORE INTO score_events"
+                    "(student_id,group_id,date,category,subcategory,points)"
+                    " VALUES(?,?,?,'task',?,1)",
+                    (uid, group_id, date, key)
+                )
 
 
 def get_today_report(uid, group_id=None):
+    today = get_date()
     with db() as c:
         if group_id is not None:
-            return c.execute(
-                "SELECT * FROM reports WHERE sid=? AND date=? AND group_id=?",
-                (uid, get_date(), group_id)
-            ).fetchone()
-        return c.execute(
-            "SELECT * FROM reports WHERE sid=? AND date=? ORDER BY id LIMIT 1",
-            (uid, get_date())
-        ).fetchone()
+            rows = c.execute(
+                "SELECT subcategory FROM score_events"
+                " WHERE student_id=? AND group_id=? AND date=? AND category='task'",
+                (uid, group_id, today)
+            ).fetchall()
+        else:
+            rows = c.execute(
+                "SELECT subcategory FROM score_events"
+                " WHERE student_id=? AND date=? AND category='task'",
+                (uid, today)
+            ).fetchall()
+    if not rows:
+        return None
+    result = {k: False for k in ("m", "r", "t", "j", "n", "h")}
+    for r in rows:
+        if r["subcategory"] in result:
+            result[r["subcategory"]] = True
+    result["score"] = sum(1 for v in result.values() if v)
+    return result
+
+
+def _active_dates(uid, limit=400):
+    """Множество дат когда студент имел хоть одно событие."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT DISTINCT date FROM score_events WHERE student_id=? ORDER BY date DESC LIMIT ?",
+            (uid, limit)
+        ).fetchall()
+    return {r["date"] for r in rows}
 
 
 def get_days_since_last_report(uid):
     tz = pytz.timezone(TZ)
     with db() as c:
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
-        rows = c.execute(
-            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 400", (uid,)
-        ).fetchall()
-    dates = {r["date"] for r in rows}
+    dates = _active_dates(uid)
     added = user["added_date"] if user else None
     today = datetime.now(tz).date()
     missed = 0
@@ -818,10 +893,7 @@ def get_consecutive_skips(uid):
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
             return 0
-        rows = c.execute(
-            "SELECT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 30", (uid,)
-        ).fetchall()
-    dates = {r["date"] for r in rows}
+    dates = _active_dates(uid, limit=30)
     tz = pytz.timezone(TZ)
     skips = 0
     for i in range(1, 31):
@@ -844,7 +916,8 @@ def get_skip_count_month(uid):
         if not user:
             return 0
         rows = c.execute(
-            "SELECT date FROM reports WHERE sid=? AND date>=?", (uid, month_start)
+            "SELECT DISTINCT date FROM score_events WHERE student_id=? AND date>=?",
+            (uid, month_start)
         ).fetchall()
     dates = {r["date"] for r in rows}
     start = max(month_start, user["added_date"])
@@ -864,10 +937,7 @@ def get_miss_count_last_30_days(uid):
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
             return 30
-        rows = c.execute(
-            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 60", (uid,)
-        ).fetchall()
-    dates = {r["date"] for r in rows}
+    dates = _active_dates(uid, limit=60)
     added = user["added_date"]
     misses = 0
     days_checked = 0
@@ -885,11 +955,7 @@ def get_miss_count_last_30_days(uid):
 
 def get_streak_days(uid):
     tz = pytz.timezone(TZ)
-    with db() as c:
-        rows = c.execute(
-            "SELECT DISTINCT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 400", (uid,)
-        ).fetchall()
-    dates = {r["date"] for r in rows}
+    dates = _active_dates(uid)
     today = datetime.now(tz).date()
     streak = 0
     for i in range(400):
@@ -907,10 +973,7 @@ def check_no_skip_week(uid):
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
             return False
-        rows = c.execute(
-            "SELECT date FROM reports WHERE sid=? ORDER BY date DESC LIMIT 7", (uid,)
-        ).fetchall()
-    dates = {r["date"] for r in rows}
+    dates = _active_dates(uid, limit=7)
     today = datetime.now(tz).date()
     for i in range(7):
         day = (today - timedelta(days=i)).isoformat()
@@ -936,25 +999,38 @@ def get_lesson_skip_count_month(uid, group_id):
     return sum(1 for l in lessons if l["id"] not in attended_ids)
 
 
-def add_bonus(uid, group_id, date, points, reason):
+def add_bonus(uid, group_id, date, points, category, subcategory="", note=None):
     with db() as c:
         c.execute(
-            "INSERT OR IGNORE INTO bonus_points(sid,group_id,date,points,reason) VALUES(?,?,?,?,?)",
-            (uid, group_id, date, points, reason)
+            "INSERT OR IGNORE INTO score_events"
+            "(student_id,group_id,date,category,subcategory,points,note)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (uid, group_id, date, category, subcategory, points, note)
         )
 
 
 def get_missing_students(group_id, group_tasks):
     students = get_students(group_id)
+    today = get_date()
     result = []
-    for s in students:
-        rep = get_today_report(s["id"], group_id)
-        missing = []
-        for key in group_tasks:
-            if not rep or not rep[key]:
-                missing.append(key)
-        if missing:
-            result.append((s, missing))
+    with db() as c:
+        for s in students:
+            has_excuse = c.execute(
+                "SELECT 1 FROM score_events"
+                " WHERE student_id=? AND group_id=? AND date=? AND category='excuse' LIMIT 1",
+                (s["id"], group_id, today)
+            ).fetchone()
+            if has_excuse:
+                continue
+            task_rows = c.execute(
+                "SELECT subcategory FROM score_events"
+                " WHERE student_id=? AND group_id=? AND date=? AND category='task'",
+                (s["id"], group_id, today)
+            ).fetchall()
+            done = {r["subcategory"] for r in task_rows}
+            missing = [k for k in group_tasks if k not in done]
+            if missing:
+                result.append((s, missing))
     return result
 
 
@@ -1007,10 +1083,11 @@ def get_prep_students_due():
 
 
 def count_report_days_since(uid, group_id, since_date):
-    """Количество дней с отчётами начиная с даты (для prep проверки)."""
+    """Количество дней с заданиями начиная с даты (для prep проверки). Узр не считается."""
     with db() as c:
         row = c.execute(
-            "SELECT COUNT(DISTINCT date) as cnt FROM reports WHERE sid=? AND group_id=? AND date>=?",
+            "SELECT COUNT(DISTINCT date) as cnt FROM score_events"
+            " WHERE student_id=? AND group_id=? AND date>=? AND category='task'",
             (uid, group_id, since_date)
         ).fetchone()
         return row["cnt"] if row else 0
@@ -1035,10 +1112,14 @@ def get_relaxed_groups_by_lang(lang):
 def get_cumulative_avg(group_id):
     with db() as c:
         result = c.execute("""
-            SELECT ROUND(AVG(r.score), 2) as avg
-            FROM reports r
-            JOIN user_groups ug ON ug.user_id=r.sid AND ug.group_id=r.group_id
-            WHERE r.group_id=? AND ug.role='student' AND ug.active=1
+            SELECT ROUND(AVG(daily_score), 2) as avg FROM (
+                SELECT e.student_id, e.date, COUNT(*) as daily_score
+                FROM score_events e
+                JOIN user_groups ug ON ug.user_id=e.student_id AND ug.group_id=e.group_id
+                WHERE e.group_id=? AND e.category='task'
+                  AND ug.role='student' AND ug.active=1
+                GROUP BY e.student_id, e.date
+            )
         """, (group_id,)).fetchone()
     return result["avg"] if result and result["avg"] else 0
 
@@ -1046,10 +1127,14 @@ def get_cumulative_avg(group_id):
 def get_today_avg(group_id):
     with db() as c:
         result = c.execute("""
-            SELECT ROUND(AVG(r.score), 2) as avg
-            FROM reports r
-            JOIN user_groups ug ON ug.user_id=r.sid AND ug.group_id=r.group_id
-            WHERE r.group_id=? AND r.date=? AND ug.role='student' AND ug.active=1
+            SELECT ROUND(AVG(daily_score), 2) as avg FROM (
+                SELECT e.student_id, COUNT(*) as daily_score
+                FROM score_events e
+                JOIN user_groups ug ON ug.user_id=e.student_id AND ug.group_id=e.group_id
+                WHERE e.group_id=? AND e.date=? AND e.category='task'
+                  AND ug.role='student' AND ug.active=1
+                GROUP BY e.student_id
+            )
         """, (group_id, get_date())).fetchone()
     return result["avg"] if result and result["avg"] else 0
 
@@ -1080,14 +1165,18 @@ def close_lesson(group_id):
 
 
 def get_open_lesson(group_id):
-    """Возвращает текущий активный (открытый устазом) урок или None."""
+    """Возвращает текущий активный урок только если он открыт сегодня, иначе None."""
     lesson_id = get_setting(_LESSON_KEY + str(group_id))
     if not lesson_id:
         return None
     with db() as c:
-        return c.execute(
+        lesson = c.execute(
             "SELECT * FROM online_lessons WHERE id=?", (int(lesson_id),)
         ).fetchone()
+    if not lesson or lesson["date"] != get_date():
+        delete_setting(_LESSON_KEY + str(group_id))
+        return None
+    return lesson
 
 
 def get_lesson_attendance(lesson_id):
@@ -1121,36 +1210,52 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None):
         for_date = get_date()
     date_str = datetime.strptime(for_date, "%Y-%m-%d").strftime("%d.%m.%Y")
     with db() as c:
-        rows = c.execute("""
-            SELECT u.name, u.phone, r.m, r.r, r.t, r.j, r.n, r.h, r.score
-            FROM users u
+        students = c.execute("""
+            SELECT u.id, u.name FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
-            LEFT JOIN reports r ON u.id=r.sid AND r.date=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-            ORDER BY r.score DESC NULLS LAST, u.name
-        """, (for_date, group_id)).fetchall()
+            ORDER BY u.name
+        """, (group_id,)).fetchall()
+        task_rows = c.execute(
+            "SELECT student_id, subcategory FROM score_events"
+            " WHERE group_id=? AND date=? AND category='task'",
+            (group_id, for_date)
+        ).fetchall()
+        excuse_ids = {r["student_id"] for r in c.execute(
+            "SELECT student_id FROM score_events"
+            " WHERE group_id=? AND date=? AND category='excuse'",
+            (group_id, for_date)
+        ).fetchall()}
+
+    task_map = {}
+    for r in task_rows:
+        task_map.setdefault(r["student_id"], set()).add(r["subcategory"])
 
     total_tasks = len(group_tasks)
     legend = "  ".join(DEFAULT_TASKS[k] for k in group_tasks)
     lines = ["📋 Отчёт — " + group_title + " за " + date_str + "\n"]
     lines.append("Порядок заданий:\n" + legend + "\n")
 
+    students_sorted = sorted(
+        students,
+        key=lambda s: (-sum(1 for k in group_tasks if k in task_map.get(s["id"], set())), s["name"])
+    )
+
     done_count = 0
-    for r in rows:
-        marks = ""
-        cnt = 0
-        for key in group_tasks:
-            if r[key]:
-                marks += "✅"
-                cnt += 1
-            else:
-                marks += "❌"
+    for s in students_sorted:
+        sid = s["id"]
+        done = task_map.get(sid, set())
+        cnt = sum(1 for k in group_tasks if k in done)
         if cnt > 0:
             done_count += 1
+        if sid in excuse_ids and cnt == 0:
+            lines.append(s["name"] + ": ⛔ узр")
+            continue
+        marks = "".join("✅" if k in done else "❌" for k in group_tasks)
         celebrate = " 🎉" if cnt == total_tasks else ""
-        lines.append(r["name"] + ": " + marks + " " + str(cnt) + "/" + str(total_tasks) + celebrate)
+        lines.append(s["name"] + ": " + marks + " " + str(cnt) + "/" + str(total_tasks) + celebrate)
 
-    lines.append("\n📊 Сдали хоть что-то: " + str(done_count) + "/" + str(len(rows)))
+    lines.append("\n📊 Сдали хоть что-то: " + str(done_count) + "/" + str(len(students)))
     lines.append("📈 Средний балл сегодня: " + str(get_today_avg(group_id)))
     lines.append("📊 Средний за всё время: " + str(get_cumulative_avg(group_id)))
     return "\n".join(lines)
@@ -1160,53 +1265,83 @@ def get_period_winner(group_id, days):
     start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days)).isoformat()
     with db() as c:
         return c.execute("""
-            SELECT u.name, COALESCE(SUM(r.score),0) as points
+            SELECT u.name, COALESCE(SUM(e.points),0) as points
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
-            LEFT JOIN reports r ON u.id=r.sid AND r.date>=? AND r.group_id=?
+            LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
             GROUP BY u.id ORDER BY points DESC LIMIT 1
-        """, (start, group_id, group_id)).fetchone()
+        """, (group_id, start, group_id)).fetchone()
 
 
 def format_period_report(group_id, group_title, group_tasks, days):
     start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days)).isoformat()
-    label = "неделю" if days == 7 else ("месяц" if days == 30 else "год")
+    label = "неделю" if days == 7 else ("месяц" if days == 30 else ("год" if days == 365 else str(days) + " дн."))
     with db() as c:
-        rows = c.execute("""
-            SELECT u.name,
-                   COALESCE(SUM(r.score),0) as total,
-                   COUNT(r.id) as days_done
-            FROM users u
+        students = c.execute("""
+            SELECT u.id, u.name FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
-            LEFT JOIN reports r ON u.id=r.sid AND r.date>=? AND r.group_id=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-            GROUP BY u.id ORDER BY total DESC
-        """, (start, group_id, group_id)).fetchall()
-        bonus_rows = c.execute("""
-            SELECT u.name, COALESCE(SUM(b.points),0) as bonus
-            FROM users u
-            JOIN user_groups ug ON u.id=ug.user_id
-            LEFT JOIN bonus_points b ON b.sid=u.id AND b.date>=? AND b.group_id=?
-            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-            GROUP BY u.id
-        """, (start, group_id, group_id)).fetchall()
+        """, (group_id,)).fetchall()
+        task_agg = c.execute("""
+            SELECT student_id,
+                   COUNT(*) as task_points,
+                   COUNT(DISTINCT date) as days_done
+            FROM score_events
+            WHERE group_id=? AND date>=? AND category='task'
+            GROUP BY student_id
+        """, (group_id, start)).fetchall()
+        bonus_agg = c.execute("""
+            SELECT student_id, COALESCE(SUM(points),0) as bonus
+            FROM score_events
+            WHERE group_id=? AND date>=? AND category != 'task'
+            GROUP BY student_id
+        """, (group_id, start)).fetchall()
 
-    bonus_map = {b["name"]: b["bonus"] for b in bonus_rows}
+    task_map  = {r["student_id"]: (r["task_points"], r["days_done"]) for r in task_agg}
+    bonus_map = {r["student_id"]: r["bonus"] for r in bonus_agg}
+
+    results = []
+    for s in students:
+        sid = s["id"]
+        task_pts, days_done = task_map.get(sid, (0, 0))
+        bonus = bonus_map.get(sid, 0)
+        results.append((s["name"], task_pts + bonus, days_done, bonus))
+    results.sort(key=lambda x: -x[1])
+
     medals = ["🥇", "🥈", "🥉"]
 
     def day_word(n):
         return "день" if n == 1 else ("дня" if 2 <= n <= 4 else "дней")
 
     lines = ["📊 Отчёт за " + label + " — " + group_title + ":\n"]
-    for i, r in enumerate(rows):
+    for i, (name, total, days_done, bonus) in enumerate(results):
         medal = medals[i] if i < 3 else str(i + 1) + "."
-        bonus = bonus_map.get(r["name"], 0)
-        total = r["total"] + bonus
         bonus_str = " (+{} бонус)".format(bonus) if bonus > 0 else ""
         lines.append(
-            medal + " " + r["name"] + " — 💎 " + str(total) + " очков"
-            + " (" + str(r["days_done"]) + " " + day_word(r["days_done"]) + ")" + bonus_str
+            medal + " " + name + " — 💎 " + str(total) + " очков"
+            + " (" + str(days_done) + " " + day_word(days_done) + ")" + bonus_str
         )
     lines.append("\n📊 Средний балл за всё время: " + str(get_cumulative_avg(group_id)))
+
+    with db() as c:
+        lessons = c.execute(
+            "SELECT id, date FROM online_lessons WHERE group_id=? AND date>=? ORDER BY date",
+            (group_id, start)
+        ).fetchall()
+    if lessons:
+        total_students = len(students)
+        lines.append("\n📡 Онлайн уроки:")
+        with db() as c:
+            for l in lessons:
+                names = [r["name"] for r in c.execute(
+                    "SELECT u.name FROM attendance a JOIN users u ON a.sid=u.id WHERE a.lesson_id=?",
+                    (l["id"],)
+                ).fetchall()]
+                date_str = datetime.strptime(l["date"], "%Y-%m-%d").strftime("%d.%m")
+                header = "  • " + date_str + " — " + str(len(names)) + " из " + str(total_students) + " студентов"
+                if names:
+                    header += ": " + ", ".join(names)
+                lines.append(header)
+
     return "\n".join(lines)

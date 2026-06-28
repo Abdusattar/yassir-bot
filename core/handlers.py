@@ -17,7 +17,7 @@ from core.db import (
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_skip_count_month, add_bonus,
-    open_lesson, close_lesson, get_open_lesson, get_lesson_attendance, mark_attendance,
+    open_lesson, get_open_lesson, get_lesson_attendance, mark_attendance,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -106,6 +106,27 @@ def detect_yassir(text):
         if low.startswith(v):
             return t[len(v):].lstrip(" ,!:-—?")
     return None
+
+
+def _parse_minus_cmd(text):
+    """Parse '- Имя код...' / '/minus Имя код...' → (name, [codes]) or (None, None)."""
+    t = text.strip()
+    low = t.lower()
+    if t.startswith("- ") and len(t) > 2:
+        rest = t[2:].strip()
+    elif low.startswith("/minus "):
+        rest = t[7:].strip()
+    elif low.startswith("minus "):
+        rest = t[6:].strip()
+    else:
+        return None, None
+    parts = rest.split()
+    if not parts:
+        return "", []
+    codes = []
+    while parts and parts[-1].lower() in TASK_KEYS:
+        codes.insert(0, parts.pop().lower())
+    return " ".join(parts), codes
 
 
 def _with_knowledge(base: str) -> str:
@@ -260,7 +281,7 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         log.error("verify error: %s", e)
 
 
-async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None):
+async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text=""):
     phone = extract_phone(sender)
     text = (text or "").strip()
     # Telegram в группах добавляет @botname к командам: /help@yassirquranbot → /help
@@ -385,7 +406,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     GROUP BY g.id ORDER BY g.id
                 """).fetchall()
                 today_reports = c.execute(
-                    "SELECT COUNT(DISTINCT sid) FROM reports WHERE date=?", (get_date(),)
+                    "SELECT COUNT(DISTINCT student_id) FROM score_events WHERE date=? AND category='task'",
+                    (get_date(),)
                 ).fetchone()[0]
             lines = ["📊 База данных (сервер)\n"]
             lines.append("👥 Пользователей: " + str(total_users))
@@ -730,20 +752,46 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             "Всего в группе: " + str(len(students)) + " студентов")
         return
 
-    if text in ("/урокзавершен", "/endlesson") and is_group_admin(phone, group_id):
-        lesson = get_open_lesson(group_id)
-        if not lesson:
-            await send_message(chat_id, "Активного урока нет.")
-            return
-        attended = get_lesson_attendance(lesson["id"])
-        close_lesson(group_id)
-        if attended:
-            names = "\n".join("• " + r["name"] for r in attended)
+
+    # ── Отмена задания: "- Имя код" / "/minus Имя код" ───────────────────────
+    _m_name, _m_codes = _parse_minus_cmd(text)
+    if _m_name is not None and is_group_admin(phone, group_id):
+        if not _m_name or not _m_codes:
             await send_message(chat_id,
-                "✅ Урок завершён!\n\n"
-                "Присутствовали (" + str(len(attended)) + " человек):\n" + names)
-        else:
-            await send_message(chat_id, "✅ Урок завершён. Никто не отметился.")
+                "❌ Формат: - Имя код\nПример: - Азиз t r\n\n"
+                "Коды заданий: m r t j n h")
+            return
+        st = find_by_name(_m_name, group_id)
+        if not st:
+            await send_message(chat_id, "❌ Студент «" + _m_name + "» не найден в этой группе")
+            return
+        today = get_date()
+        cancelled, not_found = [], []
+        with db() as c:
+            for code in _m_codes:
+                exists = c.execute(
+                    "SELECT 1 FROM score_events"
+                    " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
+                    (st["id"], group_id, today, code)
+                ).fetchone()
+                if exists:
+                    c.execute(
+                        "DELETE FROM score_events"
+                        " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
+                        (st["id"], group_id, today, code)
+                    )
+                    cancelled.append(DEFAULT_TASKS.get(code, code))
+                else:
+                    not_found.append(DEFAULT_TASKS.get(code, code))
+        if cancelled:
+            lines = ["❌ По решению устаза аннулировано у " + st["name"] + ":"]
+            lines += ["• " + n for n in cancelled]
+            lines.append("\nПо вопросам обращайтесь к устазу. 🤲")
+            await send_message(chat_id, "\n".join(lines))
+        if not_found:
+            info = ["ℹ️ Сегодня не найдено у " + st["name"] + ":"]
+            info += ["• " + n for n in not_found]
+            await send_message(chat_id, "\n".join(info))
         return
 
     # ── Студенты ──────────────────────────────────────────────────────────────
@@ -841,13 +889,15 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         week_ago = (__import__('datetime').datetime.now(pytz.timezone(TZ)).date() - timedelta(days=7)).isoformat()
         with db() as c:
             rows = c.execute("""
-                SELECT u.name, COALESCE(SUM(r.score),0) as total, COUNT(r.id) as days
+                SELECT u.name,
+                       COALESCE(SUM(e.points),0) as total,
+                       COUNT(DISTINCT CASE WHEN e.category='task' THEN e.date END) as days
                 FROM users u
                 JOIN user_groups ug ON u.id=ug.user_id
-                LEFT JOIN reports r ON u.id=r.sid AND r.date>=? AND r.group_id=?
+                LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=?
                 WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
                 GROUP BY u.id ORDER BY total DESC
-            """, (week_ago, group_id, group_id)).fetchall()
+            """, (group_id, week_ago, group_id)).fetchall()
         medals = ["🥇", "🥈", "🥉"]
         lines = [T("rating_header", glang, title=group["title"] or chat_id)]
         for i, r in enumerate(rows):
@@ -878,24 +928,24 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         skips_month = get_skip_count_month(s_check["id"])
         with db() as c:
             total_row = c.execute(
-                "SELECT COALESCE(SUM(score),0) as total, COUNT(id) as days FROM reports WHERE sid=?",
+                "SELECT COALESCE(SUM(points),0) as total FROM score_events WHERE student_id=?",
                 (s_check["id"],)
             ).fetchone()
-            bonus_row = c.execute(
-                "SELECT COALESCE(SUM(points),0) as bonus FROM bonus_points WHERE sid=?",
+            days_row = c.execute(
+                "SELECT COUNT(DISTINCT date) as days FROM score_events"
+                " WHERE student_id=? AND category='task'",
                 (s_check["id"],)
             ).fetchone()
             rank_rows = c.execute("""
-                SELECT u.id, COALESCE(SUM(r.score),0)+COALESCE(b.bonus,0) as grand
+                SELECT u.id, COALESCE(SUM(e.points),0) as grand
                 FROM users u
                 JOIN user_groups ug ON u.id=ug.user_id
-                LEFT JOIN reports r ON r.sid=u.id
-                LEFT JOIN (SELECT sid, SUM(points) as bonus FROM bonus_points GROUP BY sid) b ON b.sid=u.id
+                LEFT JOIN score_events e ON e.student_id=u.id AND e.group_id=?
                 WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
                 GROUP BY u.id ORDER BY grand DESC
-            """, (group_id,)).fetchall()
-        total_score = (total_row["total"] or 0) + (bonus_row["bonus"] or 0)
-        days_done = total_row["days"] or 0
+            """, (group_id, group_id)).fetchall()
+        total_score = total_row["total"] or 0
+        days_done = days_row["days"] or 0
         rank = next((i + 1 for i, r in enumerate(rank_rows) if r["id"] == s_check["id"]), "?")
         today_rep = get_today_report(s_check["id"], group_id)
         today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
@@ -925,7 +975,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             b_reason = parts[2] if len(parts) > 2 else "ручной бонус"
             b_student = find_by_name(b_name, group_id)
             if b_student:
-                add_bonus(b_student["id"], group_id, get_date(), b_points, "manual_" + get_date() + "_" + b_reason[:20])
+                add_bonus(b_student["id"], group_id, get_date(), b_points, "bonus", subcategory=b_reason[:50], note=b_reason)
                 sign = "+" if b_points >= 0 else ""
                 await send_message(chat_id,
                     "✅ " + b_name + ": " + sign + str(b_points) + " баллов\nПричина: " + b_reason)
@@ -941,8 +991,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if is_excuse and s_pre:
         with db() as c:
             already_excuse = c.execute(
-                "SELECT 1 FROM bonus_points WHERE sid=? AND date=? AND reason='excuse'",
-                (s_pre["id"], get_date())
+                "SELECT 1 FROM score_events"
+                " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
+                (s_pre["id"], group_id, get_date())
             ).fetchone()
         if not already_excuse:
             add_bonus(s_pre["id"], group_id, get_date(), 1, "excuse")
@@ -969,7 +1020,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 ).fetchone()
             if not already:
                 mark_attendance(s_self["id"], lesson["id"])
-                add_bonus(s_self["id"], group_id, get_date(), 5, "online_lesson")
+                add_bonus(s_self["id"], group_id, get_date(), 5, "attendance", "online")
                 await send_message(chat_id, T("present", glang, name=s_self["name"]))
             return
 
@@ -1002,7 +1053,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         marked = []
         for st in found:
             mark_attendance(st["id"], lesson["id"])
-            add_bonus(st["id"], group_id, get_date(), 5, "online_lesson")
+            add_bonus(st["id"], group_id, get_date(), 5, "attendance", "online")
             marked.append(st["name"])
         await send_message(chat_id,
             "📡 Онлайн урок отмечен!\n\n✅ Присутствовали (+5 баллов):\n" +
@@ -1058,6 +1109,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     if score == 0:
+        if not is_media:
+            answer = await ai.answer_if_relevant(
+                text, _build_reference_for_question(text),
+                group["title"] or chat_id, phone, group_id, s["name"]
+            )
+            if answer:
+                await send_message(chat_id, "🤖 Ясир:\n" + answer)
         return
 
     # ── ИИ-проверка в фоне ────────────────────────────────────────────────────
