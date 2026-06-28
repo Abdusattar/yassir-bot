@@ -1083,7 +1083,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             return
         answer = await ai.answer_question(
             yassir_question, _build_reference_for_question(yassir_question),
-            group["title"] or chat_id, phone, group_id, s["name"]
+            group["title"] or chat_id, phone, group_id, s["name"],
+            is_ustaz=is_group_admin(phone, group_id)
         )
         await send_message(chat_id, "🤖 Ясир:\n" + answer)
         return
@@ -1104,21 +1105,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     score = sum(1 for k in group_tasks if tasks_done.get(k))
 
-    # Вопрос к Ясиру (есть "?")
-    is_question = ("?" in text and score == 0)
-    if is_question and not is_media:
-        answer = await ai.answer_question(
-            text, _build_reference_for_question(text),
-            group["title"] or chat_id, phone, group_id, s["name"]
-        )
-        await send_message(chat_id, "🤖 Ясир:\n" + answer)
-        return
-
     if score == 0:
         if not is_media:
             answer = await ai.answer_if_relevant(
                 text, _build_reference_for_question(text),
-                group["title"] or chat_id, phone, group_id, s["name"]
+                group["title"] or chat_id, phone, group_id, s["name"],
+                is_ustaz=is_group_admin(phone, group_id)
             )
             if answer:
                 await send_message(chat_id, "🤖 Ясир:\n" + answer)

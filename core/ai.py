@@ -228,9 +228,16 @@ async def check_report(name, tasks_done, lang="ru", hadith=None, ayah=None):
     return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
-async def answer_question(question, program_info, group_title, phone=None, group_id=None, student_name=""):
+async def answer_question(question, program_info, group_title, phone=None, group_id=None, student_name="", is_ustaz=False):
+    role_note = (
+        "Собеседник — УСТАЗ (администратор группы).\n"
+        if is_ustaz else
+        "Собеседник — СТУДЕНТ (не устаз, не администратор). "
+        "Не называй его устазом. Команды устаза ему не показывай — только студенческие.\n"
+    )
     system = (
         "Ты ИИ-помощник учителя Корана по имени Ясир. Работаешь в Telegram-группе проекта Яссир.\n"
+        + role_note + "\n"
         "Отвечай на основании Корана, хадисов, слов учёных. В вопросах методики — "
         "строго по системе проекта Яссир описанной ниже.\n\n"
         + _HUMAN_STYLE + "\n\n"
@@ -259,6 +266,49 @@ async def answer_question(question, program_info, group_title, phone=None, group
         "Ассаляму алейкум! Не могу ответить прямо сейчас.\n"
         "Задай вопрос через несколько минут, или Устаз ответит лично. БаракАллаху фийк! 🕌"
     )
+
+
+async def answer_if_relevant(question, program_info, group_title, phone=None, group_id=None, student_name="", is_ustaz=False):
+    """Отвечает только если сообщение явно адресовано боту. Возвращает None если нет."""
+    role_note = (
+        "Собеседник — УСТАЗ (администратор группы).\n"
+        if is_ustaz else
+        "Собеседник — СТУДЕНТ. Не называй его устазом. Команды устаза не показывай.\n"
+    )
+    system = (
+        "Ты ИИ-помощник учителя Корана по имени Ясир. Работаешь в Telegram-группе проекта Яссир.\n"
+        + role_note
+        + "Студент написал сообщение в группе. СНАЧАЛА определи — обращается ли он К ТЕБЕ (к боту).\n\n"
+        "Отвечай ТОЛЬКО если это явный вопрос или запрос к боту: про задания, правила, методику, "
+        "команды, расписание, баллы, статистику, арабский язык, Коран, таджвид, нахв, муфрадат.\n\n"
+        "ИГНОРИРУЙ (пиши IGNORE):\n"
+        "— студент разговаривает с другими студентами, а не с ботом\n"
+        "— приветствие, эмодзи, «машааллах», «джазакАллах», похвала кому-то\n"
+        "— личное заявление без вопроса к боту («сегодня тяжело», «сдал алхамдулиллах»)\n"
+        "— вопрос студента к другому студенту («ты сдал?», «какой аят учишь?»)\n"
+        "— если сомневаешься — IGNORE\n\n"
+        "ПРИМЕРЫ:\n"
+        "«расскажи про проект» → отвечай\n"
+        "«как зарегистрироваться?» → отвечай\n"
+        "«что означает 40+40?» → отвечай\n"
+        "«у меня есть вопрос по проекту Яссир» → отвечай\n"
+        "«как начислить баллы?» → отвечай\n"
+        "«ты какой аят сейчас учишь?» → IGNORE (к другому студенту)\n"
+        "«машааллах брат молодец» → IGNORE\n"
+        "«сегодня тяжело было» → IGNORE\n"
+        "«алхамдулиллах сдал» → IGNORE\n"
+        "«а ты сдал сегодня?» → IGNORE\n\n"
+        "Если отвечаешь — коротко и по существу (2-4 предложения), на языке сообщения.\n"
+        "Если не отвечаешь — ровно одно слово: IGNORE\n\n"
+        + _HUMAN_STYLE + "\n\n"
+        + PROJECT_INFO + "\n\n"
+        "СПРАВОЧНИК (таджвид, нахв, методика):\n" + program_info
+    )
+    name_prefix = ("Студент " + student_name + ": ") if student_name else ""
+    result = await ask_ai(name_prefix + question, system=system)
+    if not result or result.strip().upper().startswith("IGNORE"):
+        return None
+    return result
 
 
 async def answer_ustaz_question(question, program_info, ustaz_name=""):
