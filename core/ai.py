@@ -750,6 +750,7 @@ _NASIHA_SYSTEM = (
     "- Plain text, no bullet points, no headers, no bold.\n"
     "- 7-10 flowing lines. One idea, going deep.\n"
     "- Language: Russian.\n"
+    "- Correct Russian spelling of Islamic terms: мусхаф (not мушаф), ду'а, сакина, иснад.\n"
     + _GENDER_ADDR
 )
 

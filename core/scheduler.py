@@ -474,8 +474,6 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
-            elif h == 9 and m == 0:
-                await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
             elif h == 18 and m == 0:
