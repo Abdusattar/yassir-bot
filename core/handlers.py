@@ -749,7 +749,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Онлайн урок (устаз открывает / закрывает) ────────────────────────────
-    if text in ("/урок", "/lesson") and is_group_admin(phone, group_id):
+    if text.lower() in ("/урок", "/lesson") and is_group_admin(phone, group_id):
         lesson = open_lesson(group_id)
         students = get_students(group_id)
         await send_message(chat_id,
