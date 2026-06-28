@@ -102,9 +102,15 @@ def is_group_admin(phone, group_id):
 def detect_yassir(text):
     t = text.strip()
     low = t.lower()
-    for v in ["ясир", "ясыр", "yassir", "yasir", "yassır", "яссир"]:
+    _NAMES = ["ясир", "ясыр", "yassir", "yasir", "yassır", "яссир"]
+    # Текст начинается с имени → вернуть часть после имени
+    for v in _NAMES:
         if low.startswith(v):
             return t[len(v):].lstrip(" ,!:-—?")
+    # Имя упомянуто в середине/конце → весь текст как вопрос
+    for v in _NAMES:
+        if v in low:
+            return t
     return None
 
 
@@ -1129,8 +1135,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             checks.append("mufradat (arabic word spelling and translation accuracy)")
         if tasks_done.get("h"):
             checks.append("hadith (arabic word spelling and translation accuracy)")
-        # Writing check always fires when Arabic text is present
-        if checks or _has_arabic(text):
+        # Верификация только если есть арабский текст — иначе нечего проверять
+        if _has_arabic(text):
             asyncio.create_task(_verify_and_reply(
                 chat_id, text, group["title"] or chat_id, phone, group_id, s["name"], checks, glang, message_id))
 
