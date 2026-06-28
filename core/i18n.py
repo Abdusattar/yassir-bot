@@ -562,8 +562,7 @@ _HELP_ADMIN = {
         "/setlang ru — язык (ru/ky/uz/kk/ar)\n"
         "/settype pro/relaxed/tadabbur/prep — тип группы\n"
         "/setlink https://t.me/+xxx — ссылка-приглашение группы\n"
-        "/lesson — открыть онлайн урок\n"
-        "/endlesson — завершить урок"
+        "/урок или /lesson — открыть онлайн урок"
     ),
     "ky": (
         "👤 УСТАЗДЫН БУЙРУКТАРЫ (топто жаз)\n"
@@ -583,8 +582,7 @@ _HELP_ADMIN = {
         "/setlang ky — тил (ru/ky/uz/kk/ar)\n"
         "/settype pro/relaxed/tadabbur/prep — топ түрү\n"
         "/setlink https://t.me/+xxx — топтун чакыруу шилтемеси\n"
-        "/lesson — онлайн сабакты ачуу\n"
-        "/endlesson — сабакты аяктоо"
+        "/урок же /lesson — онлайн сабакты ачуу"
     ),
     "uz": (
         "👤 USTOZ BUYRUQLARI (guruhda yoz)\n"
@@ -603,8 +601,7 @@ _HELP_ADMIN = {
         "  j-tajvid n-grammatika h-hadis\n"
         "/setlang uz — til (ru/ky/uz/kk/ar)\n"
         "/settype pro/relaxed/tadabbur — guruh turi\n"
-        "/lesson — onlayn darsni ochish\n"
-        "/endlesson — darsni yakunlash"
+        "/урок yoki /lesson — onlayn darsni ochish"
     ),
     "kk": (
         "👤 ҰСТАЗ КОМАНДАЛАРЫ (топта жаз)\n"
@@ -623,8 +620,7 @@ _HELP_ADMIN = {
         "  j-тәжуид n-грамматика h-хадис\n"
         "/setlang kk — тіл (ru/ky/uz/kk/ar)\n"
         "/settype pro/relaxed/tadabbur — топ түрі\n"
-        "/lesson — онлайн сабақ ашу\n"
-        "/endlesson — сабақты аяқтау"
+        "/урок немесе /lesson — онлайн сабақ ашу"
     ),
     "en": (
         "👤 USTAZ COMMANDS (write in group)\n"
@@ -643,8 +639,7 @@ _HELP_ADMIN = {
         "  j-tajweed n-grammar h-hadith\n"
         "/setlang en — language (ru/ky/uz/kk/ar)\n"
         "/settype pro/relaxed/tadabbur — group type\n"
-        "/lesson — open online lesson\n"
-        "/endlesson — end lesson"
+        "/урок or /lesson — open online lesson"
     ),
 }
 
