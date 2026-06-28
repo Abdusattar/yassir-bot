@@ -117,7 +117,10 @@ def test_add_bonus(test_db):
     save_group("-100666", "Группа Л")
     g = get_group("-100666")
     sid = add_student("Данияр", g["id"])
-    add_bonus(sid, g["id"], get_date(), 10, "тест")
+    add_bonus(sid, g["id"], get_date(), 10, "bonus", subcategory="тест")
     with db() as c:
-        row = c.execute("SELECT SUM(points) as total FROM bonus_points WHERE sid=?", (sid,)).fetchone()
+        row = c.execute(
+            "SELECT SUM(points) as total FROM score_events WHERE student_id=? AND category='bonus'",
+            (sid,)
+        ).fetchone()
     assert row["total"] == 10
