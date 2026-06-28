@@ -268,6 +268,20 @@ async def skip_warnings():
             log.error("skip_warnings error in %s: %s", chat_id, e)
 
 
+# ── Тадаббур-пост (14:00) ─────────────────────────────────────────────────────
+
+async def tadabbur_post():
+    tadabbur = get_tadabbur_group()
+    if not tadabbur:
+        return
+    try:
+        text = await ai.daily_tadabbur_post()
+        if text and len(text) >= 50:
+            await send_message(tadabbur["chat_id"], text)
+    except Exception as e:
+        log.error("tadabbur_post error: %s", e)
+
+
 # ── Ежедневная насыха в Тадаббур (09:00) ─────────────────────────────────────
 
 async def tadabbur_nasiha(slot: str = "fajr"):
@@ -472,11 +486,13 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
+            elif h == 14 and m == 0:
+                await maybe_run("tadabbur_post", tadabbur_post)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
             elif h == 18 and m == 0:
                 await maybe_run("personal_reminders", personal_reminders)
-            elif h == 20 and m == 0:
+            elif h == 20 and m == 15:
                 await maybe_run("evening_report", evening_report)
                 await maybe_run("tadabbur_invite", tadabbur_invite_reminder)
             elif h == 20 and m == 30:
