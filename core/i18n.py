@@ -499,7 +499,7 @@ _HELP_STUDENT = {
     "ru": {
         "header": "📚 КАК СДАВАТЬ ОТЧЁТ\nПиши что выполнил:\n{tasks}\nЗа каждое задание +1 балл 💎\n\n"
                   "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
-                  "📡 Онлайн урок: напиши +\n\n"
+                  "📡 Онлайн урок: напиши у\n\n"
                   "/mystats — твоя статистика\n/rating — рейтинг группы\nЯсир, ...? — задай вопрос боту",
         "pro":     "\n⚠️ Pro-группа: пропуск 10 дней → Тадаббур",
         "relaxed": "\n📅 Расслабленная: пропуск 20 дней → Тадаббур",
@@ -508,7 +508,7 @@ _HELP_STUDENT = {
     "ky": {
         "header": "📚 ОТЧЁТ КАНТИП ТАПШЫРЫЛАТ\nЭмнени аткаргандыгыңды жаз:\n{tasks}\nАр бир тапшырма үчүн +1 упай 💎\n\n"
                   "⛔ Узактуу себеп:\nооруп жатам / себебим бар / узр\n"
-                  "📡 Онлайн сабак: + деп жаз\n\n"
+                  "📡 Онлайн сабак: у деп жаз\n\n"
                   "/mystats — сенин статистикаң\n/rating — топтун рейтинги\nЯсир, ...? — боттон суроо бер",
         "pro":     "\n⚠️ Pro-топ: 10 күн өткөрүп жиберсең → Тадаббурга",
         "relaxed": "\n📅 Жеңил топ: 20 күн өткөрүп жиберсең → Тадаббурга",
@@ -517,7 +517,7 @@ _HELP_STUDENT = {
     "uz": {
         "header": "📚 HISOBOT QANDAY TOPSHIRILADI\nNimani bajarganingni yoz:\n{tasks}\nHar bir topshiriq uchun +1 ball 💎\n\n"
                   "⛔ Uzrli sabab:\nkasalman / sabab bor / uzr\n"
-                  "📡 Onlayn dars: + deb yoz\n\n"
+                  "📡 Onlayn dars: u deb yoz\n\n"
                   "/mystats — sening statistikang\n/rating — guruh reytingi\nYassir, ...? — botdan so'ra",
         "pro":     "\n⚠️ Pro-guruh: 10 kun o'tkazib yuborsang → Tadabbur",
         "relaxed": "\n📅 Yengil guruh: 20 kun o'tkazib yuborsang → Tadabbur",
@@ -526,7 +526,7 @@ _HELP_STUDENT = {
     "kk": {
         "header": "📚 ЕСЕПТІ ҚАЛАЙ ТАПСЫРУ КЕРЕК\nНені орындағаныңды жаз:\n{tasks}\nӘр тапсырма үшін +1 ұпай 💎\n\n"
                   "⛔ Дәлелді себеп:\nауырып жатырмын / себебім бар / узр\n"
-                  "📡 Онлайн сабақ: + деп жаз\n\n"
+                  "📡 Онлайн сабақ: у деп жаз\n\n"
                   "/mystats — сенің статистикаң\n/rating — топ рейтингі\nЯсир, ...? — боттан сұра",
         "pro":     "\n⚠️ Pro-топ: 10 күн өткізіп жіберсең → Тадаббур",
         "relaxed": "\n📅 Жеңіл топ: 20 күн өткізіп жіберсең → Тадаббур",
@@ -535,7 +535,7 @@ _HELP_STUDENT = {
     "en": {
         "header": "📚 HOW TO SUBMIT A REPORT\nWrite what you completed:\n{tasks}\n+1 point per task 💎\n\n"
                   "⛔ Valid excuse:\nI'm sick / valid reason / uzr\n"
-                  "📡 Online lesson: write +\n\n"
+                  "📡 Online lesson: write u\n\n"
                   "/mystats — your stats\n/rating — group rating\nYassir, ...? — ask the bot",
         "pro":     "\n⚠️ Pro group: 10 days missed → Tadabbur",
         "relaxed": "\n📅 Relaxed group: 20 days missed → Tadabbur",
@@ -561,8 +561,7 @@ _HELP_ADMIN = {
         "  j-таджвид n-грамматика h-хадис\n"
         "/setlang ru — язык (ru/ky/uz/kk/ar)\n"
         "/settype pro/relaxed/tadabbur/prep — тип группы\n"
-        "/setlink https://t.me/+xxx — ссылка-приглашение группы\n"
-        "/урок или /lesson — открыть онлайн урок"
+        "/setlink https://t.me/+xxx — ссылка-приглашение группы"
     ),
     "ky": (
         "👤 УСТАЗДЫН БУЙРУКТАРЫ (топто жаз)\n"
@@ -581,8 +580,7 @@ _HELP_ADMIN = {
         "  j-таджвид n-грамматика h-хадис\n"
         "/setlang ky — тил (ru/ky/uz/kk/ar)\n"
         "/settype pro/relaxed/tadabbur/prep — топ түрү\n"
-        "/setlink https://t.me/+xxx — топтун чакыруу шилтемеси\n"
-        "/урок же /lesson — онлайн сабакты ачуу"
+        "/setlink https://t.me/+xxx — топтун чакыруу шилтемеси"
     ),
     "uz": (
         "👤 USTOZ BUYRUQLARI (guruhda yoz)\n"
@@ -600,8 +598,7 @@ _HELP_ADMIN = {
         "  m-yodlash r-takrorlash t-so'zlar\n"
         "  j-tajvid n-grammatika h-hadis\n"
         "/setlang uz — til (ru/ky/uz/kk/ar)\n"
-        "/settype pro/relaxed/tadabbur — guruh turi\n"
-        "/урок yoki /lesson — onlayn darsni ochish"
+        "/settype pro/relaxed/tadabbur — guruh turi"
     ),
     "kk": (
         "👤 ҰСТАЗ КОМАНДАЛАРЫ (топта жаз)\n"
@@ -619,8 +616,7 @@ _HELP_ADMIN = {
         "  m-жаттау r-қайталау t-сөздер\n"
         "  j-тәжуид n-грамматика h-хадис\n"
         "/setlang kk — тіл (ru/ky/uz/kk/ar)\n"
-        "/settype pro/relaxed/tadabbur — топ түрі\n"
-        "/урок немесе /lesson — онлайн сабақ ашу"
+        "/settype pro/relaxed/tadabbur — топ түрі"
     ),
     "en": (
         "👤 USTAZ COMMANDS (write in group)\n"
@@ -638,8 +634,7 @@ _HELP_ADMIN = {
         "  m-memorization r-revision t-words\n"
         "  j-tajweed n-grammar h-hadith\n"
         "/setlang en — language (ru/ky/uz/kk/ar)\n"
-        "/settype pro/relaxed/tadabbur — group type\n"
-        "/урок or /lesson — open online lesson"
+        "/settype pro/relaxed/tadabbur — group type"
     ),
 }
 

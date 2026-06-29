@@ -3,7 +3,7 @@ import logging
 
 from config import SUPER_ADMIN_IDS
 from core.content import (
-    TASK_KEYS, DEFAULT_TASKS, ONLINE_WORDS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
+    TASK_KEYS, DEFAULT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
 from core.i18n import T, get_group_lang, LANG_NAMES, task_name, help_student, help_admin
 from core.tg import send_message
@@ -17,7 +17,7 @@ from core.db import (
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_skip_count_month, add_bonus,
-    open_lesson, get_open_lesson, get_lesson_attendance, mark_attendance,
+    has_attendance_this_week,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -748,15 +748,6 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, "\n".join(lines))
         return
 
-    # ── Онлайн урок (устаз открывает / закрывает) ────────────────────────────
-    if text.lower() in ("/урок", "/lesson") and is_group_admin(phone, group_id):
-        lesson = open_lesson(group_id)
-        students = get_students(group_id)
-        await send_message(chat_id,
-            "📡 Урок начат!\n\n"
-            "Братья, кто присутствует — напишите «+»\n\n"
-            "Всего в группе: " + str(len(students)) + " студентов")
-        return
 
 
     # ── Отмена задания: "- Имя код" / "/minus Имя код" ───────────────────────
@@ -1009,61 +1000,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await send_message(chat_id, "ℹ️ " + s_pre["name"] + ", причина уже засчитана сегодня. 🤲")
         return
 
-    # ── Отметка присутствия (+) ────────────────────────────────────────────────
+    # ── Отметка присутствия на уроке (u / у) ─────────────────────────────────
     text_lower = text.strip().lower()
-    is_online_word = text_lower in [w.lower() for w in ONLINE_WORDS] or text.strip() == "+"
-    if is_online_word:
+    if text_lower in ("u", "у"):
         s_self = find_by_phone(phone, group_id)
         if s_self:
-            lesson = get_open_lesson(group_id)
-            if not lesson:
-                # Урок не открыт устазом — тихо игнорируем
-                return
-            with db() as c:
-                already = c.execute(
-                    "SELECT 1 FROM attendance WHERE sid=? AND lesson_id=?",
-                    (s_self["id"], lesson["id"])
-                ).fetchone()
-            if not already:
-                mark_attendance(s_self["id"], lesson["id"])
+            if not has_attendance_this_week(s_self["id"], group_id):
                 add_bonus(s_self["id"], group_id, get_date(), 5, "attendance", "online")
                 await send_message(chat_id, T("present", glang, name=s_self["name"]))
-            return
-
-    # ── Отметка присутствия списком (от учителя) ──────────────────────────────
-    def try_mark_attendance(msg_text):
-        chunks = msg_text.replace("\n", ",").replace(".", ",").split(",")
-        found_students, leftover = [], []
-        for chunk in chunks:
-            nm = chunk.strip()
-            if not nm:
-                continue
-            st = find_by_name(nm, group_id)
-            if st:
-                found_students.append(st)
-            else:
-                leftover.append(nm)
-        return found_students, leftover
-
-    found, leftover = try_mark_attendance(text)
-    has_task_word = any(v for v in check_text(text).values())
-    is_yassir = detect_yassir(text) is not None
-    junk = [x for x in leftover if len(x) > 2 and x.lower() not in
-            ("был", "была", "были", "и", "да", "все", "тут", "есть", "присутствовал", "присутствовали")]
-    is_attendance_list = (len(found) >= 2) or (len(found) >= 1 and is_group_admin(phone, group_id))
-    if found and is_attendance_list and not has_task_word and not is_yassir and not junk:
-        lesson = get_open_lesson(group_id)
-        if not lesson:
-            # Устаз перечислил имена, но урок не открыт — открываем автоматически
-            lesson = open_lesson(group_id)
-        marked = []
-        for st in found:
-            mark_attendance(st["id"], lesson["id"])
-            add_bonus(st["id"], group_id, get_date(), 5, "attendance", "online")
-            marked.append(st["name"])
-        await send_message(chat_id,
-            "📡 Онлайн урок отмечен!\n\n✅ Присутствовали (+5 баллов):\n" +
-            "\n".join("• " + n for n in marked))
         return
 
     s = find_by_phone(phone, group_id)

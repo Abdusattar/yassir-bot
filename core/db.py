@@ -1202,6 +1202,18 @@ def mark_attendance(uid, lesson_id):
         c.execute("INSERT OR IGNORE INTO attendance(sid,lesson_id) VALUES(?,?)", (uid, lesson_id))
 
 
+def has_attendance_this_week(uid, group_id):
+    from datetime import date, timedelta
+    today = date.today()
+    week_start = str(today - timedelta(days=today.weekday()))
+    with db() as c:
+        return c.execute(
+            "SELECT 1 FROM score_events"
+            " WHERE student_id=? AND group_id=? AND category='attendance' AND date>=?",
+            (uid, group_id, week_start)
+        ).fetchone() is not None
+
+
 # ── Formatting ─────────────────────────────────────────────────────────────────
 
 def format_daily_report(group_id, group_title, group_tasks, for_date=None):

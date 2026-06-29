@@ -284,12 +284,14 @@ async def tadabbur_post():
 
 # ── Ежедневная насыха в Тадаббур (09:00) ─────────────────────────────────────
 
-async def tadabbur_nasiha(slot: str = "fajr"):
+async def tadabbur_nasiha():
     tadabbur = get_tadabbur_group()
     if not tadabbur:
         return
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
     try:
-        text = await ai.daily_nasiha(slot=slot)
+        text = await ai.daily_nasiha(hadith=hadith, ayah=ayah)
         if text and len(text) >= 50:
             await send_message(tadabbur["chat_id"], "📖\n\n" + text)
     except Exception as e:
@@ -481,12 +483,11 @@ async def scheduler():
             h, m, wd, d = slot
 
             if h == 7 and m == 0:
-                await maybe_run("morning_reminder", morning_reminder)
                 await maybe_run("morning_tadabbur_report", morning_tadabbur_report)
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
-            elif h == 9 and m == 0:
+            elif h == 5 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif h == 14 and m == 0:
                 await maybe_run("tadabbur_post", tadabbur_post)

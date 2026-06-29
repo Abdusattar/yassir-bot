@@ -851,17 +851,42 @@ async def daily_tadabbur_post() -> str | None:
     return result
 
 
-async def daily_nasiha(slot: str = "fajr") -> str | None:
-    if slot == "fajr":
-        time_ctx = "Время: после фаджра — утро ещё тихое, брат только проснулся."
-    else:
-        time_ctx = "Время: 16:00 — конец рабочего дня, брат устал, урок ещё не сдан, день уходит."
+async def daily_nasiha(hadith=None, ayah=None) -> str | None:
+    source_block = ""
+    if ayah:
+        meaning = ayah.get("meaning_en") or await _get_ayah_translation(ayah, "ru")
+        source_block += (
+            "АЯТ (используй только смысл — арабский текст в сообщении не писать):\n"
+            "Смысл: " + meaning + "\n"
+            "Ссылка: (Сура " + ayah["sura"] + ", аят " + ayah["aya"] + ")\n\n"
+        )
+    if hadith:
+        translation = await _get_hadith_translation(hadith, "ru")
+        hadith_meaning = (translation or hadith.get("english_text") or "").strip()
+        source_block += (
+            "ХАДИС (используй только смысл — арабский и английский текст не писать):\n"
+            "Смысл: " + hadith_meaning + "\n"
+            "Ссылка: ("
+            + hadith.get("label", hadith.get("collection", ""))
+            + ", №" + str(hadith.get("hadith_number", "")) + ")\n\n"
+        )
+
     prompt = (
-        time_ctx + "\n\n"
-        "Напиши наставление. ОДНА истина. Войди через боль. Раскрой якорь. "
-        "Заверши тягой и ду'а 🤲"
+        _HUMAN_STYLE + "\n\n"
+        "Напиши мотивационное насыха для студентов, заучивающих Коран.\n"
+        "Не обращайся по именам — только общий текст.\n\n"
+        + source_block
+        + "Тон: тёплый, вдохновляющий. Утреннее наставление после фаджра. "
+        "Акцент на благодати начать день с Книги Аллаха.\n\n"
+        "ПРАВИЛА ОФОРМЛЕНИЯ:\n"
+        "- После упоминания смысла аята сразу в скобках: (Сура N, аят M)\n"
+        "- После упоминания смысла хадиса сразу в скобках: (Сборник, №N)\n"
+        "- Арабский и английский текст не включать.\n"
+        "- Структура: 1) насыха от бота — тёплые слова студентам; 2) смысл аята/хадиса с ссылкой как опора; 3) связь с трудом в словах бота; 4) ду'а.\n"
+        "- Завершай мягким общим напоминанием, без призыва по именам.\n"
+        "На русском языке. Длина: 4–6 строк."
     )
-    result = await ask_ai(prompt, system=_NASIHA_SYSTEM, model=_NASIHA_MODEL, max_tokens=900)
+    result = await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_NASIHA_MODEL, max_tokens=900)
     if result:
         result = result.rstrip(" ·").strip()
     return result
