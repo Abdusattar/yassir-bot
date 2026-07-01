@@ -11,7 +11,7 @@ from core.db import (
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, add_student, get_streak_days, add_bonus, db,
-    get_days_since_last_report, get_daily_task_counts, get_today_avg, get_cumulative_avg
+    get_days_since_last_report, get_daily_task_counts
 )
 from core.tg import send_message, tg_call
 from core.i18n import T
@@ -86,6 +86,7 @@ async def morning_tadabbur_report():
 
     groups_info = []
     zero_titles = []
+    partial_titles = []
     uzr_names = []
 
     for group in get_all_groups():
@@ -102,11 +103,14 @@ async def morning_tadabbur_report():
             submitted = [c for c in counts if c["done"] > 0]
             uzr_names.extend(c["name"] + " (" + title + ")" for c in counts if c["excused"])
 
+            full = [c for c in submitted if c["done"] == total_tasks]
+
             if not submitted:
                 if any(not c["excused"] for c in counts):
                     zero_titles.append(title)
+            elif not full:
+                partial_titles.append(title)
             else:
-                full = [c for c in submitted if c["done"] == total_tasks]
                 full_lines = [
                     c["name"] + " — 🔥" + str(get_streak_days(c["id"], yesterday))
                     for c in full
@@ -115,10 +119,6 @@ async def morning_tadabbur_report():
                     "title": title,
                     "full_lines": full_lines,
                     "full_count": len(full),
-                    "submitted_count": len(submitted),
-                    "total_students": len(counts),
-                    "avg_today": get_today_avg(group["id"], yesterday),
-                    "avg_all": get_cumulative_avg(group["id"]),
                 })
 
             # Личная насыха несдавшим вчера — один текст на всех
@@ -140,7 +140,7 @@ async def morning_tadabbur_report():
         except Exception as e:
             log.error("morning_tadabbur_report error in %s: %s", group["chat_id"], e)
 
-    groups_info.sort(key=lambda g: (-g["full_count"], -g["submitted_count"]))
+    groups_info.sort(key=lambda g: -g["full_count"])
 
     lines = []
     if intro:
@@ -152,10 +152,9 @@ async def morning_tadabbur_report():
         lines.append("")
         lines.append(g["title"])
         lines.extend(g["full_lines"])
-        lines.append(
-            "📊 " + str(g["submitted_count"]) + "/" + str(g["total_students"])
-            + " · средний " + str(g["avg_today"]) + " (всего " + str(g["avg_all"]) + ")"
-        )
+    if partial_titles:
+        lines.append("")
+        lines.append("Группы, где сдали частично: " + ", ".join(partial_titles))
     if zero_titles:
         lines.append("")
         lines.append("Не сдавали вчера ничего: " + ", ".join(zero_titles))
