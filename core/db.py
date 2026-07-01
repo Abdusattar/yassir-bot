@@ -1009,23 +1009,23 @@ def add_bonus(uid, group_id, date, points, category, subcategory="", note=None):
         )
 
 
-def get_missing_students(group_id, group_tasks):
+def get_missing_students(group_id, group_tasks, date=None):
     students = get_students(group_id)
-    today = get_date()
+    check_date = date or get_date()
     result = []
     with db() as c:
         for s in students:
             has_excuse = c.execute(
                 "SELECT 1 FROM score_events"
                 " WHERE student_id=? AND group_id=? AND date=? AND category='excuse' LIMIT 1",
-                (s["id"], group_id, today)
+                (s["id"], group_id, check_date)
             ).fetchone()
             if has_excuse:
                 continue
             task_rows = c.execute(
                 "SELECT subcategory FROM score_events"
                 " WHERE student_id=? AND group_id=? AND date=? AND category='task'",
-                (s["id"], group_id, today)
+                (s["id"], group_id, check_date)
             ).fetchall()
             done = {r["subcategory"] for r in task_rows}
             missing = [k for k in group_tasks if k not in done]
@@ -1216,7 +1216,7 @@ def has_attendance_this_week(uid, group_id):
 
 # ── Formatting ─────────────────────────────────────────────────────────────────
 
-def format_daily_report(group_id, group_title, group_tasks, for_date=None):
+def format_daily_report(group_id, group_title, group_tasks, for_date=None, submitted_only=False):
     from core.content import DEFAULT_TASKS
     if for_date is None:
         for_date = get_date()
@@ -1261,7 +1261,10 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None):
         if cnt > 0:
             done_count += 1
         if sid in excuse_ids and cnt == 0:
-            lines.append(s["name"] + ": ⛔ узр")
+            if not submitted_only:
+                lines.append(s["name"] + ": ⛔ узр")
+            continue
+        if submitted_only and cnt == 0:
             continue
         marks = "".join("✅" if k in done else "❌" for k in group_tasks)
         celebrate = " 🎉" if cnt == total_tasks else ""

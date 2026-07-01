@@ -62,8 +62,8 @@ async def _check_group_for_transfers(group, gtype):
                         await _transfer_to_tadabbur(student, group, fallback_id, lesson_misses, lang, reason="lessons")
 
             elif gtype == "relaxed":
-                if days_absent >= RELAXED_INACTIVE_DAYS:
-                    await _transfer_to_tadabbur(student, group, fallback_id, days_absent, lang)
+                if month_skips >= RELAXED_INACTIVE_DAYS:
+                    await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang)
                 elif _qualifies_for_upgrade(student["id"]):
                     await _suggest_upgrade(student, group, lang)
 

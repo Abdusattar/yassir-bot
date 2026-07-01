@@ -3,7 +3,7 @@ import logging
 
 from config import SUPER_ADMIN_IDS
 from core.content import (
-    TASK_KEYS, DEFAULT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
+    TASK_KEYS, DEFAULT_TASKS, SHORT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
 from core.i18n import T, get_group_lang, LANG_NAMES, task_name, help_student, help_admin
 from core.tg import send_message
@@ -948,6 +948,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
         gtype = group["group_type"] or "relaxed"
         limit_days = 14 if gtype == "pro" else 30
+        import calendar
+        _month_names_ru = ["январе","феврале","марте","апреле","мае","июне",
+                           "июле","августе","сентябре","октябре","ноябре","декабре"]
+        from datetime import datetime as _dt
+        _cur_month = _dt.now().month
+        month_label = _month_names_ru[_cur_month - 1]
 
         lines = [
             T("mystats_title", glang, name=s_check["name"]),
@@ -955,7 +961,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             T("mystats_rank", glang, n=rank),
             T("mystats_points", glang, n=total_score),
             T("mystats_days", glang, n=days_done),
-            T("mystats_skips", glang, n=skips_month, limit=limit_days),
+            T("mystats_skips", glang, n=skips_month, limit=limit_days, month=month_label),
             T("mystats_today", glang, done=today_done, total=len(group_tasks)),
         ]
         await send_message(chat_id, "\n".join(lines))
@@ -1100,19 +1106,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     if not new_tasks:
-        reply = T("already_counted", glang, name=s["name"])
-        if wait_list:
-            reply += "\n\n" + T("still_left", glang) + "\n" + "\n".join("⬜ " + n for n in wait_list)
-        await send_message(chat_id, reply)
+        await send_message(chat_id, T("already_counted", glang, name=s["name"]))
         return
 
-    new_names = [DEFAULT_TASKS[k] for k in group_tasks if k in new_tasks]
-    reply = T("accepted", glang, name=s["name"]) + "\n\n"
-    reply += T("counted_today", glang) + "\n" + "\n".join("✅ " + n for n in new_names)
+    new_names = [SHORT_TASKS.get(k, DEFAULT_TASKS[k]) for k in group_tasks if k in new_tasks]
+    reply = T("accepted", glang, name=s["name"]) + " " + ", ".join(new_names)
     if wait_list:
-        reply += "\n\n" + T("still_left", glang) + "\n" + "\n".join("⬜ " + n for n in wait_list)
-        reply += "\n\n" + T("keep_going", glang)
+        reply += "\n" + T("remaining", glang) + " " + ", ".join(wait_list)
     if now_complete:
-        reply += "\n\n" + T("all_done", glang)
+        reply += "\n" + T("all_done", glang)
     await send_message(chat_id, reply)
 

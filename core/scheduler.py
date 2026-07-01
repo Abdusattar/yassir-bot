@@ -17,6 +17,7 @@ from core.tg import send_message, tg_call
 from core.i18n import T
 from core.transfers import run_transfer_checks
 from core.prep import check_prep_students, send_prep_reminders
+import random
 import core.ai as ai
 import core.sampler as sampler
 
@@ -74,7 +75,6 @@ async def morning_tadabbur_report():
     tadabbur = get_tadabbur_group()
     if not tadabbur:
         return
-    from datetime import timedelta
     yesterday = (datetime.now(pytz.timezone(TZ)) - timedelta(days=1)).strftime("%Y-%m-%d")
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
@@ -82,11 +82,34 @@ async def morning_tadabbur_report():
             continue
         try:
             group_tasks = get_group_tasks(group)
-            report = format_daily_report(group["id"], group["title"] or group["chat_id"], group_tasks, yesterday)
+            glang = get_group_lang(group)
+
+            # Отчёт только по сдавшим — в ТДБР
+            report = format_daily_report(
+                group["id"], group["title"] or group["chat_id"],
+                group_tasks, yesterday, submitted_only=True
+            )
             label = "про-группы" if gtype == "pro" else "группы"
             msg = "📋 Итоги вчера — " + label + " " + (group["title"] or str(group["chat_id"])) + ":\n\n" + report
             await send_message(tadabbur["chat_id"], msg)
             await asyncio.sleep(1)
+
+            # Личная насыха несдавшим вчера — один текст на всех
+            missing = get_missing_students(group["id"], group_tasks, date=yesterday)
+            phones = [s["phone"] for s, _ in missing if s.get("phone")]
+            if phones:
+                if random.random() < 0.5:
+                    hadith, ayah = sampler.sample_hadith(), None
+                else:
+                    hadith, ayah = None, sampler.sample_ayah()
+                msg_personal = await ai.morning_miss_nasiha(glang, hadith=hadith, ayah=ayah)
+                if msg_personal and len(msg_personal) >= 20:
+                    for phone in phones:
+                        try:
+                            await send_message(phone, "🤲 " + msg_personal)
+                        except Exception:
+                            pass
+                        await asyncio.sleep(0.5)
         except Exception as e:
             log.error("morning_tadabbur_report error in %s: %s", group["chat_id"], e)
 
@@ -255,14 +278,16 @@ async def skip_warnings():
                     continue
                 if gtype == "pro":
                     skips = get_skip_count_month(s["id"])
-                    warn_threshold = 7   # предупреждаем при 7+ из 14 за месяц
+                    warn_threshold = 5
+                    transfer_limit = 10
                 else:
-                    skips = get_consecutive_skips(s["id"])
-                    warn_threshold = 15  # предупреждаем при 15+ подряд из 30
+                    skips = get_skip_count_month(s["id"])
+                    warn_threshold = 15
+                    transfer_limit = 20
                 if skips >= warn_threshold:
-                    warn = await ai.warning_skips(s["name"], skips, glang, hadith=hadith, ayah=ayah)
+                    warn = await ai.warning_skips(s["name"], skips, transfer_limit, glang, hadith=hadith, ayah=ayah)
                     if warn:
-                        await send_message(chat_id, "⚠️ " + warn)
+                        await send_message(s["phone"], "⚠️ " + warn)
                     await asyncio.sleep(0.8)
         except Exception as e:
             log.error("skip_warnings error in %s: %s", chat_id, e)
@@ -291,7 +316,7 @@ async def tadabbur_nasiha():
     hadith = sampler.sample_hadith()
     ayah   = sampler.sample_ayah()
     try:
-        text = await ai.daily_nasiha(hadith=hadith, ayah=ayah)
+        text = await ai.group_motivation_base("ru", "relaxed", hadith=hadith, ayah=ayah, model="deepseek/deepseek-v4-flash")
         if text and len(text) >= 50:
             await send_message(tadabbur["chat_id"], "📖\n\n" + text)
     except Exception as e:
@@ -487,17 +512,12 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
-            elif h == 5 and m == 0:
+            elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif h == 14 and m == 0:
                 await maybe_run("tadabbur_post", tadabbur_post)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
-            elif h == 18 and m == 0:
-                await maybe_run("personal_reminders", personal_reminders)
-            elif h == 20 and m == 15:
-                await maybe_run("evening_report", evening_report)
-                await maybe_run("tadabbur_invite", tadabbur_invite_reminder)
             elif h == 20 and m == 30:
                 await maybe_run("skip_warnings", skip_warnings)
             elif h == 21 and m == 0:

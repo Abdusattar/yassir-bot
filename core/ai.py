@@ -506,7 +506,7 @@ SUBMIT_TODAY = {
 
 
 async def group_motivation_base(lang: str, gtype: str,
-                                hadith=None, ayah=None) -> str | None:
+                                hadith=None, ayah=None, model=None) -> str | None:
     """Насыха без имён. Один вызов на (gtype, lang); имена добавляет планировщик."""
     source_block = ""
     if ayah:
@@ -566,7 +566,7 @@ async def group_motivation_base(lang: str, gtype: str,
         "- Завершай мягким общим напоминанием, без призыва по именам.\n"
         + lang_instruction(lang) + " Длина: 4-6 строк."
     )
-    return await ask_ai(prompt, system=system, model=_model_for_lang(lang))
+    return await ask_ai(prompt, system=system, model=model or _model_for_lang(lang))
 
 
 async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah=None):
@@ -594,6 +594,20 @@ async def praise_completed(name, lang="ru", hadith=None, ayah=None):
         + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: joyful, sincere. Length: 4-6 lines."
+    )
+    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+
+
+async def morning_miss_nasiha(lang="ru", hadith=None, ayah=None):
+    source_block = await _build_source_block(hadith, ayah, lang)
+    prompt = (
+        _HUMAN_STYLE + "\n\n"
+        "Write a gentle morning nasiha for a Quran student who missed submitting yesterday.\n"
+        + source_block
+        + "Encourage them warmly to open the Quran today, "
+        + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
+        + "end with a brief dua. No names, no blame, no guilt.\n"
+        + lang_instruction(lang) + " Tone: very soft. 3-4 lines."
     )
     return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
@@ -643,18 +657,23 @@ async def group_praise(names, lang="ru", hadith=None, ayah=None):
     return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
 
-async def warning_skips(name, skip_count, lang="ru", hadith=None, ayah=None):
+async def warning_skips(name, skip_count, transfer_limit, lang="ru", hadith=None, ayah=None, is_pro=False):
     source_block = await _build_source_block(hadith, ayah, lang)
+    days_left = max(0, transfer_limit - skip_count)
+    situation = (
+        str(skip_count) + " missed days this month, "
+        + str(days_left) + " days left before transfer to Tadabbur. "
+        "Group rule: " + str(transfer_limit) + " missed days in a month = transfer to Tadabbur."
+    )
     prompt = (
         _HUMAN_STYLE + "\n\n"
-        "Write a serious warning for Quran student «" + name + "».\n"
-        "Situation: " + str(skip_count) + " missed days this month, "
-        + str(14 - skip_count) + " days left before transfer to Tadabbur group.\n"
+        "Write a warning for Quran student «" + name + "».\n"
+        "Situation: " + situation + "\n"
         + source_block
-        + "Start with 'Assalamu alaykum, " + name + "!', warn about the transfer, "
+        + "Start with 'Assalamu alaykum, " + name + "!', briefly state the rule and days left, "
         + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
-        + "a call to return.\n"
-        + lang_instruction(lang) + " Tone: serious but not harsh. 4-6 lines."
+        + "a short call to return.\n"
+        + lang_instruction(lang) + " Tone: clear and kind, not harsh. 3-4 lines."
     )
     return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
 
@@ -715,7 +734,7 @@ async def is_valid_name(name: str) -> bool:
 
 # ── Ежедневная насыха (мощное наставление) ────────────────────────────────────
 
-_NASIHA_MODEL = "z-ai/glm-5.2"
+_NASIHA_MODEL = "deepseek/deepseek-v4-flash"
 
 _TADABBUR_POST_SYSTEM = (
     "[РОЛЬ И КОНТЕКСТ]\n"
