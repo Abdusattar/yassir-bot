@@ -988,24 +988,6 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await send_message(chat_id, "Формат: /bonus Имя 10 причина\nПример: /bonus Бакыт 5 победил в конкурсе")
         return
 
-    # ── Уважительная причина → 1 балл ─────────────────────────────────────────
-    is_excuse = any(w in text.strip().lower() for w in EXCUSE_WORDS)
-    s_pre = find_by_phone(phone, group_id)
-    if is_excuse and s_pre:
-        with db() as c:
-            already_excuse = c.execute(
-                "SELECT 1 FROM score_events"
-                " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
-                (s_pre["id"], group_id, get_date())
-            ).fetchone()
-        if not already_excuse:
-            add_bonus(s_pre["id"], group_id, get_date(), 1, "excuse")
-            await send_message(chat_id,
-                "✅ " + s_pre["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
-        else:
-            await send_message(chat_id, "ℹ️ " + s_pre["name"] + ", причина уже засчитана сегодня. 🤲")
-        return
-
     # ── Отметка присутствия на уроке (u / у) ─────────────────────────────────
     text_lower = text.strip().lower()
     if text_lower in ("u", "у"):
@@ -1056,6 +1038,22 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     score = sum(1 for k in group_tasks if tasks_done.get(k))
 
     if score == 0:
+        # ── Уважительная причина → 1 балл (только если это не отчёт) ────────
+        is_excuse = any(w in text.strip().lower() for w in EXCUSE_WORDS)
+        if is_excuse:
+            with db() as c:
+                already_excuse = c.execute(
+                    "SELECT 1 FROM score_events"
+                    " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
+                    (s["id"], group_id, get_date())
+                ).fetchone()
+            if not already_excuse:
+                add_bonus(s["id"], group_id, get_date(), 1, "excuse")
+                await send_message(chat_id,
+                    "✅ " + s["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
+            else:
+                await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
+            return
         if not is_media:
             answer = await ai.answer_if_relevant(
                 text, _build_reference_for_question(text),
