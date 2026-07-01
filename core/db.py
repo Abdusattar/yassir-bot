@@ -953,13 +953,13 @@ def get_miss_count_last_30_days(uid):
     return misses
 
 
-def get_streak_days(uid):
+def get_streak_days(uid, for_date=None):
     tz = pytz.timezone(TZ)
     dates = _active_dates(uid)
-    today = datetime.now(tz).date()
+    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else datetime.now(tz).date()
     streak = 0
     for i in range(400):
-        day = (today - timedelta(days=i)).isoformat()
+        day = (anchor - timedelta(days=i)).isoformat()
         if day in dates:
             streak += 1
         else:
@@ -1124,7 +1124,9 @@ def get_cumulative_avg(group_id):
     return result["avg"] if result and result["avg"] else 0
 
 
-def get_today_avg(group_id):
+def get_today_avg(group_id, for_date=None):
+    if for_date is None:
+        for_date = get_date()
     with db() as c:
         result = c.execute("""
             SELECT ROUND(AVG(daily_score), 2) as avg FROM (
@@ -1135,8 +1137,37 @@ def get_today_avg(group_id):
                   AND ug.role='student' AND ug.active=1
                 GROUP BY e.student_id
             )
-        """, (group_id, get_date())).fetchone()
+        """, (group_id, for_date)).fetchone()
     return result["avg"] if result and result["avg"] else 0
+
+
+def get_daily_task_counts(group_id, group_tasks, for_date):
+    """Возвращает [{id, name, done, excused}] — сколько заданий каждый студент сдал в указанную дату."""
+    with db() as c:
+        students = c.execute("""
+            SELECT u.id, u.name FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+        """, (group_id,)).fetchall()
+        task_rows = c.execute(
+            "SELECT student_id, subcategory FROM score_events"
+            " WHERE group_id=? AND date=? AND category='task'",
+            (group_id, for_date)
+        ).fetchall()
+        excuse_ids = {r["student_id"] for r in c.execute(
+            "SELECT student_id FROM score_events"
+            " WHERE group_id=? AND date=? AND category='excuse'",
+            (group_id, for_date)
+        ).fetchall()}
+    task_map = {}
+    for r in task_rows:
+        task_map.setdefault(r["student_id"], set()).add(r["subcategory"])
+    return [
+        {"id": s["id"], "name": s["name"],
+         "done": sum(1 for k in group_tasks if k in task_map.get(s["id"], set())),
+         "excused": s["id"] in excuse_ids}
+        for s in students
+    ]
 
 
 # ── Online lessons ─────────────────────────────────────────────────────────────

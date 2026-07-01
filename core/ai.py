@@ -859,12 +859,32 @@ _NASIHA_SYSTEM = (
 )
 
 
+async def morning_report_intro(hadith=None, ayah=None) -> str | None:
+    source_block = await _build_source_block(hadith, ayah, "ru")
+    if not source_block:
+        return None
+    prompt = (
+        _HUMAN_STYLE + "\n\n"
+        "Напиши ОДНУ короткую фразу (максимум 15-20 слов, без обращения по именам) — "
+        "про почёт тех, кто усердствует на пути познания Корана. Она пойдёт эпиграфом "
+        "к утреннему сводному отчёту по группам.\n\n"
+        + source_block
+        + "Опирайся строго на смысл аята/хадиса выше, в конце добавь ссылку в скобках. "
+        "Без вступлений («Вот фраза:» и т.п.), без эмодзи — только сама фраза.\n"
+        "На русском языке."
+    )
+    result = await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_NASIHA_MODEL, max_tokens=1600)
+    if result:
+        result = result.strip().strip('"').rstrip(" ·")
+    return result
+
+
 async def daily_tadabbur_post() -> str | None:
     prompt = (
         "Время: 14:00 — середина дня.\n"
         "Выбери тему. Напиши готовый тадаббур-пост."
     )
-    result = await ask_ai(prompt, system=_TADABBUR_POST_SYSTEM, model=_NASIHA_MODEL, max_tokens=900)
+    result = await ask_ai(prompt, system=_TADABBUR_POST_SYSTEM, model=_NASIHA_MODEL, max_tokens=1600)
     if result:
         result = result.rstrip(" ·").strip()
     return result
@@ -905,7 +925,7 @@ async def daily_nasiha(hadith=None, ayah=None) -> str | None:
         "- Завершай мягким общим напоминанием, без призыва по именам.\n"
         "На русском языке. Длина: 4–6 строк."
     )
-    result = await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_NASIHA_MODEL, max_tokens=900)
+    result = await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_NASIHA_MODEL, max_tokens=1600)
     if result:
         result = result.rstrip(" ·").strip()
     return result
