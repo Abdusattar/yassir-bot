@@ -112,7 +112,7 @@ async def morning_tadabbur_report():
                 partial_titles.append(title)
             else:
                 full_lines = [
-                    c["name"] + " — 🔥" + str(get_streak_days(c["id"], yesterday))
+                    c["name"] + " — 🌟" + str(get_streak_days(c["id"], yesterday))
                     for c in full
                 ]
                 groups_info.append({
@@ -147,7 +147,7 @@ async def morning_tadabbur_report():
         lines.append("📖 " + intro)
         lines.append("")
     lines.append("🎉 Сдали ВСЕ задания за " + date_str)
-    lines.append("(🔥 — дней подряд без пропуска)")
+    lines.append("(🌟 — дней подряд без пропуска)")
     for g in groups_info:
         lines.append("")
         lines.append(g["title"])
