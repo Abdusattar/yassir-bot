@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 
 from config import SUPER_ADMIN_IDS
 from core.content import (
@@ -1005,6 +1006,24 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     if not s:
+        return
+
+    # ── Явный узр: слово "узр"/"uzr" первым в сообщении, дальше причина ──────
+    uzr_match = re.match(r"^(узр|uzr)\b[:\s]*(.*)", text.strip(), re.IGNORECASE | re.DOTALL)
+    if uzr_match:
+        reason = uzr_match.group(2).strip()
+        with db() as c:
+            already_excuse = c.execute(
+                "SELECT 1 FROM score_events"
+                " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
+                (s["id"], group_id, get_date())
+            ).fetchone()
+        if not already_excuse:
+            add_bonus(s["id"], group_id, get_date(), 1, "excuse", note=reason or None)
+            await send_message(chat_id,
+                "✅ " + s["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
+        else:
+            await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
         return
 
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
