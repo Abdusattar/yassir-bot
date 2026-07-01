@@ -506,7 +506,7 @@ SUBMIT_TODAY = {
 
 
 async def group_motivation_base(lang: str, gtype: str,
-                                hadith=None, ayah=None, model=None) -> str | None:
+                                hadith=None, ayah=None, model=None, max_tokens=1024) -> str | None:
     """Насыха без имён. Один вызов на (gtype, lang); имена добавляет планировщик."""
     source_block = ""
     if ayah:
@@ -566,7 +566,7 @@ async def group_motivation_base(lang: str, gtype: str,
         "- Завершай мягким общим напоминанием, без призыва по именам.\n"
         + lang_instruction(lang) + " Длина: 4-6 строк."
     )
-    return await ask_ai(prompt, system=system, model=model or _model_for_lang(lang))
+    return await ask_ai(prompt, system=system, model=model or _model_for_lang(lang), max_tokens=max_tokens)
 
 
 async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah=None):

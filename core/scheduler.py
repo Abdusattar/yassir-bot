@@ -345,20 +345,6 @@ async def skip_warnings():
             log.error("skip_warnings error in %s: %s", chat_id, e)
 
 
-# ── Тадаббур-пост (14:00) ─────────────────────────────────────────────────────
-
-async def tadabbur_post():
-    tadabbur = get_tadabbur_group()
-    if not tadabbur:
-        return
-    try:
-        text = await ai.daily_tadabbur_post()
-        if text and len(text) >= 50:
-            await send_message(tadabbur["chat_id"], text)
-    except Exception as e:
-        log.error("tadabbur_post error: %s", e)
-
-
 # ── Ежедневная насыха в Тадаббур (09:00) ─────────────────────────────────────
 
 async def tadabbur_nasiha():
@@ -368,7 +354,10 @@ async def tadabbur_nasiha():
     hadith = sampler.sample_hadith()
     ayah   = sampler.sample_ayah()
     try:
-        text = await ai.group_motivation_base("ru", "relaxed", hadith=hadith, ayah=ayah, model="deepseek/deepseek-v4-pro")
+        text = await ai.group_motivation_base(
+            "ru", "relaxed", hadith=hadith, ayah=ayah,
+            model="deepseek/deepseek-v4-pro", max_tokens=1600
+        )
         if text and len(text) >= 50:
             await send_message(tadabbur["chat_id"], "📖\n\n" + text)
     except Exception as e:
@@ -566,8 +555,6 @@ async def scheduler():
                 await maybe_run("prep_reminders", send_prep_reminders)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
-            elif h == 14 and m == 0:
-                await maybe_run("tadabbur_post", tadabbur_post)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
             elif h == 20 and m == 30:
