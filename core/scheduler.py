@@ -316,7 +316,7 @@ async def tadabbur_nasiha():
     hadith = sampler.sample_hadith()
     ayah   = sampler.sample_ayah()
     try:
-        text = await ai.group_motivation_base("ru", "relaxed", hadith=hadith, ayah=ayah, model="deepseek/deepseek-v4-flash")
+        text = await ai.group_motivation_base("ru", "relaxed", hadith=hadith, ayah=ayah, model="deepseek/deepseek-v4-pro")
         if text and len(text) >= 50:
             await send_message(tadabbur["chat_id"], "📖\n\n" + text)
     except Exception as e:

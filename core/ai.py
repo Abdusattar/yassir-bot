@@ -734,7 +734,7 @@ async def is_valid_name(name: str) -> bool:
 
 # ── Ежедневная насыха (мощное наставление) ────────────────────────────────────
 
-_NASIHA_MODEL = "deepseek/deepseek-v4-flash"
+_NASIHA_MODEL = "deepseek/deepseek-v4-pro"
 
 _TADABBUR_POST_SYSTEM = (
     "[РОЛЬ И КОНТЕКСТ]\n"

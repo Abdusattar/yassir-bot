@@ -17,7 +17,7 @@ DB = os.getenv("DB_PATH", f"quran_{PROFILE}.db")
 # OpenRouter API (совместим со старым CLAUDE_API_KEY)
 OR_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("CLAUDE_API_KEY", "")
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
-AI_MODEL = os.getenv("AI_MODEL", "deepseek/deepseek-v4-flash")
+AI_MODEL = os.getenv("AI_MODEL", "deepseek/deepseek-v4-pro")
 
 # Shadow mode: если задан SHADOW_CHAT_IDS — бот не отвечает в группах,
 # а пересылает ответы наблюдателям (через запятую: user_id или chat_id)
