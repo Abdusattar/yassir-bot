@@ -11,7 +11,8 @@ from core.db import (
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, add_student, get_streak_days, add_bonus, db,
-    get_days_since_last_report, get_daily_task_counts, get_voice_review_stats
+    get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
+    get_group_admins
 )
 from core.tg import send_message, tg_call
 from core.i18n import T
@@ -167,7 +168,11 @@ async def morning_tadabbur_report():
 
 # ── Проверка голосовых сдач устазами (12:00, группа «Масштабирование») ───────
 
-_VOICE_REVIEW_CHAT_ID = "-5283697370"
+# chat_id обновлён 04.07.2026 — группа была апгрейднута до супергруппы,
+# старый -5283697370 больше не годится для getChatAdministrators/exportChatInviteLink.
+_SCALING_CHAT_ID = "-1004387097146"
+_SCALING_INVITE_LINK = "https://t.me/+8IxbNN6MtjY3NDRi"
+_VOICE_REVIEW_CHAT_ID = _SCALING_CHAT_ID
 
 
 async def voice_review_report():
@@ -209,6 +214,38 @@ async def voice_review_report():
         lines.append("Не проверено: " + ", ".join(names))
 
     await send_message(_VOICE_REVIEW_CHAT_ID, "\n".join(lines))
+
+
+# ── Приглашение устазов в «Масштабирование» (21:00) ──────────────────────────
+# Устаз = user_groups.role='admin' (назначается командой /admin реплаем) —
+# это и есть источник, который реально читает is_group_admin().
+
+async def invite_missing_ustaz_to_scaling():
+    ustaz_ids = set()
+    for group in get_all_groups():
+        for phone in get_group_admins(group["id"]):
+            if phone and phone not in SUPER_ADMIN_IDS:
+                ustaz_ids.add(phone)
+
+    text = (
+        "Ассаляму алейкум! 🕌\n"
+        "Присоединяйтесь к группе «Масштабирование» — там утренние сводки по группам:\n"
+        + _SCALING_INVITE_LINK
+    )
+
+    for uid in ustaz_ids:
+        try:
+            needs_invite = True
+            member_resp = await tg_call("getChatMember", {"chat_id": _SCALING_CHAT_ID, "user_id": int(uid)})
+            if member_resp and member_resp.get("ok"):
+                status = member_resp["result"].get("status")
+                if status not in ("left", "kicked"):
+                    needs_invite = False
+            if needs_invite:
+                await send_message(uid, text)
+                await asyncio.sleep(0.5)
+        except Exception as e:
+            log.error("invite_missing_ustaz: error for uid=%s: %s", uid, e)
 
 
 # ── Бонус +5 за 7 дней стрика (07:00) ────────────────────────────────────────
@@ -609,6 +646,7 @@ async def scheduler():
             elif h == 21 and m == 0:
                 await maybe_run("transfer_check", transfer_check)
                 await maybe_run("prep_check", check_prep_students)
+                await maybe_run("invite_missing_ustaz_to_scaling", invite_missing_ustaz_to_scaling)
             elif wd == 6 and h == 19 and m == 0:
                 await maybe_run("weekly_report", weekly_report)
             elif wd == 6 and h == 20 and m == 30:
