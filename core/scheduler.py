@@ -165,15 +165,15 @@ async def morning_tadabbur_report():
     await send_message(tadabbur["chat_id"], "\n".join(lines))
 
 
-# ── Проверка голосовых сдач устазами (07:00, группа «Масштабирование») ───────
+# ── Проверка голосовых сдач устазами (12:00, группа «Масштабирование») ───────
 
 _VOICE_REVIEW_CHAT_ID = "-5283697370"
 
 
 async def voice_review_report():
-    # Смотрим позавчера, а не вчера — устазу нужны полные сутки на проверку
-    # (иначе голосовое, присланное поздно вечером, попадает в отчёт нечестно).
-    target_date = (datetime.now(pytz.timezone(TZ)) - timedelta(days=2)).date().isoformat()
+    # Смотрим вчера, отчёт шлём в обед — у устаза весь вчерашний день
+    # плюс сегодняшнее утро до 12:00 на проверку.
+    target_date = (datetime.now(pytz.timezone(TZ)) - timedelta(days=1)).date().isoformat()
     date_str = datetime.strptime(target_date, "%Y-%m-%d").strftime("%d.%m.%Y")
 
     full_titles = []
@@ -598,6 +598,7 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
+            elif h == 12 and m == 0:
                 await maybe_run("voice_review_report", voice_review_report)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
