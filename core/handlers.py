@@ -22,7 +22,8 @@ from core.db import (
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
-    get_missing_students, get_date, db
+    get_missing_students, get_date, db,
+    save_voice_submission, mark_voice_reviewed
 )
 
 log = logging.getLogger(__name__)
@@ -288,7 +289,17 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         log.error("verify error: %s", e)
 
 
-async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text=""):
+async def handle_reaction(chat_id, user_id, message_id):
+    """Устаз поставил Telegram-реакцию (эмодзи-тап) на сообщение — тоже считаем проверкой."""
+    group = get_group(chat_id)
+    if not group:
+        return
+    phone = extract_phone(user_id)
+    if is_group_admin(phone, group["id"]):
+        mark_voice_reviewed(chat_id, message_id)
+
+
+async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None):
     phone = extract_phone(sender)
     text = (text or "").strip()
     # Telegram в группах добавляет @botname к командам: /help@yassirquranbot → /help
@@ -514,6 +525,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     group_tasks = get_group_tasks(group)
     glang = get_group_lang(group)
     gtype = group["group_type"] or "relaxed"
+
+    # ── Устаз реплаем отмечает голосовую сдачу как проверенную ─────────────────
+    # (любой реплай — текст, эмодзи или свой голосовой с разбором ошибки)
+    if reply_to_message_id and is_group_admin(phone, group_id):
+        mark_voice_reviewed(chat_id, reply_to_message_id)
 
     # Тадаббур — только для админов, обычные сообщения игнорируем
     if gtype == "tadabbur" and not is_group_admin(phone, group_id):
@@ -1007,6 +1023,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     if not s:
         return
+
+    # ── Голосовая/аудио сдача заучивания — ждёт проверки устаза ───────────────
+    if is_voice and message_id:
+        save_voice_submission(s["id"], group_id, chat_id, message_id, get_date())
 
     # ── Явный узр: слово "узр"/"uzr" первым в сообщении, дальше причина ──────
     uzr_match = re.match(r"^(узр|uzr)\b[:\s]*(.*)", text.strip(), re.IGNORECASE | re.DOTALL)

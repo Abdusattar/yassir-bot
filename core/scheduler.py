@@ -11,7 +11,7 @@ from core.db import (
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, add_student, get_streak_days, add_bonus, db,
-    get_days_since_last_report, get_daily_task_counts
+    get_days_since_last_report, get_daily_task_counts, get_voice_review_stats
 )
 from core.tg import send_message, tg_call
 from core.i18n import T
@@ -163,6 +163,52 @@ async def morning_tadabbur_report():
         lines.append("⛔ Узр: " + ", ".join(uzr_names))
 
     await send_message(tadabbur["chat_id"], "\n".join(lines))
+
+
+# ── Проверка голосовых сдач устазами (07:00, группа «Масштабирование») ───────
+
+_VOICE_REVIEW_CHAT_ID = "-5283697370"
+
+
+async def voice_review_report():
+    # Смотрим позавчера, а не вчера — устазу нужны полные сутки на проверку
+    # (иначе голосовое, присланное поздно вечером, попадает в отчёт нечестно).
+    target_date = (datetime.now(pytz.timezone(TZ)) - timedelta(days=2)).date().isoformat()
+    date_str = datetime.strptime(target_date, "%Y-%m-%d").strftime("%d.%m.%Y")
+
+    full_titles = []
+    partial = []
+
+    for group in get_all_groups():
+        gtype = group["group_type"] or "relaxed"
+        if gtype == "tadabbur":
+            continue
+        try:
+            title = group["title"] or str(group["chat_id"])
+            total, reviewed, unreviewed_names = get_voice_review_stats(group["id"], target_date)
+            if total == 0:
+                continue
+            if reviewed == total:
+                full_titles.append(title + " (" + str(reviewed) + "/" + str(total) + ")")
+            else:
+                partial.append((title, reviewed, total, unreviewed_names))
+        except Exception as e:
+            log.error("voice_review_report error in %s: %s", group["chat_id"], e)
+
+    if not full_titles and not partial:
+        return
+
+    lines = ["🎙 Проверка голосовых за " + date_str]
+    if full_titles:
+        lines.append("")
+        lines.append("✅ Проверено полностью:")
+        lines.extend("— " + t for t in full_titles)
+    for title, reviewed, total, names in partial:
+        lines.append("")
+        lines.append(title + " — проверено " + str(reviewed) + "/" + str(total))
+        lines.append("Не проверено: " + ", ".join(names))
+
+    await send_message(_VOICE_REVIEW_CHAT_ID, "\n".join(lines))
 
 
 # ── Бонус +5 за 7 дней стрика (07:00) ────────────────────────────────────────
@@ -355,7 +401,7 @@ async def tadabbur_nasiha():
     try:
         text = await ai.group_motivation_base(
             "ru", "relaxed", hadith=hadith, ayah=ayah,
-            model="deepseek/deepseek-v4-pro", max_tokens=1600
+            model="google/gemini-2.5-pro", max_tokens=1600
         )
         if text and len(text) >= 50:
             await send_message(tadabbur["chat_id"], "📖\n\n" + text)
@@ -552,6 +598,7 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
+                await maybe_run("voice_review_report", voice_review_report)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif h == 15 and m == 0:

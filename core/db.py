@@ -161,6 +161,17 @@ def init():
                 FOREIGN KEY (teacher_id) REFERENCES teachers(id),
                 FOREIGN KEY (group_id) REFERENCES groups(id)
             );
+            CREATE TABLE IF NOT EXISTS voice_submissions(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                chat_id TEXT NOT NULL,
+                message_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                reviewed_at TEXT,
+                UNIQUE(chat_id, message_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_vs_group_date ON voice_submissions(group_id, date);
         """)
         _run_migrations(c)
 
@@ -858,6 +869,40 @@ def get_today_report(uid, group_id=None):
             result[r["subcategory"]] = True
     result["score"] = sum(1 for v in result.values() if v)
     return result
+
+
+def save_voice_submission(student_id, group_id, chat_id, message_id, date):
+    with db() as c:
+        c.execute(
+            "INSERT OR IGNORE INTO voice_submissions"
+            "(student_id,group_id,chat_id,message_id,date)"
+            " VALUES(?,?,?,?,?)",
+            (student_id, group_id, chat_id, message_id, date)
+        )
+
+
+def mark_voice_reviewed(chat_id, message_id):
+    with db() as c:
+        c.execute(
+            "UPDATE voice_submissions SET reviewed_at=?"
+            " WHERE chat_id=? AND message_id=? AND reviewed_at IS NULL",
+            (get_now().isoformat(), chat_id, message_id)
+        )
+
+
+def get_voice_review_stats(group_id, date):
+    """(всего, проверено, [имена без проверки]) по голосовым сдачам группы за дату."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT vs.reviewed_at, u.name FROM voice_submissions vs"
+            " JOIN users u ON u.id = vs.student_id"
+            " WHERE vs.group_id=? AND vs.date=?",
+            (group_id, date)
+        ).fetchall()
+    total = len(rows)
+    reviewed = sum(1 for r in rows if r["reviewed_at"])
+    unreviewed_names = [r["name"] for r in rows if not r["reviewed_at"]]
+    return total, reviewed, unreviewed_names
 
 
 def _active_dates(uid, limit=400):

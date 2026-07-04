@@ -16,7 +16,7 @@ from core.tg import tg_call, send_message
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, add_student, get_learning_group
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
-from core.handlers import process_message
+from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_prep_callback
 
@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 _sender_locks: dict = {}
 
 
-async def queued_process_message(chat_id, sender, text, sender_name, is_media=False, reply_to_id=None, message_id=None):
+async def queued_process_message(chat_id, sender, text, sender_name, is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None):
     key = (chat_id, sender)
     lock = _sender_locks.get(key)
     if lock is None:
@@ -36,7 +36,7 @@ async def queued_process_message(chat_id, sender, text, sender_name, is_media=Fa
         _sender_locks[key] = lock
     async with lock:
         try:
-            await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id)
+            await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id)
         except Exception as e:
             log.error("process_message error chat=%s sender=%s: %s", chat_id, sender, e)
         await asyncio.sleep(0.3)
@@ -63,7 +63,7 @@ async def main():
         try:
             resp = await tg_call(
                 "getUpdates",
-                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "callback_query"]},
+                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "callback_query", "message_reaction"]},
                 timeout=40
             )
             if not resp or not resp.get("ok"):
@@ -130,6 +130,16 @@ async def main():
                     asyncio.create_task(handle_prep_callback(cq))
                     continue
 
+                mr = upd.get("message_reaction")
+                if mr:
+                    r_chat_id = str(mr.get("chat", {}).get("id", ""))
+                    r_user = mr.get("user") or {}
+                    r_user_id = str(r_user.get("id", "")) if r_user else ""
+                    r_message_id = mr.get("message_id")
+                    if r_chat_id and r_user_id and r_message_id:
+                        asyncio.create_task(handle_reaction(r_chat_id, r_user_id, r_message_id))
+                    continue
+
                 msg = upd.get("message")
                 if not msg:
                     continue
@@ -149,8 +159,11 @@ async def main():
                 text = msg.get("text", "") or msg.get("caption", "")
                 is_media = any(k in msg for k in
                                ("photo", "video", "document", "audio", "voice", "video_note"))
+                is_voice = "voice" in msg or "audio" in msg
                 reply_to = msg.get("reply_to_message", {})
                 reply_to_id = reply_to.get("from", {}).get("id") if reply_to else None
+                reply_to_text = reply_to.get("text", "") if reply_to else ""
+                reply_to_message_id = reply_to.get("message_id") if reply_to else None
 
                 if frm.get("is_bot"):
                     continue
@@ -203,7 +216,7 @@ async def main():
                 if (text or is_media) and chat_id:
                     message_id = msg.get("message_id")
                     asyncio.create_task(
-                        queued_process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id)
+                        queued_process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id)
                     )
 
         except Exception as e:
