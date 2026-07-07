@@ -15,11 +15,11 @@ from core.db import (
     get_skip_count_month, get_miss_count_last_30_days, get_lesson_skip_count_month,
     deactivate_student, add_student, log_transfer, get_group,
     get_tadabbur_group, get_overdue_unregistered, remove_unregistered,
-    find_by_phone
+    find_by_phone, is_any_group_admin
 )
+from config import SUPER_ADMIN_IDS
 from core.i18n import T, get_group_lang
 from core.tg import send_message
-from config import SUPER_ADMIN_IDS
 
 log = logging.getLogger(__name__)
 
@@ -160,6 +160,11 @@ async def kick_unregistered():
                 continue
             # Если уже зарегистрировался — просто чистим запись
             if group and find_by_phone(uid, group["id"]):
+                remove_unregistered(uid, chat_id)
+                continue
+            # Устазов и супер-админов не кикаем — они могут состоять в группе
+            # без прохождения студенческой регистрации
+            if str(uid) in SUPER_ADMIN_IDS or is_any_group_admin(str(uid)):
                 remove_unregistered(uid, chat_id)
                 continue
             # Кик (ban + unban = мягкое удаление, может вернуться)
