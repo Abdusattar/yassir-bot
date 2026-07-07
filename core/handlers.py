@@ -268,10 +268,12 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             "⚠️ НЕ смешивай предметы! Если проверяешь муфрадат — не требуй огласовок. "
             "Если проверяешь нахв — требуй правильный иъраб.\n\n"
             "ПРАВИЛА ОТВЕТА (СТРОГО!):\n"
-            "- Если всё ВЕРНО → ответь ровно одним словом: ВЕРНО\n"
-            "- ЗАПРЕЩЕНО перечислять каждое слово отдельно — если всё верно, пиши только ВЕРНО\n"
-            "- Если есть ОШИБКА → МАКСИМУМ 3 строки: 1) что неверно 2) как правильно\n"
-            "- ЗАПРЕЩЕНО: длинные объяснения, нумерованные списки, похвала за каждое слово\n\n"
+            "- Если всё ВЕРНО по всем темам → ответь ровно одним словом: ВЕРНО\n"
+            "- ЗАПРЕЩЕНО упоминать верные слова/буквы вообще — если пункт верный, просто НЕ пиши о нём ничего\n"
+            "- ЗАПРЕЩЕНО заголовки разделов типа **Муфрадат:**, **Таджвид:**, **ИТОГО:** — даже если проверяешь "
+            "несколько тем сразу, пиши ОДНИМ плоским списком, только ошибки, без деления на разделы\n"
+            "- Каждая ошибка отдельной строкой: слово/буква — что неверно — как правильно\n"
+            "- ЗАПРЕЩЕНО: длинные объяснения, нумерованные списки, похвала, слово \"Верно\" рядом с правильными пунктами\n\n"
             "СПРАВОЧНИК (сверяйся с ним):\n" + _build_reference(checks)
         )
         prompt = "Сообщение студента " + name + ":\n" + text
@@ -284,7 +286,7 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         if result and "ВЕРНО" in result.upper()[:20]:
             await send_message(chat_id, "✅", reply_to_message_id=message_id)
         elif result:
-            await send_message(chat_id, "🤖 Ясир:\n" + result, reply_to_message_id=message_id)
+            await send_message(chat_id, result, reply_to_message_id=message_id)
     except Exception as e:
         log.error("verify error: %s", e)
 
@@ -1057,7 +1059,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             group["title"] or chat_id, phone, group_id, s["name"],
             is_ustaz=is_group_admin(phone, group_id)
         )
-        await send_message(chat_id, "🤖 Ясир:\n" + answer)
+        await send_message(chat_id, answer)
         return
 
     # ── Определяем тип сообщения и задания ────────────────────────────────────
@@ -1100,7 +1102,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 is_ustaz=is_group_admin(phone, group_id)
             )
             if answer:
-                await send_message(chat_id, "🤖 Ясир:\n" + answer)
+                await send_message(chat_id, answer)
         return
 
     # ── ИИ-проверка в фоне ────────────────────────────────────────────────────
