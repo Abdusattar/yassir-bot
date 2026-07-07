@@ -901,7 +901,7 @@ def get_voice_review_stats(group_id, date):
         ).fetchall()
     total = len(rows)
     reviewed = sum(1 for r in rows if r["reviewed_at"])
-    unreviewed_names = [r["name"] for r in rows if not r["reviewed_at"]]
+    unreviewed_names = list(dict.fromkeys(r["name"] for r in rows if not r["reviewed_at"]))
     return total, reviewed, unreviewed_names
 
 
