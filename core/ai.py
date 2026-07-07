@@ -85,7 +85,14 @@ async def _or_call(messages, max_tokens=1024, retries=3, model=None):
                             await asyncio.sleep(3)
                             continue
                         return None
-                    return result["choices"][0]["message"]["content"].rstrip() + " ·"
+                    choice = result["choices"][0]
+                    if choice.get("finish_reason") == "length":
+                        log.warning("OR truncated (attempt %d): finish_reason=length, model=%s", attempt + 1, model or AI_MODEL)
+                        if attempt < retries - 1:
+                            await asyncio.sleep(3)
+                            continue
+                        return None
+                    return choice["message"]["content"].rstrip() + " ·"
         except Exception as e:
             log.error("OR error (attempt %d): %s", attempt + 1, e)
             if attempt < retries - 1:

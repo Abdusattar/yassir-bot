@@ -438,7 +438,7 @@ async def tadabbur_nasiha():
     try:
         text = await ai.group_motivation_base(
             "ru", "relaxed", hadith=hadith, ayah=ayah,
-            model="google/gemini-2.5-pro", max_tokens=1600
+            model="google/gemini-2.5-pro", max_tokens=3000
         )
         if text and len(text) >= 50:
             await send_message(tadabbur["chat_id"], "📖\n\n" + text)
