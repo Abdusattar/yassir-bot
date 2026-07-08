@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(ssh -i * stursunkul@34.51.213.67 *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git merge *)",
+      "Bash(git reset *)",
+      "Bash(git stash *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(curl *)",
+      "Bash(New-Item *)",
+      "Bash(Remove-Item *)",
+      "Bash(systemctl *)",
+      "Bash(journalctl *)",
+      "Bash(pip *)",
+      "Bash(pip3 *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(git *)",
+      "PowerShell(ssh *)",
+      "PowerShell(python *)"
+    ]
+  }
+}
