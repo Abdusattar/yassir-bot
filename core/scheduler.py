@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytz
 
-from config import TZ, SUPER_ADMIN_IDS
+from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
@@ -12,7 +12,9 @@ from core.db import (
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
-    get_group_admins
+    get_group_admins,
+    get_next_part_for_review, has_pending_curriculum_review, set_curriculum_review_message,
+    get_next_part_to_publish, mark_curriculum_published
 )
 from core.tg import send_message, tg_call
 from core.i18n import T
@@ -214,6 +216,71 @@ async def voice_review_report():
         lines.append("Не проверено: " + ", ".join(names))
 
     await send_message(_VOICE_REVIEW_CHAT_ID, "\n".join(lines))
+
+
+# ── Программа обучения: нахв/таджвид по частям, с одобрением устаза ───────────
+# Каждая часть готовится заранее (не генерируется на лету), шлётся устазу в
+# личку на одобрение (👍 → mark_curriculum_approved, core/handlers.py), и только
+# после этого может быть опубликована студентам. См. wiki/curriculum.md.
+
+_SUBJECT_TASK_KEY = {"n": "n", "j": "j"}  # subject == буква задания в groups.tasks
+
+
+async def request_curriculum_review():
+    """Если у устаза нет части на рассмотрении — шлём следующую в очереди."""
+    if not CURRICULUM_REVIEWER_ID:
+        return
+    for subject in _SUBJECT_TASK_KEY:
+        try:
+            if has_pending_curriculum_review(subject):
+                continue
+            part = get_next_part_for_review(subject)
+            if not part:
+                continue
+            label = "Нахв" if subject == "n" else "Таджвид"
+            text = (
+                "📘 " + label + " — черновик части на одобрение\n"
+                + part["chapter"] + " → " + part["topic"]
+                + " (часть " + str(part["part_number"]) + "/" + str(part["part_total"]) + ")\n\n"
+                + part["content"]
+                + "\n\n— поставь 👍 на это сообщение, если можно отправлять в группы"
+            )
+            resp = await tg_call("sendMessage", {"chat_id": CURRICULUM_REVIEWER_ID, "text": text})
+            if resp and resp.get("ok"):
+                msg_id = resp["result"]["message_id"]
+                set_curriculum_review_message(part["id"], CURRICULUM_REVIEWER_ID, msg_id)
+        except Exception as e:
+            log.error("request_curriculum_review error for subject=%s: %s", subject, e)
+
+
+async def publish_curriculum_parts():
+    """Публикует одобренные части в группы с соответствующим заданием.
+    Нет одобренной части в очереди → ничего не делает (безопасный no-op)."""
+    for subject, task_key in _SUBJECT_TASK_KEY.items():
+        try:
+            part = get_next_part_to_publish(subject)
+            if not part:
+                continue
+            label = "Нахв" if subject == "n" else "Таджвид"
+            text = (
+                "📘 " + label + ": " + part["chapter"] + " — " + part["topic"]
+                + " (часть " + str(part["part_number"]) + "/" + str(part["part_total"]) + ")\n\n"
+                + part["content"]
+            )
+            for group in get_all_groups():
+                gtype = group["group_type"] or "relaxed"
+                if gtype == "tadabbur":
+                    continue
+                if task_key not in get_group_tasks(group):
+                    continue
+                try:
+                    await send_message(group["chat_id"], text)
+                    await asyncio.sleep(0.3)
+                except Exception as e:
+                    log.error("publish_curriculum_parts send error in %s: %s", group["chat_id"], e)
+            mark_curriculum_published(part["id"])
+        except Exception as e:
+            log.error("publish_curriculum_parts error for subject=%s: %s", subject, e)
 
 
 # ── Приглашение устазов в «Масштабирование» (21:00) ──────────────────────────
@@ -636,8 +703,11 @@ async def scheduler():
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
                 await maybe_run("voice_review_report", voice_review_report)
+                await maybe_run("request_curriculum_review", request_curriculum_review)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
+            elif wd == 0 and h == 8 and m == 0:
+                await maybe_run("publish_curriculum_parts", publish_curriculum_parts)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
             elif h == 20 and m == 30:

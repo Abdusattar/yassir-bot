@@ -172,6 +172,23 @@ def init():
                 UNIQUE(chat_id, message_id)
             );
             CREATE INDEX IF NOT EXISTS idx_vs_group_date ON voice_submissions(group_id, date);
+
+            CREATE TABLE IF NOT EXISTS curriculum_parts(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject TEXT NOT NULL,
+                chapter TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                part_number INTEGER NOT NULL,
+                part_total INTEGER NOT NULL,
+                order_index INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                review_chat_id TEXT,
+                review_message_id INTEGER,
+                approved_at TEXT,
+                published_at TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_cp_subject_order ON curriculum_parts(subject, order_index);
         """)
         _run_migrations(c)
 
@@ -913,6 +930,75 @@ def get_voice_review_stats(group_id, date):
     reviewed = sum(1 for has_review, _ in by_student.values() if has_review)
     unreviewed_names = [name for has_review, name in by_student.values() if not has_review]
     return total, reviewed, unreviewed_names
+
+
+# ── Программа обучения (нахв/таджвид по частям, с одобрением устаза) ───────────
+
+def save_curriculum_part(subject, chapter, topic, part_number, part_total, order_index, content):
+    with db() as c:
+        cur = c.execute(
+            "INSERT INTO curriculum_parts"
+            "(subject,chapter,topic,part_number,part_total,order_index,content)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (subject, chapter, topic, part_number, part_total, order_index, content)
+        )
+        return cur.lastrowid
+
+
+def get_next_part_for_review(subject):
+    """Следующая часть без черновика на одобрении (ещё не отправлена устазу)."""
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM curriculum_parts WHERE subject=? AND review_message_id IS NULL"
+            " ORDER BY order_index LIMIT 1",
+            (subject,)
+        ).fetchone()
+
+
+def has_pending_curriculum_review(subject):
+    """Есть ли уже отправленная устазу часть, которая ждёт одобрения."""
+    with db() as c:
+        row = c.execute(
+            "SELECT 1 FROM curriculum_parts WHERE subject=? AND review_message_id IS NOT NULL"
+            " AND approved_at IS NULL LIMIT 1",
+            (subject,)
+        ).fetchone()
+        return row is not None
+
+
+def set_curriculum_review_message(part_id, chat_id, message_id):
+    with db() as c:
+        c.execute(
+            "UPDATE curriculum_parts SET review_chat_id=?, review_message_id=? WHERE id=?",
+            (chat_id, message_id, part_id)
+        )
+
+
+def mark_curriculum_approved(chat_id, message_id):
+    with db() as c:
+        c.execute(
+            "UPDATE curriculum_parts SET approved_at=?"
+            " WHERE review_chat_id=? AND review_message_id=? AND approved_at IS NULL",
+            (get_now().isoformat(), chat_id, message_id)
+        )
+
+
+def get_next_part_to_publish(subject):
+    """Следующая одобренная, но ещё не опубликованная часть (по очереди)."""
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM curriculum_parts WHERE subject=? AND approved_at IS NOT NULL"
+            " AND published_at IS NULL ORDER BY order_index LIMIT 1",
+            (subject,)
+        ).fetchone()
+
+
+def mark_curriculum_published(part_id):
+    with db() as c:
+        c.execute(
+            "UPDATE curriculum_parts SET published_at=? WHERE id=?",
+            (get_now().isoformat(), part_id)
+        )
 
 
 def _active_dates(uid, limit=400):

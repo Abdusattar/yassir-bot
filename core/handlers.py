@@ -23,7 +23,9 @@ from core.db import (
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db,
-    save_voice_submission, mark_voice_reviewed
+    save_voice_submission, mark_voice_reviewed,
+    save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
+    mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published
 )
 
 log = logging.getLogger(__name__)
@@ -298,11 +300,15 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
 async def handle_reaction(chat_id, user_id, message_id):
     """Устаз поставил Telegram-реакцию (эмодзи-тап) на сообщение — тоже считаем проверкой."""
     group = get_group(chat_id)
-    if not group:
+    if group:
+        phone = extract_phone(user_id)
+        if is_group_admin(phone, group["id"]):
+            mark_voice_reviewed(chat_id, message_id)
         return
-    phone = extract_phone(user_id)
-    if is_group_admin(phone, group["id"]):
-        mark_voice_reviewed(chat_id, message_id)
+    # Личка устаза — реакция на черновик части учебной программы (нахв/таджвид).
+    # Запрос уже привязан к конкретному review_chat_id+review_message_id, который
+    # мы сами присвоили при отправке — доп. проверка на админство не нужна.
+    mark_curriculum_approved(chat_id, message_id)
 
 
 async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None):

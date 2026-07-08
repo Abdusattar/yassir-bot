@@ -11,6 +11,12 @@ TG_API = "https://api.telegram.org/bot" + TELEGRAM_TOKEN
 # Telegram user_id суперадминов (числа через запятую в SUPER_ADMIN_IDS)
 SUPER_ADMIN_IDS = [s.strip() for s in os.getenv("SUPER_ADMIN_IDS", os.getenv("ADMIN_IDS", "")).split(",") if s.strip()]
 
+# Устаз, которому шлём черновики частей учебной программы (нахв/таджвид) на
+# одобрение реакцией 👍 — по умолчанию второй SUPER_ADMIN_ID (устаз Умар).
+CURRICULUM_REVIEWER_ID = os.getenv("CURRICULUM_REVIEWER_ID") or (
+    SUPER_ADMIN_IDS[1] if len(SUPER_ADMIN_IDS) > 1 else (SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else "")
+)
+
 TZ = os.getenv("TZ", "Asia/Bishkek")
 DB = os.getenv("DB_PATH", f"quran_{PROFILE}.db")
 
