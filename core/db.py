@@ -983,6 +983,30 @@ def mark_curriculum_approved(chat_id, message_id):
         )
 
 
+def get_pending_curriculum_review_by_chat(chat_id):
+    """Часть, отправленную в этот чат на одобрение и ещё не одобренную."""
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM curriculum_parts WHERE review_chat_id=? AND review_message_id IS NOT NULL"
+            " AND approved_at IS NULL ORDER BY order_index LIMIT 1",
+            (str(chat_id),)
+        ).fetchone()
+
+
+def mark_curriculum_approved_by_chat(chat_id):
+    """Устаз ответил в личке текстом/реплаем (не обязательно реакцией) — тоже одобрение.
+    Одно сообщение = одна часть (самая ранняя по очереди), не всё разом."""
+    with db() as c:
+        c.execute(
+            "UPDATE curriculum_parts SET approved_at=? WHERE id = ("
+            "  SELECT id FROM curriculum_parts WHERE review_chat_id=?"
+            "  AND review_message_id IS NOT NULL AND approved_at IS NULL"
+            "  ORDER BY order_index LIMIT 1"
+            ")",
+            (get_now().isoformat(), str(chat_id))
+        )
+
+
 def get_next_part_to_publish(subject):
     """Следующая одобренная, но ещё не опубликованная часть (по очереди)."""
     with db() as c:

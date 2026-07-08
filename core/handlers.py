@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 
-from config import SUPER_ADMIN_IDS
+from config import SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID
 from core.content import (
     TASK_KEYS, DEFAULT_TASKS, SHORT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
@@ -25,7 +25,8 @@ from core.db import (
     get_missing_students, get_date, db,
     save_voice_submission, mark_voice_reviewed,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
-    mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published
+    mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
+    get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat
 )
 
 log = logging.getLogger(__name__)
@@ -335,6 +336,17 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     is_group = is_group_chat(chat_id)
+
+    # ── Личка устаза-рецензента программы: любое сообщение = одобрение ────────
+    # Устаз не всегда ставит настоящую Telegram-реакцию — может ответить
+    # текстом ("👍", "класс", реплаем). Пока есть часть, ждущая его ответа
+    # в этом чате, любое его сообщение здесь засчитывается как одобрение.
+    if not is_group and phone == CURRICULUM_REVIEWER_ID:
+        pending = get_pending_curriculum_review_by_chat(chat_id)
+        if pending:
+            mark_curriculum_approved_by_chat(chat_id)
+            await send_message(chat_id, "✅ Принято, опубликую по расписанию")
+            return
 
     # ── Личные команды Устаза (личка) ─────────────────────────────────────────
     if is_admin(phone):
