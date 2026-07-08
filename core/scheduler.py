@@ -249,6 +249,18 @@ async def request_curriculum_review():
             if resp and resp.get("ok"):
                 msg_id = resp["result"]["message_id"]
                 set_curriculum_review_message(part["id"], CURRICULUM_REVIEWER_ID, msg_id)
+            # Копия остальным супер-админам — просто для информации,
+            # на одобрение влияет только 👍 от CURRICULUM_REVIEWER_ID.
+            for admin_id in SUPER_ADMIN_IDS:
+                if admin_id == CURRICULUM_REVIEWER_ID:
+                    continue
+                try:
+                    await tg_call("sendMessage", {
+                        "chat_id": admin_id,
+                        "text": "ℹ️ Отправлено устазу на одобрение:\n\n" + text
+                    })
+                except Exception as e:
+                    log.error("request_curriculum_review copy error for admin=%s: %s", admin_id, e)
         except Exception as e:
             log.error("request_curriculum_review error for subject=%s: %s", subject, e)
 
