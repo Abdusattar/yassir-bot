@@ -240,11 +240,11 @@ async def request_curriculum_review():
                     break
                 label = "Нахв" if subject == "n" else "Таджвид"
                 text = (
-                    "📘 " + label + " — черновик части на одобрение\n"
+                    "📘 " + label + " — скоро уйдёт в группы по расписанию\n"
                     + part["chapter"] + " → " + part["topic"]
                     + " (часть " + str(part["part_number"]) + "/" + str(part["part_total"]) + ")\n\n"
                     + part["content"]
-                    + "\n\n— поставь 👍 на это сообщение, если можно отправлять в группы"
+                    + "\n\n— если есть ошибка, напиши, поправим до или после публикации"
                 )
                 resp = await tg_call("sendMessage", {"chat_id": CURRICULUM_REVIEWER_ID, "text": text})
                 if resp and resp.get("ok"):
@@ -270,8 +270,9 @@ async def request_curriculum_review():
 
 
 async def publish_curriculum_parts():
-    """Публикует одобренные части в группы с соответствующим заданием.
-    Нет одобренной части в очереди → ничего не делает (безопасный no-op)."""
+    """Публикует следующую часть по очереди в группы с соответствующим заданием.
+    Не ждёт одобрения устаза (решение от 08.07.2026) — только видимость заранее
+    через request_curriculum_review. Нет части в очереди → безопасный no-op."""
     for subject, task_key in _SUBJECT_TASK_KEY.items():
         try:
             part = get_next_part_to_publish(subject)
@@ -719,7 +720,6 @@ async def scheduler():
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
                 await maybe_run("voice_review_report", voice_review_report)
-                await maybe_run("request_curriculum_review", request_curriculum_review)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif wd == 3 and h == 8 and m == 0:

@@ -1008,10 +1008,17 @@ def mark_curriculum_approved_by_chat(chat_id):
 
 
 def get_next_part_to_publish(subject):
-    """Следующая одобренная, но ещё не опубликованная часть (по очереди)."""
+    """Следующая часть по очереди, ещё не опубликованная.
+
+    Решение от 08.07.2026: публикация идёт по расписанию без ожидания
+    👍 от устаза (для нахва/таджвида, не для Корана/хадисов/хукмов —
+    риск ниже, контент строго на основе реальных книг). Устаз всё
+    равно видит черновик заранее через буфер request_curriculum_review
+    и может указать на ошибку до или после публикации.
+    """
     with db() as c:
         return c.execute(
-            "SELECT * FROM curriculum_parts WHERE subject=? AND approved_at IS NOT NULL"
+            "SELECT * FROM curriculum_parts WHERE subject=?"
             " AND published_at IS NULL ORDER BY order_index LIMIT 1",
             (subject,)
         ).fetchone()
