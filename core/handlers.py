@@ -288,7 +288,7 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             if result.startswith("[") or result.startswith("{"):
                 result = None
         if result and "ВЕРНО" in result.upper()[:20]:
-            await send_message(chat_id, "✅", reply_to_message_id=message_id)
+            pass  # всё верно — молчим, реагируем только на ошибки
         elif result:
             await send_message(chat_id, result, reply_to_message_id=message_id)
     except Exception as e:
