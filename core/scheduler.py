@@ -13,7 +13,7 @@ from core.db import (
     get_setting, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
     get_group_admins,
-    get_next_part_for_review, has_pending_curriculum_review, set_curriculum_review_message,
+    get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
     get_next_part_to_publish, mark_curriculum_published
 )
 from core.tg import send_message, tg_call
@@ -224,43 +224,47 @@ async def voice_review_report():
 # после этого может быть опубликована студентам. См. wiki/curriculum.md.
 
 _SUBJECT_TASK_KEY = {"n": "n", "j": "j"}  # subject == буква задания в groups.tasks
+_REVIEW_BUFFER = 3  # держим у устаза на рассмотрении до 3 частей вперёд
 
 
 async def request_curriculum_review():
-    """Если у устаза нет части на рассмотрении — шлём следующую в очереди."""
+    """Держим у устаза буфер из _REVIEW_BUFFER частей на рассмотрении —
+    досылаем недостающие, не ждём одобрения каждой по одной."""
     if not CURRICULUM_REVIEWER_ID:
         return
     for subject in _SUBJECT_TASK_KEY:
         try:
-            if has_pending_curriculum_review(subject):
-                continue
-            part = get_next_part_for_review(subject)
-            if not part:
-                continue
-            label = "Нахв" if subject == "n" else "Таджвид"
-            text = (
-                "📘 " + label + " — черновик части на одобрение\n"
-                + part["chapter"] + " → " + part["topic"]
-                + " (часть " + str(part["part_number"]) + "/" + str(part["part_total"]) + ")\n\n"
-                + part["content"]
-                + "\n\n— поставь 👍 на это сообщение, если можно отправлять в группы"
-            )
-            resp = await tg_call("sendMessage", {"chat_id": CURRICULUM_REVIEWER_ID, "text": text})
-            if resp and resp.get("ok"):
-                msg_id = resp["result"]["message_id"]
-                set_curriculum_review_message(part["id"], CURRICULUM_REVIEWER_ID, msg_id)
-            # Копия остальным супер-админам — просто для информации,
-            # на одобрение влияет только 👍 от CURRICULUM_REVIEWER_ID.
-            for admin_id in SUPER_ADMIN_IDS:
-                if admin_id == CURRICULUM_REVIEWER_ID:
-                    continue
-                try:
-                    await tg_call("sendMessage", {
-                        "chat_id": admin_id,
-                        "text": "ℹ️ Отправлено устазу на одобрение:\n\n" + text
-                    })
-                except Exception as e:
-                    log.error("request_curriculum_review copy error for admin=%s: %s", admin_id, e)
+            while count_pending_curriculum_review(subject) < _REVIEW_BUFFER:
+                part = get_next_part_for_review(subject)
+                if not part:
+                    break
+                label = "Нахв" if subject == "n" else "Таджвид"
+                text = (
+                    "📘 " + label + " — черновик части на одобрение\n"
+                    + part["chapter"] + " → " + part["topic"]
+                    + " (часть " + str(part["part_number"]) + "/" + str(part["part_total"]) + ")\n\n"
+                    + part["content"]
+                    + "\n\n— поставь 👍 на это сообщение, если можно отправлять в группы"
+                )
+                resp = await tg_call("sendMessage", {"chat_id": CURRICULUM_REVIEWER_ID, "text": text})
+                if resp and resp.get("ok"):
+                    msg_id = resp["result"]["message_id"]
+                    set_curriculum_review_message(part["id"], CURRICULUM_REVIEWER_ID, msg_id)
+                else:
+                    break
+                # Копия остальным супер-админам — просто для информации,
+                # на одобрение влияет только 👍 от CURRICULUM_REVIEWER_ID.
+                for admin_id in SUPER_ADMIN_IDS:
+                    if admin_id == CURRICULUM_REVIEWER_ID:
+                        continue
+                    try:
+                        await tg_call("sendMessage", {
+                            "chat_id": admin_id,
+                            "text": "ℹ️ Отправлено устазу на одобрение:\n\n" + text
+                        })
+                    except Exception as e:
+                        log.error("request_curriculum_review copy error for admin=%s: %s", admin_id, e)
+                await asyncio.sleep(0.3)
         except Exception as e:
             log.error("request_curriculum_review error for subject=%s: %s", subject, e)
 

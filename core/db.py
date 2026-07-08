@@ -955,15 +955,15 @@ def get_next_part_for_review(subject):
         ).fetchone()
 
 
-def has_pending_curriculum_review(subject):
-    """Есть ли уже отправленная устазу часть, которая ждёт одобрения."""
+def count_pending_curriculum_review(subject):
+    """Сколько частей уже отправлено устазу и ждут одобрения (буфер)."""
     with db() as c:
         row = c.execute(
-            "SELECT 1 FROM curriculum_parts WHERE subject=? AND review_message_id IS NOT NULL"
-            " AND approved_at IS NULL LIMIT 1",
+            "SELECT COUNT(*) AS n FROM curriculum_parts WHERE subject=?"
+            " AND review_message_id IS NOT NULL AND approved_at IS NULL",
             (subject,)
         ).fetchone()
-        return row is not None
+        return row["n"]
 
 
 def set_curriculum_review_message(part_id, chat_id, message_id):
