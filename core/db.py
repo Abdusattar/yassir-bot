@@ -891,17 +891,27 @@ def mark_voice_reviewed(chat_id, message_id):
 
 
 def get_voice_review_stats(group_id, date):
-    """(всего, проверено, [имена без проверки]) по голосовым сдачам группы за дату."""
+    """(всего, проверено, [имена без проверки]) по студентам группы за дату.
+
+    Считаем по студенту, не по отдельной сдаче: если хотя бы одно голосовое
+    студента за день проверено — весь день по нему засчитан (остальные могут
+    быть пересдачей того же урока по просьбе устаза, не отдельным заданием).
+    """
     with db() as c:
         rows = c.execute(
-            "SELECT vs.reviewed_at, u.name FROM voice_submissions vs"
+            "SELECT vs.student_id, vs.reviewed_at, u.name FROM voice_submissions vs"
             " JOIN users u ON u.id = vs.student_id"
             " WHERE vs.group_id=? AND vs.date=?",
             (group_id, date)
         ).fetchall()
-    total = len(rows)
-    reviewed = sum(1 for r in rows if r["reviewed_at"])
-    unreviewed_names = list(dict.fromkeys(r["name"] for r in rows if not r["reviewed_at"]))
+    by_student = {}
+    for r in rows:
+        sid = r["student_id"]
+        had_review = by_student.get(sid, (False, r["name"]))[0]
+        by_student[sid] = (had_review or bool(r["reviewed_at"]), r["name"])
+    total = len(by_student)
+    reviewed = sum(1 for has_review, _ in by_student.values() if has_review)
+    unreviewed_names = [name for has_review, name in by_student.values() if not has_review]
     return total, reviewed, unreviewed_names
 
 

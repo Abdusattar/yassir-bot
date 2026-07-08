@@ -176,9 +176,9 @@ _VOICE_REVIEW_CHAT_ID = _SCALING_CHAT_ID
 
 
 async def voice_review_report():
-    # Смотрим вчера, отчёт шлём в обед — у устаза весь вчерашний день
-    # плюс сегодняшнее утро до 12:00 на проверку.
-    target_date = (datetime.now(pytz.timezone(TZ)) - timedelta(days=1)).date().isoformat()
+    # Смотрим позавчера, отчёт шлём в 07:00 — гарантирует минимум 24 часа
+    # на проверку любой сдаче независимо от времени отправки.
+    target_date = (datetime.now(pytz.timezone(TZ)) - timedelta(days=2)).date().isoformat()
     date_str = datetime.strptime(target_date, "%Y-%m-%d").strftime("%d.%m.%Y")
 
     full_titles = []
@@ -635,7 +635,6 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
-            elif h == 12 and m == 0:
                 await maybe_run("voice_review_report", voice_review_report)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
