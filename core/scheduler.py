@@ -228,55 +228,290 @@ async def voice_review_report():
     await send_message(_VOICE_REVIEW_CHAT_ID, "\n".join(lines))
 
 
-# ── Отчёт по урокам за неделю (пн 07:00, подстраховка вт 07:00, «Масштабирование») ──
+# ── Операционный отчёт за неделю (пн 07:00, подстраховка вт 07:00, «Масштабирование») ──
 # Урок считается проведённым, если хотя бы 1 студент группы отметился «у»/«u»
 # (core/handlers.py, category='attendance') за прошедшую неделю (пн-вс).
 # Флаг в bot_settings не даёт задвоить отправку во вторник, если пн уже отработал.
+# Метрики недели к неделе — считаем ту же статистику за позапрошлую неделю для сравнения.
 
-async def weekly_lesson_report():
+_WORST_REVIEW_COUNT = 3  # сколько групп с самым низким % проверки показывать (реальные цифры, без порога)
+
+
+def _week_ops_stats(start, end):
+    lesson_groups, not_held = 0, []
+    task_count = 0
+    voice_total, voice_reviewed = 0, 0
+    voice_by_group = []
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
+        title = group["title"] or str(group["chat_id"])
+        with db() as c:
+            attended = c.execute(
+                "SELECT 1 FROM score_events"
+                " WHERE group_id=? AND category='attendance' AND date>=? AND date<=?",
+                (group["id"], start, end)
+            ).fetchone()
+            task_n = c.execute(
+                "SELECT COUNT(*) as n FROM score_events"
+                " WHERE group_id=? AND category='task' AND date>=? AND date<=?",
+                (group["id"], start, end)
+            ).fetchone()["n"]
+            voice_rows = c.execute(
+                "SELECT reviewed_at FROM voice_submissions"
+                " WHERE group_id=? AND date>=? AND date<=?",
+                (group["id"], start, end)
+            ).fetchall()
+        if attended:
+            lesson_groups += 1
+        else:
+            not_held.append(title)
+        task_count += task_n
+        v_total = len(voice_rows)
+        v_reviewed = sum(1 for r in voice_rows if r["reviewed_at"])
+        voice_total += v_total
+        voice_reviewed += v_reviewed
+        if v_total > 0:
+            voice_by_group.append((title, round(100 * v_reviewed / v_total)))
+    voice_by_group.sort(key=lambda x: x[1])
+    return {
+        "lesson_groups": lesson_groups,
+        "total_groups": lesson_groups + len(not_held),
+        "not_held": not_held,
+        "task_count": task_count,
+        "voice_pct": round(100 * voice_reviewed / voice_total) if voice_total else None,
+        "worst_review": voice_by_group[:_WORST_REVIEW_COUNT],
+    }
+
+
+def _day_word(n):
+    return "день" if n == 1 else ("дня" if 2 <= n <= 4 else "дней")
+
+
+def _arrow(diff, suffix=""):
+    if diff > 0:
+        return "↑" + str(diff) + suffix
+    if diff < 0:
+        return "↓" + str(abs(diff)) + suffix
+    return "→0" + suffix
+
+
+async def weekly_ops_report():
+    now = _now()
+    week_monday = (now - timedelta(days=now.weekday())).date()
+    last_monday = week_monday - timedelta(days=7)
+    last_sunday = week_monday - timedelta(days=1)
+    prev_monday = last_monday - timedelta(days=7)
+    prev_sunday = last_monday - timedelta(days=1)
+    week_key = last_monday.isoformat()
+
+    if get_setting("ops_report_week") == week_key:
+        return
+
+    try:
+        cur = _week_ops_stats(str(last_monday), str(last_sunday))
+        prev = _week_ops_stats(str(prev_monday), str(prev_sunday))
+
+        if cur["total_groups"] > 0:
+            lesson_diff = cur["lesson_groups"] - prev["lesson_groups"]
+            task_diff_pct = (
+                round(100 * (cur["task_count"] - prev["task_count"]) / prev["task_count"])
+                if prev["task_count"] > 0 else None
+            )
+            voice_diff_pct = (
+                cur["voice_pct"] - prev["voice_pct"]
+                if cur["voice_pct"] is not None and prev["voice_pct"] is not None else None
+            )
+
+            date_range = last_monday.strftime("%d.%m") + "–" + last_sunday.strftime("%d.%m.%Y")
+            lines = ["📊 Итоги недели — " + date_range, ""]
+
+            lesson_line = "🕌 Уроки: " + str(cur["lesson_groups"]) + "/" + str(cur["total_groups"]) + " групп провели урок"
+            if lesson_diff != 0:
+                lesson_line += " (" + _arrow(lesson_diff) + " к прошлой неделе)"
+            lines.append(lesson_line)
+            if cur["not_held"]:
+                lines.append("⛔ Не провели урок: " + ", ".join(cur["not_held"]))
+
+            lines.append("")
+            task_line = "📝 Сдачи заданий: " + str(cur["task_count"]) + " сдано"
+            if task_diff_pct is not None:
+                task_line += " (" + _arrow(task_diff_pct, "%") + " к прошлой неделе)"
+            lines.append(task_line)
+
+            lines.append("")
+            if cur["voice_pct"] is not None:
+                voice_line = "🎙 Проверка таджвида: " + str(cur["voice_pct"]) + "% голосовых проверено"
+                if voice_diff_pct is not None:
+                    voice_line += " (" + _arrow(voice_diff_pct, " п.п.") + " к прошлой неделе)"
+                lines.append(voice_line)
+            if cur["worst_review"]:
+                worst_str = ", ".join(t + " — " + str(p) + "%" for t, p in cur["worst_review"])
+                lines.append("Меньше всего проверено: " + worst_str)
+
+            good, bad = [], []
+            if lesson_diff > 0:
+                good.append("больше групп провели урок")
+            elif lesson_diff < 0:
+                bad.append("меньше групп провели урок")
+            if task_diff_pct is not None and task_diff_pct > 0:
+                good.append("выросли сдачи заданий")
+            elif task_diff_pct is not None and task_diff_pct < 0:
+                bad.append("просели сдачи заданий")
+            if voice_diff_pct is not None and voice_diff_pct > 0:
+                good.append("чаще проверяете таджвид")
+            elif voice_diff_pct is not None and voice_diff_pct < 0:
+                bad.append("просела проверка таджвида")
+
+            lines.append("")
+            if good and bad:
+                lines.append("📌 Вывод: " + ", ".join(good) + " — но " + ", ".join(bad))
+            elif bad:
+                lines.append("📌 Вывод: " + ", ".join(bad) + " — обратите внимание")
+            elif good:
+                lines.append("📌 Вывод: " + ", ".join(good) + " — держите темп")
+            else:
+                lines.append("📌 Вывод: без изменений к прошлой неделе")
+
+            await send_message(_SCALING_CHAT_ID, "\n".join(lines))
+    except Exception as e:
+        log.error("weekly_ops_report error: %s", e)
+
+    set_setting("ops_report_week", week_key)
+
+
+# ── Сводка за неделю для «Тадаббур» (вт 12:00) — командный итог для студентов ──
+# Отдельно от weekly_ops_report (устазам, операционные метрики) — тут только то,
+# что имеет смысл для самих студентов: совокупная сдача + примеры для подражания.
+# «Примеры недели»/«Держат планку» исключают только SUPER_ADMIN_IDS[0] (устаз
+# Абдусаттар лично), а не всех устазов/супер-админов — его личная просьба.
+# Закрытие — аят/хадис без AI: берём кешированный перевод, без него — оригинал.
+
+_TADABBUR_STREAK_THRESHOLD = 7
+
+
+def _full_week_students(last_monday, last_sunday):
+    my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
+    days = [(last_monday + timedelta(days=i)).isoformat() for i in range(7)]
+    names = []
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
+        group_tasks = get_group_tasks(group)
+        total_tasks = len(group_tasks)
+        if total_tasks == 0:
+            continue
+        with db() as c:
+            rows = c.execute(
+                "SELECT student_id, date, COUNT(DISTINCT subcategory) as cnt"
+                " FROM score_events WHERE group_id=? AND category='task' AND date>=? AND date<=?"
+                " GROUP BY student_id, date",
+                (group["id"], days[0], days[-1])
+            ).fetchall()
+        per_student = {}
+        for r in rows:
+            per_student.setdefault(r["student_id"], {})[r["date"]] = r["cnt"]
+        for s in get_students(group["id"]):
+            if my_id and s["phone"] == my_id:
+                continue
+            day_counts = per_student.get(s["id"], {})
+            if all(day_counts.get(d, 0) >= total_tasks for d in days):
+                names.append(s["name"])
+    return names
+
+
+def _streak_leaders(anchor_date, threshold):
+    my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
+    result = []
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
+        for s in get_students(group["id"]):
+            if my_id and s["phone"] == my_id:
+                continue
+            streak = get_streak_days(s["id"], anchor_date)
+            if streak >= threshold:
+                result.append((s["name"], streak))
+    result.sort(key=lambda x: -x[1])
+    return result
+
+
+async def _closing_verse():
+    """Предпочитаем кешированный перевод (без AI); если для выбранной цитаты
+    перевода ещё нет — переводим один раз через ai._get_*_translation и кешируем,
+    дальше эта же цитата уже отдаётся без AI. Раз в неделю, не ежедневная нагрузка."""
+    pick_hadith_first = random.random() < 0.5
+    order = (sampler.sample_hadith, sampler.sample_ayah) if pick_hadith_first \
+        else (sampler.sample_ayah, sampler.sample_hadith)
+    for fn in order:
+        item = fn()
+        if not item:
+            continue
+        if "sura" in item:
+            text = await ai._get_ayah_translation(item, "ru")
+            if text:
+                return "📖 " + text + " (" + item["ref"] + ")"
+        else:
+            text = await ai._get_hadith_translation(item, "ru")
+            if text:
+                return "📖 " + text + " (" + item.get("label", "") + ")"
+    return None
+
+
+async def weekly_tadabbur_summary():
+    tadabbur = get_tadabbur_group()
+    if not tadabbur:
+        return
     now = _now()
     week_monday = (now - timedelta(days=now.weekday())).date()
     last_monday = week_monday - timedelta(days=7)
     last_sunday = week_monday - timedelta(days=1)
     week_key = last_monday.isoformat()
 
-    if get_setting("lesson_report_week") == week_key:
+    if get_setting("tadabbur_summary_week") == week_key:
         return
 
-    held_titles = []
-    not_held_titles = []
-    for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
-            continue
-        title = group["title"] or str(group["chat_id"])
-        try:
+    try:
+        task_count = 0
+        for group in get_all_groups():
+            if (group["group_type"] or "relaxed") == "tadabbur":
+                continue
             with db() as c:
-                row = c.execute(
-                    "SELECT 1 FROM score_events"
-                    " WHERE group_id=? AND category='attendance' AND date>=? AND date<=?",
+                task_n = c.execute(
+                    "SELECT COUNT(*) as n FROM score_events"
+                    " WHERE group_id=? AND category='task' AND date>=? AND date<=?",
                     (group["id"], str(last_monday), str(last_sunday))
-                ).fetchone()
-            if row:
-                held_titles.append(title)
-            else:
-                not_held_titles.append(title)
-        except Exception as e:
-            log.error("weekly_lesson_report error in %s: %s", group["chat_id"], e)
+                ).fetchone()["n"]
+            task_count += task_n
 
-    if held_titles or not_held_titles:
-        date_range = last_monday.strftime("%d.%m") + "–" + last_sunday.strftime("%d.%m.%Y")
-        lines = ["📅 Уроки за неделю " + date_range]
-        if held_titles:
-            lines.append("")
-            lines.append("✅ Провели урок:")
-            lines.extend("— " + t for t in held_titles)
-        if not_held_titles:
-            lines.append("")
-            lines.append("⛔ Не провели урок:")
-            lines.extend("— " + t for t in not_held_titles)
-        await send_message(_SCALING_CHAT_ID, "\n".join(lines))
+        if task_count > 0:
+            full_week_names = _full_week_students(last_monday, last_sunday)
+            streak_leaders = _streak_leaders(str(last_sunday), _TADABBUR_STREAK_THRESHOLD)
 
-    set_setting("lesson_report_week", week_key)
+            date_range = last_monday.strftime("%d.%m") + "–" + last_sunday.strftime("%d.%m.%Y")
+            lines = ["📊 Итоги недели — вся община (" + date_range + ")", ""]
+            lines.append("Вместе за неделю сдано " + str(task_count) + " заданий 🤲")
+
+            if full_week_names:
+                lines.append("")
+                lines.append("🌟 Примеры недели (сдавали всё всю неделю):")
+                lines.extend("— " + n for n in full_week_names)
+
+            if streak_leaders:
+                lines.append("")
+                lines.append("🔥 Держат планку (" + str(_TADABBUR_STREAK_THRESHOLD) + "+ дней подряд):")
+                lines.extend("— " + n + " — " + str(d) + " " + _day_word(d) for n, d in streak_leaders)
+
+            verse = await _closing_verse()
+            if verse:
+                lines.append("")
+                lines.append(verse)
+
+            await send_message(tadabbur["chat_id"], "\n".join(lines))
+    except Exception as e:
+        log.error("weekly_tadabbur_summary error: %s", e)
+
+    set_setting("tadabbur_summary_week", week_key)
 
 
 # ── Программа обучения: нахв/таджвид по частям, с одобрением устаза ───────────
@@ -782,9 +1017,11 @@ async def scheduler():
                 await maybe_run("prep_reminders", send_prep_reminders)
                 await maybe_run("voice_review_report", voice_review_report)
                 if wd in (0, 1):
-                    await maybe_run("weekly_lesson_report", weekly_lesson_report)
+                    await maybe_run("weekly_ops_report", weekly_ops_report)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
+            elif wd == 1 and h == 12 and m == 0:
+                await maybe_run("weekly_tadabbur_summary", weekly_tadabbur_summary)
             elif wd == 3 and h == 8 and m == 0:
                 await maybe_run("publish_curriculum_parts", publish_curriculum_parts)
             elif h == 15 and m == 0:
