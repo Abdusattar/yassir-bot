@@ -168,6 +168,7 @@ def init():
                 chat_id TEXT NOT NULL,
                 message_id INTEGER NOT NULL,
                 date TEXT NOT NULL,
+                sent_at TEXT,
                 reviewed_at TEXT,
                 UNIQUE(chat_id, message_id)
             );
@@ -212,6 +213,10 @@ def _run_migrations(c):
         c.execute("UPDATE groups SET started_at = date('now') WHERE started_at IS NULL")
     if "invite_link" not in gcols:
         c.execute("ALTER TABLE groups ADD COLUMN invite_link TEXT")
+
+    vscols = [r["name"] for r in c.execute("PRAGMA table_info(voice_submissions)").fetchall()]
+    if "sent_at" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN sent_at TEXT")
 
     migrated = c.execute(
         "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
@@ -892,9 +897,9 @@ def save_voice_submission(student_id, group_id, chat_id, message_id, date):
     with db() as c:
         c.execute(
             "INSERT OR IGNORE INTO voice_submissions"
-            "(student_id,group_id,chat_id,message_id,date)"
-            " VALUES(?,?,?,?,?)",
-            (student_id, group_id, chat_id, message_id, date)
+            "(student_id,group_id,chat_id,message_id,date,sent_at)"
+            " VALUES(?,?,?,?,?,?)",
+            (student_id, group_id, chat_id, message_id, date, get_now().isoformat())
         )
 
 
@@ -908,28 +913,30 @@ def mark_voice_reviewed(chat_id, message_id):
 
 
 def get_voice_review_stats(group_id, date):
-    """(всего, проверено, [имена без проверки]) по студентам группы за дату.
+    """(всего, проверено, [(имя, sent_at) без проверки]) по студентам группы за дату.
 
     Считаем по студенту, не по отдельной сдаче: если хотя бы одно голосовое
     студента за день проверено — весь день по нему засчитан (остальные могут
     быть пересдачей того же урока по просьбе устаза, не отдельным заданием).
+    Время сдачи для непроверенных — самая ранняя сдача студента за день.
     """
     with db() as c:
         rows = c.execute(
-            "SELECT vs.student_id, vs.reviewed_at, u.name FROM voice_submissions vs"
+            "SELECT vs.student_id, vs.reviewed_at, vs.sent_at, u.name FROM voice_submissions vs"
             " JOIN users u ON u.id = vs.student_id"
-            " WHERE vs.group_id=? AND vs.date=?",
+            " WHERE vs.group_id=? AND vs.date=?"
+            " ORDER BY vs.id",
             (group_id, date)
         ).fetchall()
     by_student = {}
     for r in rows:
         sid = r["student_id"]
-        had_review = by_student.get(sid, (False, r["name"]))[0]
-        by_student[sid] = (had_review or bool(r["reviewed_at"]), r["name"])
+        had_review, name, first_sent = by_student.get(sid, (False, r["name"], r["sent_at"]))
+        by_student[sid] = (had_review or bool(r["reviewed_at"]), name, first_sent)
     total = len(by_student)
-    reviewed = sum(1 for has_review, _ in by_student.values() if has_review)
-    unreviewed_names = [name for has_review, name in by_student.values() if not has_review]
-    return total, reviewed, unreviewed_names
+    reviewed = sum(1 for has_review, _, _ in by_student.values() if has_review)
+    unreviewed = [(name, sent_at) for has_review, name, sent_at in by_student.values() if not has_review]
+    return total, reviewed, unreviewed
 
 
 # ── Программа обучения (нахв/таджвид по частям, с одобрением устаза) ───────────

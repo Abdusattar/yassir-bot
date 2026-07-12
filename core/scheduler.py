@@ -10,7 +10,7 @@ from core.db import (
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
-    get_setting, add_student, get_streak_days, add_bonus, db,
+    get_setting, set_setting, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
     get_group_admins,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
@@ -177,6 +177,15 @@ _SCALING_INVITE_LINK = "https://t.me/+8IxbNN6MtjY3NDRi"
 _VOICE_REVIEW_CHAT_ID = _SCALING_CHAT_ID
 
 
+def _format_sent_time(sent_at):
+    if not sent_at:
+        return "?"
+    try:
+        return datetime.fromisoformat(sent_at).strftime("%H:%M")
+    except ValueError:
+        return "?"
+
+
 async def voice_review_report():
     # Смотрим позавчера, отчёт шлём в 07:00 — гарантирует минимум 24 часа
     # на проверку любой сдаче независимо от времени отправки.
@@ -192,13 +201,14 @@ async def voice_review_report():
             continue
         try:
             title = group["title"] or str(group["chat_id"])
-            total, reviewed, unreviewed_names = get_voice_review_stats(group["id"], target_date)
+            total, reviewed, unreviewed = get_voice_review_stats(group["id"], target_date)
             if total == 0:
                 continue
             if reviewed == total:
                 full_titles.append(title + " (" + str(reviewed) + "/" + str(total) + ")")
             else:
-                partial.append((title, reviewed, total, unreviewed_names))
+                unreviewed_labels = [name + " (" + _format_sent_time(sent_at) + ")" for name, sent_at in unreviewed]
+                partial.append((title, reviewed, total, unreviewed_labels))
         except Exception as e:
             log.error("voice_review_report error in %s: %s", group["chat_id"], e)
 
@@ -216,6 +226,57 @@ async def voice_review_report():
         lines.append("Не проверено: " + ", ".join(names))
 
     await send_message(_VOICE_REVIEW_CHAT_ID, "\n".join(lines))
+
+
+# ── Отчёт по урокам за неделю (пн 07:00, подстраховка вт 07:00, «Масштабирование») ──
+# Урок считается проведённым, если хотя бы 1 студент группы отметился «у»/«u»
+# (core/handlers.py, category='attendance') за прошедшую неделю (пн-вс).
+# Флаг в bot_settings не даёт задвоить отправку во вторник, если пн уже отработал.
+
+async def weekly_lesson_report():
+    now = _now()
+    week_monday = (now - timedelta(days=now.weekday())).date()
+    last_monday = week_monday - timedelta(days=7)
+    last_sunday = week_monday - timedelta(days=1)
+    week_key = last_monday.isoformat()
+
+    if get_setting("lesson_report_week") == week_key:
+        return
+
+    held_titles = []
+    not_held_titles = []
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
+        title = group["title"] or str(group["chat_id"])
+        try:
+            with db() as c:
+                row = c.execute(
+                    "SELECT 1 FROM score_events"
+                    " WHERE group_id=? AND category='attendance' AND date>=? AND date<=?",
+                    (group["id"], str(last_monday), str(last_sunday))
+                ).fetchone()
+            if row:
+                held_titles.append(title)
+            else:
+                not_held_titles.append(title)
+        except Exception as e:
+            log.error("weekly_lesson_report error in %s: %s", group["chat_id"], e)
+
+    if held_titles or not_held_titles:
+        date_range = last_monday.strftime("%d.%m") + "–" + last_sunday.strftime("%d.%m.%Y")
+        lines = ["📅 Уроки за неделю " + date_range]
+        if held_titles:
+            lines.append("")
+            lines.append("✅ Провели урок:")
+            lines.extend("— " + t for t in held_titles)
+        if not_held_titles:
+            lines.append("")
+            lines.append("⛔ Не провели урок:")
+            lines.extend("— " + t for t in not_held_titles)
+        await send_message(_SCALING_CHAT_ID, "\n".join(lines))
+
+    set_setting("lesson_report_week", week_key)
 
 
 # ── Программа обучения: нахв/таджвид по частям, с одобрением устаза ───────────
@@ -720,6 +781,8 @@ async def scheduler():
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
                 await maybe_run("voice_review_report", voice_review_report)
+                if wd in (0, 1):
+                    await maybe_run("weekly_lesson_report", weekly_lesson_report)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif wd == 3 and h == 8 and m == 0:
