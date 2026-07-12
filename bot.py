@@ -18,7 +18,7 @@ from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
-from core.prep import handle_prep_callback
+from core.prep import handle_prep_callback, announce_prep_graduate_arrival
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -118,6 +118,7 @@ async def main():
                                 else:
                                     add_student(existing_user["name"], group_info["id"], uid)
                                     log.info("chat_member: added existing user %s to group %s", existing_user["name"], group_info["id"])
+                                    await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
                             else:
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
@@ -208,6 +209,7 @@ async def main():
                                     pass  # уже студент в другой учебной группе — не добавляем
                                 else:
                                     add_student(existing_user["name"], group_info["id"], uid)
+                                    await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
                             else:
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"

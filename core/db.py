@@ -147,6 +147,15 @@ def init():
                 reason TEXT NOT NULL,
                 transferred_at TEXT DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS prep_graduates(
+                phone TEXT NOT NULL,
+                target_group_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                from_group_id INTEGER NOT NULL,
+                from_chat_id TEXT NOT NULL,
+                created_date TEXT DEFAULT (date('now')),
+                PRIMARY KEY(phone, target_group_id)
+            );
             CREATE TABLE IF NOT EXISTS teachers(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -1270,6 +1279,31 @@ def count_report_days_since(uid, group_id, since_date):
             (uid, group_id, since_date)
         ).fetchone()
         return row["cnt"] if row else 0
+
+
+def add_prep_graduate(phone, target_group_id, name, from_group_id, from_chat_id):
+    """Запомнить, что этого студента ждут в целевой группе после выбора языка в prep."""
+    with db() as c:
+        c.execute(
+            "INSERT OR REPLACE INTO prep_graduates"
+            "(phone, target_group_id, name, from_group_id, from_chat_id) VALUES(?,?,?,?,?)",
+            (phone, target_group_id, name, from_group_id, from_chat_id)
+        )
+
+
+def pop_prep_graduate(phone, target_group_id):
+    """Забрать и удалить запись о выпускнике prep, если студент только что вступил в целевую группу."""
+    with db() as c:
+        row = c.execute(
+            "SELECT * FROM prep_graduates WHERE phone=? AND target_group_id=?",
+            (phone, target_group_id)
+        ).fetchone()
+        if row:
+            c.execute(
+                "DELETE FROM prep_graduates WHERE phone=? AND target_group_id=?",
+                (phone, target_group_id)
+            )
+        return row
 
 
 def get_relaxed_groups_by_lang(lang):

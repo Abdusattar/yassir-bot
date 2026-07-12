@@ -2,7 +2,10 @@
 Логика подготовительной группы (group_type='prep').
 
 14 дней с момента вступления:
-  ≥5 дней с отчётами → поздравление + выбор relaxed-группы (ky/ru) → ссылка в личку
+  ≥5 дней с отчётами → поздравление + выбор relaxed-группы (ky/ru) → ссылка в личку.
+                        Из prep деактивируется только когда студент подтверждённо
+                        вступит в целевую группу (announce_prep_graduate_arrival) —
+                        чтобы не потерять его, если ссылкой не воспользуется.
   <5 дней             → остаётся в Тадаббуре, деактивируется из prep
 """
 import logging
@@ -10,6 +13,8 @@ import logging
 from core.db import (
     db, get_prep_students_due, count_report_days_since,
     get_relaxed_groups_by_lang, get_group_tasks,
+    add_prep_graduate, pop_prep_graduate,
+    get_tadabbur_group, add_student,
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message, tg_call
@@ -37,6 +42,7 @@ async def check_prep_students():
         if days_done >= PREP_MIN_DAYS:
             _pending_lang_choice[uid] = {
                 "group_id": group_id,
+                "chat_id": s["chat_id"],
                 "name": s["name"],
                 "glang": glang,
                 "joined_date": joined,
@@ -146,6 +152,7 @@ async def handle_prep_callback(callback_query):
     glang = pending["glang"]
     name = pending["name"]
     group_id = pending["group_id"]
+    from_chat_id = pending["chat_id"]
 
     groups = get_relaxed_groups_by_lang(lang_choice)
     if not groups:
@@ -153,14 +160,51 @@ async def handle_prep_callback(callback_query):
         return True
 
     target = groups[0]
-    _deactivate_from_prep_by_group_id(uid, group_id)
     del _pending_lang_choice[uid]
 
     await send_message(uid, T("prep_group_link", glang,
                               title=target["title"], link=target["invite_link"]))
 
-    log.info("prep graduate: %s → group=%s (%s)", name, target["title"], lang_choice)
+    # Из prep не убираем и никуда не объявляем прямо сейчас — только когда
+    # студент реально вступит в целевую группу (см. announce_prep_graduate_arrival).
+    # Так студент не потеряется, если ссылкой не воспользуется.
+    add_prep_graduate(uid, target["id"], name, group_id, from_chat_id)
+
+    # Страховка: сразу добавляем в Тадаббур на случай, если ссылкой на целевую
+    # группу так и не воспользуется — чтобы не остаться совсем без группы.
+    tadabbur = get_tadabbur_group()
+    if tadabbur:
+        add_student(name, tadabbur["id"], uid)
+
+    log.info("prep graduate pending: %s → group=%s (%s), ждём подтверждения вступления", name, target["title"], lang_choice)
     return True
+
+
+async def announce_prep_graduate_arrival(chat_id, group_id, phone):
+    """Вызывается когда известный студент вступает в группу по инвайт-ссылке.
+    Если это подтверждённый выпускник prep — деактивирует его в старой группе
+    и объявляет о переходе в обоих чатах."""
+    rec = pop_prep_graduate(phone, group_id)
+    if not rec:
+        return
+
+    _deactivate_from_prep_by_group_id(phone, rec["from_group_id"])
+
+    new_glang = _group_lang(group_id)
+    old_glang = _group_lang(rec["from_group_id"])
+    new_title = _group_title(group_id)
+
+    try:
+        await send_message(chat_id, T("prep_graduate_announce_new", new_glang, name=rec["name"]))
+    except Exception as e:
+        log.warning("prep graduate new-group announce failed: %s", e)
+
+    try:
+        await send_message(rec["from_chat_id"], T("prep_graduate_announce_old", old_glang, name=rec["name"], title=new_title))
+    except Exception as e:
+        log.warning("prep graduate old-group announce failed: %s", e)
+
+    log.info("prep graduate confirmed: %s arrived in group=%s", rec["name"], group_id)
 
 
 async def _send_choice(uid, name, days_done, glang):
@@ -200,3 +244,9 @@ def _group_lang(group_id):
     with db() as c:
         g = c.execute("SELECT lang FROM groups WHERE id=?", (group_id,)).fetchone()
         return (g["lang"] if g else None) or "ru"
+
+
+def _group_title(group_id):
+    with db() as c:
+        g = c.execute("SELECT title FROM groups WHERE id=?", (group_id,)).fetchone()
+        return (g["title"] if g else None) or ""
