@@ -255,6 +255,7 @@ def _week_ops_stats(start, end):
     task_count = 0
     voice_total, voice_reviewed = 0, 0
     voice_by_group = []
+    group_tasks = {}
     for group in get_all_groups():
         if (group["group_type"] or "relaxed") == "tadabbur":
             continue
@@ -280,6 +281,7 @@ def _week_ops_stats(start, end):
         else:
             not_held.append(title)
         task_count += task_n
+        group_tasks[group["id"]] = (title, task_n)
         v_total = len(voice_rows)
         v_reviewed = sum(1 for r in voice_rows if r["reviewed_at"])
         voice_total += v_total
@@ -292,9 +294,51 @@ def _week_ops_stats(start, end):
         "total_groups": lesson_groups + len(not_held),
         "not_held": not_held,
         "task_count": task_count,
+        "group_tasks": group_tasks,
         "voice_pct": round(100 * voice_reviewed / voice_total) if voice_total else None,
         "worst_review": voice_by_group[:_WORST_REVIEW_COUNT],
     }
+
+
+def _group_task_diff_lines(cur_group_tasks, prev_group_tasks):
+    """Список «Группа: N (стрелка)» по всем группам, отсортированный по названию."""
+    lines = []
+    for gid, (title, n) in sorted(cur_group_tasks.items(), key=lambda kv: kv[1][0]):
+        prev_n = prev_group_tasks.get(gid, (title, 0))[1]
+        diff = n - prev_n
+        line = "— " + title + ": " + str(n)
+        if diff != 0:
+            line += " (" + _arrow(diff) + ")"
+        lines.append(line)
+    return lines
+
+
+def _top_students_by_points(start, end, limit=10):
+    """Топ студентов по сумме баллов (задания+бонусы+посещаемость) за период,
+    без участия только в Тадаббуре и без устаза (его личная просьба, как в
+    _full_week_students/_streak_leaders)."""
+    my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
+    with db() as c:
+        rows = c.execute("""
+            SELECT u.name, u.phone, SUM(e.points) as total_points
+            FROM score_events e
+            JOIN users u ON u.id = e.student_id
+            JOIN groups g ON g.id = e.group_id
+            WHERE e.date >= ? AND e.date <= ?
+              AND (g.group_type IS NULL OR g.group_type != 'tadabbur')
+            GROUP BY e.student_id
+            HAVING total_points > 0
+            ORDER BY total_points DESC
+            LIMIT ?
+        """, (start, end, limit + 5)).fetchall()
+    result = []
+    for r in rows:
+        if my_id and r["phone"] == my_id:
+            continue
+        result.append((r["name"], r["total_points"]))
+        if len(result) >= limit:
+            break
+    return result
 
 
 def _day_word(n):
@@ -362,6 +406,10 @@ async def weekly_ops_report():
             if task_diff_pct is not None:
                 task_line += " (" + _arrow(task_diff_pct, "%") + " к прошлой неделе)"
             lines.append(task_line)
+            if task_prev_covered:
+                lines.append("")
+                lines.append("📈 По группам (неделя к неделе):")
+                lines.extend(_group_task_diff_lines(cur["group_tasks"], prev["group_tasks"]))
 
             lines.append("")
             if cur["voice_pct"] is not None:
@@ -404,6 +452,104 @@ async def weekly_ops_report():
     set_setting("ops_report_week", week_key)
 
 
+# ── Операционный отчёт за месяц (1-е число) — календарный месяц к предыдущему ──
+
+async def monthly_ops_report():
+    now = _now()
+    first_this_month = now.date().replace(day=1)
+    last_prev_month = first_this_month - timedelta(days=1)
+    first_prev_month = last_prev_month.replace(day=1)
+    last_prev2_month = first_prev_month - timedelta(days=1)
+    first_prev2_month = last_prev2_month.replace(day=1)
+    month_key = first_prev_month.isoformat()
+
+    if get_setting("ops_report_month") == month_key:
+        return
+
+    try:
+        cur = _week_ops_stats(str(first_prev_month), str(last_prev_month))
+        prev = _week_ops_stats(str(first_prev2_month), str(last_prev2_month))
+
+        prev_start = str(first_prev2_month)
+        lesson_since = _metric_tracked_since("score_events", "attendance")
+        task_since = _metric_tracked_since("score_events", "task")
+        voice_since = _metric_tracked_since("voice_submissions")
+        lesson_prev_covered = lesson_since is not None and lesson_since <= prev_start
+        task_prev_covered = task_since is not None and task_since <= prev_start
+        voice_prev_covered = voice_since is not None and voice_since <= prev_start
+
+        if cur["total_groups"] > 0:
+            lesson_diff = cur["lesson_groups"] - prev["lesson_groups"] if lesson_prev_covered else None
+            task_diff_pct = (
+                round(100 * (cur["task_count"] - prev["task_count"]) / prev["task_count"])
+                if task_prev_covered and prev["task_count"] > 0 else None
+            )
+            voice_diff_pct = (
+                cur["voice_pct"] - prev["voice_pct"]
+                if voice_prev_covered and cur["voice_pct"] is not None and prev["voice_pct"] is not None else None
+            )
+
+            month_label = first_prev_month.strftime("%m.%Y")
+            lines = ["📊 Итоги месяца — " + month_label, ""]
+
+            lesson_line = "🕌 Уроки: " + str(cur["lesson_groups"]) + "/" + str(cur["total_groups"]) + " групп провели урок"
+            if lesson_diff is not None and lesson_diff != 0:
+                lesson_line += " (" + _arrow(lesson_diff) + " к прошлому месяцу)"
+            lines.append(lesson_line)
+            if cur["not_held"]:
+                lines.append("⛔ Не провели урок ни разу: " + ", ".join(cur["not_held"]))
+
+            lines.append("")
+            task_line = "📝 Сдачи заданий: " + str(cur["task_count"]) + " сдано"
+            if task_diff_pct is not None:
+                task_line += " (" + _arrow(task_diff_pct, "%") + " к прошлому месяцу)"
+            lines.append(task_line)
+            if task_prev_covered:
+                lines.append("")
+                lines.append("📈 По группам (месяц к месяцу):")
+                lines.extend(_group_task_diff_lines(cur["group_tasks"], prev["group_tasks"]))
+
+            lines.append("")
+            if cur["voice_pct"] is not None:
+                voice_line = "🎙 Проверка таджвида: " + str(cur["voice_pct"]) + "% голосовых проверено"
+                if voice_diff_pct is not None:
+                    voice_line += " (" + _arrow(voice_diff_pct, " п.п.") + " к прошлому месяцу)"
+                lines.append(voice_line)
+            if cur["worst_review"]:
+                worst_str = ", ".join(t + " — " + str(p) + "%" for t, p in cur["worst_review"])
+                lines.append("Меньше всего проверено: " + worst_str)
+
+            good, bad = [], []
+            if lesson_diff is not None and lesson_diff > 0:
+                good.append("больше групп проводят уроки")
+            elif lesson_diff is not None and lesson_diff < 0:
+                bad.append("меньше групп проводят уроки")
+            if task_diff_pct is not None and task_diff_pct > 0:
+                good.append("выросли сдачи заданий")
+            elif task_diff_pct is not None and task_diff_pct < 0:
+                bad.append("просели сдачи заданий")
+            if voice_diff_pct is not None and voice_diff_pct > 0:
+                good.append("чаще проверяете таджвид")
+            elif voice_diff_pct is not None and voice_diff_pct < 0:
+                bad.append("просела проверка таджвида")
+
+            lines.append("")
+            if good and bad:
+                lines.append("📌 Вывод: " + ", ".join(good) + " — но " + ", ".join(bad))
+            elif bad:
+                lines.append("📌 Вывод: " + ", ".join(bad) + " — обратите внимание")
+            elif good:
+                lines.append("📌 Вывод: " + ", ".join(good) + " — держите темп")
+            else:
+                lines.append("📌 Вывод: без изменений к прошлому месяцу")
+
+            await send_message(_SCALING_CHAT_ID, "\n".join(lines))
+    except Exception as e:
+        log.error("monthly_ops_report error: %s", e)
+
+    set_setting("ops_report_month", month_key)
+
+
 # ── Сводка за неделю для «Тадаббур» (вт 12:00) — командный итог для студентов ──
 # Отдельно от weekly_ops_report (устазам, операционные метрики) — тут только то,
 # что имеет смысл для самих студентов: совокупная сдача + примеры для подражания.
@@ -412,11 +558,12 @@ async def weekly_ops_report():
 # Закрытие — аят/хадис без AI: берём кешированный перевод, без него — оригинал.
 
 _TADABBUR_STREAK_THRESHOLD = 7
+_TADABBUR_MONTHLY_STREAK_THRESHOLD = 21
 
 
-def _full_week_students(last_monday, last_sunday):
+def _full_period_students(period_start, period_end):
     my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
-    days = [(last_monday + timedelta(days=i)).isoformat() for i in range(7)]
+    days = [(period_start + timedelta(days=i)).isoformat() for i in range((period_end - period_start).days + 1)]
     names = []
     for group in get_all_groups():
         if (group["group_type"] or "relaxed") == "tadabbur":
@@ -509,8 +656,9 @@ async def weekly_tadabbur_summary():
             task_count += task_n
 
         if task_count > 0:
-            full_week_names = _full_week_students(last_monday, last_sunday)
+            full_week_names = _full_period_students(last_monday, last_sunday)
             streak_leaders = _streak_leaders(str(last_sunday), _TADABBUR_STREAK_THRESHOLD)
+            top_students = _top_students_by_points(str(last_monday), str(last_sunday), 10)
 
             date_range = last_monday.strftime("%d.%m") + "–" + last_sunday.strftime("%d.%m.%Y")
             lines = ["📊 Итоги недели — вся община (" + date_range + ")", ""]
@@ -526,6 +674,14 @@ async def weekly_tadabbur_summary():
                 lines.append("🔥 Держат планку (" + str(_TADABBUR_STREAK_THRESHOLD) + "+ дней подряд):")
                 lines.extend("— " + n + " — " + str(d) + " " + _day_word(d) for n, d in streak_leaders)
 
+            if top_students:
+                lines.append("")
+                lines.append("🏆 Топ-10 недели:")
+                lines.extend(
+                    str(i + 1) + ". " + n + " — " + str(p) + " баллов"
+                    for i, (n, p) in enumerate(top_students)
+                )
+
             verse = await _closing_verse()
             if verse:
                 lines.append("")
@@ -536,6 +692,73 @@ async def weekly_tadabbur_summary():
         log.error("weekly_tadabbur_summary error: %s", e)
 
     set_setting("tadabbur_summary_week", week_key)
+
+
+# ── Сводка за месяц для «Тадаббур» (1-е число) — подбадривающая, для студентов ─
+
+async def monthly_tadabbur_summary():
+    tadabbur = get_tadabbur_group()
+    if not tadabbur:
+        return
+    now = _now()
+    first_this_month = now.date().replace(day=1)
+    last_prev_month = first_this_month - timedelta(days=1)
+    first_prev_month = last_prev_month.replace(day=1)
+    month_key = first_prev_month.isoformat()
+
+    if get_setting("tadabbur_summary_month") == month_key:
+        return
+
+    try:
+        task_count = 0
+        for group in get_all_groups():
+            if (group["group_type"] or "relaxed") == "tadabbur":
+                continue
+            with db() as c:
+                task_n = c.execute(
+                    "SELECT COUNT(*) as n FROM score_events"
+                    " WHERE group_id=? AND category='task' AND date>=? AND date<=?",
+                    (group["id"], str(first_prev_month), str(last_prev_month))
+                ).fetchone()["n"]
+            task_count += task_n
+
+        if task_count > 0:
+            full_month_names = _full_period_students(first_prev_month, last_prev_month)
+            streak_leaders = _streak_leaders(str(last_prev_month), _TADABBUR_MONTHLY_STREAK_THRESHOLD)
+            top_students = _top_students_by_points(str(first_prev_month), str(last_prev_month), 10)
+
+            month_label = first_prev_month.strftime("%m.%Y")
+            lines = ["📊 Итоги месяца — вся община (" + month_label + ")", ""]
+            lines.append("Вместе за месяц сдано " + str(task_count) + " заданий 🤲")
+
+            if full_month_names:
+                lines.append("")
+                lines.append("🌟 Примеры месяца (сдавали всё каждый день весь месяц):")
+                lines.extend("— " + n for n in full_month_names)
+
+            if streak_leaders:
+                lines.append("")
+                lines.append("🔥 Держат планку (" + str(_TADABBUR_MONTHLY_STREAK_THRESHOLD) + "+ дней подряд):")
+                lines.extend("— " + n + " — " + str(d) + " " + _day_word(d) for n, d in streak_leaders)
+
+            if top_students:
+                lines.append("")
+                lines.append("🏆 Топ-10 месяца:")
+                lines.extend(
+                    str(i + 1) + ". " + n + " — " + str(p) + " баллов"
+                    for i, (n, p) in enumerate(top_students)
+                )
+
+            verse = await _closing_verse()
+            if verse:
+                lines.append("")
+                lines.append(verse)
+
+            await send_message(tadabbur["chat_id"], "\n".join(lines))
+    except Exception as e:
+        log.error("monthly_tadabbur_summary error: %s", e)
+
+    set_setting("tadabbur_summary_month", month_key)
 
 
 # ── Программа обучения: нахв/таджвид по частям, с одобрением устаза ───────────
@@ -1073,6 +1296,9 @@ async def scheduler():
                 await maybe_run("voice_review_report", voice_review_report)
                 if wd in (0, 1):
                     await maybe_run("weekly_ops_report", weekly_ops_report)
+                if d in (1, 2):
+                    await maybe_run("monthly_ops_report", monthly_ops_report)
+                    await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif wd == 1 and h == 12 and m == 0:
