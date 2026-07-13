@@ -1041,6 +1041,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             if not has_attendance_this_week(s_self["id"], group_id):
                 add_bonus(s_self["id"], group_id, get_date(), 5, "attendance", "online")
                 await send_message(chat_id, T("present", glang, name=s_self["name"]))
+        elif is_group_admin(phone, group_id):
+            # Устаз отмечает, что урок состоялся, даже если ни один студент не отметился —
+            # без бонусных баллов, только факт для еженедельного отчёта (scheduler._week_ops_stats)
+            ustaz = find_user_by_phone(phone)
+            if ustaz:
+                add_bonus(ustaz["id"], group_id, get_date(), 0, "attendance", "ustaz")
+                await send_message(chat_id, T("lesson_marked", glang))
         return
 
     s = find_by_phone(phone, group_id)

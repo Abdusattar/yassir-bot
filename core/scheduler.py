@@ -237,6 +237,19 @@ async def voice_review_report():
 _WORST_REVIEW_COUNT = 3  # сколько групп с самым низким % проверки показывать (реальные цифры, без порога)
 
 
+def _metric_tracked_since(table, category=None):
+    """Самая ранняя дата записи по метрике — чтобы не сравнивать с неделей,
+    когда трекинга этой метрики ещё не существовало (даёт ложный «провал/рост»)."""
+    with db() as c:
+        if category:
+            row = c.execute(
+                "SELECT MIN(date) as d FROM " + table + " WHERE category=?", (category,)
+            ).fetchone()
+        else:
+            row = c.execute("SELECT MIN(date) as d FROM " + table).fetchone()
+    return row["d"]
+
+
 def _week_ops_stats(start, end):
     lesson_groups, not_held = 0, []
     task_count = 0
@@ -312,22 +325,33 @@ async def weekly_ops_report():
         cur = _week_ops_stats(str(last_monday), str(last_sunday))
         prev = _week_ops_stats(str(prev_monday), str(prev_sunday))
 
+        # Сравнение с прошлой неделей показываем только если трекинг метрики
+        # существовал всю ту неделю целиком — иначе «просело/выросло» будет
+        # артефактом недавно появившейся фичи, а не реальной динамикой.
+        prev_start = str(prev_monday)
+        lesson_since = _metric_tracked_since("score_events", "attendance")
+        task_since = _metric_tracked_since("score_events", "task")
+        voice_since = _metric_tracked_since("voice_submissions")
+        lesson_prev_covered = lesson_since is not None and lesson_since <= prev_start
+        task_prev_covered = task_since is not None and task_since <= prev_start
+        voice_prev_covered = voice_since is not None and voice_since <= prev_start
+
         if cur["total_groups"] > 0:
-            lesson_diff = cur["lesson_groups"] - prev["lesson_groups"]
+            lesson_diff = cur["lesson_groups"] - prev["lesson_groups"] if lesson_prev_covered else None
             task_diff_pct = (
                 round(100 * (cur["task_count"] - prev["task_count"]) / prev["task_count"])
-                if prev["task_count"] > 0 else None
+                if task_prev_covered and prev["task_count"] > 0 else None
             )
             voice_diff_pct = (
                 cur["voice_pct"] - prev["voice_pct"]
-                if cur["voice_pct"] is not None and prev["voice_pct"] is not None else None
+                if voice_prev_covered and cur["voice_pct"] is not None and prev["voice_pct"] is not None else None
             )
 
             date_range = last_monday.strftime("%d.%m") + "–" + last_sunday.strftime("%d.%m.%Y")
             lines = ["📊 Итоги недели — " + date_range, ""]
 
             lesson_line = "🕌 Уроки: " + str(cur["lesson_groups"]) + "/" + str(cur["total_groups"]) + " групп провели урок"
-            if lesson_diff != 0:
+            if lesson_diff is not None and lesson_diff != 0:
                 lesson_line += " (" + _arrow(lesson_diff) + " к прошлой неделе)"
             lines.append(lesson_line)
             if cur["not_held"]:
@@ -350,9 +374,9 @@ async def weekly_ops_report():
                 lines.append("Меньше всего проверено: " + worst_str)
 
             good, bad = [], []
-            if lesson_diff > 0:
+            if lesson_diff is not None and lesson_diff > 0:
                 good.append("больше групп провели урок")
-            elif lesson_diff < 0:
+            elif lesson_diff is not None and lesson_diff < 0:
                 bad.append("меньше групп провели урок")
             if task_diff_pct is not None and task_diff_pct > 0:
                 good.append("выросли сдачи заданий")
