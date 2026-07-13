@@ -19,7 +19,7 @@ from core.db import (
 )
 from config import SUPER_ADMIN_IDS
 from core.i18n import T, get_group_lang
-from core.tg import send_message
+from core.tg import send_message, ban_member, unban_member
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +78,16 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
 
     # Деактивируем студента в текущей группе
     deactivate_student(sid, group["id"])
+
+    # Физически убираем из исходного чата — иначе студент остаётся его участником
+    # и следующим же сообщением там может случайно снова стать активным студентом
+    # (дыра авторегистрации в handlers.py). Мягкий кик (ban+unban) — не блокирует
+    # навсегда, при желании сможет вернуться по инвайт-ссылке.
+    try:
+        await ban_member(chat_id, student["phone"])
+        await unban_member(chat_id, student["phone"])
+    except Exception as e:
+        log.error("Kick after transfer failed for student %s in %s: %s", sid, chat_id, e)
 
     # Целевая группа: явный fallback → иначе единственная tadabbur-группа профиля
     target_group = None
