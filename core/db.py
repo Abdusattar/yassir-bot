@@ -227,6 +227,10 @@ def _run_migrations(c):
     if "sent_at" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN sent_at TEXT")
 
+    ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
+    if "dm_ok" not in ucols:
+        c.execute("ALTER TABLE users ADD COLUMN dm_ok INTEGER DEFAULT 0")
+
     migrated = c.execute(
         "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
     ).fetchone()
@@ -1456,6 +1460,23 @@ def has_attendance_this_week(uid, group_id):
             " WHERE student_id=? AND group_id=? AND category='attendance' AND date>=?",
             (uid, group_id, week_start)
         ).fetchone() is not None
+
+
+def get_dm_ok(uid):
+    """Писал ли пользователь боту в личку хотя бы раз (значит, бот может ему туда писать)."""
+    with db() as c:
+        row = c.execute("SELECT dm_ok FROM users WHERE id=?", (uid,)).fetchone()
+    return bool(row and row["dm_ok"])
+
+
+def mark_dm_ok(uid):
+    with db() as c:
+        c.execute("UPDATE users SET dm_ok=1 WHERE id=? AND dm_ok=0", (uid,))
+
+
+def mark_dm_ok_by_phone(phone):
+    with db() as c:
+        c.execute("UPDATE users SET dm_ok=1 WHERE phone=? AND dm_ok=0", (phone,))
 
 
 # ── Formatting ─────────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ from core.db import (
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_skip_count_month, add_bonus,
-    has_attendance_this_week,
+    has_attendance_this_week, mark_dm_ok_by_phone,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -340,6 +340,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     is_group = is_group_chat(chat_id)
+
+    # Студент написал боту в личку хотя бы раз — значит, бот теперь может писать
+    # ему первым (Telegram запрещает боту инициировать диалог до этого момента)
+    if not is_group:
+        mark_dm_ok_by_phone(phone)
 
     # ── Личка устаза-рецензента программы: любое сообщение = одобрение ────────
     # Устаз не всегда ставит настоящую Telegram-реакцию — может ответить

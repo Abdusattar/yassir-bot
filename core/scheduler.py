@@ -12,7 +12,7 @@ from core.db import (
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, set_setting, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
-    get_group_admins,
+    get_group_admins, get_dm_ok,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
     get_next_part_to_publish, mark_curriculum_published
 )
@@ -767,6 +767,37 @@ async def personal_reminders():
             log.error("personal_reminders error in %s: %s", chat_id, e)
 
 
+# ── Напоминание подключить ЛС с ботом (08:00) ────────────────────────────────
+# Telegram не даёт боту написать студенту первым, пока тот сам не напишет боту
+# хотя бы раз (users.dm_ok). Без этого не работают личные напоминания и
+# предупреждения о пропусках. Единственный канал достучаться до таких студентов —
+# групповой чат, где бот уже состоит: публикуем ссылку-приглашение только для тех,
+# кто ещё не подключился; группа, где все уже подключены, ничего не получает.
+
+async def dm_connect_reminder():
+    me = await tg_call("getMe")
+    username = (me or {}).get("result", {}).get("username") if me else None
+    if not username:
+        log.error("dm_connect_reminder: getMe failed, skip")
+        return
+    link = "https://t.me/" + username + "?start=go"
+
+    for group in get_all_groups():
+        chat_id = group["chat_id"]
+        try:
+            pending = [s["name"] for s in get_students(group["id"]) if s["phone"] and not get_dm_ok(s["id"])]
+            if not pending:
+                continue
+            await send_message(
+                chat_id,
+                "🔔 " + ", ".join(pending) + " — чтобы бот мог присылать личные "
+                "напоминания и предупреждения, перейди по ссылке и нажми Start (один раз):\n" + link
+            )
+            await asyncio.sleep(1)
+        except Exception as e:
+            log.error("dm_connect_reminder error in %s: %s", chat_id, e)
+
+
 # ── Вечерний отчёт (20:00) ────────────────────────────────────────────────────
 
 async def evening_report():
@@ -1046,8 +1077,10 @@ async def scheduler():
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif wd == 1 and h == 12 and m == 0:
                 await maybe_run("weekly_tadabbur_summary", weekly_tadabbur_summary)
-            elif wd == 3 and h == 8 and m == 0:
-                await maybe_run("publish_curriculum_parts", publish_curriculum_parts)
+            elif h == 8 and m == 0:
+                await maybe_run("dm_connect_reminder", dm_connect_reminder)
+                if wd == 3:
+                    await maybe_run("publish_curriculum_parts", publish_curriculum_parts)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
             elif h == 20 and m == 30:
