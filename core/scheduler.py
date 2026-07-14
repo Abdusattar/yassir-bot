@@ -1006,6 +1006,8 @@ async def dm_connect_reminder():
     link = "https://t.me/" + username + "?start=go"
 
     for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
         chat_id = group["chat_id"]
         try:
             pending = [s["name"] for s in get_students(group["id"]) if s["phone"] and not get_dm_ok(s["id"])]
