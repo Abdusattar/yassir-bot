@@ -12,7 +12,7 @@ from core.db import (
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, set_setting, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
-    get_group_admins, get_dm_ok,
+    get_group_admins, get_dm_ok, get_learning_group,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
     get_next_part_to_publish, mark_curriculum_published
 )
@@ -335,7 +335,9 @@ def _top_students_by_points(start, end, limit=10):
     for r in rows:
         if my_id and r["phone"] == my_id:
             continue
-        result.append((r["name"], r["total_points"]))
+        group = get_learning_group(r["phone"])
+        group_title = group["title"] if group else "Тадаббур"
+        result.append((r["name"], r["total_points"], group_title))
         if len(result) >= limit:
             break
     return result
@@ -587,7 +589,7 @@ def _full_period_students(period_start, period_end):
                 continue
             day_counts = per_student.get(s["id"], {})
             if all(day_counts.get(d, 0) >= total_tasks for d in days):
-                names.append(s["name"])
+                names.append((s["name"], group["title"] or str(group["chat_id"])))
     return names
 
 
@@ -602,7 +604,7 @@ def _streak_leaders(anchor_date, threshold):
                 continue
             streak = get_streak_days(s["id"], anchor_date)
             if streak >= threshold:
-                result.append((s["name"], streak))
+                result.append((s["name"], streak, group["title"] or str(group["chat_id"])))
     result.sort(key=lambda x: -x[1])
     return result
 
@@ -667,19 +669,19 @@ async def weekly_tadabbur_summary():
             if full_week_names:
                 lines.append("")
                 lines.append("🌟 Примеры недели (сдавали всё всю неделю):")
-                lines.extend("— " + n for n in full_week_names)
+                lines.extend("— " + n + " (" + g + ")" for n, g in full_week_names)
 
             if streak_leaders:
                 lines.append("")
                 lines.append("🔥 Держат планку (" + str(_TADABBUR_STREAK_THRESHOLD) + "+ дней подряд):")
-                lines.extend("— " + n + " — " + str(d) + " " + _day_word(d) for n, d in streak_leaders)
+                lines.extend("— " + n + " (" + g + ") — " + str(d) + " " + _day_word(d) for n, d, g in streak_leaders)
 
             if top_students:
                 lines.append("")
                 lines.append("🏆 Топ-10 недели:")
                 lines.extend(
-                    str(i + 1) + ". " + n + " — " + str(p) + " баллов"
-                    for i, (n, p) in enumerate(top_students)
+                    str(i + 1) + ". " + n + " (" + g + ") — " + str(p) + " баллов"
+                    for i, (n, p, g) in enumerate(top_students)
                 )
 
             verse = await _closing_verse()
@@ -734,19 +736,19 @@ async def monthly_tadabbur_summary():
             if full_month_names:
                 lines.append("")
                 lines.append("🌟 Примеры месяца (сдавали всё каждый день весь месяц):")
-                lines.extend("— " + n for n in full_month_names)
+                lines.extend("— " + n + " (" + g + ")" for n, g in full_month_names)
 
             if streak_leaders:
                 lines.append("")
                 lines.append("🔥 Держат планку (" + str(_TADABBUR_MONTHLY_STREAK_THRESHOLD) + "+ дней подряд):")
-                lines.extend("— " + n + " — " + str(d) + " " + _day_word(d) for n, d in streak_leaders)
+                lines.extend("— " + n + " (" + g + ") — " + str(d) + " " + _day_word(d) for n, d, g in streak_leaders)
 
             if top_students:
                 lines.append("")
                 lines.append("🏆 Топ-10 месяца:")
                 lines.extend(
-                    str(i + 1) + ". " + n + " — " + str(p) + " баллов"
-                    for i, (n, p) in enumerate(top_students)
+                    str(i + 1) + ". " + n + " (" + g + ") — " + str(p) + " баллов"
+                    for i, (n, p, g) in enumerate(top_students)
                 )
 
             verse = await _closing_verse()
