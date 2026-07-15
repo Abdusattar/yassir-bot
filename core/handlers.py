@@ -972,7 +972,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await send_message(chat_id, T("not_registered", glang))
             return
         streak = get_streak_days(s_check["id"])
-        skips_month = get_skip_count_month(s_check["id"])
+        skips_month = get_skip_count_month(s_check["id"], group_id)
         with db() as c:
             total_row = c.execute(
                 "SELECT COALESCE(SUM(points),0) as total FROM score_events WHERE student_id=?",

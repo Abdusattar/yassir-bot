@@ -672,9 +672,10 @@ def add_student(name, group_id, phone=None):
             "INSERT OR IGNORE INTO user_groups(user_id, group_id, role) VALUES(?,?,'student')",
             (uid, group_id)
         )
+        # active=1 + свежий joined_date — при (пере)входе в группу пропуски считаются заново
         c.execute(
-            "UPDATE user_groups SET active=1 WHERE user_id=? AND group_id=? AND role='student'",
-            (uid, group_id)
+            "UPDATE user_groups SET active=1, joined_date=? WHERE user_id=? AND group_id=? AND role='student'",
+            (get_date(), uid, group_id)
         )
         return uid
 
@@ -1062,12 +1063,26 @@ def _active_dates(uid, limit=400):
     return {r["date"] for r in rows}
 
 
-def get_days_since_last_report(uid):
+def _group_joined_date(uid, group_id):
+    """Дата (пере)активации студента в конкретной группе — граница отсчёта пропусков."""
+    with db() as c:
+        row = c.execute(
+            "SELECT joined_date FROM user_groups WHERE user_id=? AND group_id=? AND role='student'",
+            (uid, group_id)
+        ).fetchone()
+    return row["joined_date"] if row else None
+
+
+def get_days_since_last_report(uid, group_id=None):
     tz = pytz.timezone(TZ)
     with db() as c:
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
     dates = _active_dates(uid)
     added = user["added_date"] if user else None
+    if group_id:
+        joined = _group_joined_date(uid, group_id)
+        if joined and (not added or joined > added):
+            added = joined
     today = datetime.now(tz).date()
     missed = 0
     for i in range(400):
@@ -1099,7 +1114,7 @@ def get_consecutive_skips(uid):
     return skips
 
 
-def get_skip_count_month(uid):
+def get_skip_count_month(uid, group_id=None):
     tz = pytz.timezone(TZ)
     month_start = datetime.now(tz).replace(day=1).date().isoformat()
     today = datetime.now(tz).date()
@@ -1112,7 +1127,12 @@ def get_skip_count_month(uid):
             (uid, month_start)
         ).fetchall()
     dates = {r["date"] for r in rows}
-    start = max(month_start, user["added_date"])
+    added = user["added_date"]
+    if group_id:
+        joined = _group_joined_date(uid, group_id)
+        if joined and joined > added:
+            added = joined
+    start = max(month_start, added)
     skips = 0
     d = datetime.strptime(start, "%Y-%m-%d").date()
     while d < today:
@@ -1122,7 +1142,7 @@ def get_skip_count_month(uid):
     return skips
 
 
-def get_miss_count_last_30_days(uid):
+def get_miss_count_last_30_days(uid, group_id=None):
     tz = pytz.timezone(TZ)
     today = datetime.now(tz).date()
     with db() as c:
@@ -1131,6 +1151,10 @@ def get_miss_count_last_30_days(uid):
             return 30
     dates = _active_dates(uid, limit=60)
     added = user["added_date"]
+    if group_id:
+        joined = _group_joined_date(uid, group_id)
+        if joined and joined > added:
+            added = joined
     misses = 0
     days_checked = 0
     for i in range(30):

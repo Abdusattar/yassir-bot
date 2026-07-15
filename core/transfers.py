@@ -50,8 +50,8 @@ async def _check_group_for_transfers(group, gtype):
         if not student["phone"]:
             continue
         try:
-            days_absent = get_days_since_last_report(student["id"])
-            month_skips = get_skip_count_month(student["id"])
+            days_absent = get_days_since_last_report(student["id"], group["id"])
+            month_skips = get_skip_count_month(student["id"], group["id"])
 
             if gtype == "pro":
                 if month_skips >= PRO_INACTIVE_DAYS:
@@ -64,7 +64,7 @@ async def _check_group_for_transfers(group, gtype):
             elif gtype == "relaxed":
                 if month_skips >= RELAXED_INACTIVE_DAYS:
                     await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang)
-                elif _qualifies_for_upgrade(student["id"]):
+                elif _qualifies_for_upgrade(student["id"], group["id"]):
                     await _suggest_upgrade(student, group, lang)
 
         except Exception as e:
@@ -123,8 +123,8 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     log.info("Student %s transferred from %s to tadabbur (reason=%s, count=%d)", name, chat_id, reason, count)
 
 
-def _qualifies_for_upgrade(sid):
-    misses = get_miss_count_last_30_days(sid)
+def _qualifies_for_upgrade(sid, group_id):
+    misses = get_miss_count_last_30_days(sid, group_id)
     return misses <= UPGRADE_MAX_MISSES
 
 

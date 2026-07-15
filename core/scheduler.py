@@ -939,7 +939,7 @@ async def individual_reminders():
             for s in get_students(group["id"]):
                 if not s["phone"]:
                     continue
-                missed = get_days_since_last_report(s["id"])
+                missed = get_days_since_last_report(s["id"], group["id"])
                 if missed >= 3:
                     msg = await ai.absent_motivation(s["name"], missed, glang, hadith=hadith, ayah=ayah)
                     if msg and len(msg) >= 30:
@@ -1073,11 +1073,11 @@ async def skip_warnings():
                 if not s["phone"]:
                     continue
                 if gtype == "pro":
-                    skips = get_skip_count_month(s["id"])
+                    skips = get_skip_count_month(s["id"], group["id"])
                     warn_threshold = 5
                     transfer_limit = 10
                 else:
-                    skips = get_skip_count_month(s["id"])
+                    skips = get_skip_count_month(s["id"], group["id"])
                     warn_threshold = 15
                     transfer_limit = 20
                 if skips >= warn_threshold:
