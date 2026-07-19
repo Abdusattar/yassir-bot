@@ -177,16 +177,18 @@ async def kick_unregistered():
             if str(uid) in SUPER_ADMIN_IDS or is_any_group_admin(str(uid)):
                 remove_unregistered(uid, chat_id)
                 continue
-            # Кик (ban + unban = мягкое удаление, может вернуться)
-            await ban_member(chat_id, uid)
-            await unban_member(chat_id, uid)
+            # Сначала сообщение — чтобы студент успел прочитать, пока ещё в группе,
+            # и только потом кик (ban + unban = мягкое удаление, может вернуться)
             if group:
                 await send_message(
                     chat_id,
-                    "👋 Участник не представился в течение " + str(UNREG_DAYS) + " дней и был удалён из группы.\n"
+                    "👋 Участник не представился в течение " + str(UNREG_DAYS) + " дней и сейчас будет удалён из группы.\n"
                     "Братья, кто хочет присоединиться к общему пространству Корана — добро пожаловать в Тадаббур:\n"
                     "👉 " + TADABBUR_INVITE
                 )
+                await asyncio.sleep(10)
+            await ban_member(chat_id, uid)
+            await unban_member(chat_id, uid)
             log.info("Kicked unregistered user %s from %s", uid, chat_id)
         except Exception as e:
             log.error("kick_unregistered error user=%s chat=%s: %s", uid, chat_id, e)
