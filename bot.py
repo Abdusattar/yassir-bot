@@ -18,7 +18,7 @@ from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
-from core.prep import handle_prep_callback, announce_prep_graduate_arrival
+from core.prep import announce_prep_graduate_arrival
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ async def main():
         try:
             resp = await tg_call(
                 "getUpdates",
-                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "callback_query", "message_reaction"]},
+                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "message_reaction"]},
                 timeout=40
             )
             if not resp or not resp.get("ok"):
@@ -124,11 +124,6 @@ async def main():
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
                                 log.info("chat_member: greeting new user %s in chat %s", uid, chat_id)
                                 await send_message(chat_id, greeting + T("ask_name", glang))
-                    continue
-
-                cq = upd.get("callback_query")
-                if cq:
-                    asyncio.create_task(handle_prep_callback(cq))
                     continue
 
                 mr = upd.get("message_reaction")

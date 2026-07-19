@@ -3,7 +3,8 @@
 
 Проверка идёт ежедневно по каждому активному студенту prep:
   ≥5 дней с отчётами (в любой момент, не дожидаясь 14 дней) →
-                        поздравление + выбор relaxed-группы (ky/ru) → ссылка в личку.
+                        поздравление + ссылка на relaxed-группу (всегда ru,
+                        выбор языка убран — 19.07.2026 решение пользователя).
                         Предложение отправляется один раз (метится add_bonus
                         category='prep_offer'), повторно не спамим.
                         Из prep деактивируется только когда студент подтверждённо
@@ -19,20 +20,17 @@ import logging
 
 from core.db import (
     db, get_prep_students_active, count_report_days_since, add_bonus,
-    get_relaxed_groups_by_lang, get_group_tasks,
+    get_relaxed_groups_by_lang,
     add_prep_graduate, pop_prep_graduate,
     get_tadabbur_group, add_student,
 )
 from core.i18n import T, get_group_lang
-from core.tg import send_message, tg_call, ban_member, unban_member
+from core.tg import send_message, ban_member, unban_member
 
 log = logging.getLogger(__name__)
 
 PREP_DAYS = 14
 PREP_MIN_DAYS = 5
-
-# Ожидающие выбора языка: {phone: {group_id, name, glang, joined_date}}
-_pending_lang_choice: dict = {}
 
 
 async def check_prep_students():
@@ -49,17 +47,25 @@ async def check_prep_students():
 
         if days_done >= PREP_MIN_DAYS:
             if _has_prep_offer(s["id"], group_id):
-                continue  # уже предлагали выбор группы, ждём решения студента
+                continue  # уже предлагали переход, ждём подтверждённого вступления
+            groups = get_relaxed_groups_by_lang("ru")
+            if not groups:
+                log.error("prep check: no ru relaxed group with invite_link available (student=%s)", s["name"])
+                continue
+            target = groups[0]
             add_bonus(s["id"], group_id, joined, 0, "prep_offer")
-            _pending_lang_choice[uid] = {
-                "group_id": group_id,
-                "chat_id": s["chat_id"],
-                "name": s["name"],
-                "glang": glang,
-                "joined_date": joined,
-            }
-            await _send_choice(uid, s["name"], days_done, glang)
-            log.info("prep check: student=%s days_done=%d → offer sent (elapsed=%.1f)", s["name"], days_done, elapsed)
+            await send_message(uid, T("prep_congrats", glang, name=s["name"], days=days_done))
+            await send_message(uid, T("prep_group_link", glang, title=target["title"], link=target["invite_link"]))
+            # Из prep не убираем и никуда не объявляем прямо сейчас — только когда
+            # студент реально вступит в целевую группу (announce_prep_graduate_arrival).
+            # Так студент не потеряется, если ссылкой не воспользуется.
+            add_prep_graduate(uid, target["id"], s["name"], group_id, s["chat_id"])
+            # Страховка: сразу добавляем в Тадаббур на случай, если ссылкой
+            # так и не воспользуется — чтобы не остаться совсем без группы.
+            tadabbur = get_tadabbur_group()
+            if tadabbur:
+                add_student(s["name"], tadabbur["id"], uid)
+            log.info("prep check: student=%s days_done=%d → assigned to %s (elapsed=%.1f)", s["name"], days_done, target["title"], elapsed)
         elif elapsed >= PREP_DAYS:
             _deactivate_from_prep(s["id"], group_id)
             await send_message(uid, T("prep_failed", glang, name=s["name"], days=days_done))
@@ -145,58 +151,6 @@ async def send_prep_reminders():
                 log.warning("prep reminder group=%s error: %s", chat_id, e)
 
 
-async def handle_prep_callback(callback_query):
-    """
-    Обрабатывает нажатие inline-кнопки выбора языка группы.
-    data: 'prep_lang:ky' или 'prep_lang:ru'
-    """
-    cq_id = callback_query.get("id")
-    data = callback_query.get("data", "")
-    user = callback_query.get("from", {})
-    uid = str(user.get("id", ""))
-
-    if not data.startswith("prep_lang:"):
-        return False
-
-    lang_choice = data.split(":")[1]
-    pending = _pending_lang_choice.get(uid)
-
-    await tg_call("answerCallbackQuery", {"callback_query_id": cq_id})
-
-    if not pending:
-        return True
-
-    glang = pending["glang"]
-    name = pending["name"]
-    group_id = pending["group_id"]
-    from_chat_id = pending["chat_id"]
-
-    groups = get_relaxed_groups_by_lang(lang_choice)
-    if not groups:
-        await send_message(uid, T("prep_no_group", glang))
-        return True
-
-    target = groups[0]
-    del _pending_lang_choice[uid]
-
-    await send_message(uid, T("prep_group_link", glang,
-                              title=target["title"], link=target["invite_link"]))
-
-    # Из prep не убираем и никуда не объявляем прямо сейчас — только когда
-    # студент реально вступит в целевую группу (см. announce_prep_graduate_arrival).
-    # Так студент не потеряется, если ссылкой не воспользуется.
-    add_prep_graduate(uid, target["id"], name, group_id, from_chat_id)
-
-    # Страховка: сразу добавляем в Тадаббур на случай, если ссылкой на целевую
-    # группу так и не воспользуется — чтобы не остаться совсем без группы.
-    tadabbur = get_tadabbur_group()
-    if tadabbur:
-        add_student(name, tadabbur["id"], uid)
-
-    log.info("prep graduate pending: %s → group=%s (%s), ждём подтверждения вступления", name, target["title"], lang_choice)
-    return True
-
-
 async def announce_prep_graduate_arrival(chat_id, group_id, phone):
     """Вызывается когда известный студент вступает в группу по инвайт-ссылке.
     Если это подтверждённый выпускник prep — деактивирует его в старой группе
@@ -222,21 +176,6 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
         log.warning("prep graduate old-group announce failed: %s", e)
 
     log.info("prep graduate confirmed: %s arrived in group=%s", rec["name"], group_id)
-
-
-async def _send_choice(uid, name, days_done, glang):
-    text = T("prep_congrats", glang, name=name, days=days_done)
-    buttons = {
-        "inline_keyboard": [[
-            {"text": T("prep_link_ky", glang), "callback_data": "prep_lang:ky"},
-            {"text": T("prep_link_ru", glang), "callback_data": "prep_lang:ru"},
-        ]]
-    }
-    await tg_call("sendMessage", {
-        "chat_id": uid,
-        "text": text,
-        "reply_markup": buttons,
-    })
 
 
 def _has_prep_offer(user_id, group_id):
