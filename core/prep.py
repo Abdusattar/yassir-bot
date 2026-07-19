@@ -10,6 +10,10 @@
                         вступит в целевую группу (announce_prep_graduate_arrival) —
                         чтобы не потерять его, если ссылкой не воспользуется.
   <5 дней за 14 дней   → остаётся в Тадаббуре, деактивируется из prep
+                        и физически кикается (мягко, ban+unban) из чата —
+                        иначе дыра авторегистрации: следующим же сообщением
+                        в этом чате студент молча вернётся активным (было
+                        реальным инцидентом, см. wiki/prep_group.md).
 """
 import logging
 
@@ -20,7 +24,7 @@ from core.db import (
     get_tadabbur_group, add_student,
 )
 from core.i18n import T, get_group_lang
-from core.tg import send_message, tg_call
+from core.tg import send_message, tg_call, ban_member, unban_member
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +63,12 @@ async def check_prep_students():
         elif elapsed >= PREP_DAYS:
             _deactivate_from_prep(s["id"], group_id)
             await send_message(uid, T("prep_failed", glang, name=s["name"], days=days_done))
-            log.info("prep check: student=%s days_done=%d < %d after %d days → failed", s["name"], days_done, PREP_MIN_DAYS, PREP_DAYS)
+            try:
+                await ban_member(s["chat_id"], uid)
+                await unban_member(s["chat_id"], uid)
+            except Exception as e:
+                log.error("prep fail kick error student=%s chat=%s: %s", s["name"], s["chat_id"], e)
+            log.info("prep check: student=%s days_done=%d < %d after %d days → failed, kicked", s["name"], days_done, PREP_MIN_DAYS, PREP_DAYS)
 
 
 async def send_prep_reminders():
