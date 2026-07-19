@@ -63,6 +63,7 @@ async def check_prep_students():
         elif elapsed >= PREP_DAYS:
             _deactivate_from_prep(s["id"], group_id)
             await send_message(uid, T("prep_failed", glang, name=s["name"], days=days_done))
+            await send_message(s["chat_id"], T("prep_failed_group", glang, name=s["name"], days=days_done))
             try:
                 await ban_member(s["chat_id"], uid)
                 await unban_member(s["chat_id"], uid)
