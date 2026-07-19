@@ -22,7 +22,7 @@ from core.db import (
     db, get_prep_students_active, count_report_days_since, add_bonus,
     get_relaxed_groups_by_lang,
     add_prep_graduate, pop_prep_graduate,
-    get_tadabbur_group, add_student,
+    get_tadabbur_group, add_student, find_by_phone,
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member
@@ -68,7 +68,15 @@ async def check_prep_students():
             log.info("prep check: student=%s days_done=%d → assigned to %s (elapsed=%.1f)", s["name"], days_done, target["title"], elapsed)
         elif elapsed >= PREP_DAYS:
             _deactivate_from_prep(s["id"], group_id)
-            await send_message(uid, T("prep_failed", glang, name=s["name"], days=days_done))
+            # Гарантируем, что "остаёшься в Тадаббуре" — правда, а не просто текст
+            tadabbur = get_tadabbur_group()
+            already_in_tadabbur = tadabbur and find_by_phone(uid, tadabbur["id"])
+            if tadabbur and not already_in_tadabbur:
+                add_student(s["name"], tadabbur["id"], uid)
+            fail_text = T("prep_failed", glang, name=s["name"], days=days_done)
+            if tadabbur and not already_in_tadabbur and tadabbur["invite_link"]:
+                fail_text += "\n\n👉 " + tadabbur["invite_link"]
+            await send_message(uid, fail_text)
             await send_message(s["chat_id"], T("prep_failed_group", glang, name=s["name"], days=days_done))
             try:
                 await ban_member(s["chat_id"], uid)
