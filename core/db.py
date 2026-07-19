@@ -1566,7 +1566,7 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None, submi
 
 
 def get_period_winner(group_id, days):
-    start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days)).isoformat()
+    start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days - 1)).isoformat()
     with db() as c:
         return c.execute("""
             SELECT u.name, COALESCE(SUM(e.points),0) as points
@@ -1579,7 +1579,7 @@ def get_period_winner(group_id, days):
 
 
 def format_period_report(group_id, group_title, group_tasks, days):
-    start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days)).isoformat()
+    start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days - 1)).isoformat()
     label = "неделю" if days == 7 else ("месяц" if days == 30 else ("год" if days == 365 else str(days) + " дн."))
     with db() as c:
         students = c.execute("""
