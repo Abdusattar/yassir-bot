@@ -148,10 +148,10 @@ async def _suggest_upgrade(student, group, lang):
     log.info("Upgrade suggested for student %s from group %s", name, chat_id)
 
 
-# ── Кик незарегистрированных через 14 дней ───────────────────────────────────
+# ── Кик незарегистрированных через 7 дней ────────────────────────────────────
 
 TADABBUR_INVITE = "https://t.me/+8dP2yljXPtJmM2Ey"
-UNREG_DAYS = 14
+UNREG_DAYS = 7
 
 
 async def kick_unregistered():

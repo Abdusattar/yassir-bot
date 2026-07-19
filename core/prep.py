@@ -1,17 +1,20 @@
 """
 Логика подготовительной группы (group_type='prep').
 
-14 дней с момента вступления:
-  ≥5 дней с отчётами → поздравление + выбор relaxed-группы (ky/ru) → ссылка в личку.
+Проверка идёт ежедневно по каждому активному студенту prep:
+  ≥5 дней с отчётами (в любой момент, не дожидаясь 14 дней) →
+                        поздравление + выбор relaxed-группы (ky/ru) → ссылка в личку.
+                        Предложение отправляется один раз (метится add_bonus
+                        category='prep_offer'), повторно не спамим.
                         Из prep деактивируется только когда студент подтверждённо
                         вступит в целевую группу (announce_prep_graduate_arrival) —
                         чтобы не потерять его, если ссылкой не воспользуется.
-  <5 дней             → остаётся в Тадаббуре, деактивируется из prep
+  <5 дней за 14 дней   → остаётся в Тадаббуре, деактивируется из prep
 """
 import logging
 
 from core.db import (
-    db, get_prep_students_due, count_report_days_since,
+    db, get_prep_students_active, count_report_days_since, add_bonus,
     get_relaxed_groups_by_lang, get_group_tasks,
     add_prep_graduate, pop_prep_graduate,
     get_tadabbur_group, add_student,
@@ -30,7 +33,7 @@ _pending_lang_choice: dict = {}
 
 async def check_prep_students():
     """Вызывается ежедневно в 21:00 рядом с check_transfers."""
-    students = get_prep_students_due()
+    students = get_prep_students_active()
     for s in students:
         uid = s["phone"]
         group_id = s["group_id"]
@@ -38,8 +41,12 @@ async def check_prep_students():
         glang = _group_lang(group_id)
 
         days_done = count_report_days_since(s["id"], group_id, joined)
+        elapsed = s["elapsed"] or 0
 
         if days_done >= PREP_MIN_DAYS:
+            if _has_prep_offer(s["id"], group_id):
+                continue  # уже предлагали выбор группы, ждём решения студента
+            add_bonus(s["id"], group_id, joined, 0, "prep_offer")
             _pending_lang_choice[uid] = {
                 "group_id": group_id,
                 "chat_id": s["chat_id"],
@@ -48,11 +55,11 @@ async def check_prep_students():
                 "joined_date": joined,
             }
             await _send_choice(uid, s["name"], days_done, glang)
-        else:
+            log.info("prep check: student=%s days_done=%d → offer sent (elapsed=%.1f)", s["name"], days_done, elapsed)
+        elif elapsed >= PREP_DAYS:
             _deactivate_from_prep(s["id"], group_id)
             await send_message(uid, T("prep_failed", glang, name=s["name"], days=days_done))
-
-        log.info("prep check: student=%s days_done=%d min=%d", s["name"], days_done, PREP_MIN_DAYS)
+            log.info("prep check: student=%s days_done=%d < %d after %d days → failed", s["name"], days_done, PREP_MIN_DAYS, PREP_DAYS)
 
 
 async def send_prep_reminders():
@@ -220,6 +227,14 @@ async def _send_choice(uid, name, days_done, glang):
         "text": text,
         "reply_markup": buttons,
     })
+
+
+def _has_prep_offer(user_id, group_id):
+    with db() as c:
+        return c.execute(
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_offer'",
+            (user_id, group_id)
+        ).fetchone() is not None
 
 
 def _deactivate_from_prep(user_id, group_id):

@@ -1283,18 +1283,18 @@ def set_group_invite_link(group_id, link):
         c.execute("UPDATE groups SET invite_link=? WHERE id=?", (link, group_id))
 
 
-def get_prep_students_due():
-    """Студенты prep-групп у кого прошло ровно 14 дней с joined_date."""
+def get_prep_students_active():
+    """Все активные студенты prep-групп (проверка идёт по каждому ежедневно)."""
     with db() as c:
         return c.execute("""
             SELECT u.id, u.name, u.phone, g.id as group_id, g.chat_id, g.title,
-                   g.fallback_chat_id, ug.joined_date
+                   g.fallback_chat_id, ug.joined_date,
+                   julianday('now','localtime') - julianday(ug.joined_date) as elapsed
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
             JOIN groups g ON ug.group_id=g.id
             WHERE ug.role='student' AND ug.active=1
               AND g.group_type='prep'
-              AND julianday('now','localtime') - julianday(ug.joined_date) >= 14
         """).fetchall()
 
 
