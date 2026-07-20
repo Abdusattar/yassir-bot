@@ -10,11 +10,16 @@
                         Из prep деактивируется только когда студент подтверждённо
                         вступит в целевую группу (announce_prep_graduate_arrival) —
                         чтобы не потерять его, если ссылкой не воспользуется.
-  <5 дней за 14 дней   → остаётся в Тадаббуре, деактивируется из prep
+  <5 дней к дедлайну   → остаётся в Тадаббуре, деактивируется из prep
                         и физически кикается (мягко, ban+unban) из чата —
                         иначе дыра авторегистрации: следующим же сообщением
                         в этом чате студент молча вернётся активным (было
                         реальным инцидентом, см. wiki/prep_group.md).
+                        Дедлайн — 14 дней с joined_date, но если студент успел
+                        сдать хотя бы 1 отчёт (значит реально начал), даём ему
+                        +5 дней (до 19) — решение пользователя от 20.07.2026:
+                        не резать тех, кто уже втянулся, только за то, что не
+                        успел набрать все 5 дней ровно к 14-му дню.
 """
 import logging
 
@@ -31,6 +36,7 @@ log = logging.getLogger(__name__)
 
 PREP_DAYS = 14
 PREP_MIN_DAYS = 5
+PREP_EXTENSION_DAYS = 5  # доп. дни к дедлайну, если студент сдал ≥1 отчёт
 
 
 async def check_prep_students():
@@ -66,7 +72,10 @@ async def check_prep_students():
             if tadabbur:
                 add_student(s["name"], tadabbur["id"], uid)
             log.info("prep check: student=%s days_done=%d → assigned to %s (elapsed=%.1f)", s["name"], days_done, target["title"], elapsed)
-        elif elapsed >= PREP_DAYS:
+        else:
+            deadline = PREP_DAYS + (PREP_EXTENSION_DAYS if days_done >= 1 else 0)
+            if elapsed < deadline:
+                continue
             _deactivate_from_prep(s["id"], group_id)
             # Гарантируем, что "остаёшься в Тадаббуре" — правда, а не просто текст
             tadabbur = get_tadabbur_group()
@@ -83,7 +92,7 @@ async def check_prep_students():
                 await unban_member(s["chat_id"], uid)
             except Exception as e:
                 log.error("prep fail kick error student=%s chat=%s: %s", s["name"], s["chat_id"], e)
-            log.info("prep check: student=%s days_done=%d < %d after %d days → failed, kicked", s["name"], days_done, PREP_MIN_DAYS, PREP_DAYS)
+            log.info("prep check: student=%s days_done=%d < %d after %d days (deadline=%d) → failed, kicked", s["name"], days_done, PREP_MIN_DAYS, elapsed, deadline)
 
 
 async def send_prep_reminders():
@@ -121,10 +130,11 @@ async def send_prep_reminders():
         for s in students:
             days_done = count_report_days_since(s["id"], group_id, s["joined_date"])
             elapsed = int(s["elapsed"] or 0)
-            days_left = max(0, PREP_DAYS - elapsed)
             if days_done >= 1:
-                active_names.append((s["name"], days_done, days_left))
+                needed = max(0, PREP_MIN_DAYS - days_done)
+                active_names.append((s["name"], days_done, needed))
             else:
+                days_left = max(0, PREP_DAYS - elapsed)
                 passive_names.append((s["name"], days_left))
 
         lines = []
@@ -133,11 +143,17 @@ async def send_prep_reminders():
                 lines.append("✅ Тапшырып жатышкандар — мыкты, улантыңыздар:")
             else:
                 lines.append("✅ Сдают отчёты — так держать:")
-            for name, done, left in active_names:
+            for name, done, needed in active_names:
                 if glang == "ky":
-                    lines.append(f"  • {name} — {done} күн тапшырды, {left} күн калды")
+                    if needed > 0:
+                        lines.append(f"  • {name} — {done} күн тапшырды, өтүүгө {needed} күн калды")
+                    else:
+                        lines.append(f"  • {name} — {done} күн тапшырды, шарт аткарылды, өтүүнү күтөбүз")
                 else:
-                    lines.append(f"  • {name} — {done} дн. сдано, осталось {left} дн.")
+                    if needed > 0:
+                        lines.append(f"  • {name} — {done} дн. сдано, осталось {needed} дн. до перехода")
+                    else:
+                        lines.append(f"  • {name} — {done} дн. сдано, условие выполнено, ожидаем перехода")
 
         if passive_names:
             if lines:
