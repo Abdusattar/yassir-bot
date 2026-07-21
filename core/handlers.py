@@ -587,9 +587,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 if gtype_chk != "tadabbur":
                     existing_lg = get_learning_group(phone)
                     if existing_lg and existing_lg["id"] != group_id:
-                        await send_message(chat_id,
-                            existing_user["name"] + ", ты уже студент группы «" + (existing_lg["title"] or "") + "». "
-                            "Студент может быть только в одной учебной группе.")
+                        await send_message(chat_id, T("already_in_group", glang,
+                            name=existing_user["name"], title=existing_lg["title"] or ""))
                         return
                 add_student(existing_user["name"], group_id, phone)
                 await send_message(chat_id, T("registered_group", glang, name=existing_user["name"]))
@@ -636,9 +635,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     existing_lg = get_learning_group(phone)
                     if existing_lg and existing_lg["id"] != group_id:
                         clear_pending_name(phone, group_id)
-                        await send_message(chat_id,
-                            new_name + ", ты уже студент группы «" + (existing_lg["title"] or "") + "». "
-                            "Студент может быть только в одной учебной группе.")
+                        await send_message(chat_id, T("already_in_group", glang,
+                            name=new_name, title=existing_lg["title"] or ""))
                         return
                 # Привязать к существующему студенту без ID, иначе создать нового
                 existing_s = find_unlinked_by_name(new_name, group_id)
