@@ -214,10 +214,24 @@ Husary_64kbps/`).
 - **Кандидаты на будущее тестирование** (список моделей с аудио на входе,
   снят с `openrouter.ai/api/v1/models` 21.07.2026): `openai/gpt-audio`,
   `openai/gpt-audio-mini`, `mistralai/voxtral-small-24b-2507`,
-  `xiaomi/mimo-v2.5` (китайская, единственная найденная с явной поддержкой
-  аудио в списке — Qwen-аудио модели в списке OpenRouter не обнаружены на
-  этот момент), `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`
-  (бесплатная). Ни одна не протестирована.
+  `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (бесплатная). Ни одна
+  не протестирована.
+- **`xiaomi/mimo-v2.5` — протестирована, провалилась так же, как
+  `gemini-3.1-pro-preview`/`gemini-pro-latest`.** Числится с `audio` в
+  `input_modalities`, но в `reasoning`-трейсе прямым текстом: «I cannot
+  listen to audio files. I can only process text» — после чего сама
+  придумала фиктивную арабскую транскрипцию (никакого текста ей не
+  передавалось, только `input_audio`) и сравнивала её саму с собой.
+  `finish_reason: length` — не дописала. **Важный системный паттерн**: три
+  разные модели (3.1-preview, pro-latest, mimo) независимо показали одно и
+  то же — заявляют об отсутствии аудио и всё равно уверенно фантазируют
+  детали. Только `gemini-2.5-pro` (через `input_audio`) и `gemini-3.1-pro-
+  preview` (через `type: file`, один раз) показали реальное использование
+  аудио. Похоже, `input_audio` content-type на OpenRouter надёжно работает
+  только для давно обкатанных эндпоинтов, не для всех, кто заявляет
+  поддержку модальности в каталоге. Qwen-Audio/Omni и MiniMax с аудио на
+  входе на OpenRouter не найдены вообще (проверено 21.07 — только text/
+  image/video у всех Qwen и MiniMax моделей).
 - **`google/gemini-3.1-pro-preview` — retest с `type: file` вместо
   `input_audio`**, короткий промпт, дождаться выхода из preview или
   подтвердить стабильность повторными прогонами перед тем как доверять.
