@@ -1,6 +1,7 @@
 import os
 
 PROFILE = os.getenv("BOT_PROFILE", "male")  # "male" | "female"
+IS_FEMALE = PROFILE == "female"
 
 TELEGRAM_TOKEN = (
     os.getenv(f"TELEGRAM_TOKEN_{PROFILE.upper()}")

@@ -17,7 +17,7 @@ from core.db import (
     get_tadabbur_group, get_overdue_unregistered, remove_unregistered,
     find_by_phone, is_any_group_admin
 )
-from config import SUPER_ADMIN_IDS
+from config import SUPER_ADMIN_IDS, IS_FEMALE
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member
 
@@ -150,7 +150,6 @@ async def _suggest_upgrade(student, group, lang):
 
 # ── Кик незарегистрированных через 7 дней ────────────────────────────────────
 
-TADABBUR_INVITE = "https://t.me/+8dP2yljXPtJmM2Ey"
 UNREG_DAYS = 7
 
 
@@ -158,6 +157,7 @@ async def kick_unregistered():
     """Кикает из учебных групп тех, кто не зарегистрировался за 14 дней.
     Отправляет ссылку на тадаббур."""
     from core.tg import ban_member, unban_member
+    tadabbur = get_tadabbur_group()
     overdue = get_overdue_unregistered(UNREG_DAYS)
     for row in overdue:
         uid = row["user_id"]
@@ -180,12 +180,14 @@ async def kick_unregistered():
             # Сначала сообщение — чтобы студент успел прочитать, пока ещё в группе,
             # и только потом кик (ban + unban = мягкое удаление, может вернуться)
             if group:
-                await send_message(
-                    chat_id,
-                    "👋 Участник не представился в течение " + str(UNREG_DAYS) + " дней и сейчас будет удалён из группы.\n"
-                    "Братья, кто хочет присоединиться к общему пространству Корана — добро пожаловать в Тадаббур:\n"
-                    "👉 " + TADABBUR_INVITE
-                )
+                addr = "Сёстры" if IS_FEMALE else "Братья"
+                msg = "👋 Участник не представился в течение " + str(UNREG_DAYS) + " дней и сейчас будет удалён из группы."
+                if tadabbur and tadabbur["invite_link"]:
+                    msg += (
+                        "\n" + addr + ", кто хочет присоединиться к общему пространству Корана — добро пожаловать в Тадаббур:\n"
+                        "👉 " + tadabbur["invite_link"]
+                    )
+                await send_message(chat_id, msg)
                 await asyncio.sleep(10)
             await ban_member(chat_id, uid)
             await unban_member(chat_id, uid)

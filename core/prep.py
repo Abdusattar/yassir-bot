@@ -23,6 +23,7 @@
 """
 import logging
 
+from config import IS_FEMALE
 from core.db import (
     db, get_prep_students_active, count_report_days_since, add_bonus,
     get_relaxed_groups_by_lang,
@@ -190,7 +191,8 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
     new_title = _group_title(group_id)
 
     try:
-        await send_message(chat_id, T("prep_graduate_announce_new", new_glang, name=rec["name"]))
+        addr = "сёстры" if IS_FEMALE else "братья"
+        await send_message(chat_id, T("prep_graduate_announce_new", new_glang, name=rec["name"], addr=addr))
     except Exception as e:
         log.warning("prep graduate new-group announce failed: %s", e)
 

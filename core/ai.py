@@ -5,7 +5,7 @@ import aiohttp
 from datetime import datetime
 import pytz
 
-from config import OR_API_KEY, OR_URL, AI_MODEL, TZ, PROFILE
+from config import OR_API_KEY, OR_URL, AI_MODEL, TZ, PROFILE, IS_FEMALE
 
 _GEMINI_FLASH = "google/gemini-2.5-flash"
 _LANG_MODEL   = {"ky": _GEMINI_FLASH}
@@ -19,7 +19,7 @@ from core.content import PROJECT_INFO
 
 log = logging.getLogger(__name__)
 
-_IS_FEMALE = PROFILE == "female"
+_IS_FEMALE = IS_FEMALE
 
 _HUMAN_STYLE = (
     "STYLE: write like a real person in Telegram, not like an AI. "

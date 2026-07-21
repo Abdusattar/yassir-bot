@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytz
 
-from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID
+from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, IS_FEMALE
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
@@ -1110,8 +1110,6 @@ async def tadabbur_nasiha():
 
 # ── Приглашение в Тадаббур (10:00) ───────────────────────────────────────────
 
-TADABBUR_INVITE = "https://t.me/+8dP2yljXPtJmM2Ey"
-
 async def _sync_tadabbur_member(student, tadabbur):
     """Проверяет через Telegram API — реально ли студент в Тадаббур-группе.
     Если да — добавляет в user_groups и возвращает True."""
@@ -1151,12 +1149,15 @@ async def tadabbur_invite_reminder():
                     truly_missing.append(s)
             if not truly_missing:
                 continue
+            if not tadabbur["invite_link"]:
+                continue
             names = "\n".join("• " + s["name"] for s in truly_missing)
+            addr = "Сёстры" if IS_FEMALE else "Братья"
             msg = (
-                "📚 Братья, напоминаем! Присоединяйтесь к нашей общей группе "
+                "📚 " + addr + ", напоминаем! Присоединяйтесь к нашей общей группе "
                 "Тадаббур — пространство красоты и смыслов Корана, общих отчётов и объявлений 🌿\n\n"
                 "Ещё не в группе:\n" + names + "\n\n"
-                "👉 " + TADABBUR_INVITE
+                "👉 " + tadabbur["invite_link"]
             )
             await send_message(group["chat_id"], msg)
         except Exception as e:
