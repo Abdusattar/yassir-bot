@@ -1214,15 +1214,32 @@ async def tadabbur_invite_reminder():
                 continue
             if not tadabbur["invite_link"]:
                 continue
-            names = "\n".join("• " + s["name"] for s in truly_missing)
-            addr = "Сёстры" if IS_FEMALE else "Братья"
-            msg = (
-                "📚 " + addr + ", напоминаем! Присоединяйтесь к нашей общей группе "
+
+            personal_text = (
+                "📚 Напоминаем! Присоединяйтесь к нашей общей группе "
                 "Тадаббур — пространство красоты и смыслов Корана, общих отчётов и объявлений 🌿\n\n"
-                "Ещё не в группе:\n" + names + "\n\n"
                 "👉 " + tadabbur["invite_link"]
             )
-            await send_message(group["chat_id"], msg)
+            unreachable = []
+            for s in truly_missing:
+                sent = False
+                if s["phone"]:
+                    resp = await send_message(s["phone"], personal_text)
+                    sent = bool(resp and resp.get("ok"))
+                    await asyncio.sleep(0.3)
+                if not sent:
+                    unreachable.append(s)
+
+            if unreachable:
+                names = "\n".join("• " + s["name"] for s in unreachable)
+                addr = "Сёстры" if IS_FEMALE else "Братья"
+                msg = (
+                    "📚 " + addr + ", напоминаем! Присоединяйтесь к нашей общей группе "
+                    "Тадаббур — пространство красоты и смыслов Корана, общих отчётов и объявлений 🌿\n\n"
+                    "Ещё не в группе:\n" + names + "\n\n"
+                    "👉 " + tadabbur["invite_link"]
+                )
+                await send_message(group["chat_id"], msg)
         except Exception as e:
             log.error("tadabbur_invite_reminder error in %s: %s", group["chat_id"], e)
 
