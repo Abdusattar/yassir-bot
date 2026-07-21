@@ -29,3 +29,8 @@ AI_MODEL = os.getenv("AI_MODEL", "deepseek/deepseek-v4-flash")
 # Shadow mode: если задан SHADOW_CHAT_IDS — бот не отвечает в группах,
 # а пересылает ответы наблюдателям (через запятую: user_id или chat_id)
 SHADOW_CHAT_IDS = [s.strip() for s in os.getenv("SHADOW_CHAT_IDS", "").split(",") if s.strip()]
+
+# Группа устазов («Масштабирование») — куда шлём сводные отчёты (голосовые
+# проверки, операционные отчёты). Своя для каждого профиля (male/female).
+SCALING_CHAT_ID = os.getenv("SCALING_CHAT_ID", "")
+SCALING_INVITE_LINK = os.getenv("SCALING_INVITE_LINK", "")

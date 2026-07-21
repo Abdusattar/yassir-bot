@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytz
 
-from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, IS_FEMALE
+from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, IS_FEMALE, SCALING_CHAT_ID, SCALING_INVITE_LINK
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
@@ -170,10 +170,8 @@ async def morning_tadabbur_report():
 
 # ── Проверка голосовых сдач устазами (12:00, группа «Масштабирование») ───────
 
-# chat_id обновлён 04.07.2026 — группа была апгрейднута до супергруппы,
-# старый -5283697370 больше не годится для getChatAdministrators/exportChatInviteLink.
-_SCALING_CHAT_ID = "-1004387097146"
-_SCALING_INVITE_LINK = "https://t.me/+8IxbNN6MtjY3NDRi"
+_SCALING_CHAT_ID = SCALING_CHAT_ID
+_SCALING_INVITE_LINK = SCALING_INVITE_LINK
 _VOICE_REVIEW_CHAT_ID = _SCALING_CHAT_ID
 
 
@@ -187,6 +185,8 @@ def _format_sent_time(sent_at):
 
 
 async def voice_review_report():
+    if not _VOICE_REVIEW_CHAT_ID:
+        return
     # Смотрим позавчера, отчёт шлём в 07:00 — гарантирует минимум 24 часа
     # на проверку любой сдаче независимо от времени отправки.
     target_date = (datetime.now(pytz.timezone(TZ)) - timedelta(days=2)).date().isoformat()
@@ -356,6 +356,8 @@ def _arrow(diff, suffix=""):
 
 
 async def weekly_ops_report():
+    if not _SCALING_CHAT_ID:
+        return
     now = _now()
     week_monday = (now - timedelta(days=now.weekday())).date()
     last_monday = week_monday - timedelta(days=7)
@@ -457,6 +459,8 @@ async def weekly_ops_report():
 # ── Операционный отчёт за месяц (1-е число) — календарный месяц к предыдущему ──
 
 async def monthly_ops_report():
+    if not _SCALING_CHAT_ID:
+        return
     now = _now()
     first_this_month = now.date().replace(day=1)
     last_prev_month = first_this_month - timedelta(days=1)
@@ -850,6 +854,8 @@ async def publish_curriculum_parts():
 # это и есть источник, который реально читает is_group_admin().
 
 async def invite_missing_ustaz_to_scaling():
+    if not _SCALING_CHAT_ID:
+        return
     ustaz_ids = set()
     for group in get_all_groups():
         for phone in get_group_admins(group["id"]):
