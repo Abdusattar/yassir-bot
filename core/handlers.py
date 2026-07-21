@@ -580,6 +580,22 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if not is_group_admin(phone, group_id):
         s_reg = find_by_phone(phone, group_id)
         if not s_reg:
+            # Уже известен боту (зарегистрирован где-то ещё) — не спрашиваем имя заново
+            existing_user = find_user_by_phone(phone)
+            if existing_user:
+                gtype_chk = group["group_type"] or "relaxed"
+                if gtype_chk != "tadabbur":
+                    existing_lg = get_learning_group(phone)
+                    if existing_lg and existing_lg["id"] != group_id:
+                        await send_message(chat_id,
+                            existing_user["name"] + ", ты уже студент группы «" + (existing_lg["title"] or "") + "». "
+                            "Студент может быть только в одной учебной группе.")
+                        return
+                add_student(existing_user["name"], group_id, phone)
+                await send_message(chat_id, T("registered_group", glang, name=existing_user["name"]))
+                for ap in SUPER_ADMIN_IDS:
+                    await send_message(ap, "👤 " + existing_user["name"] + " авторегистрация (уже был известен) в «" + (group["title"] or str(chat_id)) + "»")
+                return
             if text.startswith("/"):
                 if is_pending_name(phone, group_id):
                     await send_message(chat_id, T("ask_name", glang))
