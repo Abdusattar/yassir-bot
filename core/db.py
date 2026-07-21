@@ -199,6 +199,19 @@ def init():
                 created_at TEXT DEFAULT (datetime('now'))
             );
             CREATE INDEX IF NOT EXISTS idx_cp_subject_order ON curriculum_parts(subject, order_index);
+
+            CREATE TABLE IF NOT EXISTS verify_log(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                checks TEXT NOT NULL,
+                submitted_text TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                flagged INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_vl_date ON verify_log(date);
         """)
         _run_migrations(c)
 
@@ -953,6 +966,28 @@ def get_voice_review_stats(group_id, date):
     return total, reviewed, unreviewed
 
 
+# ── Лог AI-проверок (муфрадат/таджвид/нахв) — для контроля качества ────────────
+
+def log_verify_check(student_id, group_id, checks, submitted_text, verdict, flagged, date):
+    with db() as c:
+        c.execute(
+            "INSERT INTO verify_log(student_id,group_id,checks,submitted_text,verdict,flagged,date)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (student_id, group_id, ", ".join(checks), submitted_text, verdict, int(flagged), date)
+        )
+
+
+def get_verify_log_for_date(date):
+    with db() as c:
+        return c.execute(
+            "SELECT vl.*, u.name as student_name, g.title as group_title FROM verify_log vl"
+            " JOIN users u ON u.id = vl.student_id"
+            " JOIN groups g ON g.id = vl.group_id"
+            " WHERE vl.date=? ORDER BY vl.id",
+            (date,)
+        ).fetchall()
+
+
 # ── Программа обучения (нахв/таджвид по частям, с одобрением устаза) ───────────
 
 def save_curriculum_part(subject, chapter, topic, part_number, part_total, order_index, content):
@@ -985,6 +1020,17 @@ def count_pending_curriculum_review(subject):
             (subject,)
         ).fetchone()
         return row["n"]
+
+
+def get_approved_curriculum_content(subject):
+    """Текст всех одобренных устазом частей по предмету (n/j), по порядку — для справочника AI-проверки."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT content FROM curriculum_parts WHERE subject=? AND approved_at IS NOT NULL"
+            " ORDER BY order_index",
+            (subject,)
+        ).fetchall()
+        return "\n\n".join(r["content"] for r in rows)
 
 
 def set_curriculum_review_message(part_id, chat_id, message_id):

@@ -14,7 +14,7 @@ from core.db import (
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
     get_group_admins, get_dm_ok, get_learning_group,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
-    get_next_part_to_publish, mark_curriculum_published
+    get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date
 )
 from core.tg import send_message, tg_call
 from core.i18n import T
@@ -226,6 +226,63 @@ async def voice_review_report():
         lines.append("Не проверено: " + ", ".join(names))
 
     await send_message(_VOICE_REVIEW_CHAT_ID, "\n".join(lines))
+
+
+# ── Отчёт по качеству AI-проверки муфрадат/таджвид/нахв (15:00) ──────────────
+# Временная фича по просьбе Абдусаттара (21.07.2026) — следить за качеством
+# _verify_and_reply (core/handlers.py), пока не появится уверенность, что ИИ
+# соблюдает правила («молчит на верно», не путает ح/خ и т.д.). Шлётся лично
+# ему, не через SUPER_ADMIN_IDS[0] — на женском боте первый суперадмин другой
+# человек, а отчёт нужен именно Абдусаттару, независимо от профиля.
+_VERIFY_REPORT_ADMIN_ID = "272581710"
+
+_CHECK_LABELS = [
+    ("tajweed", "таджвид"),
+    ("mufradat", "муфрадат"),
+    ("hadith", "хадис"),
+    ("grammar", "нахв"),
+    ("nahw", "нахв"),
+]
+
+
+def _check_labels(checks_str):
+    low = (checks_str or "").lower()
+    labels = []
+    for needle, label in _CHECK_LABELS:
+        if needle in low and label not in labels:
+            labels.append(label)
+    return "/".join(labels) or checks_str
+
+
+async def verify_quality_report():
+    rows = get_verify_log_for_date(get_date())
+    if not rows:
+        return
+
+    total = len(rows)
+    flagged = sum(1 for r in rows if r["flagged"])
+    correct = total - flagged
+
+    lines = [
+        "🔍 Проверка ИИ за " + get_date() + " — всего " + str(total)
+        + " (✅ верно " + str(correct) + ", ⚠️ ошибок " + str(flagged) + ")",
+        "",
+    ]
+    for i, r in enumerate(rows, 1):
+        mark = "⚠️" if r["flagged"] else "✅"
+        submitted = r["submitted_text"].strip().replace("\n", " ")
+        if len(submitted) > 150:
+            submitted = submitted[:150] + "…"
+        lines.append(
+            str(i) + ". " + mark + " " + r["student_name"] + " (" + _check_labels(r["checks"])
+            + ", " + r["group_title"] + ")"
+        )
+        lines.append("   Студент: " + submitted)
+        if r["flagged"]:
+            lines.append("   Бот: " + r["verdict"].strip().replace("\n", " "))
+        lines.append("")
+
+    await send_message(_VERIFY_REPORT_ADMIN_ID, "\n".join(lines).strip())
 
 
 # ── Операционный отчёт за неделю (пн 07:00, подстраховка вт 07:00, «Масштабирование») ──
@@ -1320,6 +1377,7 @@ async def scheduler():
                     await maybe_run("publish_curriculum_parts", publish_curriculum_parts)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
+                await maybe_run("verify_quality_report", verify_quality_report)
             elif h == 20 and m == 30:
                 await maybe_run("skip_warnings", skip_warnings)
             elif h == 21 and m == 0:

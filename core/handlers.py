@@ -26,7 +26,8 @@ from core.db import (
     save_voice_submission, mark_voice_reviewed,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
-    get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat
+    get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
+    get_approved_curriculum_content, log_verify_check
 )
 
 log = logging.getLogger(__name__)
@@ -199,6 +200,10 @@ def _build_reference(checks):
         if key and key not in seen:
             seen.add(key)
             parts.append(PROG_SECTIONS[key])
+            if key in ("j", "n"):
+                approved = get_approved_curriculum_content(key)
+                if approved:
+                    parts.append(approved)
     extra = get_knowledge()
     if extra:
         parts.append("\nДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ОТ УСТАЗА:")
@@ -207,7 +212,7 @@ def _build_reference(checks):
     return "\n".join(parts)
 
 
-async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks, glang="ru", message_id=None):
+async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks, glang="ru", message_id=None, student_id=None):
     try:
         system = (
             "Ты учитель Корана Ясир. Проверь ТОЛЬКО " + ", ".join(checks) + " в сообщении студента.\n\n"
@@ -294,7 +299,10 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             result = _re.sub(r"```[a-z]*\n?", "", result).strip().rstrip("`").strip()
             if result.startswith("[") or result.startswith("{"):
                 result = None
-        if result and "ВЕРНО" in result.upper()[:20]:
+        flagged = bool(result) and not ("ВЕРНО" in result.upper()[:20])
+        if result and student_id:
+            log_verify_check(student_id, group_id, checks, text, result, flagged, get_date())
+        if result and not flagged:
             pass  # всё верно — молчим, реагируем только на ошибки
         elif result:
             await send_message(chat_id, result, reply_to_message_id=message_id)
@@ -1157,7 +1165,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # Верификация только если есть арабский текст — иначе нечего проверять
         if _has_arabic(text):
             asyncio.create_task(_verify_and_reply(
-                chat_id, text, group["title"] or chat_id, phone, group_id, s["name"], checks, glang, message_id))
+                chat_id, text, group["title"] or chat_id, phone, group_id, s["name"], checks, glang, message_id, s["id"]))
 
     # ── Засчитываем отчёт ─────────────────────────────────────────────────────
     prev = get_today_report(s["id"], group_id)
