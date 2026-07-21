@@ -164,9 +164,9 @@ async def send_prep_reminders():
                 lines.append(f"⏳ Пока не сдавали — период короткий, нужно ≥5 дней для перехода:")
             for name, left in passive_names:
                 if glang == "ky":
-                    lines.append(f"  • {name} — {left} күн калды")
+                    lines.append(f"  • {name} — мөөнөткө {left} күн калды, тапшырууну баштаңыз")
                 else:
-                    lines.append(f"  • {name} — осталось {left} дн.")
+                    lines.append(f"  • {name} — осталось {left} дн. до дедлайна, начните сдавать")
 
         if lines:
             try:
