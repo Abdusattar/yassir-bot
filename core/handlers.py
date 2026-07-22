@@ -1,13 +1,14 @@
 import asyncio
 import logging
 import re
+import time
 
 from config import SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID
 from core.content import (
     TASK_KEYS, DEFAULT_TASKS, SHORT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
 from core.i18n import T, get_group_lang, LANG_NAMES, task_name, help_student, help_admin, lang_instruction
-from core.tg import send_message
+from core.tg import send_message, get_dm_start_link
 import core.ai as ai
 from core.db import (
     get_group, save_group, get_group_tasks, update_group_tasks, update_group_lang,
@@ -18,7 +19,7 @@ from core.db import (
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_skip_count_month, add_bonus,
-    has_attendance_this_week, mark_dm_ok_by_phone,
+    has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -27,7 +28,7 @@ from core.db import (
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
-    get_approved_curriculum_content, log_verify_check
+    get_published_curriculum_content, log_verify_check
 )
 
 log = logging.getLogger(__name__)
@@ -81,6 +82,101 @@ def _section_student(group_tasks, gtype, lang="ru"):
     return help_student(group_tasks, gtype, lang)
 
 
+async def _send_registered(chat_id, glang, name, phone, prefix=""):
+    """Сообщение по завершении регистрации: если студент ещё не жал Start в личке —
+    объясняем, что отчёты остаются в группе, а /help, /rating, /mystats и личные
+    напоминания теперь приходят в личку, и даём ссылку."""
+    if get_dm_ok_by_phone(phone):
+        await send_message(chat_id, prefix + T("registered_group", glang, name=name))
+        return
+    link = await get_dm_start_link()
+    await send_message(chat_id, prefix + T("registered_group_dm", glang, name=name, link=link or "https://t.me/"))
+
+
+async def _resolve_dm_target(phone, group_chat_id, glang):
+    """Куда слать ответ на команду: в личку, если вызвавший уже жал Start (dm_ok) —
+    неважно, студент это, устаз или суперадмин; иначе просим нажать Start в группе
+    (со ссылкой) и возвращаем None."""
+    if get_dm_ok_by_phone(phone):
+        return phone
+    link = await get_dm_start_link()
+    await send_message(group_chat_id, T("dm_start_needed", glang, link=link or "https://t.me/"))
+    return None
+
+
+async def _send_rating_to(target_chat_id, group, group_id, glang):
+    import pytz
+    from datetime import timedelta
+    from config import TZ
+    week_ago = (__import__('datetime').datetime.now(pytz.timezone(TZ)).date() - timedelta(days=7)).isoformat()
+    with db() as c:
+        rows = c.execute("""
+            SELECT u.name,
+                   COALESCE(SUM(e.points),0) as total,
+                   COUNT(DISTINCT CASE WHEN e.category='task' THEN e.date END) as days
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=?
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+            GROUP BY u.id ORDER BY total DESC
+        """, (group_id, week_ago, group_id)).fetchall()
+    medals = ["🥇", "🥈", "🥉"]
+    lines = [T("rating_header", glang, title=group["title"] or group["chat_id"])]
+    for i, r in enumerate(rows):
+        medal = medals[i] if i < 3 else str(i + 1) + "."
+        lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " " + T("rating_points", glang) + " (" + str(r["days"]) + " " + T("rating_days", glang) + ")")
+    await send_message(target_chat_id, "\n".join(lines))
+
+
+async def _send_mystats_to(target_chat_id, s_check, group, group_id, group_tasks, glang):
+    streak = get_streak_days(s_check["id"])
+    skips_month = get_skip_count_month(s_check["id"], group_id)
+    with db() as c:
+        total_row = c.execute(
+            "SELECT COALESCE(SUM(points),0) as total FROM score_events WHERE student_id=?",
+            (s_check["id"],)
+        ).fetchone()
+        days_row = c.execute(
+            "SELECT COUNT(DISTINCT date) as days FROM score_events"
+            " WHERE student_id=? AND category='task'",
+            (s_check["id"],)
+        ).fetchone()
+        rank_rows = c.execute("""
+            SELECT u.id, COALESCE(SUM(e.points),0) as grand
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            LEFT JOIN score_events e ON e.student_id=u.id AND e.group_id=?
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+            GROUP BY u.id ORDER BY grand DESC
+        """, (group_id, group_id)).fetchall()
+    total_score = total_row["total"] or 0
+    days_done = days_row["days"] or 0
+    rank = next((i + 1 for i, r in enumerate(rank_rows) if r["id"] == s_check["id"]), "?")
+    today_rep = get_today_report(s_check["id"], group_id)
+    today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
+    gtype = group["group_type"] or "relaxed"
+    limit_days = 14 if gtype == "pro" else 30
+    _month_names_ru = ["январе","феврале","марте","апреле","мае","июне",
+                       "июле","августе","сентябре","октябре","ноябре","декабре"]
+    from datetime import datetime as _dt
+    _cur_month = _dt.now().month
+    month_label = _month_names_ru[_cur_month - 1]
+
+    lines = [
+        T("mystats_title", glang, name=s_check["name"]),
+        T("mystats_streak", glang, n=streak),
+        T("mystats_rank", glang, n=rank),
+        T("mystats_points", glang, n=total_score),
+        T("mystats_days", glang, n=days_done),
+        T("mystats_skips", glang, n=skips_month, limit=limit_days, month=month_label),
+        T("mystats_today", glang, done=today_done, total=len(group_tasks)),
+    ]
+    await send_message(target_chat_id, "\n".join(lines))
+    comment = await ai.mystats_comment(s_check["name"], streak, rank, total_score, days_done, glang)
+    if comment:
+        await send_message(target_chat_id, comment)
+
+
 def extract_phone(sender):
     if sender is None:
         return ""
@@ -118,6 +214,27 @@ def detect_yassir(text):
         if v in low:
             return t
     return None
+
+
+# Скриптовые команды (/rating, /help, /mystats) отвечают в личку без ограничений —
+# это дешёвый детерминированный запрос к БД. А вот свободные вопросы студента про
+# Ясира/программу идут через ИИ и рискуют превратиться в бесконечный чат: вики не
+# меняется от повторного ответа, поэтому больше 2 ИИ-ответов за скользящий час
+# на одного студента — тишина, без объяснений (не подогревать переписку).
+_YASSIR_MAX_ANSWERS = 2
+_YASSIR_WINDOW_SECONDS = 3600
+_yassir_answer_times: dict = {}
+
+
+def _yassir_quota_ok(phone):
+    now = time.time()
+    times = [t for t in _yassir_answer_times.get(phone, []) if now - t < _YASSIR_WINDOW_SECONDS]
+    _yassir_answer_times[phone] = times
+    return len(times) < _YASSIR_MAX_ANSWERS
+
+
+def _yassir_record_answer(phone):
+    _yassir_answer_times.setdefault(phone, []).append(time.time())
 
 
 def _parse_minus_cmd(text):
@@ -172,12 +289,26 @@ _Q_KEYWORDS = {
 
 def _build_reference_for_question(text: str) -> str:
     """Для ответа на вопрос: определяет тему и берёт нужную секцию.
-    При неуверенности — возвращает весь PROGRAM_INFO (безопаснее, чем пропустить секцию)."""
+    При неуверенности — возвращает весь PROGRAM_INFO (безопаснее, чем пропустить секцию).
+    К таджвиду/нахву дополнительно подмешивает уже опубликованные части curriculum_parts —
+    они со ссылкой на реальные книги (Аль-Аджуррумия, Аль-Мукаддима аль-Джазарийя),
+    в отличие от общего конспекта в PROG_SECTIONS."""
     t = text.lower()
     matched = {key for key, kws in _Q_KEYWORDS.items() if any(kw in t for kw in kws)}
     if len(matched) == 1:
-        return _with_knowledge(PROG_SECTIONS[matched.pop()])
-    return _with_knowledge(PROGRAM_INFO)
+        key = matched.pop()
+        base = _with_knowledge(PROG_SECTIONS[key])
+        if key in ("j", "n"):
+            published = get_published_curriculum_content(key)
+            if published:
+                base += "\n\n" + published
+        return base
+    base = _with_knowledge(PROGRAM_INFO)
+    for key in ("j", "n"):
+        published = get_published_curriculum_content(key)
+        if published:
+            base += "\n\n" + published
+    return base
 
 
 def _has_arabic(text):
@@ -201,9 +332,9 @@ def _build_reference(checks):
             seen.add(key)
             parts.append(PROG_SECTIONS[key])
             if key in ("j", "n"):
-                approved = get_approved_curriculum_content(key)
-                if approved:
-                    parts.append(approved)
+                published = get_published_curriculum_content(key)
+                if published:
+                    parts.append(published)
     extra = get_knowledge()
     if extra:
         parts.append("\nДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ОТ УСТАЗА:")
@@ -240,6 +371,15 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             "Только состав согласных букв должен совпадать. Огласовки и знаки ПОЛНОСТЬЮ ИГНОРИРУЙ!\n"
             "Если буквы верны → ВЕРНО (даже если перевод выглядит неточным — перевод не твоя забота)\n"
             "Если ошибка в буквах → укажи какая буква неправильная\n\n"
+            "⚠️ У ТЕБЯ НЕТ ТЕКСТА АЯТА ДЛЯ СВЕРКИ (ни в муфрадате, ни в хадисе) — только твоя "
+            "собственная память о Коране, а она может ошибаться. Поэтому здесь будь МАКСИМАЛЬНО "
+            "консервативен: указывай ошибку буквы ТОЛЬКО если абсолютно уверен на 100%, что именно "
+            "так это слово никогда не пишется (явно другой корень, явно перепутанные похожие буквы). "
+            "Если есть хоть малейшее сомнение — считай верным и молчи, лучше пропустить реальную "
+            "ошибку, чем указать на несуществующую студенту, который заучивает Коран.\n"
+            "НЕ путай грамматическое явление с ошибкой буквы — например «قبلُ» с даммой на конце "
+            "(потому что это ظرف مقطوع عن الإضافة) это ХАРАКАТ/ГРАММАТИКА, а не пропущенная или "
+            "лишняя буква. Такие случаи в муфрадате/хадисе не проверяются вообще — здесь нет иъраба.\n\n"
             "📚 НАХВ (это ГРАММАТИКА): проверяй ТОЛЬКО ИЪРАБ (конечную огласовку) — "
             "مرفوع (рафъ/дамма) / منصوب (насб/фатха) / مجرور (джарр/кясра) / مجزوم (джазм) "
             "и название члена предложения (فاعل، مفعول به، مبتدأ، خبر и т.д.).\n"
@@ -299,7 +439,11 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             result = _re.sub(r"```[a-z]*\n?", "", result).strip().rstrip("`").strip()
             if result.startswith("[") or result.startswith("{"):
                 result = None
-        flagged = bool(result) and not ("ВЕРНО" in result.upper()[:20])
+        # Точное совпадение, а не подстрока: "неверно" содержит "верно" как подстроку,
+        # из-за чего ответы, начинающиеся с "Неверно ...", ошибочно считались "всё верно"
+        # и реальные замечания молча терялись (не отправлялись студенту).
+        _verdict_clean = result.strip().rstrip(" ·.").upper() if result else ""
+        flagged = bool(result) and _verdict_clean != "ВЕРНО"
         if result and student_id:
             log_verify_check(student_id, group_id, checks, text, result, flagged, get_date())
         if result and not flagged:
@@ -520,6 +664,19 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     "Пиши мне в личку любой вопрос по таджвиду, нахву или программе — отвечу 🤲"
                 )
             return
+        student_group = get_learning_group(phone)
+        if student_group:
+            s_dm = find_by_phone(phone, student_group["id"])
+            glang_dm = get_group_lang(student_group)
+            if text == "/help":
+                await send_message(chat_id, _section_student(get_group_tasks(student_group), student_group["group_type"] or "relaxed", glang_dm))
+            elif text == "/rating":
+                await _send_rating_to(chat_id, student_group, student_group["id"], glang_dm)
+            elif text == "/mystats":
+                await _send_mystats_to(chat_id, s_dm, student_group, student_group["id"], get_group_tasks(student_group), glang_dm)
+            else:
+                await send_message(chat_id, T("dm_welcome", glang_dm, name=s_dm["name"]))
+            return
         await send_message(chat_id,
             "Ассаляму алейкум! 🕌\n"
             "Чтобы зарегистрироваться — напиши любое сообщение в своей учебной группе, "
@@ -591,7 +748,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                             name=existing_user["name"], title=existing_lg["title"] or ""))
                         return
                 add_student(existing_user["name"], group_id, phone)
-                await send_message(chat_id, T("registered_group", glang, name=existing_user["name"]))
+                await _send_registered(chat_id, glang, existing_user["name"], phone)
                 for ap in SUPER_ADMIN_IDS:
                     await send_message(ap, "👤 " + existing_user["name"] + " авторегистрация (уже был известен) в «" + (group["title"] or str(chat_id)) + "»")
                 return
@@ -648,7 +805,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 # Засчитать сохранённый первый отчёт если был
                 saved = get_pending_text(phone, group_id)
                 clear_pending_name(phone, group_id)
-                await send_message(chat_id, T("registered_group", glang, name=new_name))
+                await _send_registered(chat_id, glang, new_name, phone)
                 for ap in SUPER_ADMIN_IDS:
                     await send_message(ap, "👤 " + new_name + " зарегистрировался в «" + (group["title"] or str(chat_id)) + "»")
                 if saved and saved.strip():
@@ -664,7 +821,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 existing_user = find_user_by_phone(phone)
                 if existing_user:
                     add_student(existing_user["name"], group_id, phone)
-                    await send_message(chat_id, T("registered_group", glang, name=existing_user["name"]))
+                    await _send_registered(chat_id, glang, existing_user["name"], phone)
                     return
                 # Первый раз в системе — пробуем авто-матч по Telegram-имени
                 # Только если точное совпадение И ровно один такой незарегистрированный
@@ -689,7 +846,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                                     register_student(existing_s["id"], phone)
                                     sid = existing_s["id"]
                                     greeting = "Ассаляму алейкум, " + tg_name + "! 🌙\n"
-                                    await send_message(chat_id, greeting + T("registered_group", glang, name=tg_name))
+                                    await _send_registered(chat_id, glang, tg_name, phone, prefix=greeting)
                                     for ap in SUPER_ADMIN_IDS:
                                         await send_message(ap, "👤 " + tg_name + " авторегистрация в «" + (group["title"] or str(chat_id)) + "»")
                                     return
@@ -952,27 +1109,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     if text == "/rating":
-        import pytz
-        from datetime import timedelta
-        from config import TZ
-        week_ago = (__import__('datetime').datetime.now(pytz.timezone(TZ)).date() - timedelta(days=7)).isoformat()
-        with db() as c:
-            rows = c.execute("""
-                SELECT u.name,
-                       COALESCE(SUM(e.points),0) as total,
-                       COUNT(DISTINCT CASE WHEN e.category='task' THEN e.date END) as days
-                FROM users u
-                JOIN user_groups ug ON u.id=ug.user_id
-                LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=?
-                WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-                GROUP BY u.id ORDER BY total DESC
-            """, (group_id, week_ago, group_id)).fetchall()
-        medals = ["🥇", "🥈", "🥉"]
-        lines = [T("rating_header", glang, title=group["title"] or chat_id)]
-        for i, r in enumerate(rows):
-            medal = medals[i] if i < 3 else str(i + 1) + "."
-            lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " " + T("rating_points", glang) + " (" + str(r["days"]) + " " + T("rating_days", glang) + ")")
-        await send_message(chat_id, "\n".join(lines))
+        target = await _resolve_dm_target(phone, chat_id, glang)
+        if not target:
+            return
+        await _send_rating_to(target, group, group_id, glang)
+        await send_message(chat_id, T("dm_answered", glang))
         return
 
     if text == "/help":
@@ -984,8 +1125,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             sections.append(help_admin(glang))
         if phone in SUPER_ADMIN_IDS:
             sections.append(_SECTION_SUPER)
-        if sections:
-            await send_message(chat_id, ("\n\n" + "─" * 20 + "\n\n").join(sections))
+        if not sections:
+            return
+        target = await _resolve_dm_target(phone, chat_id, glang)
+        if not target:
+            return
+        await send_message(target, ("\n\n" + "─" * 20 + "\n\n").join(sections))
+        await send_message(chat_id, T("dm_answered", glang))
         return
 
     if text == "/mystats":
@@ -993,53 +1139,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not s_check:
             await send_message(chat_id, T("not_registered", glang))
             return
-        streak = get_streak_days(s_check["id"])
-        skips_month = get_skip_count_month(s_check["id"], group_id)
-        with db() as c:
-            total_row = c.execute(
-                "SELECT COALESCE(SUM(points),0) as total FROM score_events WHERE student_id=?",
-                (s_check["id"],)
-            ).fetchone()
-            days_row = c.execute(
-                "SELECT COUNT(DISTINCT date) as days FROM score_events"
-                " WHERE student_id=? AND category='task'",
-                (s_check["id"],)
-            ).fetchone()
-            rank_rows = c.execute("""
-                SELECT u.id, COALESCE(SUM(e.points),0) as grand
-                FROM users u
-                JOIN user_groups ug ON u.id=ug.user_id
-                LEFT JOIN score_events e ON e.student_id=u.id AND e.group_id=?
-                WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-                GROUP BY u.id ORDER BY grand DESC
-            """, (group_id, group_id)).fetchall()
-        total_score = total_row["total"] or 0
-        days_done = days_row["days"] or 0
-        rank = next((i + 1 for i, r in enumerate(rank_rows) if r["id"] == s_check["id"]), "?")
-        today_rep = get_today_report(s_check["id"], group_id)
-        today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
-        gtype = group["group_type"] or "relaxed"
-        limit_days = 14 if gtype == "pro" else 30
-        import calendar
-        _month_names_ru = ["январе","феврале","марте","апреле","мае","июне",
-                           "июле","августе","сентябре","октябре","ноябре","декабре"]
-        from datetime import datetime as _dt
-        _cur_month = _dt.now().month
-        month_label = _month_names_ru[_cur_month - 1]
-
-        lines = [
-            T("mystats_title", glang, name=s_check["name"]),
-            T("mystats_streak", glang, n=streak),
-            T("mystats_rank", glang, n=rank),
-            T("mystats_points", glang, n=total_score),
-            T("mystats_days", glang, n=days_done),
-            T("mystats_skips", glang, n=skips_month, limit=limit_days, month=month_label),
-            T("mystats_today", glang, done=today_done, total=len(group_tasks)),
-        ]
-        await send_message(chat_id, "\n".join(lines))
-        comment = await ai.mystats_comment(s_check["name"], streak, rank, total_score, days_done, glang)
-        if comment:
-            await send_message(chat_id, comment)
+        target = await _resolve_dm_target(phone, chat_id, glang)
+        if not target:
+            return
+        await _send_mystats_to(target, s_check, group, group_id, group_tasks, glang)
+        await send_message(chat_id, T("dm_answered", glang))
         return
 
     if text.startswith("/bonus ") and is_group_admin(phone, group_id):
@@ -1114,12 +1218,15 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not yassir_question:
             await send_message(chat_id, T("yassir_listening", glang))
             return
+        if not _yassir_quota_ok(phone):
+            return
         answer = await ai.answer_question(
             yassir_question, _build_reference_for_question(yassir_question),
             group["title"] or chat_id, phone, group_id, s["name"],
             is_ustaz=is_group_admin(phone, group_id)
         )
         await send_message(chat_id, answer)
+        _yassir_record_answer(phone)
         return
 
     # ── Определяем тип сообщения и задания ────────────────────────────────────
@@ -1155,7 +1262,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             else:
                 await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
             return
-        if not is_media:
+        if not is_media and _yassir_quota_ok(phone):
             answer = await ai.answer_if_relevant(
                 text, _build_reference_for_question(text),
                 group["title"] or chat_id, phone, group_id, s["name"],
@@ -1163,6 +1270,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             )
             if answer:
                 await send_message(chat_id, answer)
+                _yassir_record_answer(phone)
         return
 
     # ── ИИ-проверка в фоне ────────────────────────────────────────────────────

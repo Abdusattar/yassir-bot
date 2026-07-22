@@ -16,7 +16,7 @@ from core.db import (
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
     get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date
 )
-from core.tg import send_message, tg_call
+from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
 from core.transfers import run_transfer_checks
 from core.prep import check_prep_students, send_prep_reminders
@@ -1063,12 +1063,10 @@ async def personal_reminders():
 # кто ещё не подключился; группа, где все уже подключены, ничего не получает.
 
 async def dm_connect_reminder():
-    me = await tg_call("getMe")
-    username = (me or {}).get("result", {}).get("username") if me else None
-    if not username:
+    link = await get_dm_start_link()
+    if not link:
         log.error("dm_connect_reminder: getMe failed, skip")
         return
-    link = "https://t.me/" + username + "?start=go"
 
     for group in get_all_groups():
         if (group["group_type"] or "relaxed") == "tadabbur":

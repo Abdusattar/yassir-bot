@@ -115,7 +115,8 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     # Уведомляем всех глобальных админов
     admin_msg = T(
         "transfer_notify_admin", "ru",
-        name=name, reason=reason + "_" + group["group_type"], days=count
+        name=name, reason=reason + "_" + group["group_type"], days=count,
+        group=group["title"] or chat_id
     )
     for admin_id in SUPER_ADMIN_IDS:
         await send_message(admin_id, admin_msg)

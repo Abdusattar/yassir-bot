@@ -339,8 +339,8 @@ TR = {
         ),
     },
     "transfer_notify_admin": {
-        "ru": "⚠️ Студент {name} переведён в Тадаббур (причина: {reason}, дней без отчётов: {days})",
-        "en": "⚠️ Student {name} transferred to Tadabbur (reason: {reason}, days absent: {days})",
+        "ru": "⚠️ Студент {name} (группа «{group}») переведён в Тадаббур (причина: {reason}, дней без отчётов: {days})",
+        "en": "⚠️ Student {name} (group «{group}») transferred to Tadabbur (reason: {reason}, days absent: {days})",
     },
     "upgrade_notify_admin": {
         "ru": "⭐ Студент {name} (группа {group}) готов к переходу в pro-группу.\n30 дней с ≤3 пропусками. Выбери целевую группу и подтверди перевод командой /transfer {sid} [chat_id]",
@@ -377,6 +377,18 @@ TR = {
         "kk": "✅ «{name}» ретінде тіркелдің!\nЕнді есеп тапсыра аласың 📖\nКомандаларды білу үшін /help жаз.",
         "ar": "✅ تم تسجيلك باسم «{name}»!\nيمكنك الآن تسليم التقارير 📖\nاكتب /help لمعرفة الأوامر.",
         "en": "✅ Registered as «{name}»!\nYou can now submit reports 📖\nWrite /help to see commands.",
+    },
+    "registered_group_dm": {
+        "ru": "✅ Зарегистрирован как «{name}»!\nОтчёты сдавай прямо тут, в группе 📖\nА команды /help, /rating, /mystats и личные напоминания теперь приходят в личку — перейди по ссылке и нажми Start (один раз):\n{link}",
+    },
+    "dm_start_needed": {
+        "ru": "Нажми Start в личке с ботом, чтобы получить ответ туда 👇\n{link}",
+    },
+    "dm_answered": {
+        "ru": "📩 Ответил тебе в личку",
+    },
+    "dm_welcome": {
+        "ru": "Ассаляму алейкум, {name}! 🌙\nТут в личке доступны: /help, /rating, /mystats.\nОтчёты по-прежнему сдавай в своей группе 📖",
     },
     "already_in_group": {
         "ru": "{name}, ты уже студент группы «{title}». Студент может быть только в одной учебной группе.",

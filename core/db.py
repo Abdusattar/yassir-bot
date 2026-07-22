@@ -649,7 +649,7 @@ def get_learning_group(phone):
     """Возвращает учебную группу (pro/relaxed) в которой студент уже состоит, или None."""
     with db() as c:
         return c.execute("""
-            SELECT g.id, g.title, g.group_type FROM users u
+            SELECT g.* FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
             JOIN groups g ON ug.group_id=g.id
             WHERE u.phone=? AND ug.role='student' AND ug.active=1
@@ -1022,11 +1022,18 @@ def count_pending_curriculum_review(subject):
         return row["n"]
 
 
-def get_approved_curriculum_content(subject):
-    """Текст всех одобренных устазом частей по предмету (n/j), по порядку — для справочника AI-проверки."""
+def get_published_curriculum_content(subject):
+    """Текст всех уже ОПУБЛИКОВАННЫХ частей по предмету (n/j), по порядку — для справочника AI-проверки.
+
+    Раньше фильтровалось по approved_at, но с 08.07.2026 публикация идёт по расписанию
+    БЕЗ обязательного одобрения устаза (см. get_next_part_to_publish) — approved_at
+    у большинства опубликованных частей так и остаётся NULL. Фильтр по approved_at
+    молча выкидывал из справочника почти всё уже отправленное студентам. published_at —
+    правильный критерий: часть либо уже видна студентам (значит должна быть в справочнике),
+    либо ещё нет (и рано её туда включать)."""
     with db() as c:
         rows = c.execute(
-            "SELECT content FROM curriculum_parts WHERE subject=? AND approved_at IS NOT NULL"
+            "SELECT content FROM curriculum_parts WHERE subject=? AND published_at IS NOT NULL"
             " ORDER BY order_index",
             (subject,)
         ).fetchall()
@@ -1539,14 +1546,30 @@ def get_dm_ok(uid):
     return bool(row and row["dm_ok"])
 
 
+def get_dm_ok_by_phone(phone):
+    """То же самое, но по Telegram-id — не привязано к роли (студент/устаз/суперадмин),
+    в отличие от get_dm_ok не требует, чтобы вызывающий уже был студентом с известным users.id."""
+    with db() as c:
+        row = c.execute("SELECT dm_ok FROM users WHERE phone=?", (phone,)).fetchone()
+    return bool(row and row["dm_ok"])
+
+
 def mark_dm_ok(uid):
     with db() as c:
         c.execute("UPDATE users SET dm_ok=1 WHERE id=? AND dm_ok=0", (uid,))
 
 
 def mark_dm_ok_by_phone(phone):
+    """Отмечает, что боту можно писать этому Telegram-id первым. Если строки в users ещё
+    нет (например суперадмин или устаз, который никогда не проходил студенческую
+    регистрацию) — создаёт её с пустым именем; add_student потом сам подставит
+    настоящее имя в такую запись (UPDATE ... WHERE name='')."""
     with db() as c:
-        c.execute("UPDATE users SET dm_ok=1 WHERE phone=? AND dm_ok=0", (phone,))
+        c.execute(
+            "INSERT INTO users(name, phone, dm_ok) VALUES('', ?, 1) "
+            "ON CONFLICT(phone) DO UPDATE SET dm_ok=1",
+            (phone,)
+        )
 
 
 # ── Formatting ─────────────────────────────────────────────────────────────────

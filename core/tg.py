@@ -67,6 +67,17 @@ async def send_message(chat_id, text, reply_to_message_id=None):
     return await _raw_send(cid, text or "", reply_to_message_id=reply_to_message_id)
 
 
+async def get_dm_start_link():
+    """Ссылка-приглашение в личку с ботом (https://t.me/<username>?start=go).
+    Юзернейм берётся через getMe каждый раз — на случай разных ботов (муж/жен)."""
+    me = await tg_call("getMe")
+    username = (me or {}).get("result", {}).get("username") if me else None
+    if not username:
+        log.error("get_dm_start_link: getMe failed")
+        return None
+    return "https://t.me/" + username + "?start=go"
+
+
 async def ban_member(chat_id, user_id):
     return await tg_call("banChatMember", {"chat_id": int(str(chat_id)), "user_id": int(str(user_id))})
 
