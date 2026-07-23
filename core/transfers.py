@@ -170,13 +170,22 @@ async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
     except Exception as e:
         log.error("Kick (return without prep) failed for %s in %s: %s", uid, chat_id, e)
 
-    await send_message(chat_id, T("return_needs_prep_group", lang, name=name))
-
     prep_group = get_prep_group()
     prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
-    await send_message(phone, T("return_needs_prep_dm", lang, name=name, prep_link=prep_link))
 
-    admin_msg = T("return_blocked_notify_admin", "ru", name=name, group=group["title"] or chat_id)
+    # Сначала личка — от результата зависит, что написать в группу (иначе
+    # группа может заявить "отправили в личку", хотя доставка не прошла,
+    # например если студент ни разу не писал боту в личку напрямую).
+    dm_resp = await send_message(phone, T("return_needs_prep_dm", lang, name=name, prep_link=prep_link))
+    dm_ok = bool(dm_resp and dm_resp.get("ok"))
+
+    if dm_ok:
+        await send_message(chat_id, T("return_needs_prep_group", lang, name=name))
+        admin_msg = T("return_blocked_notify_admin", "ru", name=name, group=group["title"] or chat_id)
+    else:
+        await send_message(chat_id, T("return_needs_prep_group_dm_failed", lang, name=name, prep_link=prep_link))
+        admin_msg = T("return_blocked_notify_admin_dm_failed", "ru", name=name, group=group["title"] or chat_id)
+
     for admin_id in SUPER_ADMIN_IDS:
         await send_message(admin_id, admin_msg)
 
