@@ -245,6 +245,8 @@ def _run_migrations(c):
     vscols = [r["name"] for r in c.execute("PRAGMA table_info(voice_submissions)").fetchall()]
     if "sent_at" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN sent_at TEXT")
+    if "file_id" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN file_id TEXT")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -976,13 +978,13 @@ def get_today_report(uid, group_id=None):
     return result
 
 
-def save_voice_submission(student_id, group_id, chat_id, message_id, date):
+def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_id=None):
     with db() as c:
         c.execute(
             "INSERT OR IGNORE INTO voice_submissions"
-            "(student_id,group_id,chat_id,message_id,date,sent_at)"
-            " VALUES(?,?,?,?,?,?)",
-            (student_id, group_id, chat_id, message_id, date, get_now().isoformat())
+            "(student_id,group_id,chat_id,message_id,date,sent_at,file_id)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (student_id, group_id, chat_id, message_id, date, get_now().isoformat(), file_id)
         )
 
 
