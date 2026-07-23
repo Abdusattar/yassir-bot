@@ -17,7 +17,8 @@ from core.db import (
     get_lesson_skip_count_month,
     deactivate_student, add_student, log_transfer, get_group,
     get_tadabbur_group, get_prep_group, get_overdue_unregistered, remove_unregistered,
-    find_by_phone, is_any_group_admin, is_pending_graduation, has_pending_prep_graduate
+    find_by_phone, is_any_group_admin, is_pending_prep_return, has_pending_prep_graduate,
+    mark_pending_prep_return
 )
 from config import SUPER_ADMIN_IDS, IS_FEMALE
 from core.i18n import T, get_group_lang
@@ -88,6 +89,12 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     # Деактивируем студента в текущей группе
     deactivate_student(sid, group["id"])
 
+    # Маркер "кикнут за пропуски сдачи заданий, должен вернуться только
+    # через официальный выпуск из prep" (решение пользователя 23.07.2026).
+    # Только reason="inactive" — именно пропуски отчётов, не пропуски уроков.
+    if reason == "inactive":
+        mark_pending_prep_return(student["phone"], group["id"], reason)
+
     # Физически убираем из исходного чата — иначе студент остаётся его участником
     # и следующим же сообщением там может случайно снова стать активным студентом
     # (дыра авторегистрации в handlers.py). Мягкий кик (ban+unban) — не блокирует
@@ -139,24 +146,18 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
 
 
 async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
-    """Закрывает дыру авторегистрации: студент, ещё не выпустившийся из
-    prep (сейчас активен в Тадаббуре или подготовительной), не может
-    автоматически "воскреснуть" студентом в pro/relaxed напрямую — только
-    через официальный выпуск из prep (prep_graduates).
+    """Закрывает дыру авторегистрации: студент, кикнутый за пропуски сдачи
+    заданий и ещё не выпустившийся из prep официально (pending_prep_return),
+    не может автоматически "воскреснуть" студентом в pro/relaxed напрямую —
+    только через официальный выпуск из prep (prep_graduates).
 
     Возвращает True, если студента заблокировали и кикнули (вызывающий код
     не должен добавлять его в группу). False — путь свободен, можно
     регистрировать как обычно."""
-    # ВРЕМЕННО ОТКЛЮЧЕНО (23.07): is_pending_graduation ошибочно ловит
-    # обычных активных студентов — членство в Тадаббуре есть у всех
-    # (tadabbur_invite_reminder зовёт туда всех, не только кикнутых за
-    # пропуски). Нужен отдельный маркер именно для "кикнут за пропуски,
-    # ещё не выпустился из prep", а не факт членства в Тадаббуре.
-    return False
     gtype = group["group_type"] or "relaxed"
     if gtype not in ("pro", "relaxed"):
         return False
-    if not is_pending_graduation(uid):
+    if not is_pending_prep_return(phone):
         return False
     if has_pending_prep_graduate(phone, group["id"]):
         return False

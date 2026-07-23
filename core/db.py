@@ -156,6 +156,12 @@ def init():
                 created_date TEXT DEFAULT (date('now')),
                 PRIMARY KEY(phone, target_group_id)
             );
+            CREATE TABLE IF NOT EXISTS pending_prep_return(
+                phone TEXT PRIMARY KEY,
+                from_group_id INTEGER,
+                reason TEXT,
+                created_date TEXT DEFAULT (date('now'))
+            );
             CREATE TABLE IF NOT EXISTS teachers(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -540,18 +546,27 @@ def get_prep_group():
     return rows[0] if rows else None
 
 
-def is_pending_graduation(uid):
-    """True, если студент сейчас активен в Тадаббуре или подготовительной —
-    должен сперва пройти prep, прежде чем вернуться в постоянную группу."""
+def mark_pending_prep_return(phone, from_group_id, reason):
+    """Отметить: студент кикнут за пропуски, должен вернуться только через
+    официальный выпуск из prep. Снимается clear_pending_prep_return()
+    при подтверждённом выпуске (см. core/prep.py announce_prep_graduate_arrival)."""
     with db() as c:
-        row = c.execute("""
-            SELECT 1 FROM user_groups ug
-            JOIN groups g ON ug.group_id=g.id
-            WHERE ug.user_id=? AND ug.role='student' AND ug.active=1
-              AND g.group_type IN ('tadabbur','prep')
-            LIMIT 1
-        """, (uid,)).fetchone()
+        c.execute(
+            "INSERT OR REPLACE INTO pending_prep_return(phone, from_group_id, reason, created_date)"
+            " VALUES(?,?,?,?)",
+            (phone, from_group_id, reason, get_date())
+        )
+
+
+def is_pending_prep_return(phone):
+    with db() as c:
+        row = c.execute("SELECT 1 FROM pending_prep_return WHERE phone=?", (phone,)).fetchone()
     return row is not None
+
+
+def clear_pending_prep_return(phone):
+    with db() as c:
+        c.execute("DELETE FROM pending_prep_return WHERE phone=?", (phone,))
 
 
 def has_pending_prep_graduate(phone, group_id):

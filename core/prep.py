@@ -29,6 +29,7 @@ from core.db import (
     get_relaxed_groups_by_lang,
     add_prep_graduate, pop_prep_graduate,
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
+    clear_pending_prep_return,
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member
@@ -186,11 +187,13 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
 
     _deactivate_from_prep_by_group_id(phone, rec["from_group_id"])
 
+    # Официальный выпуск подтверждён — снимаем маркер "кикнут за пропуски,
+    # должен вернуться только через prep" (см. core/transfers.py,
+    # block_return_if_pending_prep), иначе он остался бы true навсегда.
+    clear_pending_prep_return(phone)
+
     # Страховочное членство в Тадаббуре (добавлено при предложении перехода,
-    # см. check_prep_students) больше не нужно — иначе флаг "ещё не выпустился"
-    # (is_pending_graduation) остаётся true навсегда, и студент, легитимно
-    # выпустившийся из prep, может позже ошибочно попасть под блокировку
-    # block_return_if_pending_prep в core/transfers.py.
+    # см. check_prep_students) больше не нужно — держать активным незачем.
     with db() as c:
         u = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
     if u:
