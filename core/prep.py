@@ -264,6 +264,36 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
     log.info("prep graduate confirmed: %s arrived in group=%s (kicked from prep)", name, group_id)
 
 
+async def remind_ustaz_about_graduate(phone):
+    """Студент, уже выполнивший условие prep и ожидающий ручного перевода,
+    сам написал боту в личку — считаем это напоминанием, шлём то же
+    уведомление устазу ещё раз (решение пользователя 23.07.2026).
+    Возвращает (name, lang) если напоминание реально отправлено (студент
+    действительно ожидает перевода), иначе None — вызывающий код сам решает,
+    что ответить."""
+    with db() as c:
+        row = c.execute("""
+            SELECT u.id as uid, u.name, ug.group_id as gid, ug.joined_date, g.chat_id, g.title, g.lang
+            FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? AND ug.role='student' AND ug.active=1 AND g.group_type='prep'
+            LIMIT 1
+        """, (phone,)).fetchone()
+    if not row:
+        return None
+    days_done = count_report_days_since(row["uid"], row["gid"], row["joined_date"])
+    if days_done < PREP_MIN_DAYS:
+        return None
+    admin_msg = T(
+        "prep_graduate_notify_admin", "ru",
+        name=row["name"], days=days_done, group=row["title"] or row["chat_id"]
+    )
+    await send_message(_PREP_GRADUATE_ADMIN_ID, "🔔 Напоминание от студента:\n" + admin_msg)
+    log.info("prep graduate reminder: %s nudged admin", row["name"])
+    return (row["name"], row["lang"] or "ru")
+
+
 def _has_prep_offer(user_id, group_id):
     with db() as c:
         return c.execute(

@@ -28,7 +28,7 @@ from core.db import (
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
-    get_published_curriculum_content, log_verify_check
+    get_published_curriculum_content, log_verify_check, get_prep_group
 )
 from core.transfers import block_return_if_pending_prep
 
@@ -678,6 +678,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             else:
                 await send_message(chat_id, T("dm_welcome", glang_dm, name=s_dm["name"]))
             return
+        # Не активен в pro/relaxed — возможно, ждёт ручного перевода после
+        # подготовительной. Любое сообщение в личку — как напоминание устазу.
+        from core.prep import remind_ustaz_about_graduate
+        reminded = await remind_ustaz_about_graduate(phone)
+        if reminded:
+            reminded_name, reminded_lang = reminded
+            await send_message(chat_id, T("prep_remind_sent", reminded_lang, name=reminded_name))
+            return
         await send_message(chat_id,
             "Ассаляму алейкум! 🕌\n"
             "Чтобы зарегистрироваться — напиши любое сообщение в своей учебной группе, "
@@ -754,6 +762,17 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 await _send_registered(chat_id, glang, existing_user["name"], phone)
                 for ap in SUPER_ADMIN_IDS:
                     await send_message(ap, "👤 " + existing_user["name"] + " авторегистрация (уже был известен) в «" + (group["title"] or str(chat_id)) + "»")
+                return
+            # Совсем новый человек (никогда не был в системе) — регистрация
+            # начинается только с подготовительной, напрямую в pro/relaxed
+            # не пускаем (решение пользователя 23.07.2026). Не регистрируем
+            # и не спрашиваем имя здесь — просто не даём начать; кто не
+            # уйдёт сам, через 7 дней заберёт обычный kick_unregistered.
+            gtype_new = group["group_type"] or "relaxed"
+            if gtype_new in ("pro", "relaxed"):
+                prep_group = get_prep_group()
+                prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+                await send_message(chat_id, T("new_student_needs_prep_group", glang, prep_link=prep_link))
                 return
             if text.startswith("/"):
                 if is_pending_name(phone, group_id):
