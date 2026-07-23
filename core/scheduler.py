@@ -14,7 +14,8 @@ from core.db import (
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
     get_group_admins, get_dm_ok, get_learning_group,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
-    get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date
+    get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date,
+    count_unpublished_parts
 )
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
@@ -902,6 +903,19 @@ async def publish_curriculum_parts():
                 except Exception as e:
                     log.error("publish_curriculum_parts send error in %s: %s", group["chat_id"], e)
             mark_curriculum_published(part["id"])
+
+            # За неделю до последнего урока в очереди — напомнить устазу
+            # подготовить ещё (решение пользователя 23.07.2026). Публикация
+            # раз в неделю, значит remaining==1 означает: то, что сейчас
+            # ушло — предпоследнее, а единственное оставшееся уйдёт ровно
+            # через неделю и будет последним.
+            remaining = count_unpublished_parts(subject)
+            if remaining == 1 and SUPER_ADMIN_IDS:
+                await send_message(
+                    SUPER_ADMIN_IDS[0],
+                    "⚠️ По предмету «" + label + "» в очереди остался всего 1 урок "
+                    "(уйдёт через неделю и будет последним) — пора подготовить ещё."
+                )
         except Exception as e:
             log.error("publish_curriculum_parts error for subject=%s: %s", subject, e)
 

@@ -1127,6 +1127,16 @@ def get_next_part_to_publish(subject):
         ).fetchone()
 
 
+def count_unpublished_parts(subject):
+    """Сколько частей ещё в очереди (не опубликовано) по предмету."""
+    with db() as c:
+        row = c.execute(
+            "SELECT COUNT(*) as n FROM curriculum_parts WHERE subject=? AND published_at IS NULL",
+            (subject,)
+        ).fetchone()
+    return row["n"] if row else 0
+
+
 def mark_curriculum_published(part_id):
     with db() as c:
         c.execute(
