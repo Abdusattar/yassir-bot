@@ -17,9 +17,10 @@ from core.db import (
     get_lesson_skip_count_month,
     deactivate_student, add_student, log_transfer, get_group,
     get_tadabbur_group, get_prep_group, get_overdue_unregistered, remove_unregistered,
-    find_by_phone, is_any_group_admin, is_pending_prep_return, has_pending_prep_graduate,
+    find_by_phone, is_any_group_admin, is_pending_prep_return, prep_days_done,
     mark_pending_prep_return
 )
+from core.prep import PREP_MIN_DAYS
 from config import SUPER_ADMIN_IDS, IS_FEMALE
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member
@@ -149,7 +150,7 @@ async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
     """Закрывает дыру авторегистрации: студент, кикнутый за пропуски сдачи
     заданий и ещё не выпустившийся из prep официально (pending_prep_return),
     не может автоматически "воскреснуть" студентом в pro/relaxed напрямую —
-    только через официальный выпуск из prep (prep_graduates).
+    только через официальный выпуск из prep.
 
     Возвращает True, если студента заблокировали и кикнули (вызывающий код
     не должен добавлять его в группу). False — путь свободен, можно
@@ -159,7 +160,13 @@ async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
         return False
     if not is_pending_prep_return(phone):
         return False
-    if has_pending_prep_graduate(phone, group["id"]):
+    if prep_days_done(phone) >= PREP_MIN_DAYS:
+        # Реально выполнил условие подготовительной (не просто состоит там)
+        # — это и есть легитимный путь выпуска (см. core/prep.py
+        # announce_prep_graduate_arrival, которая снимет pending_prep_return
+        # сама). НЕ блокировать, иначе дедлок: маркер снимается только там,
+        # а туда мы бы никогда не пустили. Тот же порог (PREP_MIN_DAYS),
+        # что и announce — иначе можно проскочить с недобранными днями.
         return False
 
     lang = get_group_lang(group)

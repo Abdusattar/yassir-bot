@@ -3,13 +3,21 @@
 
 Проверка идёт ежедневно по каждому активному студенту prep:
   ≥5 дней с отчётами (в любой момент, не дожидаясь 14 дней) →
-                        поздравление + ссылка на relaxed-группу (всегда ru,
-                        выбор языка убран — 19.07.2026 решение пользователя).
-                        Предложение отправляется один раз (метится add_bonus
-                        category='prep_offer'), повторно не спамим.
-                        Из prep деактивируется только когда студент подтверждённо
-                        вступит в целевую группу (announce_prep_graduate_arrival) —
-                        чтобы не потерять его, если ссылкой не воспользуется.
+                        поздравление студенту в личку + объявление в саму
+                        prep-группу (мотивация остальным) + уведомление
+                        ОДНОМУ конкретному устазу (не всем супер-админам —
+                        решение пользователя 23.07.2026: если видят
+                        несколько человек, могут по ошибке распределить
+                        одного студента сразу в две группы). Устаз сам
+                        вручную решает, в какую постоянную группу определить,
+                        и зовёт студента туда. Повторяется КАЖДУЮ проверку,
+                        пока студента реально не переведут — без этого
+                        уведомление легко потерять среди других сообщений.
+                        Из prep деактивируется и физически кикается только
+                        когда студент реально станет активным в pro/relaxed
+                        группе (см. announce_prep_graduate_arrival — теперь
+                        срабатывает по факту, а не по заранее выбранной
+                        целевой группе).
   <5 дней к дедлайну   → остаётся в Тадаббуре, деактивируется из prep
                         и физически кикается (мягко, ban+unban) из чата —
                         иначе дыра авторегистрации: следующим же сообщением
@@ -26,10 +34,8 @@ import logging
 from config import IS_FEMALE
 from core.db import (
     db, get_prep_students_active, count_report_days_since, add_bonus,
-    get_relaxed_groups_by_lang,
-    add_prep_graduate, pop_prep_graduate,
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
-    clear_pending_prep_return,
+    clear_pending_prep_return, prep_days_done,
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member
@@ -39,6 +45,11 @@ log = logging.getLogger(__name__)
 PREP_DAYS = 14
 PREP_MIN_DAYS = 5
 PREP_EXTENSION_DAYS = 5  # доп. дни к дедлайну, если студент сдал ≥1 отчёт
+
+# Кому лично уходит уведомление о выпускнике подготовительной — один
+# конкретный человек на профиль, не все супер-админы (решение 23.07.2026,
+# см. докстринг модуля выше).
+_PREP_GRADUATE_ADMIN_ID = "5342232498" if IS_FEMALE else "7666229019"  # Зейнеб / Умар устаз
 
 
 async def check_prep_students():
@@ -54,26 +65,24 @@ async def check_prep_students():
         elapsed = s["elapsed"] or 0
 
         if days_done >= PREP_MIN_DAYS:
-            if _has_prep_offer(s["id"], group_id):
-                continue  # уже предлагали переход, ждём подтверждённого вступления
-            groups = get_relaxed_groups_by_lang("ru")
-            if not groups:
-                log.error("prep check: no ru relaxed group with invite_link available (student=%s)", s["name"])
-                continue
-            target = groups[0]
-            add_bonus(s["id"], group_id, joined, 0, "prep_offer")
-            await send_message(uid, T("prep_congrats", glang, name=s["name"], days=days_done))
-            await send_message(uid, T("prep_group_link", glang, title=target["title"], link=target["invite_link"]))
-            # Из prep не убираем и никуда не объявляем прямо сейчас — только когда
-            # студент реально вступит в целевую группу (announce_prep_graduate_arrival).
-            # Так студент не потеряется, если ссылкой не воспользуется.
-            add_prep_graduate(uid, target["id"], s["name"], group_id, s["chat_id"])
-            # Страховка: сразу добавляем в Тадаббур на случай, если ссылкой
-            # так и не воспользуется — чтобы не остаться совсем без группы.
-            tadabbur = get_tadabbur_group()
-            if tadabbur:
-                add_student(s["name"], tadabbur["id"], uid)
-            log.info("prep check: student=%s days_done=%d → assigned to %s (elapsed=%.1f)", s["name"], days_done, target["title"], elapsed)
+            already_notified = _has_prep_offer(s["id"], group_id)
+            if not already_notified:
+                # Студенту и в группу — один раз, не спамим при повторных проверках
+                add_bonus(s["id"], group_id, joined, 0, "prep_offer")
+                await send_message(uid, T("prep_congrats", glang, name=s["name"], days=days_done))
+                await send_message(s["chat_id"], T("prep_success_group", glang, name=s["name"], days=days_done))
+
+            # Устазу (одному конкретному, не всем супер-админам) — повторяем
+            # КАЖДУЮ проверку, пока студента реально не переведут, иначе
+            # уведомление легко потерять среди других сообщений. Из prep
+            # студент уходит сам — announce_prep_graduate_arrival сработает,
+            # когда он реально станет активным в новой группе.
+            admin_msg = T(
+                "prep_graduate_notify_admin", "ru",
+                name=s["name"], days=days_done, group=s["title"] or s["chat_id"]
+            )
+            await send_message(_PREP_GRADUATE_ADMIN_ID, admin_msg)
+            log.info("prep check: student=%s days_done=%d → admin reminded for manual placement", s["name"], days_done)
         else:
             deadline = PREP_DAYS + (PREP_EXTENSION_DAYS if days_done >= 1 else 0)
             if elapsed < deadline:
@@ -178,45 +187,81 @@ async def send_prep_reminders():
 
 
 async def announce_prep_graduate_arrival(chat_id, group_id, phone):
-    """Вызывается когда известный студент вступает в группу по инвайт-ссылке.
-    Если это подтверждённый выпускник prep — деактивирует его в старой группе
-    и объявляет о переходе в обоих чатах."""
-    rec = pop_prep_graduate(phone, group_id)
-    if not rec:
+    """Вызывается когда известный студент становится активным в pro/relaxed
+    группе (устаз вручную позвал его туда после прохождения подготовительной
+    — решение пользователя 23.07.2026, без заранее выбранной целевой группы
+    и без ссылки). Если студент сейчас активен в ЛЮБОЙ подготовительной —
+    это и есть выпуск: кикаем его оттуда, объявляем в обоих чатах."""
+    with db() as c:
+        target_group = c.execute("SELECT group_type FROM groups WHERE id=?", (group_id,)).fetchone()
+        if not target_group or (target_group["group_type"] or "relaxed") not in ("pro", "relaxed"):
+            return  # не постоянная учебная группа — не считается выпуском
+
+        u = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
+        if not u:
+            return
+        prep_row = c.execute("""
+            SELECT ug.group_id as gid, g.chat_id, g.title, u2.name, ug.joined_date
+            FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            JOIN users u2 ON u2.id=ug.user_id
+            WHERE ug.user_id=? AND ug.role='student' AND ug.active=1 AND g.group_type='prep'
+            LIMIT 1
+        """, (u["id"],)).fetchone()
+    if not prep_row:
         return
 
-    _deactivate_from_prep_by_group_id(phone, rec["from_group_id"])
+    from_group_id = prep_row["gid"]
+    from_chat_id = prep_row["chat_id"]
+    name = prep_row["name"]
+
+    # Защита от преждевременного "выпуска": условие (≥5 дней отчётов) должно
+    # быть реально выполнено, а не просто "студент где-то стал активным".
+    # Тот же prep_days_done, что и block_return_if_pending_prep в
+    # core/transfers.py — единый критерий, не дублируем расчёт вручную.
+    days_done = prep_days_done(phone)
+    if days_done < PREP_MIN_DAYS:
+        log.warning(
+            "prep graduate arrival skipped: %s active in new group but only %d/%d days in prep",
+            name, days_done, PREP_MIN_DAYS
+        )
+        return
+
+    _deactivate_from_prep_by_group_id(phone, from_group_id)
 
     # Официальный выпуск подтверждён — снимаем маркер "кикнут за пропуски,
     # должен вернуться только через prep" (см. core/transfers.py,
     # block_return_if_pending_prep), иначе он остался бы true навсегда.
     clear_pending_prep_return(phone)
 
-    # Страховочное членство в Тадаббуре (добавлено при предложении перехода,
-    # см. check_prep_students) больше не нужно — держать активным незачем.
-    with db() as c:
-        u = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
-    if u:
-        tadabbur = get_tadabbur_group()
-        if tadabbur:
-            deactivate_student(u["id"], tadabbur["id"])
+    tadabbur = get_tadabbur_group()
+    if tadabbur:
+        deactivate_student(u["id"], tadabbur["id"])
 
     new_glang = _group_lang(group_id)
-    old_glang = _group_lang(rec["from_group_id"])
+    old_glang = _group_lang(from_group_id)
     new_title = _group_title(group_id)
 
     try:
         addr = "сёстры" if IS_FEMALE else "братья"
-        await send_message(chat_id, T("prep_graduate_announce_new", new_glang, name=rec["name"], addr=addr))
+        await send_message(chat_id, T("prep_graduate_announce_new", new_glang, name=name, addr=addr))
     except Exception as e:
         log.warning("prep graduate new-group announce failed: %s", e)
 
     try:
-        await send_message(rec["from_chat_id"], T("prep_graduate_announce_old", old_glang, name=rec["name"], title=new_title))
+        await send_message(from_chat_id, T("prep_graduate_announce_old", old_glang, name=name, title=new_title))
     except Exception as e:
         log.warning("prep graduate old-group announce failed: %s", e)
 
-    log.info("prep graduate confirmed: %s arrived in group=%s", rec["name"], group_id)
+    # Физически кикаем из подготовительной — иначе дыра авторегистрации
+    # (следующее же сообщение там молча вернёт активным студентом).
+    try:
+        await ban_member(from_chat_id, phone)
+        await unban_member(from_chat_id, phone)
+    except Exception as e:
+        log.error("prep graduate kick from prep failed for %s in %s: %s", name, from_chat_id, e)
+
+    log.info("prep graduate confirmed: %s arrived in group=%s (kicked from prep)", name, group_id)
 
 
 def _has_prep_offer(user_id, group_id):

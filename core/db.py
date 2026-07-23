@@ -569,14 +569,26 @@ def clear_pending_prep_return(phone):
         c.execute("DELETE FROM pending_prep_return WHERE phone=?", (phone,))
 
 
-def has_pending_prep_graduate(phone, group_id):
-    """Проверка (без удаления) — ждут ли этого студента в этой группе после выпуска из prep."""
+def prep_days_done(phone):
+    """Сколько дней отчётов у студента в его активной подготовительной группе.
+    0, если сейчас не активен ни в одной prep-группе. Единый критерий для
+    core/transfers.py (block_return_if_pending_prep) и core/prep.py
+    (announce_prep_graduate_arrival) — оба должны сверяться с одним и тем
+    же числом, иначе первый может пропустить студента, которого второй
+    ещё не готов признать выпускником (реальный дедлок/дыра, найдены и
+    исправлены 23.07.2026 при ревью)."""
     with db() as c:
-        row = c.execute(
-            "SELECT 1 FROM prep_graduates WHERE phone=? AND target_group_id=?",
-            (phone, group_id)
-        ).fetchone()
-    return row is not None
+        row = c.execute("""
+            SELECT u.id as uid, ug.group_id as gid, ug.joined_date
+            FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? AND ug.role='student' AND ug.active=1 AND g.group_type='prep'
+            LIMIT 1
+        """, (phone,)).fetchone()
+    if not row:
+        return 0
+    return count_report_days_since(row["uid"], row["gid"], row["joined_date"])
 
 
 def get_group_tasks(group):
@@ -1424,45 +1436,6 @@ def count_report_days_since(uid, group_id, since_date):
             (uid, group_id, since_date)
         ).fetchone()
         return row["cnt"] if row else 0
-
-
-def add_prep_graduate(phone, target_group_id, name, from_group_id, from_chat_id):
-    """Запомнить, что этого студента ждут в целевой группе после выбора языка в prep."""
-    with db() as c:
-        c.execute(
-            "INSERT OR REPLACE INTO prep_graduates"
-            "(phone, target_group_id, name, from_group_id, from_chat_id) VALUES(?,?,?,?,?)",
-            (phone, target_group_id, name, from_group_id, from_chat_id)
-        )
-
-
-def pop_prep_graduate(phone, target_group_id):
-    """Забрать и удалить запись о выпускнике prep, если студент только что вступил в целевую группу."""
-    with db() as c:
-        row = c.execute(
-            "SELECT * FROM prep_graduates WHERE phone=? AND target_group_id=?",
-            (phone, target_group_id)
-        ).fetchone()
-        if row:
-            c.execute(
-                "DELETE FROM prep_graduates WHERE phone=? AND target_group_id=?",
-                (phone, target_group_id)
-            )
-        return row
-
-
-def get_relaxed_groups_by_lang(lang):
-    """Relaxed-группы заданного языка, отсортированные по числу студентов (меньше → первая)."""
-    with db() as c:
-        return c.execute("""
-            SELECT g.id, g.chat_id, g.title, g.invite_link,
-                   COUNT(ug.user_id) as student_count
-            FROM groups g
-            LEFT JOIN user_groups ug ON ug.group_id=g.id AND ug.role='student' AND ug.active=1
-            WHERE g.group_type='relaxed' AND g.lang=? AND g.active=1 AND g.invite_link IS NOT NULL
-            GROUP BY g.id
-            ORDER BY student_count ASC
-        """, (lang,)).fetchall()
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
