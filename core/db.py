@@ -247,6 +247,12 @@ def _run_migrations(c):
         c.execute("ALTER TABLE voice_submissions ADD COLUMN sent_at TEXT")
     if "file_id" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN file_id TEXT")
+    if "review_type" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN review_type TEXT")
+    if "review_file_id" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN review_file_id TEXT")
+    if "review_text" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN review_text TEXT")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -994,6 +1000,20 @@ def mark_voice_reviewed(chat_id, message_id):
             "UPDATE voice_submissions SET reviewed_at=?"
             " WHERE chat_id=? AND message_id=? AND reviewed_at IS NULL",
             (get_now().isoformat(), chat_id, message_id)
+        )
+
+
+def save_umar_review(chat_id, message_id, review_type, review_file_id=None, review_text=None):
+    """Stage 0 (R&D таджвида, 23.07.2026): сохраняем сырой реплай ИМЕННО
+    Умар устаза (CURRICULUM_REVIEWER_ID) на голосовую сдачу студента - его
+    коррекции доверенный ground truth (25 лет с Кораном, хафиз, образование
+    по Корану в Университете Медины). Реплаи других админов не пишем -
+    только его. Без автотранскрипции - просто копим сырьё."""
+    with db() as c:
+        c.execute(
+            "UPDATE voice_submissions SET review_type=?, review_file_id=?, review_text=?"
+            " WHERE chat_id=? AND message_id=? AND review_type IS NULL",
+            (review_type, review_file_id, review_text, chat_id, message_id)
         )
 
 

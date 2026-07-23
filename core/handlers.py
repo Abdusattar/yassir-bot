@@ -24,7 +24,7 @@ from core.db import (
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db,
-    save_voice_submission, mark_voice_reviewed,
+    save_voice_submission, mark_voice_reviewed, save_umar_review,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
@@ -737,6 +737,15 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # (любой реплай — текст, эмодзи или свой голосовой с разбором ошибки)
     if reply_to_message_id and is_group_admin(phone, group_id):
         mark_voice_reviewed(chat_id, reply_to_message_id)
+        # Stage 0 (R&D таджвида, 23.07.2026): отдельно копим сырьё ИМЕННО из
+        # реплаев Умар устаза (CURRICULUM_REVIEWER_ID) - его коррекции
+        # доверенный ground truth, реплаи прочих админов не пишем. Без
+        # автотранскрипции - просто сохраняем file_id/текст на будущее.
+        if phone == CURRICULUM_REVIEWER_ID:
+            if is_voice and voice_file_id:
+                save_umar_review(chat_id, reply_to_message_id, "voice", review_file_id=voice_file_id)
+            elif text:
+                save_umar_review(chat_id, reply_to_message_id, "text", review_text=text)
 
     # Тадаббур — только для админов, обычные сообщения игнорируем
     if gtype == "tadabbur" and not is_group_admin(phone, group_id):
