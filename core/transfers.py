@@ -4,18 +4,20 @@
 Схема переходов:
   pro  → (14 дней без отчёта)              → tadabbur
   relaxed → (30 дней без отчёта)           → tadabbur
-  tadabbur → (по желанию студента)         → relaxed
+  tadabbur/prep → (только через выпуск из prep) → relaxed
   relaxed → (≤3 пропуска за 30 дней)       → предлагаем pro (устаз выбирает группу)
 """
 import logging
 import asyncio
+from datetime import datetime
 
 from core.db import (
     get_all_groups, get_students, get_days_since_last_report,
-    get_skip_count_month, get_miss_count_last_30_days, get_lesson_skip_count_month,
+    get_skip_count_month, get_skip_count_month_detail, get_miss_count_last_30_days,
+    get_lesson_skip_count_month,
     deactivate_student, add_student, log_transfer, get_group,
-    get_tadabbur_group, get_overdue_unregistered, remove_unregistered,
-    find_by_phone, is_any_group_admin
+    get_tadabbur_group, get_prep_group, get_overdue_unregistered, remove_unregistered,
+    find_by_phone, is_any_group_admin, is_pending_graduation, has_pending_prep_graduate
 )
 from config import SUPER_ADMIN_IDS, IS_FEMALE
 from core.i18n import T, get_group_lang
@@ -51,11 +53,12 @@ async def _check_group_for_transfers(group, gtype):
             continue
         try:
             days_absent = get_days_since_last_report(student["id"], group["id"])
-            month_skips = get_skip_count_month(student["id"], group["id"])
+            detail = get_skip_count_month_detail(student["id"], group["id"])
+            month_skips = detail["missed"] if detail else 0
 
             if gtype == "pro":
                 if month_skips >= PRO_INACTIVE_DAYS:
-                    await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang)
+                    await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang, detail=detail, threshold=PRO_INACTIVE_DAYS)
                 else:
                     lesson_misses = get_lesson_skip_count_month(student["id"], group["id"])
                     if lesson_misses >= PRO_LESSON_MISS_LIMIT:
@@ -63,7 +66,7 @@ async def _check_group_for_transfers(group, gtype):
 
             elif gtype == "relaxed":
                 if month_skips >= RELAXED_INACTIVE_DAYS:
-                    await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang)
+                    await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang, detail=detail, threshold=RELAXED_INACTIVE_DAYS)
                 elif _qualifies_for_upgrade(student["id"], group["id"]):
                     await _suggest_upgrade(student, group, lang)
 
@@ -71,7 +74,13 @@ async def _check_group_for_transfers(group, gtype):
             log.error("Transfer check error for student %s: %s", student["id"], e)
 
 
-async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason="inactive"):
+def _fmt_dm(iso_date):
+    """'2026-07-01' → '01.07'"""
+    d = datetime.strptime(iso_date, "%Y-%m-%d").date()
+    return "{:02d}.{:02d}".format(d.day, d.month)
+
+
+async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason="inactive", detail=None, threshold=None):
     chat_id = group["chat_id"]
     name = student["name"]
     sid = student["id"]
@@ -108,8 +117,13 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     # Уведомляем студента
     if reason == "lessons":
         msg = T("transfer_to_tadabbur_lessons", lang, name=name, misses=count)
+    elif detail:
+        msg = T("transfer_to_tadabbur", lang, name=name,
+                 start=_fmt_dm(detail["start"]), end=_fmt_dm(detail["end"]),
+                 submitted=detail["submitted"], total=detail["total"], threshold=threshold)
     else:
-        msg = T("transfer_to_tadabbur", lang, name=name, days=count)
+        msg = T("transfer_to_tadabbur", lang, name=name,
+                 start="", end="", submitted=0, total=count, threshold=threshold or count)
     await send_message(chat_id, msg)
 
     # Уведомляем всех глобальных админов
@@ -122,6 +136,45 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
         await send_message(admin_id, admin_msg)
 
     log.info("Student %s transferred from %s to tadabbur (reason=%s, count=%d)", name, chat_id, reason, count)
+
+
+async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
+    """Закрывает дыру авторегистрации: студент, ещё не выпустившийся из
+    prep (сейчас активен в Тадаббуре или подготовительной), не может
+    автоматически "воскреснуть" студентом в pro/relaxed напрямую — только
+    через официальный выпуск из prep (prep_graduates).
+
+    Возвращает True, если студента заблокировали и кикнули (вызывающий код
+    не должен добавлять его в группу). False — путь свободен, можно
+    регистрировать как обычно."""
+    gtype = group["group_type"] or "relaxed"
+    if gtype not in ("pro", "relaxed"):
+        return False
+    if not is_pending_graduation(uid):
+        return False
+    if has_pending_prep_graduate(phone, group["id"]):
+        return False
+
+    lang = get_group_lang(group)
+
+    try:
+        await ban_member(chat_id, phone)
+        await unban_member(chat_id, phone)
+    except Exception as e:
+        log.error("Kick (return without prep) failed for %s in %s: %s", uid, chat_id, e)
+
+    await send_message(chat_id, T("return_needs_prep_group", lang, name=name))
+
+    prep_group = get_prep_group()
+    prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+    await send_message(phone, T("return_needs_prep_dm", lang, name=name, prep_link=prep_link))
+
+    admin_msg = T("return_blocked_notify_admin", "ru", name=name, group=group["title"] or chat_id)
+    for admin_id in SUPER_ADMIN_IDS:
+        await send_message(admin_id, admin_msg)
+
+    log.info("Blocked return without prep: %s in %s", name, chat_id)
+    return True
 
 
 def _qualifies_for_upgrade(sid, group_id):

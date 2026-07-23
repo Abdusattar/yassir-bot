@@ -535,6 +535,35 @@ def get_tadabbur_group():
     return rows[0] if rows else None
 
 
+def get_prep_group():
+    rows = get_groups_by_type("prep")
+    return rows[0] if rows else None
+
+
+def is_pending_graduation(uid):
+    """True, если студент сейчас активен в Тадаббуре или подготовительной —
+    должен сперва пройти prep, прежде чем вернуться в постоянную группу."""
+    with db() as c:
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            WHERE ug.user_id=? AND ug.role='student' AND ug.active=1
+              AND g.group_type IN ('tadabbur','prep')
+            LIMIT 1
+        """, (uid,)).fetchone()
+    return row is not None
+
+
+def has_pending_prep_graduate(phone, group_id):
+    """Проверка (без удаления) — ждут ли этого студента в этой группе после выпуска из prep."""
+    with db() as c:
+        row = c.execute(
+            "SELECT 1 FROM prep_graduates WHERE phone=? AND target_group_id=?",
+            (phone, group_id)
+        ).fetchone()
+    return row is not None
+
+
 def get_group_tasks(group):
     return group["tasks"].split(",") if group["tasks"] else ["m", "r", "t"]
 
@@ -1167,14 +1196,16 @@ def get_consecutive_skips(uid):
     return skips
 
 
-def get_skip_count_month(uid, group_id=None):
+def get_skip_count_month_detail(uid, group_id=None):
+    """Детали окна подсчёта пропусков текущего месяца: начало/конец окна,
+    сколько дней сдано, сколько всего дней в окне, сколько пропущено."""
     tz = pytz.timezone(TZ)
     month_start = datetime.now(tz).replace(day=1).date().isoformat()
     today = datetime.now(tz).date()
     with db() as c:
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
-            return 0
+            return None
         rows = c.execute(
             "SELECT DISTINCT date FROM score_events WHERE student_id=? AND date>=?",
             (uid, month_start)
@@ -1186,13 +1217,21 @@ def get_skip_count_month(uid, group_id=None):
         if joined and joined > added:
             added = joined
     start = max(month_start, added)
-    skips = 0
+    end = (today - timedelta(days=1)).isoformat()
+    total = 0
+    submitted = 0
     d = datetime.strptime(start, "%Y-%m-%d").date()
     while d < today:
-        if d.isoformat() not in dates:
-            skips += 1
+        total += 1
+        if d.isoformat() in dates:
+            submitted += 1
         d += timedelta(days=1)
-    return skips
+    return {"start": start, "end": end, "total": total, "submitted": submitted, "missed": total - submitted}
+
+
+def get_skip_count_month(uid, group_id=None):
+    detail = get_skip_count_month_detail(uid, group_id)
+    return detail["missed"] if detail else 0
 
 
 def get_miss_count_last_30_days(uid, group_id=None):

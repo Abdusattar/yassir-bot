@@ -30,6 +30,7 @@ from core.db import (
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
     get_published_curriculum_content, log_verify_check
 )
+from core.transfers import block_return_if_pending_prep
 
 log = logging.getLogger(__name__)
 
@@ -747,6 +748,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                         await send_message(chat_id, T("already_in_group", glang,
                             name=existing_user["name"], title=existing_lg["title"] or ""))
                         return
+                if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], phone, chat_id, group):
+                    return
                 add_student(existing_user["name"], group_id, phone)
                 await _send_registered(chat_id, glang, existing_user["name"], phone)
                 for ap in SUPER_ADMIN_IDS:
@@ -820,6 +823,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 # Уже зарегистрирован в другой группе — авторегистрация
                 existing_user = find_user_by_phone(phone)
                 if existing_user:
+                    if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], phone, chat_id, group):
+                        return
                     add_student(existing_user["name"], group_id, phone)
                     await _send_registered(chat_id, glang, existing_user["name"], phone)
                     return

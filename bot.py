@@ -19,6 +19,7 @@ from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import announce_prep_graduate_arrival
+from core.transfers import block_return_if_pending_prep
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -115,6 +116,8 @@ async def main():
                                 gtype = group_info["group_type"] or "relaxed"
                                 if existing_group and gtype != "tadabbur":
                                     log.info("chat_member: %s already in another group, skip", uid)
+                                elif await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
+                                    pass
                                 else:
                                     add_student(existing_user["name"], group_info["id"], uid)
                                     log.info("chat_member: added existing user %s to group %s", existing_user["name"], group_info["id"])
@@ -202,6 +205,8 @@ async def main():
                                 gtype = group_info["group_type"] or "relaxed"
                                 if existing_group and gtype != "tadabbur":
                                     pass  # уже студент в другой учебной группе — не добавляем
+                                elif await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
+                                    pass
                                 else:
                                     add_student(existing_user["name"], group_info["id"], uid)
                                     await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
