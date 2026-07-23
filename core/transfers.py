@@ -147,6 +147,12 @@ async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
     Возвращает True, если студента заблокировали и кикнули (вызывающий код
     не должен добавлять его в группу). False — путь свободен, можно
     регистрировать как обычно."""
+    # ВРЕМЕННО ОТКЛЮЧЕНО (23.07): is_pending_graduation ошибочно ловит
+    # обычных активных студентов — членство в Тадаббуре есть у всех
+    # (tadabbur_invite_reminder зовёт туда всех, не только кикнутых за
+    # пропуски). Нужен отдельный маркер именно для "кикнут за пропуски,
+    # ещё не выпустился из prep", а не факт членства в Тадаббуре.
+    return False
     gtype = group["group_type"] or "relaxed"
     if gtype not in ("pro", "relaxed"):
         return False
