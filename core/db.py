@@ -549,6 +549,22 @@ def get_tadabbur_group():
     return rows[0] if rows else None
 
 
+def get_group_by_id(group_id):
+    with db() as c:
+        return c.execute("SELECT * FROM groups WHERE id=?", (group_id,)).fetchone()
+
+
+def get_event_time(student_id, group_id, category):
+    """created_at (UTC, 'YYYY-MM-DD HH:MM:SS') первой записи такой категории -
+    для отслеживания "сколько часов студент не отвечает/не вступил" (24.07.2026)."""
+    with db() as c:
+        row = c.execute(
+            "SELECT created_at FROM score_events WHERE student_id=? AND group_id=? AND category=? LIMIT 1",
+            (student_id, group_id, category)
+        ).fetchone()
+    return row["created_at"] if row else None
+
+
 def get_group_by_title(title):
     with db() as c:
         return c.execute(
