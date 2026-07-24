@@ -408,6 +408,68 @@ def _strip_phantom_errors(verdict):
     return "\n".join(l for idx, l in enumerate(lines) if not drop[idx]).strip()
 
 
+# "Нарушение молчания" в таджвиде (24.07.2026, пункт #2): когда в ответе
+# есть реальная ошибка по другой теме (нахв/муфрадат), модель заодно
+# пересказывает уже верные таджвид-буквы вместо молчания. Консервативное
+# сравнение по словам, НЕ семантическая классификация - риск спрятать
+# настоящую правку устаза выше, чем польза от убранного шума, поэтому при
+# малейшей неоднозначности (слово степени пропало, есть отрицание) - не
+# трогаем. Проверено вручную на всех 25 записях с tajweed в checks.
+_LETTER_MENTION_RE = re.compile(r"(?<![؀-ۿ])([؀-ۿ])(?![؀-ۿ])\d*\s*[-–—:]?\s*([^\n]*)")
+_TAJWEED_VOCAB = ["горл", "язык", "губ", "нёб", "неб", "зуб", "нос", "гортан"]
+_TAJWEED_NEGATION_WORDS = ["не ", "неверно", "неточно", "неправильно", "не совсем", "не тот", "не та"]
+_TAJWEED_STOPWORDS = {"и", "с", "в", "на", "к", "ко", "часть", "буква"}
+_TAJWEED_DEGREE_WORDS = {"ближе", "почти", "слегка", "чуть"}
+
+
+def _has_tajweed_vocab(text):
+    low = text.lower()
+    return any(v in low for v in _TAJWEED_VOCAB)
+
+
+def _tajweed_words(text):
+    text = text.lower().replace("+", " ")
+    toks = re.findall(r"[а-яё]+", text)
+    return {t for t in toks if t not in _TAJWEED_STOPWORDS and len(t) > 1}
+
+
+def _extract_letter_descriptions(text):
+    result = {}
+    for line in text.split("\n"):
+        for m in _LETTER_MENTION_RE.finditer(line):
+            letter, desc = m.group(1), m.group(2).strip(" ·.,;")
+            if not desc or not _has_tajweed_vocab(desc):
+                continue
+            result.setdefault(letter, []).append(desc)
+    return result
+
+
+def _is_tajweed_redundant(student_desc, bot_desc):
+    if any(n in bot_desc.lower() for n in _TAJWEED_NEGATION_WORDS):
+        return False
+    sw, bw = _tajweed_words(student_desc), _tajweed_words(bot_desc)
+    if not sw or not bw:
+        return False
+    if (sw & _TAJWEED_DEGREE_WORDS) - bw:
+        return False
+    return len(sw & bw) >= 1 and bw.issubset(sw | {"нёбо", "небо"})
+
+
+def _strip_tajweed_silence_violations(submitted_text, verdict):
+    student_letters = _extract_letter_descriptions(submitted_text)
+    lines = verdict.split("\n")
+    drop = [False] * len(lines)
+    for idx, line in enumerate(lines):
+        for m in _LETTER_MENTION_RE.finditer(line):
+            letter, desc = m.group(1), m.group(2).strip(" ·.,;")
+            if not desc or not _has_tajweed_vocab(desc) or letter not in student_letters:
+                continue
+            if any(_is_tajweed_redundant(sd, desc) for sd in student_letters[letter]):
+                drop[idx] = True
+                break
+    return "\n".join(l for idx, l in enumerate(lines) if not drop[idx]).strip()
+
+
 async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks, glang="ru", message_id=None, student_id=None):
     try:
         system = (
@@ -508,6 +570,8 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         # есть иъраб-ошибка) - фильтр только для mufradat/hadith.
         if result and any(c.startswith("mufradat") or c.startswith("hadith") for c in checks):
             result = _strip_phantom_errors(result) or "ВЕРНО"
+        if result and any(c.startswith("tajweed") for c in checks):
+            result = _strip_tajweed_silence_violations(text, result) or "ВЕРНО"
         # Точное совпадение, а не подстрока: "неверно" содержит "верно" как подстроку,
         # из-за чего ответы, начинающиеся с "Неверно ...", ошибочно считались "всё верно"
         # и реальные замечания молча терялись (не отправлялись студенту).
