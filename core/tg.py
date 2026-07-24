@@ -67,6 +67,33 @@ async def send_message(chat_id, text, reply_to_message_id=None):
     return await _raw_send(cid, text or "", reply_to_message_id=reply_to_message_id)
 
 
+async def send_message_with_buttons(chat_id, text, buttons):
+    """buttons: список (label, callback_data) - одна кнопка на строку."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    keyboard = {"inline_keyboard": [[{"text": label, "callback_data": data}] for label, data in buttons]}
+    return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": keyboard})
+
+
+async def answer_callback_query(callback_query_id, text=None):
+    payload = {"callback_query_id": callback_query_id}
+    if text:
+        payload["text"] = text
+    await tg_call("answerCallbackQuery", payload)
+
+
+async def remove_message_keyboard(chat_id, message_id):
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    await tg_call("editMessageReplyMarkup", {
+        "chat_id": cid, "message_id": message_id, "reply_markup": {"inline_keyboard": []}
+    })
+
+
 async def get_dm_start_link():
     """Ссылка-приглашение в личку с ботом (https://t.me/<username>?start=go).
     Юзернейм берётся через getMe каждый раз — на случай разных ботов (муж/жен)."""

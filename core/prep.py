@@ -3,21 +3,20 @@
 
 Проверка идёт ежедневно по каждому активному студенту prep:
   ≥5 дней с отчётами (в любой момент, не дожидаясь 14 дней) →
-                        поздравление студенту в личку + объявление в саму
-                        prep-группу (мотивация остальным) + уведомление
-                        ОДНОМУ конкретному устазу (не всем супер-админам —
-                        решение пользователя 23.07.2026: если видят
-                        несколько человек, могут по ошибке распределить
-                        одного студента сразу в две группы). Устаз сам
-                        вручную решает, в какую постоянную группу определить,
-                        и зовёт студента туда. Повторяется КАЖДУЮ проверку,
-                        пока студента реально не переведут — без этого
-                        уведомление легко потерять среди других сообщений.
-                        Из prep деактивируется и физически кикается только
-                        когда студент реально станет активным в pro/relaxed
-                        группе (см. announce_prep_graduate_arrival — теперь
-                        срабатывает по факту, а не по заранее выбранной
-                        целевой группе).
+                        объявление в саму prep-группу (мотивация остальным) +
+                        студенту в личку вопрос с кнопками "знаешь ли хотя бы
+                        1 джуз наизусть?" (решение Умар устаза 24.07.2026).
+                        По ответу бот САМ подбирает группу: знает ≥1 джуз →
+                        конкретная группа N-1, не знает → наименее заполненная
+                        relaxed нужного языка - и шлёт студенту в личку
+                        ссылку-приглашение. Устаз
+                        больше не участвует, кроме редкого случая, когда
+                        подходящей группы со ссылкой не нашлось (см.
+                        handle_juz_answer). Из prep деактивируется и
+                        физически кикается только когда студент реально
+                        станет активным в pro/relaxed группе (см.
+                        announce_prep_graduate_arrival — срабатывает по
+                        факту вступления по ссылке, а не заранее).
   <5 дней к дедлайну   → остаётся в Тадаббуре, деактивируется из prep
                         и физически кикается (мягко, ban+unban) из чата —
                         иначе дыра авторегистрации: следующим же сообщением
@@ -36,9 +35,10 @@ from core.db import (
     db, get_prep_students_active, count_report_days_since, add_bonus,
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
     clear_pending_prep_return, prep_days_done, get_regular_group_sizes,
+    get_best_group_for_transfer, get_group_by_title, get_dm_ok_by_phone,
 )
 from core.i18n import T, get_group_lang
-from core.tg import send_message, ban_member, unban_member
+from core.tg import send_message, ban_member, unban_member, send_message_with_buttons
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +50,10 @@ PREP_EXTENSION_DAYS = 5  # доп. дни к дедлайну, если студ
 # конкретный человек на профиль, не все супер-админы (решение 23.07.2026,
 # см. докстринг модуля выше).
 _PREP_GRADUATE_ADMIN_ID = "5342232498" if IS_FEMALE else "7666229019"  # Зейнеб / Умар устаз
+
+# Кто знает хотя бы 1 джуз наизусть - идёт в конкретную группу N-1, а не в
+# "любую наименее заполненную pro" (уточнение Умар устаза 24.07.2026).
+_PREP_JUZ_KNOWN_TARGET_TITLE = "N-1"
 
 
 async def check_prep_students():
@@ -65,24 +69,21 @@ async def check_prep_students():
         elapsed = s["elapsed"] or 0
 
         if days_done >= PREP_MIN_DAYS:
-            already_notified = _has_prep_offer(s["id"], group_id)
-            if not already_notified:
-                # Студенту и в группу — один раз, не спамим при повторных проверках
+            if not _has_prep_offer(s["id"], group_id):
+                # Объявление в группу — один раз (мотивация остальным)
                 add_bonus(s["id"], group_id, joined, 0, "prep_offer")
-                await send_message(uid, T("prep_congrats", glang, name=s["name"], days=days_done))
                 await send_message(s["chat_id"], T("prep_success_group", glang, name=s["name"], days=days_done))
 
-            # Устазу (одному конкретному, не всем супер-админам) — повторяем
-            # КАЖДУЮ проверку, пока студента реально не переведут, иначе
-            # уведомление легко потерять среди других сообщений. Из prep
-            # студент уходит сам — announce_prep_graduate_arrival сработает,
-            # когда он реально станет активным в новой группе.
-            admin_msg = T(
-                "prep_graduate_notify_admin", "ru",
-                name=s["name"], days=days_done, group=s["title"] or s["chat_id"]
-            ) + _group_sizes_text()
-            await send_message(_PREP_GRADUATE_ADMIN_ID, admin_msg)
-            log.info("prep check: student=%s days_done=%d → admin reminded for manual placement", s["name"], days_done)
+            if not _has_juz_answer(s["id"], group_id):
+                # Вопрос студенту в личку про джуз — повторяем КАЖДУЮ проверку,
+                # пока не ответит (не одноразовый флаг!). Иначе если бот ещё
+                # не может писать в личку (студент сам не открывал диалог с
+                # ботом — Forbidden: bot can't initiate conversation), вопрос
+                # тихо не доходит, а студент остаётся зависшим навсегда
+                # (тот же класс бага, что уже ловили сегодня на Мураде вручную,
+                # см. feedback про add_bonus до отправки — 24.07.2026).
+                await send_juz_question(uid, s["name"], glang, days_done, s["chat_id"])
+                log.info("prep check: student=%s days_done=%d → juz question (re)sent", s["name"], days_done)
         else:
             deadline = PREP_DAYS + (PREP_EXTENSION_DAYS if days_done >= 1 else 0)
             if elapsed < deadline:
@@ -265,12 +266,12 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
 
 
 async def remind_ustaz_about_graduate(phone):
-    """Студент, уже выполнивший условие prep и ожидающий ручного перевода,
-    сам написал боту в личку — считаем это напоминанием, шлём то же
-    уведомление устазу ещё раз (решение пользователя 23.07.2026).
-    Возвращает (name, lang) если напоминание реально отправлено (студент
-    действительно ожидает перевода), иначе None — вызывающий код сам решает,
-    что ответить."""
+    """Студент, уже выполнивший условие prep, сам написал боту в личку, пока
+    ждёт перевода — считаем это напоминанием. С 24.07.2026 перевод полностью
+    автоматический (решение Умар устаза): если вопрос про джуз ещё не задан -
+    задаём сейчас; если уже отвечал - шлём ту же ссылку повторно (чтобы не
+    перевыбирать группу заново и не сбивать студента другой ссылкой).
+    Возвращает (name, lang) если что-то реально отправлено, иначе None."""
     with db() as c:
         row = c.execute("""
             SELECT u.id as uid, u.name, ug.group_id as gid, ug.joined_date, g.chat_id, g.title, g.lang
@@ -285,18 +286,23 @@ async def remind_ustaz_about_graduate(phone):
     days_done = count_report_days_since(row["uid"], row["gid"], row["joined_date"])
     if days_done < PREP_MIN_DAYS:
         return None
-    admin_msg = T(
-        "prep_graduate_notify_admin", "ru",
-        name=row["name"], days=days_done, group=row["title"] or row["chat_id"]
-    ) + _group_sizes_text()
-    await send_message(_PREP_GRADUATE_ADMIN_ID, "🔔 Напоминание от студента:\n" + admin_msg)
-    log.info("prep graduate reminder: %s nudged admin", row["name"])
-    return (row["name"], row["lang"] or "ru")
+    glang = row["lang"] or "ru"
+    answer = _get_juz_answer(row["uid"], row["gid"])
+    if answer:
+        _, target_group_id = answer
+        with db() as c:
+            g = c.execute("SELECT invite_link FROM groups WHERE id=?", (target_group_id,)).fetchone()
+        if g and g["invite_link"]:
+            await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=g["invite_link"]))
+    else:
+        await send_juz_question(phone, row["name"], glang, days_done, row["chat_id"])
+    log.info("prep graduate reminder: %s nudged (answer=%s)", row["name"], bool(answer))
+    return (row["name"], glang)
 
 
 def _group_sizes_text():
-    """Список постоянных групп с количеством студентов - чтобы устаз видел
-    нагрузку групп и решал, куда определить выпускника (24.07.2026)."""
+    """Список постоянных групп с количеством студентов - для запасного
+    ручного уведомления устазу, если авто-подбор группы не сработал (24.07.2026)."""
     rows = get_regular_group_sizes()
     if not rows:
         return ""
@@ -306,12 +312,93 @@ def _group_sizes_text():
     return "\n".join(lines)
 
 
+async def send_juz_question(phone, name, glang, days_done, group_chat_id):
+    """В личку, если студент уже жал Start боту (get_dm_ok_by_phone) - иначе
+    в саму prep-группу (личка молча не дойдёт - Forbidden: bot can't initiate
+    conversation, пока студент сам не откроет диалог). Идентичность тапнувшего
+    проверяется в bot.py по uid, закодированному в callback_data - кнопки в
+    группе видны и нажимаемы всем, не только адресату (24.07.2026)."""
+    text = T("prep_juz_question", glang, name=name, days=days_done)
+    buttons = [
+        (T("prep_juz_yes_btn", glang), f"pjz:yes:{phone}"),
+        (T("prep_juz_no_btn", glang), f"pjz:no:{phone}"),
+    ]
+    target_chat = phone if get_dm_ok_by_phone(phone) else group_chat_id
+    await send_message_with_buttons(target_chat, text, buttons)
+
+
+async def _send_dm_or_group(phone, group_chat_id, text):
+    target_chat = phone if get_dm_ok_by_phone(phone) else group_chat_id
+    await send_message(target_chat, text)
+
+
+async def handle_juz_answer(phone, knows_juz):
+    """Студент нажал кнопку (знает ли хотя бы 1 джуз наизусть) - решение
+    Умар устаза 24.07.2026: знает → конкретная группа N-1, не знает →
+    наименее заполненная relaxed того же языка, что подготовительная
+    (кыргызская исключается сама собой, если студент не из кыргызской
+    подготовительной). Бот сам шлёт ссылку в личку - дальше как при обычном
+    вступлении по ссылке (announce_prep_graduate_arrival сработает при
+    заходе в чат)."""
+    with db() as c:
+        row = c.execute("""
+            SELECT u.id as uid, u.name, ug.group_id as gid, ug.joined_date, g.lang, g.chat_id
+            FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? AND ug.role='student' AND ug.active=1 AND g.group_type='prep'
+            LIMIT 1
+        """, (phone,)).fetchone()
+    if not row:
+        return  # уже не в подготовительной (например, повторный тап после перевода)
+    if _has_juz_answer(row["uid"], row["gid"]):
+        return  # уже отвечал - не обрабатываем повторно (защита от двойного тапа)
+
+    glang = row["lang"] or "ru"
+    if knows_juz:
+        target_type = "N-1"
+        target = get_group_by_title(_PREP_JUZ_KNOWN_TARGET_TITLE)
+    else:
+        target_type = "relaxed"
+        target = get_best_group_for_transfer("relaxed", glang)
+    if not target or not target["invite_link"]:
+        # Нет подходящей группы со ссылкой - редкий случай, зовём устаза вручную
+        await send_message(_PREP_GRADUATE_ADMIN_ID,
+            "⚠️ " + row["name"] + ": не нашлось группы (" + target_type +
+            ") со ссылкой-приглашением - определите вручную." +
+            _group_sizes_text())
+        log.warning("prep juz answer: no eligible '%s' group for %s", target_type, row["name"])
+        return
+
+    add_bonus(row["uid"], row["gid"], row["joined_date"], 0, "prep_juz_answer",
+              subcategory=target_type, note=str(target["id"]))
+    await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+    log.info("prep juz answer: %s → %s (group=%s)", row["name"], target_type, target["title"])
+
+
 def _has_prep_offer(user_id, group_id):
     with db() as c:
         return c.execute(
             "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_offer'",
             (user_id, group_id)
         ).fetchone() is not None
+
+
+def _has_juz_answer(user_id, group_id):
+    with db() as c:
+        return c.execute(
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer'",
+            (user_id, group_id)
+        ).fetchone() is not None
+
+
+def _get_juz_answer(user_id, group_id):
+    with db() as c:
+        row = c.execute(
+            "SELECT subcategory, note FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer'",
+            (user_id, group_id)
+        ).fetchone()
+    return (row["subcategory"], int(row["note"])) if row else None
 
 
 def _deactivate_from_prep(user_id, group_id):

@@ -549,6 +549,30 @@ def get_tadabbur_group():
     return rows[0] if rows else None
 
 
+def get_group_by_title(title):
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM groups WHERE active=1 AND title=? LIMIT 1", (title,)
+        ).fetchone()
+
+
+def get_best_group_for_transfer(group_type, lang):
+    """Наименее заполненная активная группа нужного типа/языка со ссылкой-
+    приглашением - для авто-перевода выпускника подготовительной (24.07.2026).
+    Без invite_link смысла возвращать группу нет - некуда отправлять студента."""
+    with db() as c:
+        return c.execute("""
+            SELECT g.*,
+                   (SELECT COUNT(*) FROM user_groups ug
+                    WHERE ug.group_id=g.id AND ug.role='student' AND ug.active=1) as cnt
+            FROM groups g
+            WHERE g.active=1 AND g.group_type=? AND g.lang=?
+              AND g.invite_link IS NOT NULL AND g.invite_link != ''
+            ORDER BY cnt
+            LIMIT 1
+        """, (group_type, lang)).fetchone()
+
+
 def get_regular_group_sizes():
     """Постоянные учебные группы (pro/relaxed) с количеством активных
     студентов - устазу для решения, куда определить выпускника подготовительной."""

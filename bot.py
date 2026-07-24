@@ -12,13 +12,13 @@ import asyncio
 import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
-from core.tg import tg_call, send_message
+from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, add_student, get_learning_group
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
-from core.prep import announce_prep_graduate_arrival
+from core.prep import announce_prep_graduate_arrival, handle_juz_answer
 from core.transfers import block_return_if_pending_prep
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -64,7 +64,7 @@ async def main():
         try:
             resp = await tg_call(
                 "getUpdates",
-                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "message_reaction"]},
+                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "message_reaction", "callback_query"]},
                 timeout=40
             )
             if not resp or not resp.get("ok"):
@@ -77,6 +77,30 @@ async def main():
                 log.debug("getUpdates: %d updates", len(updates))
             for upd in updates:
                 offset = upd["update_id"] + 1
+
+                # Нажатие инлайн-кнопки (сейчас единственный сценарий — вопрос
+                # "знаешь ли хотя бы 1 джуз" при выпуске из подготовительной)
+                cq = upd.get("callback_query")
+                if cq:
+                    cq_data = cq.get("data", "")
+                    cq_from = cq.get("from", {})
+                    cq_uid = str(cq_from.get("id", ""))
+                    cq_msg = cq.get("message", {}) or {}
+                    cq_chat_id = str(cq_msg.get("chat", {}).get("id", ""))
+                    cq_message_id = cq_msg.get("message_id")
+                    await answer_callback_query(cq.get("id"))
+                    # "pjz:yes:<uid>" / "pjz:no:<uid>" - вопрос про джуз при выпуске
+                    # из подготовительной. uid закодирован в callback_data, потому
+                    # что кнопка может быть показана в ГРУППЕ (если личка студенту
+                    # ещё недоступна) - там её видят и могут нажать все участники,
+                    # поэтому обрабатываем только тап именно адресата (24.07.2026).
+                    if cq_data.startswith("pjz:"):
+                        parts = cq_data.split(":", 2)
+                        if len(parts) == 3 and parts[2] == cq_uid:
+                            if cq_chat_id and cq_message_id:
+                                await remove_message_keyboard(cq_chat_id, cq_message_id)
+                            asyncio.create_task(handle_juz_answer(cq_uid, parts[1] == "yes"))
+                    continue
 
                 # Вступление по ссылке-приглашению (chat_member update)
                 cm = upd.get("chat_member")
