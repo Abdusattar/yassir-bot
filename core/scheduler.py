@@ -1390,6 +1390,11 @@ async def scheduler():
                 await maybe_run("streak_bonuses", streak_bonuses)
                 await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
+                # Дублируем вечернюю проверку (21:00) с утра: студенты часто сдают
+                # отчёт поздно вечером (после 21:00), и раньше уведомление устазу
+                # о выполнении условия (≥5 дней) уходило только на СЛЕДУЮЩИЙ вечер.
+                # Утренняя проверка ловит такие случаи на ~14 часов раньше (24.07.2026).
+                await maybe_run("prep_check_morning", check_prep_students)
                 await maybe_run("voice_review_report", voice_review_report)
                 if wd in (0, 1):
                     await maybe_run("weekly_ops_report", weekly_ops_report)
