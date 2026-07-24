@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import time
+import unicodedata
 
 from config import SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID
 from core.content import (
@@ -344,6 +345,53 @@ def _build_reference(checks):
     return "\n".join(parts)
 
 
+# Фантомные ошибки муфрадат/хадис-проверки (24.07.2026): Gemini иногда заявляет
+# "неверно"/"правильно X", а X после снятия огласовок побуквенно совпадает с
+# исходным словом студента - ошибки физически нет. Хамзу (ء أ إ ؤ ئ), алиф
+# (ا/آ), та-марбуту (ة/ه), алиф-максуру (ى/ي) НЕ трогаем - это реальные
+# различия, которые промпт требует проверять по-настоящему. Проверено на
+# 85 реальных записях verify_log (см. tajweed_ai/scripts/verify_phantom_filter.py).
+_HARAKAT_RE = re.compile(r"[ً-ْـٰ]")
+_ARABIC_TOKEN_RE = re.compile(r"[؀-ۿ]+")
+_PHANTOM_TRIGGER_WORDS = ["неверно", "неправильно", "правильно", "туура эмес", "туура"]
+
+
+def _normalize_arabic(word):
+    word = unicodedata.normalize("NFC", word)
+    return _HARAKAT_RE.sub("", word).strip()
+
+
+def _has_phantom_trigger(line):
+    low = line.lower()
+    return any(t in low for t in _PHANTOM_TRIGGER_WORDS)
+
+
+def _strip_phantom_errors(verdict):
+    """Убирает строки, где заявленная 'ошибка' после снятия огласовок
+    идентична 'правильному' варианту - см. комментарий выше."""
+    lines = verdict.split("\n")
+    n = len(lines)
+    drop = [False] * n
+    i = 0
+    while i < n:
+        line = lines[i]
+        toks = _ARABIC_TOKEN_RE.findall(line)
+        if len(toks) >= 2 and _has_phantom_trigger(line):
+            if _normalize_arabic(toks[0]) == _normalize_arabic(toks[-1]):
+                drop[i] = True
+            i += 1
+            continue
+        if len(toks) == 1 and _has_phantom_trigger(line) and i + 1 < n:
+            next_toks = _ARABIC_TOKEN_RE.findall(lines[i + 1])
+            if len(next_toks) == 1 and _normalize_arabic(toks[0]) == _normalize_arabic(next_toks[0]):
+                drop[i] = True
+                drop[i + 1] = True
+                i += 2
+                continue
+        i += 1
+    return "\n".join(l for idx, l in enumerate(lines) if not drop[idx]).strip()
+
+
 async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks, glang="ru", message_id=None, student_id=None):
     try:
         system = (
@@ -440,6 +488,10 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             result = _re.sub(r"```[a-z]*\n?", "", result).strip().rstrip("`").strip()
             if result.startswith("[") or result.startswith("{"):
                 result = None
+        # Огласовки не проверяем в нахве (там огласовка на конце слова - это и
+        # есть иъраб-ошибка) - фильтр только для mufradat/hadith.
+        if result and any(c.startswith("mufradat") or c.startswith("hadith") for c in checks):
+            result = _strip_phantom_errors(result) or "ВЕРНО"
         # Точное совпадение, а не подстрока: "неверно" содержит "верно" как подстроку,
         # из-за чего ответы, начинающиеся с "Неверно ...", ошибочно считались "всё верно"
         # и реальные замечания молча терялись (не отправлялись студенту).
