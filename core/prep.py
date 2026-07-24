@@ -35,7 +35,7 @@ from config import IS_FEMALE
 from core.db import (
     db, get_prep_students_active, count_report_days_since, add_bonus,
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
-    clear_pending_prep_return, prep_days_done,
+    clear_pending_prep_return, prep_days_done, get_regular_group_sizes,
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member
@@ -80,7 +80,7 @@ async def check_prep_students():
             admin_msg = T(
                 "prep_graduate_notify_admin", "ru",
                 name=s["name"], days=days_done, group=s["title"] or s["chat_id"]
-            )
+            ) + _group_sizes_text()
             await send_message(_PREP_GRADUATE_ADMIN_ID, admin_msg)
             log.info("prep check: student=%s days_done=%d → admin reminded for manual placement", s["name"], days_done)
         else:
@@ -288,10 +288,22 @@ async def remind_ustaz_about_graduate(phone):
     admin_msg = T(
         "prep_graduate_notify_admin", "ru",
         name=row["name"], days=days_done, group=row["title"] or row["chat_id"]
-    )
+    ) + _group_sizes_text()
     await send_message(_PREP_GRADUATE_ADMIN_ID, "🔔 Напоминание от студента:\n" + admin_msg)
     log.info("prep graduate reminder: %s nudged admin", row["name"])
     return (row["name"], row["lang"] or "ru")
+
+
+def _group_sizes_text():
+    """Список постоянных групп с количеством студентов - чтобы устаз видел
+    нагрузку групп и решал, куда определить выпускника (24.07.2026)."""
+    rows = get_regular_group_sizes()
+    if not rows:
+        return ""
+    lines = ["", "📊 Студентов в группах:"]
+    for r in rows:
+        lines.append(f"  • {r['title']} ({r['group_type']}): {r['cnt']}")
+    return "\n".join(lines)
 
 
 def _has_prep_offer(user_id, group_id):

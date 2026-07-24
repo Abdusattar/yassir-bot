@@ -549,6 +549,20 @@ def get_tadabbur_group():
     return rows[0] if rows else None
 
 
+def get_regular_group_sizes():
+    """Постоянные учебные группы (pro/relaxed) с количеством активных
+    студентов - устазу для решения, куда определить выпускника подготовительной."""
+    with db() as c:
+        return c.execute("""
+            SELECT g.title, g.group_type,
+                   (SELECT COUNT(*) FROM user_groups ug
+                    WHERE ug.group_id=g.id AND ug.role='student' AND ug.active=1) as cnt
+            FROM groups g
+            WHERE g.active=1 AND g.group_type IN ('pro','relaxed')
+            ORDER BY g.group_type, cnt
+        """).fetchall()
+
+
 def get_prep_group():
     rows = get_groups_by_type("prep")
     return rows[0] if rows else None
