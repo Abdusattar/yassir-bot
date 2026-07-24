@@ -355,6 +355,17 @@ _HARAKAT_RE = re.compile(r"[ً-ْـٰ]")
 _ARABIC_TOKEN_RE = re.compile(r"[؀-ۿ]+")
 _PHANTOM_TRIGGER_WORDS = ["неверно", "неправильно", "правильно", "туура эмес", "туура"]
 
+# Узкий паттерн "слово - не БУКВА, а БУКВА (слово2)" (id=1, 24.07.2026). "не"
+# намеренно НЕ в _PHANTOM_TRIGGER_WORDS выше - слишком частое в легитимных
+# пояснениях ("не к рту", "не فعل المضارع"). Здесь структура жёстко узкая:
+# сравниваем только первое слово и слово в скобках, буквы посередине - это
+# claim модели, который не валидируем.
+_NE_A_PATTERN = re.compile(
+    r"^([؀-ۿ]+)\s*[-–—]\s*"
+    r"(?:не\s+[؀-ۿ]+,?\s*а\s+[؀-ۿ]+,?\s*)+"
+    r"\(([؀-ۿ]+)\)"
+)
+
 
 def _normalize_arabic(word):
     word = unicodedata.normalize("NFC", word)
@@ -375,6 +386,11 @@ def _strip_phantom_errors(verdict):
     i = 0
     while i < n:
         line = lines[i]
+        m = _NE_A_PATTERN.match(line.strip())
+        if m and _normalize_arabic(m.group(1)) == _normalize_arabic(m.group(2)):
+            drop[i] = True
+            i += 1
+            continue
         toks = _ARABIC_TOKEN_RE.findall(line)
         if len(toks) >= 2 and _has_phantom_trigger(line):
             if _normalize_arabic(toks[0]) == _normalize_arabic(toks[-1]):
