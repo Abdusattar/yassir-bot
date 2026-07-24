@@ -408,6 +408,33 @@ def _strip_phantom_errors(verdict):
     return "\n".join(l for idx, l in enumerate(lines) if not drop[idx]).strip()
 
 
+# Точные фантомы в нахве (24.07.2026): "X — вместо X" - claimed и "correct"
+# побуквенно совпадают. НЕ снимаем огласовки (в отличие от _strip_phantom_
+# errors) - в нахве конечная огласовка это и есть проверяемый иъраб, её
+# трогать нельзя. Умышленно узкий скоуп - по совету advisor грамматику
+# нельзя валидировать паттернами (см. discussion 24.07.2026): "мабни может
+# быть в محل рафъ/насб/джарр" - это НЕ противоречие, а стандартная
+# конструкция, и ل - многозначная буква (харф джарр/амр/ибтида), список
+# не определяет её роль без контекста. Только точное само-противоречие.
+_NAHW_VMESTO_RE = re.compile(r"\s*[—–]\s*")
+
+
+def _strip_nahw_exact_phantoms(verdict):
+    lines = verdict.split("\n")
+    keep = []
+    for line in lines:
+        parts = [p.strip(" ·.,;0123456789.") for p in _NAHW_VMESTO_RE.split(line)]
+        is_phantom = False
+        for i, p in enumerate(parts):
+            if p.lower().startswith("вместо ") and i > 0:
+                if parts[i - 1] == p[len("вместо "):].strip():
+                    is_phantom = True
+                    break
+        if not is_phantom:
+            keep.append(line)
+    return "\n".join(keep).strip()
+
+
 # "Нарушение молчания" в таджвиде (24.07.2026, пункт #2): когда в ответе
 # есть реальная ошибка по другой теме (нахв/муфрадат), модель заодно
 # пересказывает уже верные таджвид-буквы вместо молчания. Консервативное
@@ -572,6 +599,8 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             result = _strip_phantom_errors(result) or "ВЕРНО"
         if result and any(c.startswith("tajweed") for c in checks):
             result = _strip_tajweed_silence_violations(text, result) or "ВЕРНО"
+        if result and any(c.startswith("arabic grammar") for c in checks):
+            result = _strip_nahw_exact_phantoms(result) or "ВЕРНО"
         # Точное совпадение, а не подстрока: "неверно" содержит "верно" как подстроку,
         # из-за чего ответы, начинающиеся с "Неверно ...", ошибочно считались "всё верно"
         # и реальные замечания молча терялись (не отправлялись студенту).
