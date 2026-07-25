@@ -5,7 +5,10 @@
   pro  → (14 дней без отчёта)              → tadabbur
   relaxed → (30 дней без отчёта)           → tadabbur
   tadabbur/prep → (только через выпуск из prep) → relaxed
-  relaxed → (≤3 пропуска за 30 дней)       → предлагаем pro (устаз выбирает группу)
+  relaxed → (≤3 пропуска за 30 дней, раз в 30 дней) → DM с кнопками "остаюсь"/
+            "хочу в pro" (25.07.2026, см. _check_upgrade). Кик из relaxed —
+            только по факту реального вступления в pro-группу (см.
+            handle_known_user_group_join), не сразу после выбора.
 """
 import logging
 import asyncio
@@ -15,22 +18,27 @@ from core.db import (
     get_all_groups, get_students, get_days_since_last_report,
     get_skip_count_month, get_skip_count_month_detail, get_miss_count_last_30_days,
     get_lesson_skip_count_month,
-    deactivate_student, add_student, log_transfer, get_group,
+    deactivate_student, add_student, log_transfer, get_group, get_group_by_id,
     get_tadabbur_group, get_prep_group, get_overdue_unregistered, remove_unregistered,
-    find_by_phone, is_any_group_admin, is_pending_prep_return, prep_days_done,
-    mark_pending_prep_return
+    find_by_phone, find_user_by_phone, get_learning_group, is_any_group_admin,
+    is_pending_prep_return, prep_days_done, mark_pending_prep_return,
+    get_dm_ok_by_phone, get_best_pro_group_for_upgrade, create_upgrade_offer,
+    delete_upgrade_offer, get_last_upgrade_offer_at, get_upgrade_offer_by_id,
+    set_upgrade_decision, get_pending_upgrade_target, resolve_upgrade_offer,
 )
-from core.prep import PREP_MIN_DAYS
+from core.prep import PREP_MIN_DAYS, announce_prep_graduate_arrival
 from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.i18n import T, get_group_lang
-from core.tg import send_message, ban_member, unban_member
+from core.tg import send_message, send_message_with_buttons, ban_member, unban_member
 
 log = logging.getLogger(__name__)
 
 # Пороговые дни бездействия
 PRO_INACTIVE_DAYS = 10
 RELAXED_INACTIVE_DAYS = 20
-UPGRADE_MAX_MISSES = 3      # ≤3 пропуска за 30 дней → кандидат на повышение
+UPGRADE_MAX_MISSES = 3      # ≤3 пропуска за 30 дней → кандидат на повышение в pro
+UPGRADE_COOLDOWN_DAYS = 30  # раньше повторно не предлагаем, даже если снова подошёл
+UPGRADE_OFFER_TTL_HOURS = 24  # сколько действует предложение с кнопками
 PRO_LESSON_MISS_LIMIT = 3   # 3+ пропуска онлайн урока в месяц → перевод в тадаббур
 
 
@@ -69,8 +77,8 @@ async def _check_group_for_transfers(group, gtype):
             elif gtype == "relaxed":
                 if month_skips >= RELAXED_INACTIVE_DAYS:
                     await _transfer_to_tadabbur(student, group, fallback_id, month_skips, lang, detail=detail, threshold=RELAXED_INACTIVE_DAYS)
-                elif _qualifies_for_upgrade(student["id"], group["id"]):
-                    await _suggest_upgrade(student, group, lang)
+                else:
+                    await _check_upgrade(student, group, lang)
 
         except Exception as e:
             log.error("Transfer check error for student %s: %s", student["id"], e)
@@ -200,29 +208,149 @@ async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
     return True
 
 
-def _qualifies_for_upgrade(sid, group_id):
-    misses = get_miss_count_last_30_days(sid, group_id)
-    return misses <= UPGRADE_MAX_MISSES
+def _hours_since(ts):
+    try:
+        dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return 1e9
+    return (datetime.utcnow() - dt).total_seconds() / 3600
 
 
-async def _suggest_upgrade(student, group, lang):
-    name = student["name"]
+async def _check_upgrade(student, group, lang):
+    """Раз в UPGRADE_COOLDOWN_DAYS дней предлагаем relaxed-студенту, который
+    почти не пропускает (≤UPGRADE_MAX_MISSES за 30 дней), перейти в pro —
+    личным сообщением с кнопками (25.07.2026, решение пользователя). Только
+    тем, кто уже жал /start боту (dm_ok) — иначе личка недоступна, а группового
+    фолбэка тут намеренно нет (в отличие от prep-flow), это не публичный
+    вопрос. Якорь 30-дневного окна ставится только при реально доставленном
+    сообщении, иначе dm_ok=1, но заблокировавший бота студент навсегда
+    выпадет из проверки (тот же класс бага, что и в core/prep.py)."""
     sid = student["id"]
-    chat_id = group["chat_id"]
+    phone = student["phone"]
+    group_id = group["id"]
 
-    # Студенту в группе
-    msg = T("upgrade_suggestion", lang, name=name)
-    await send_message(chat_id, msg)
+    if not get_dm_ok_by_phone(phone):
+        return
 
-    # Устазу — в личку (нужно подтверждение с выбором целевой группы)
-    admin_msg = T(
-        "upgrade_notify_admin", "ru",
-        name=name, group=group["title"] or chat_id, sid=sid
-    )
-    for admin_id in SUPER_ADMIN_IDS:
-        await send_message(admin_id, admin_msg)
+    last_offer_at = get_last_upgrade_offer_at(sid, group_id)
+    if last_offer_at and _hours_since(last_offer_at) < UPGRADE_COOLDOWN_DAYS * 24:
+        return
 
-    log.info("Upgrade suggested for student %s from group %s", name, chat_id)
+    if get_miss_count_last_30_days(sid, group_id) > UPGRADE_MAX_MISSES:
+        return
+
+    # Нет ни одной pro-группы с местом — предложение бессмысленно, не шлём.
+    if not get_best_pro_group_for_upgrade(lang):
+        return
+
+    name = student["name"]
+    # Создаём запись СРАЗУ, чтобы offer_id можно было вшить в callback_data
+    # кнопок (иначе тап по устаревшему сообщению резолвил бы не то
+    # предложение) - но если реальная отправка не удалась, откатываем,
+    # иначе якорь 30-дневного окна сдвинется без доставки (тот же класс
+    # бага, что и в core/prep.py, см. докстринг выше).
+    offer_id = create_upgrade_offer(sid, group_id)
+    text = T("upgrade_offer_dm", lang, name=name)
+    buttons = [
+        (T("upgrade_stay_btn", lang), f"upg:stay:{phone}:{offer_id}"),
+        (T("upgrade_pro_btn", lang), f"upg:pro:{phone}:{offer_id}"),
+    ]
+    resp = await send_message_with_buttons(phone, text, buttons)
+    if resp and resp.get("ok"):
+        log.info("Upgrade offer sent to %s (group=%s)", name, group_id)
+    else:
+        delete_upgrade_offer(offer_id)
+        log.warning("Upgrade offer DM failed for %s (group=%s): %s", name, group_id, resp)
+
+
+async def handle_upgrade_answer(phone, choice, offer_id):
+    """Колбэк кнопки под предложением relaxed→pro. choice: 'stay' | 'pro'."""
+    row = get_upgrade_offer_by_id(offer_id)
+    if not row or row["decision"] is not None:
+        return  # нет такого предложения или уже отвечали (защита от двойного тапа)
+
+    group = get_group_by_id(row["group_id"])
+    lang = get_group_lang(group) if group else "ru"
+    user = find_user_by_phone(phone)
+    name = user["name"] if user else ""
+
+    if _hours_since(row["offered_at"]) >= UPGRADE_OFFER_TTL_HOURS:
+        set_upgrade_decision(row["id"], "expired")
+        await send_message(phone, T("upgrade_expired", lang))
+        log.info("Upgrade offer expired for %s", name)
+        return
+
+    if choice == "stay":
+        set_upgrade_decision(row["id"], "stay")
+        await send_message(phone, T("upgrade_stay_reply", lang, name=name))
+        log.info("Upgrade offer: %s chose to stay", name)
+        return
+
+    # choice == "pro" — пересчитываем доступную группу заново (место могли
+    # занять между отправкой предложения и нажатием кнопки).
+    target = get_best_pro_group_for_upgrade(lang)
+    if not target:
+        set_upgrade_decision(row["id"], "pro_no_room")
+        await send_message(phone, T("upgrade_pro_no_room", lang, name=name))
+        log.info("Upgrade offer: %s wanted pro, no room left", name)
+        return
+
+    set_upgrade_decision(row["id"], "pro", target_group_id=target["id"])
+    await send_message(phone, T("upgrade_pro_reply", lang, name=name, link=target["invite_link"]))
+    log.info("Upgrade offer: %s chose pro, sent link to %s", name, target["title"])
+
+
+async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
+    """Общая логика для уже известного пользователя, вступившего в группу по
+    приглашению (chat_member update) или добавленного вручную (new_chat_members).
+    По приоритету:
+      1) Уже активен в другой pro/relaxed группе — если это подтверждённый
+         переход по предложению upgrade (см. handle_upgrade_answer) и целевая
+         группа совпадает с этой — завершаем перевод; иначе просто игнор.
+      2) pending_prep_return — блокируем до официального выпуска из prep.
+      3) Обычная авторегистрация + возможный выпуск из подготовительной."""
+    existing_group = get_learning_group(uid)
+    gtype = group_info["group_type"] or "relaxed"
+
+    if existing_group and gtype != "tadabbur":
+        pending = get_pending_upgrade_target(uid)
+        if pending and pending[1] == group_info["id"]:
+            offer_id, _ = pending
+            await _finalize_upgrade_arrival(offer_id, existing_user, existing_group, group_info, uid)
+        else:
+            log.info("join: %s already in another group, skip", uid)
+        return
+
+    if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
+        return
+
+    add_student(existing_user["name"], group_info["id"], uid)
+    log.info("join: added existing user %s to group %s", existing_user["name"], group_info["id"])
+    await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
+
+
+async def _finalize_upgrade_arrival(offer_id, existing_user, old_group, new_group, phone):
+    """Студент реально вступил в предложенную pro-группу — теперь и только
+    теперь деактивируем и физически кикаем его из старой relaxed-группы
+    (решение пользователя 25.07.2026: не раньше, чтобы не остаться без
+    группы, если студент так и не перейдёт по ссылке). Плюс короткое
+    представление-поздравление в новую группу (решение пользователя 25.07.2026)."""
+    name = existing_user["name"]
+    deactivate_student(existing_user["id"], old_group["id"])
+    try:
+        await ban_member(old_group["chat_id"], phone)
+        await unban_member(old_group["chat_id"], phone)
+    except Exception as e:
+        log.error("Upgrade kick from relaxed failed for %s in %s: %s", name, old_group["chat_id"], e)
+    add_student(name, new_group["id"], phone)
+    resolve_upgrade_offer(offer_id)
+
+    try:
+        await send_message(new_group["chat_id"], T("upgrade_arrival_announce", get_group_lang(new_group), name=name))
+    except Exception as e:
+        log.warning("Upgrade arrival announce failed for %s in %s: %s", name, new_group["chat_id"], e)
+
+    log.info("Upgrade confirmed: %s moved from group %s to %s", name, old_group["id"], new_group["id"])
 
 
 # ── Кик незарегистрированных ──────────────────────────────────────────────────

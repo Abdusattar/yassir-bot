@@ -280,12 +280,34 @@ TR = {
         "kk": "📿 {name}, осы айда {misses} онлайн сабақты өткізіп жібердің және Тадаббур тобына ауыстырылдың.\nОнда міндетті тапсырмалар жоқ — оқы, ойлан, дайын болғанда қайт 🤲",
         "en": "📿 {name}, you missed {misses} online lessons this month and have been moved to Tadabbur group.\nNo mandatory tasks there — read, reflect, return when ready 🤲",
     },
-    "upgrade_suggestion": {
-        "ru": "🌟 {name}, МашаАллах! Ты 30 дней сдавал почти без пропусков.\nУстаз предлагает перейти в продвинутую (pro) группу — хочешь?",
-        "ky": "🌟 {name}, МашаАллах! 30 күн дээрлик тынымсыз тапшырдың.\nУстаз сени pro-топко өтүүнү сунуштайт — каалайсыңбы?",
-        "uz": "🌟 {name}, MashaAlloh! 30 kun deyarli uzluksiz topshirding.\nUstoz seni pro guruhga o'tishni tavsiya qiladi — xohlaysanmi?",
-        "kk": "🌟 {name}, МашаАллах! 30 күн дерлік үздіксіз тапсырдың.\nҰстаз сені pro тобына ауысуды ұсынады — қалайсың ба?",
-        "en": "🌟 {name}, MashaAllah! You've submitted almost every day for 30 days.\nUstaz suggests moving to a pro group — do you want to?",
+    "upgrade_offer_dm": {
+        "ru": (
+            "🌟 {name}, МашаАллах! Ты сдаёшь отчёты стабильно — за последние 30 дней пропустил не больше 3 раз.\n"
+            "Можешь спокойно продолжать в своей группе — если всё устраивает, лучше остаться.\n"
+            "А если хочешь более активную атмосферу — есть возможность перейти в pro-группу.\n\n"
+            "⏳ Предложение действует 24 часа."
+        ),
+    },
+    "upgrade_stay_btn": {
+        "ru": "Остаюсь в своей группе",
+    },
+    "upgrade_pro_btn": {
+        "ru": "Хочу в pro-группу",
+    },
+    "upgrade_stay_reply": {
+        "ru": "Хорошо, {name}! Продолжай в том же духе 🤲 БаракАллаху фийк!",
+    },
+    "upgrade_pro_reply": {
+        "ru": "🎉 Отлично, {name}! Вот ссылка на pro-группу: {link}\nПереходи по ней, чтобы присоединиться.",
+    },
+    "upgrade_pro_no_room": {
+        "ru": "Прости, {name}, сейчас все pro-группы заполнены. Оставайся пока в своей группе — как только появится место, снова предложим переход.",
+    },
+    "upgrade_expired": {
+        "ru": "Это предложение уже неактуально ⏳ (прошло больше суток). Продолжай сдавать — при следующей возможности снова предложим переход.",
+    },
+    "upgrade_arrival_announce": {
+        "ru": "🎉 Ассаляму алейкум! Встречайте {name} — перешёл к нам за стабильную сдачу отчётов. МашаАллах, так держать! 🤲",
     },
     "prep_congrats": {
         "ru": (
@@ -388,10 +410,6 @@ TR = {
     "transfer_notify_admin": {
         "ru": "⚠️ Студент {name} (группа «{group}») переведён в Тадаббур (причина: {reason}, дней без отчётов: {days})",
         "en": "⚠️ Student {name} (group «{group}») transferred to Tadabbur (reason: {reason}, days absent: {days})",
-    },
-    "upgrade_notify_admin": {
-        "ru": "⭐ Студент {name} (группа {group}) готов к переходу в pro-группу.\n30 дней с ≤3 пропусками. Выбери целевую группу и подтверди перевод командой /transfer {sid} [chat_id]",
-        "en": "⭐ Student {name} (group {group}) is ready for pro group.\n30 days with ≤3 misses. Pick the target group and confirm with /transfer {sid} [chat_id]",
     },
     "ask_name": {
         "ru": "Как тебя зовут? Напиши своё имя 📝",

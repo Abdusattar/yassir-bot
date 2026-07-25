@@ -162,6 +162,17 @@ def init():
                 reason TEXT,
                 created_date TEXT DEFAULT (date('now'))
             );
+            CREATE TABLE IF NOT EXISTS upgrade_offers(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                target_group_id INTEGER,
+                offered_at TEXT NOT NULL DEFAULT (datetime('now')),
+                decision TEXT,
+                decided_at TEXT,
+                resolved INTEGER DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_upgrade_offers_student ON upgrade_offers(student_id, group_id);
             CREATE TABLE IF NOT EXISTS teachers(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -587,6 +598,92 @@ def get_best_group_for_transfer(group_type, lang):
             ORDER BY cnt
             LIMIT 1
         """, (group_type, lang)).fetchone()
+
+
+UPGRADE_MAX_GROUP_SIZE = 10  # для relaxed→pro предлагаем только группы < 10 студентов
+
+
+def get_best_pro_group_for_upgrade(lang, exclude_title="N-1"):
+    """Наименее заполненная pro-группа нужного языка со ссылкой, кроме
+    группы exclude_title (зарезервирована под выпускников подготовительной,
+    знающих джуз - core/prep.py _PREP_JUZ_KNOWN_TARGET_TITLE) и с местом
+    (< UPGRADE_MAX_GROUP_SIZE студентов) - для перехода relaxed→pro (25.07.2026)."""
+    with db() as c:
+        return c.execute("""
+            SELECT g.*,
+                   (SELECT COUNT(*) FROM user_groups ug
+                    WHERE ug.group_id=g.id AND ug.role='student' AND ug.active=1) as cnt
+            FROM groups g
+            WHERE g.active=1 AND g.group_type='pro' AND g.lang=? AND g.title != ?
+              AND g.invite_link IS NOT NULL AND g.invite_link != ''
+            GROUP BY g.id
+            HAVING cnt < ?
+            ORDER BY cnt
+            LIMIT 1
+        """, (lang, exclude_title, UPGRADE_MAX_GROUP_SIZE)).fetchone()
+
+
+def create_upgrade_offer(student_id, group_id):
+    with db() as c:
+        cur = c.execute(
+            "INSERT INTO upgrade_offers(student_id, group_id) VALUES(?,?)",
+            (student_id, group_id)
+        )
+        return cur.lastrowid
+
+
+def get_last_upgrade_offer_at(student_id, group_id):
+    """Дата последнего предложения (независимо от решения) - якорь для
+    30-дневного окна до следующего предложения (25.07.2026)."""
+    with db() as c:
+        row = c.execute(
+            "SELECT offered_at FROM upgrade_offers WHERE student_id=? AND group_id=? "
+            "ORDER BY offered_at DESC LIMIT 1",
+            (student_id, group_id)
+        ).fetchone()
+    return row["offered_at"] if row else None
+
+
+def get_upgrade_offer_by_id(offer_id):
+    """offer_id закодирован в callback_data кнопки - конкретное предложение,
+    а не 'последнее по телефону' (иначе тап по устаревшему сообщению с
+    кнопками мог бы случайно закрыть текущее предложение, 25.07.2026)."""
+    with db() as c:
+        return c.execute("SELECT * FROM upgrade_offers WHERE id=?", (offer_id,)).fetchone()
+
+
+def delete_upgrade_offer(offer_id):
+    """Откат создания предложения, если реальная отправка DM не удалась -
+    иначе якорь 30-дневного окна сдвинулся бы без доставки (25.07.2026)."""
+    with db() as c:
+        c.execute("DELETE FROM upgrade_offers WHERE id=?", (offer_id,))
+
+
+def set_upgrade_decision(offer_id, decision, target_group_id=None):
+    with db() as c:
+        c.execute(
+            "UPDATE upgrade_offers SET decision=?, decided_at=datetime('now'), target_group_id=? WHERE id=?",
+            (decision, target_group_id, offer_id)
+        )
+
+
+def get_pending_upgrade_target(phone):
+    """Подтверждённое решение 'pro', ещё физически не перенесённое (resolved=0)
+    - для join-хука в bot.py, определяющего реальное вступление в pro-группу.
+    Возвращает (offer_id, target_group_id) или None."""
+    with db() as c:
+        row = c.execute("""
+            SELECT uo.id, uo.target_group_id FROM upgrade_offers uo
+            JOIN users u ON u.id=uo.student_id
+            WHERE u.phone=? AND uo.decision='pro' AND uo.resolved=0
+            ORDER BY uo.offered_at DESC LIMIT 1
+        """, (phone,)).fetchone()
+    return (row["id"], row["target_group_id"]) if row and row["target_group_id"] else None
+
+
+def resolve_upgrade_offer(offer_id):
+    with db() as c:
+        c.execute("UPDATE upgrade_offers SET resolved=1 WHERE id=?", (offer_id,))
 
 
 def get_regular_group_sizes():

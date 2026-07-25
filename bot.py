@@ -13,13 +13,13 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, add_student, get_learning_group
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
-from core.prep import announce_prep_graduate_arrival, handle_juz_answer
-from core.transfers import block_return_if_pending_prep
+from core.prep import handle_juz_answer
+from core.transfers import handle_known_user_group_join, handle_upgrade_answer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -100,6 +100,16 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_juz_answer(cq_uid, parts[1] == "yes"))
+                    # "upg:stay:<uid>:<offer_id>" / "upg:pro:<uid>:<offer_id>" -
+                    # предложение перейти из relaxed в pro-группу (25.07.2026).
+                    # offer_id в data - чтобы тап по устаревшему сообщению не
+                    # резолвил случайно текущее предложение того же студента.
+                    elif cq_data.startswith("upg:"):
+                        parts = cq_data.split(":", 3)
+                        if len(parts) == 4 and parts[2] == cq_uid:
+                            if cq_chat_id and cq_message_id:
+                                await remove_message_keyboard(cq_chat_id, cq_message_id)
+                            asyncio.create_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
                     continue
 
                 # Вступление по ссылке-приглашению (chat_member update)
@@ -136,16 +146,7 @@ async def main():
                             glang = get_group_lang(group_info)
                             existing_user = find_user_by_phone(uid)
                             if existing_user:
-                                existing_group = get_learning_group(uid)
-                                gtype = group_info["group_type"] or "relaxed"
-                                if existing_group and gtype != "tadabbur":
-                                    log.info("chat_member: %s already in another group, skip", uid)
-                                elif await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
-                                    pass
-                                else:
-                                    add_student(existing_user["name"], group_info["id"], uid)
-                                    log.info("chat_member: added existing user %s to group %s", existing_user["name"], group_info["id"])
-                                    await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
+                                await handle_known_user_group_join(chat_id, group_info, uid, existing_user)
                             else:
                                 with db() as c:
                                     c.execute(
@@ -231,15 +232,7 @@ async def main():
                         if group_info:
                             existing_user = find_user_by_phone(uid)
                             if existing_user:
-                                existing_group = get_learning_group(uid)
-                                gtype = group_info["group_type"] or "relaxed"
-                                if existing_group and gtype != "tadabbur":
-                                    pass  # уже студент в другой учебной группе — не добавляем
-                                elif await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
-                                    pass
-                                else:
-                                    add_student(existing_user["name"], group_info["id"], uid)
-                                    await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
+                                await handle_known_user_group_join(chat_id, group_info, uid, existing_user)
                             else:
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
