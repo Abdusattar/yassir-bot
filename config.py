@@ -21,6 +21,14 @@ CURRICULUM_REVIEWER_ID = os.getenv("CURRICULUM_REVIEWER_ID") or (
 TZ = os.getenv("TZ", "Asia/Bishkek")
 DB = os.getenv("DB_PATH", f"quran_{PROFILE}.db")
 
+# Обязателен ли проход через подготовительную для НОВЫХ (никогда не виденных)
+# людей, зашедших сразу в pro/relaxed. По умолчанию включено (мужской бот —
+# группы устаканились, в основном новички). Для женского бота временно
+# выключить в .env (REQUIRE_PREP_FOR_NEW_STUDENTS=false) — группы только
+# мигрировали из WhatsApp, уже сформированы, устазы сами следят за составом;
+# включить обратно через ~2 месяца (решение пользователя 25.07.2026).
+REQUIRE_PREP_FOR_NEW_STUDENTS = os.getenv("REQUIRE_PREP_FOR_NEW_STUDENTS", "true").lower() == "true"
+
 # OpenRouter API (совместим со старым CLAUDE_API_KEY)
 OR_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("CLAUDE_API_KEY", "")
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"

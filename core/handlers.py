@@ -4,7 +4,7 @@ import re
 import time
 import unicodedata
 
-from config import SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID
+from config import SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.content import (
     TASK_KEYS, DEFAULT_TASKS, SHORT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
@@ -942,7 +942,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # и не спрашиваем имя здесь — просто не даём начать; кто не
             # уйдёт сам, через 7 дней заберёт обычный kick_unregistered.
             gtype_new = group["group_type"] or "relaxed"
-            if gtype_new in ("pro", "relaxed"):
+            if REQUIRE_PREP_FOR_NEW_STUDENTS and gtype_new in ("pro", "relaxed"):
                 prep_group = get_prep_group()
                 prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
                 await send_message(chat_id, T("new_student_needs_prep_group", glang, prep_link=prep_link))

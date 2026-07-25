@@ -21,7 +21,7 @@ from core.db import (
     mark_pending_prep_return
 )
 from core.prep import PREP_MIN_DAYS
-from config import SUPER_ADMIN_IDS, IS_FEMALE
+from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member
 
@@ -225,24 +225,41 @@ async def _suggest_upgrade(student, group, lang):
     log.info("Upgrade suggested for student %s from group %s", name, chat_id)
 
 
-# ── Кик незарегистрированных через 7 дней ────────────────────────────────────
+# ── Кик незарегистрированных ──────────────────────────────────────────────────
 
-UNREG_DAYS = 7
+UNREG_DAYS = 7  # общий порог (относится к prep/tadabbur-подобным случаям)
+
+# Кто зашёл напрямую в pro/relaxed, минуя подготовительную, и за сутки не
+# представился — кикаем быстрее общего порога и шлём ссылку именно на
+# подготовительную, а не на Тадаббур (решение пользователя 25.07.2026,
+# см. new_student_needs_prep_group в handlers.py — это тот же сценарий,
+# только для тех, кто игнорирует напоминание и ничего не пишет дальше).
+UNREG_DAYS_PREP_BYPASS = 1
 
 
 async def kick_unregistered():
-    """Кикает из учебных групп тех, кто не зарегистрировался за 14 дней.
-    Отправляет ссылку на тадаббур."""
+    """Кикает из групп тех, кто не зарегистрировался. Для pro/relaxed — через
+    UNREG_DAYS_PREP_BYPASS дней (ссылка на подготовительную), для остальных —
+    через UNREG_DAYS (ссылка на Тадаббур)."""
     from core.tg import ban_member, unban_member
     tadabbur = get_tadabbur_group()
-    overdue = get_overdue_unregistered(UNREG_DAYS)
+    prep_group = get_prep_group()
+    overdue = get_overdue_unregistered(min(UNREG_DAYS, UNREG_DAYS_PREP_BYPASS))
     for row in overdue:
         uid = row["user_id"]
         chat_id = row["chat_id"]
+        elapsed = row["elapsed"] or 0
+        group = get_group(chat_id)
+        gtype = (group["group_type"] or "relaxed") if group else "relaxed"
+        is_prep_bypass = REQUIRE_PREP_FOR_NEW_STUDENTS and gtype in ("pro", "relaxed")
+        threshold = UNREG_DAYS_PREP_BYPASS if is_prep_bypass else UNREG_DAYS
+        if elapsed < threshold:
+            # Личный порог этого типа группы ещё не истёк — запись не трогаем,
+            # дождёмся следующей ежедневной проверки.
+            continue
         try:
-            group = get_group(chat_id)
             # Пропускаем тадаббур — там регистрация не нужна
-            if group and (group["group_type"] or "relaxed") == "tadabbur":
+            if gtype == "tadabbur":
                 remove_unregistered(uid, chat_id)
                 continue
             # Если уже зарегистрировался — просто чистим запись
@@ -258,17 +275,25 @@ async def kick_unregistered():
             # и только потом кик (ban + unban = мягкое удаление, может вернуться)
             if group:
                 addr = "Сёстры" if IS_FEMALE else "Братья"
-                msg = "👋 Участник не представился в течение " + str(UNREG_DAYS) + " дней и сейчас будет удалён из группы."
-                if tadabbur and tadabbur["invite_link"]:
-                    msg += (
-                        "\n" + addr + ", кто хочет присоединиться к общему пространству Корана — добро пожаловать в Тадаббур:\n"
-                        "👉 " + tadabbur["invite_link"]
+                if is_prep_bypass and prep_group and prep_group["invite_link"]:
+                    msg = (
+                        "👋 Участник зашёл напрямую, минуя подготовительную, и не представился — "
+                        "сейчас будет удалён из группы.\n"
+                        + addr + ", регистрация начинается с подготовительной группы:\n"
+                        "👉 " + prep_group["invite_link"]
                     )
+                else:
+                    msg = "👋 Участник не представился в течение " + str(threshold) + " дней и сейчас будет удалён из группы."
+                    if tadabbur and tadabbur["invite_link"]:
+                        msg += (
+                            "\n" + addr + ", кто хочет присоединиться к общему пространству Корана — добро пожаловать в Тадаббур:\n"
+                            "👉 " + tadabbur["invite_link"]
+                        )
                 await send_message(chat_id, msg)
                 await asyncio.sleep(10)
             await ban_member(chat_id, uid)
             await unban_member(chat_id, uid)
-            log.info("Kicked unregistered user %s from %s", uid, chat_id)
+            log.info("Kicked unregistered user %s from %s (gtype=%s, threshold=%d)", uid, chat_id, gtype, threshold)
         except Exception as e:
             log.error("kick_unregistered error user=%s chat=%s: %s", uid, chat_id, e)
         finally:

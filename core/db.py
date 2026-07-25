@@ -1466,11 +1466,12 @@ def log_transfer(student_id, from_chat_id, to_chat_id, reason):
 
 
 def get_overdue_unregistered(days=14):
-    """Возвращает (user_id, chat_id) незарегистрированных старше days дней."""
+    """Возвращает (user_id, chat_id, elapsed) незарегистрированных старше days дней.
+    elapsed нужен вызывающему коду для разных порогов по типу группы."""
     with db() as c:
         return c.execute(
-            "SELECT user_id, chat_id FROM unregistered_members "
-            "WHERE julianday('now') - julianday(joined_date) >= ?",
+            "SELECT user_id, chat_id, julianday('now') - julianday(joined_date) AS elapsed "
+            "FROM unregistered_members WHERE julianday('now') - julianday(joined_date) >= ?",
             (days,)
         ).fetchall()
 

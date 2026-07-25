@@ -147,6 +147,11 @@ async def main():
                                     log.info("chat_member: added existing user %s to group %s", existing_user["name"], group_info["id"])
                                     await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
                             else:
+                                with db() as c:
+                                    c.execute(
+                                        "INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
+                                        (uid, chat_id)
+                                    )
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
                                 log.info("chat_member: greeting new user %s in chat %s", uid, chat_id)
