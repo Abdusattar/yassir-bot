@@ -367,6 +367,17 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
             offer_id, _ = pending
             await _finalize_upgrade_arrival(offer_id, existing_user, existing_group, group_info, uid)
         else:
+            # Чистим служебную запись unregistered_members СРАЗУ - иначе
+            # kick_unregistered() через сутки кикнет его как постороннего,
+            # хотя он легитимный активный студент/устаз в другой группе
+            # (баг с Закиром, 25.07.2026: устаз добавил уже активного
+            # студента в третью группу под будущего устаза, бот его молча
+            # пропустил, а на следующий день зачистка выкинула).
+            remove_unregistered(uid, chat_id)
+            await send_message(chat_id, T(
+                "join_already_active_elsewhere", get_group_lang(group_info),
+                name=existing_user["name"], title=existing_group["title"] or ""
+            ))
             log.info("join: %s already in another group, skip", uid)
         return
 
