@@ -170,7 +170,8 @@ def init():
                 offered_at TEXT NOT NULL DEFAULT (datetime('now')),
                 decision TEXT,
                 decided_at TEXT,
-                resolved INTEGER DEFAULT 0
+                resolved INTEGER DEFAULT 0,
+                channel TEXT NOT NULL DEFAULT 'dm'
             );
             CREATE INDEX IF NOT EXISTS idx_upgrade_offers_student ON upgrade_offers(student_id, group_id);
             CREATE TABLE IF NOT EXISTS teachers(
@@ -268,6 +269,10 @@ def _run_migrations(c):
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
         c.execute("ALTER TABLE users ADD COLUMN dm_ok INTEGER DEFAULT 0")
+
+    uocols = [r["name"] for r in c.execute("PRAGMA table_info(upgrade_offers)").fetchall()]
+    if "channel" not in uocols:
+        c.execute("ALTER TABLE upgrade_offers ADD COLUMN channel TEXT NOT NULL DEFAULT 'dm'")
 
     migrated = c.execute(
         "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
@@ -623,11 +628,14 @@ def get_best_pro_group_for_upgrade(lang, exclude_title="N-1"):
         """, (lang, exclude_title, UPGRADE_MAX_GROUP_SIZE)).fetchone()
 
 
-def create_upgrade_offer(student_id, group_id):
+def create_upgrade_offer(student_id, group_id, channel="dm"):
+    """channel: 'dm' - обычное предложение в личку; 'group_nudge' - студент
+    ещё не жал /start, ссылка на старт ушла в группу вместо личного
+    предложения (25.07.2026)."""
     with db() as c:
         cur = c.execute(
-            "INSERT INTO upgrade_offers(student_id, group_id) VALUES(?,?)",
-            (student_id, group_id)
+            "INSERT INTO upgrade_offers(student_id, group_id, channel) VALUES(?,?,?)",
+            (student_id, group_id, channel)
         )
         return cur.lastrowid
 
@@ -684,6 +692,20 @@ def get_pending_upgrade_target(phone):
 def resolve_upgrade_offer(offer_id):
     with db() as c:
         c.execute("UPDATE upgrade_offers SET resolved=1 WHERE id=?", (offer_id,))
+
+
+def get_pending_group_nudge(phone):
+    """Непросроченное (по decision) предложение-'подтолкнуть к /start' -
+    проверяется в момент, когда студент впервые открыл личку с ботом
+    (mark_dm_ok_by_phone), чтобы сразу запустить настоящее DM-предложение
+    (25.07.2026)."""
+    with db() as c:
+        return c.execute("""
+            SELECT uo.* FROM upgrade_offers uo
+            JOIN users u ON u.id=uo.student_id
+            WHERE u.phone=? AND uo.channel='group_nudge' AND uo.decision IS NULL
+            ORDER BY uo.offered_at DESC LIMIT 1
+        """, (phone,)).fetchone()
 
 
 def get_regular_group_sizes():

@@ -31,7 +31,7 @@ from core.db import (
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
     get_published_curriculum_content, log_verify_check, get_prep_group
 )
-from core.transfers import block_return_if_pending_prep
+from core.transfers import block_return_if_pending_prep, handle_dm_unlocked
 
 log = logging.getLogger(__name__)
 
@@ -661,7 +661,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # Студент написал боту в личку хотя бы раз — значит, бот теперь может писать
     # ему первым (Telegram запрещает боту инициировать диалог до этого момента)
     if not is_group:
+        was_dm_ok = get_dm_ok_by_phone(phone)
         mark_dm_ok_by_phone(phone)
+        # Личка только что открылась впервые — если есть непросроченное
+        # приглашение relaxed→pro, отправленное в группу (студент тогда ещё
+        # не мог получить его в личку), запускаем настоящее DM-предложение
+        # прямо сейчас (25.07.2026).
+        if not was_dm_ok:
+            await handle_dm_unlocked(phone)
 
     # ── Личка устаза-рецензента программы: любое сообщение = одобрение ────────
     # Устаз не всегда ставит настоящую Telegram-реакцию — может ответить

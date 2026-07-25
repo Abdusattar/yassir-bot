@@ -6,9 +6,11 @@
   relaxed → (30 дней без отчёта)           → tadabbur
   tadabbur/prep → (только через выпуск из prep) → relaxed
   relaxed → (≤3 пропуска за 30 дней, раз в 30 дней) → DM с кнопками "остаюсь"/
-            "хочу в pro" (25.07.2026, см. _check_upgrade). Кик из relaxed —
-            только по факту реального вступления в pro-группу (см.
-            handle_known_user_group_join), не сразу после выбора.
+            "хочу в pro" (25.07.2026, см. _check_upgrade). Кто ещё не жал
+            /start боту - вместо личного сообщения зовём в группе со ссылкой
+            на старт (24ч на клик, дальше handle_dm_unlocked). Кик из
+            relaxed — только по факту реального вступления в pro-группу
+            (см. handle_known_user_group_join), не сразу после выбора.
 """
 import logging
 import asyncio
@@ -25,11 +27,12 @@ from core.db import (
     get_dm_ok_by_phone, get_best_pro_group_for_upgrade, create_upgrade_offer,
     delete_upgrade_offer, get_last_upgrade_offer_at, get_upgrade_offer_by_id,
     set_upgrade_decision, get_pending_upgrade_target, resolve_upgrade_offer,
+    get_pending_group_nudge,
 )
 from core.prep import PREP_MIN_DAYS, announce_prep_graduate_arrival
 from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.i18n import T, get_group_lang
-from core.tg import send_message, send_message_with_buttons, ban_member, unban_member
+from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link
 
 log = logging.getLogger(__name__)
 
@@ -218,19 +221,17 @@ def _hours_since(ts):
 
 async def _check_upgrade(student, group, lang):
     """Раз в UPGRADE_COOLDOWN_DAYS дней предлагаем relaxed-студенту, который
-    почти не пропускает (≤UPGRADE_MAX_MISSES за 30 дней), перейти в pro —
-    личным сообщением с кнопками (25.07.2026, решение пользователя). Только
-    тем, кто уже жал /start боту (dm_ok) — иначе личка недоступна, а группового
-    фолбэка тут намеренно нет (в отличие от prep-flow), это не публичный
-    вопрос. Якорь 30-дневного окна ставится только при реально доставленном
-    сообщении, иначе dm_ok=1, но заблокировавший бота студент навсегда
-    выпадет из проверки (тот же класс бага, что и в core/prep.py)."""
+    почти не пропускает (≤UPGRADE_MAX_MISSES за 30 дней), перейти в pro
+    (25.07.2026, решение пользователя). Кто уже жал /start боту (dm_ok) —
+    личное сообщение с кнопками. Кто ещё не жал — сообщение в саму группу
+    с упоминанием и ссылкой на старт бота (иначе личка недоступна, Telegram
+    не даёт боту писать первым); если нажмёт старт в течение 24 часов,
+    handle_dm_unlocked запустит настоящее DM-предложение. Якорь 30-дневного
+    окна ставится в обоих случаях сразу, независимо от исхода."""
     sid = student["id"]
     phone = student["phone"]
     group_id = group["id"]
-
-    if not get_dm_ok_by_phone(phone):
-        return
+    name = student["name"]
 
     last_offer_at = get_last_upgrade_offer_at(sid, group_id)
     if last_offer_at and _hours_since(last_offer_at) < UPGRADE_COOLDOWN_DAYS * 24:
@@ -243,13 +244,19 @@ async def _check_upgrade(student, group, lang):
     if not get_best_pro_group_for_upgrade(lang):
         return
 
-    name = student["name"]
-    # Создаём запись СРАЗУ, чтобы offer_id можно было вшить в callback_data
-    # кнопок (иначе тап по устаревшему сообщению резолвил бы не то
-    # предложение) - но если реальная отправка не удалась, откатываем,
-    # иначе якорь 30-дневного окна сдвинется без доставки (тот же класс
-    # бага, что и в core/prep.py, см. докстринг выше).
-    offer_id = create_upgrade_offer(sid, group_id)
+    if get_dm_ok_by_phone(phone):
+        await _send_upgrade_dm(sid, phone, name, group_id, lang)
+    else:
+        await _send_upgrade_group_nudge(sid, phone, name, group, lang)
+
+
+async def _send_upgrade_dm(sid, phone, name, group_id, lang):
+    """Личное предложение с кнопками. Запись создаётся СРАЗУ, чтобы offer_id
+    можно было вшить в callback_data кнопок (иначе тап по устаревшему
+    сообщению резолвил бы не то предложение) - но если реальная отправка не
+    удалась, откатываем, иначе якорь 30-дневного окна сдвинется без
+    доставки (тот же класс бага, что и в core/prep.py)."""
+    offer_id = create_upgrade_offer(sid, group_id, channel="dm")
     text = T("upgrade_offer_dm", lang, name=name)
     buttons = [
         (T("upgrade_stay_btn", lang), f"upg:stay:{phone}:{offer_id}"),
@@ -261,6 +268,48 @@ async def _check_upgrade(student, group, lang):
     else:
         delete_upgrade_offer(offer_id)
         log.warning("Upgrade offer DM failed for %s (group=%s): %s", name, group_id, resp)
+
+
+async def _send_upgrade_group_nudge(sid, phone, name, group, lang):
+    """Студент ещё не жал /start - зовём его в группе, ссылкой на старт.
+    Та же логика отката при неудачной отправке, что и у DM-варианта."""
+    link = await get_dm_start_link()
+    if not link:
+        log.warning("Upgrade nudge: no start link (getMe failed), skip for %s", name)
+        return
+    offer_id = create_upgrade_offer(sid, group["id"], channel="group_nudge")
+    text = T("upgrade_nudge_group", lang, name=name, link=link)
+    resp = await send_message(group["chat_id"], text)
+    if resp and resp.get("ok"):
+        log.info("Upgrade nudge sent in group for %s (not dm_ok)", name)
+    else:
+        delete_upgrade_offer(offer_id)
+        log.warning("Upgrade nudge failed for %s (group=%s): %s", name, group["id"], resp)
+
+
+async def handle_dm_unlocked(phone):
+    """Студент только что впервые открыл личку с ботом (mark_dm_ok_by_phone
+    в handlers.py). Если у него есть непросроченный group_nudge (предложение
+    relaxed→pro ушло в группу, т.к. личка была недоступна) - запускаем
+    настоящее DM-предложение прямо сейчас, со свежими 24 часами на выбор
+    кнопки (25.07.2026)."""
+    row = get_pending_group_nudge(phone)
+    if not row:
+        return
+
+    if _hours_since(row["offered_at"]) >= UPGRADE_OFFER_TTL_HOURS:
+        set_upgrade_decision(row["id"], "expired")
+        log.info("Upgrade group nudge expired before start for phone=%s", phone)
+        return
+
+    set_upgrade_decision(row["id"], "started")
+
+    group = get_group_by_id(row["group_id"])
+    user = find_user_by_phone(phone)
+    if not group or not user:
+        return
+    lang = get_group_lang(group)
+    await _send_upgrade_dm(row["student_id"], phone, user["name"], row["group_id"], lang)
 
 
 async def handle_upgrade_answer(phone, choice, offer_id):
