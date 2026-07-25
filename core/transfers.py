@@ -350,6 +350,12 @@ async def _finalize_upgrade_arrival(offer_id, existing_user, old_group, new_grou
     except Exception as e:
         log.warning("Upgrade arrival announce failed for %s in %s: %s", name, new_group["chat_id"], e)
 
+    # В старую группу — как пример для остальных (решение пользователя 25.07.2026)
+    try:
+        await send_message(old_group["chat_id"], T("upgrade_departure_announce", get_group_lang(old_group), name=name))
+    except Exception as e:
+        log.warning("Upgrade departure announce failed for %s in %s: %s", name, old_group["chat_id"], e)
+
     log.info("Upgrade confirmed: %s moved from group %s to %s", name, old_group["id"], new_group["id"])
 
 
