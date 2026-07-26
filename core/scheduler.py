@@ -19,7 +19,7 @@ from core.db import (
 )
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
-from core.transfers import run_transfer_checks
+from core.transfers import run_transfer_checks, send_return_nudges
 from core.prep import check_prep_students, send_prep_reminders
 import random
 import core.ai as ai
@@ -1263,6 +1263,10 @@ async def transfer_check():
         await run_transfer_checks()
     except Exception as e:
         log.error("transfer_check error: %s", e)
+    try:
+        await send_return_nudges()
+    except Exception as e:
+        log.error("send_return_nudges error: %s", e)
 
 
 # ── Еженедельный отчёт (воскресенье 19:00) ────────────────────────────────────

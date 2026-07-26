@@ -27,7 +27,8 @@ from core.db import (
     get_dm_ok_by_phone, get_best_pro_group_for_upgrade, create_upgrade_offer,
     delete_upgrade_offer, get_last_upgrade_offer_at, get_upgrade_offer_by_id,
     set_upgrade_decision, get_pending_upgrade_target, resolve_upgrade_offer,
-    get_pending_group_nudge,
+    get_pending_group_nudge, get_return_nudge_candidates, get_last_return_nudge_at,
+    mark_return_nudge_sent, get_last_known_lang,
 )
 from core.prep import PREP_MIN_DAYS, announce_prep_graduate_arrival
 from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
@@ -43,6 +44,7 @@ UPGRADE_MAX_MISSES = 3      # ≤3 пропуска за 30 дней → кан�
 UPGRADE_COOLDOWN_DAYS = 30  # раньше повторно не предлагаем, даже если снова подошёл
 UPGRADE_OFFER_TTL_HOURS = 24  # сколько действует предложение с кнопками
 PRO_LESSON_MISS_LIMIT = 3   # 3+ пропуска онлайн урока в месяц → перевод в тадаббур
+RETURN_NUDGE_COOLDOWN_DAYS = 30  # раз в месяц, пока не станет активным студентом
 
 
 async def run_transfer_checks():
@@ -557,3 +559,44 @@ async def kick_unregistered():
             log.error("kick_unregistered error user=%s chat=%s: %s", uid, chat_id, e)
         finally:
             remove_unregistered(uid, chat_id)
+
+
+# ── Тёплое напоминание "вернись" ───────────────────────────────────────────────
+
+async def send_return_nudges():
+    """Раз в сутки (вместе с обычной вечерней проверкой) — тёплое напоминание
+    раз в 30 дней тем, кто известен боту, но сейчас не активен ни в
+    подготовительной, ни в pro/relaxed (штрафники, тадаббур-only, и просто
+    выпавшие из процесса) - решение пользователя 26.07.2026: цель - не
+    терять людей из обучения, ссылка на подготовительную и мягкое "приходи,
+    когда будешь готов". Активные админы/устазы исключены на уровне SQL
+    (см. get_return_nudge_candidates - например Умар устаз, он уже прошёл
+    программу и не должен получать это напоминание). Останавливается сама
+    собой, как только человек снова станет активным студентом где-то -
+    тогда он просто перестаёт попадать в выборку."""
+    for student in get_return_nudge_candidates():
+        phone = student["phone"]
+        try:
+            if str(phone) in SUPER_ADMIN_IDS:
+                continue
+            if not get_dm_ok_by_phone(phone):
+                continue
+            last_at = get_last_return_nudge_at(phone)
+            if last_at and _hours_since(last_at) < RETURN_NUDGE_COOLDOWN_DAYS * 24:
+                continue
+
+            prep_group = get_prep_group()
+            link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+            if not link:
+                continue  # некуда звать - не шлём полу-сообщение без ссылки
+
+            resp = await send_message(phone, T(
+                "return_nudge_dm", get_last_known_lang(phone), name=student["name"], days=PREP_MIN_DAYS, link=link
+            ))
+            if resp and resp.get("ok"):
+                mark_return_nudge_sent(phone)
+                log.info("Return nudge sent to %s", student["name"])
+            else:
+                log.warning("Return nudge DM failed for %s: %s", student["name"], resp)
+        except Exception as e:
+            log.error("Return nudge error for student %s: %s", student["id"], e)

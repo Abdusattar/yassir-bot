@@ -162,6 +162,10 @@ def init():
                 reason TEXT,
                 created_date TEXT DEFAULT (date('now'))
             );
+            CREATE TABLE IF NOT EXISTS return_nudges(
+                phone TEXT PRIMARY KEY,
+                last_sent_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             CREATE TABLE IF NOT EXISTS upgrade_offers(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id INTEGER NOT NULL,
@@ -706,6 +710,60 @@ def get_pending_group_nudge(phone):
             WHERE u.phone=? AND uo.channel='group_nudge' AND uo.decision IS NULL
             ORDER BY uo.offered_at DESC LIMIT 1
         """, (phone,)).fetchone()
+
+
+def get_return_nudge_candidates():
+    """Известные боту люди (есть phone), которые сейчас НЕ активны ни в
+    подготовительной, ни в pro/relaxed - независимо от того, в тадаббуре
+    ли они, со штрафом (pending_prep_return) или вообще нигде. Активные
+    админы/устазы исключены на уровне SQL - их роль не про возврат в
+    учёбу (26.07.2026, решение пользователя: Умар устаз не должен получать
+    такое напоминание)."""
+    with db() as c:
+        return c.execute("""
+            SELECT DISTINCT u.id, u.name, u.phone
+            FROM users u
+            WHERE u.phone IS NOT NULL AND u.active=1
+              AND NOT EXISTS (
+                  SELECT 1 FROM user_groups ug
+                  JOIN groups g ON g.id=ug.group_id
+                  WHERE ug.user_id=u.id AND ug.role='student' AND ug.active=1
+                    AND g.group_type IN ('pro','relaxed','prep')
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM user_groups ug2
+                  WHERE ug2.user_id=u.id AND ug2.role='admin' AND ug2.active=1
+              )
+        """).fetchall()
+
+
+def get_last_known_lang(phone):
+    """Язык последней известной группы студента (любой статус, не только
+    активной) - для тёплых напоминаний тем, кто сейчас нигде не активен
+    (26.07.2026). 'ru' по умолчанию, если истории вообще нет."""
+    with db() as c:
+        row = c.execute("""
+            SELECT g.lang FROM user_groups ug
+            JOIN groups g ON g.id=ug.group_id
+            JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? AND ug.role='student'
+            ORDER BY ug.joined_date DESC LIMIT 1
+        """, (phone,)).fetchone()
+    return (row["lang"] if row else None) or "ru"
+
+
+def get_last_return_nudge_at(phone):
+    with db() as c:
+        row = c.execute("SELECT last_sent_at FROM return_nudges WHERE phone=?", (phone,)).fetchone()
+    return row["last_sent_at"] if row else None
+
+
+def mark_return_nudge_sent(phone):
+    with db() as c:
+        c.execute("""
+            INSERT INTO return_nudges(phone, last_sent_at) VALUES(?, datetime('now'))
+            ON CONFLICT(phone) DO UPDATE SET last_sent_at=datetime('now')
+        """, (phone,))
 
 
 def get_regular_group_sizes():
