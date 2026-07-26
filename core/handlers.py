@@ -1514,7 +1514,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     now_done = {k for k in group_tasks if tasks_done.get(k)}
     new_tasks = now_done - prev_done
     missing = [k for k in group_tasks if not tasks_done.get(k, False)]
-    wait_list = [DEFAULT_TASKS[k] for k in missing]
+    wait_list = [SHORT_TASKS.get(k, DEFAULT_TASKS[k]).lower() for k in missing]
     now_complete = (len(missing) == 0)
 
     if was_complete and not new_tasks:
@@ -1525,10 +1525,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, T("already_counted", glang, name=s["name"]))
         return
 
-    new_names = [SHORT_TASKS.get(k, DEFAULT_TASKS[k]) for k in group_tasks if k in new_tasks]
-    reply = T("accepted", glang, name=s["name"]) + " " + ", ".join(new_names)
+    # Короткий формат вместо "✅ Имя, принято! Слова\nосталось: ..." -
+    # "Имя, слова+. Осталось: ..." (решение пользователя 26.07.2026: минимум
+    # сообщений, короче).
+    new_names = [SHORT_TASKS.get(k, DEFAULT_TASKS[k]).lower() for k in group_tasks if k in new_tasks]
+    reply = s["name"] + ", " + ", ".join(new_names) + "+."
     if wait_list:
-        reply += "\n" + T("remaining", glang) + " " + ", ".join(wait_list)
+        reply += " " + T("remaining", glang) + " " + ", ".join(wait_list)
     if now_complete:
         reply += "\n" + T("all_done", glang)
     await send_message(chat_id, reply)
