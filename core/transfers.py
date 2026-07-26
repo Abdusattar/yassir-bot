@@ -353,32 +353,31 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
     """Общая логика для уже известного пользователя, вступившего в группу по
     приглашению (chat_member update) или добавленного вручную (new_chat_members).
     По приоритету:
-      1) Уже активен в другой pro/relaxed группе — если это подтверждённый
+      1) Уже активен в той же группе — не-оп (спурионный повторный join).
+      2) Уже активен в другой pro/relaxed группе — если это подтверждённый
          переход по предложению upgrade (см. handle_upgrade_answer) и целевая
-         группа совпадает с этой — завершаем перевод; иначе просто игнор.
-      2) pending_prep_return — блокируем до официального выпуска из prep.
-      3) Обычная авторегистрация + возможный выпуск из подготовительной."""
+         группа совпадает с этой — завершаем именно этот перевод; иначе —
+         обычный автоперевод между группами (решение пользователя 26.07.2026:
+         устазы сами регулируют такие переводы, например объединяя отца и
+         ребёнка в одну группу - бот должен справляться сам, без ручных
+         фиксов). Безопасно именно потому, что штрафники (pending_prep_return)
+         и новички сюда не попадают вообще - у них existing_group всегда
+         пусто, они уходят в отдельные ветки ниже.
+      3) pending_prep_return — блокируем до официального выпуска из prep.
+      4) Обычная авторегистрация + возможный выпуск из подготовительной."""
     existing_group = get_learning_group(uid)
     gtype = group_info["group_type"] or "relaxed"
 
     if existing_group and gtype != "tadabbur":
+        if existing_group["id"] == group_info["id"]:
+            log.info("join: %s rejoined own group %s, no-op", uid, group_info["id"])
+            return
         pending = get_pending_upgrade_target(uid)
         if pending and pending[1] == group_info["id"]:
             offer_id, _ = pending
             await _finalize_upgrade_arrival(offer_id, existing_user, existing_group, group_info, uid)
         else:
-            # Чистим служебную запись unregistered_members СРАЗУ - иначе
-            # kick_unregistered() через сутки кикнет его как постороннего,
-            # хотя он легитимный активный студент/устаз в другой группе
-            # (баг с Закиром, 25.07.2026: устаз добавил уже активного
-            # студента в третью группу под будущего устаза, бот его молча
-            # пропустил, а на следующий день зачистка выкинула).
-            remove_unregistered(uid, chat_id)
-            await send_message(chat_id, T(
-                "join_already_active_elsewhere", get_group_lang(group_info),
-                name=existing_user["name"], title=existing_group["title"] or ""
-            ))
-            log.info("join: %s already in another group, skip", uid)
+            await _transfer_active_student(existing_user, existing_group, group_info, uid)
         return
 
     if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
@@ -389,6 +388,52 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
     await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
 
 
+async def _kick_and_register(existing_user, old_group, new_group, phone):
+    """Кикает из old_group и регистрирует в new_group — общий механический
+    шаг для upgrade-перевода и обычного перевода известного студента между
+    группами (26.07.2026)."""
+    name = existing_user["name"]
+    deactivate_student(existing_user["id"], old_group["id"])
+    try:
+        await ban_member(old_group["chat_id"], phone)
+        await unban_member(old_group["chat_id"], phone)
+    except Exception as e:
+        log.error("Kick from old group failed for %s in %s: %s", name, old_group["chat_id"], e)
+    add_student(name, new_group["id"], phone)
+
+
+async def _transfer_active_student(existing_user, old_group, new_group, phone):
+    """Известный активный студент вступил в другую активную pro/relaxed
+    группу не через upgrade-предложение (напр. устаз объединяет отца и
+    ребёнка в одной группе) — переводим автоматически, без ручного
+    /remove (решение пользователя 26.07.2026). Безопасно: сюда попадают
+    только уже активные студенты — штрафники и новички идут в другие ветки
+    handle_known_user_group_join, гейт "сначала подготовительная" их не
+    минует."""
+    name = existing_user["name"]
+    old_title = old_group["title"] or old_group["chat_id"]
+    new_title = new_group["title"] or new_group["chat_id"]
+    await _kick_and_register(existing_user, old_group, new_group, phone)
+
+    # Одинаковое сообщение в обе группы - откуда и куда (решение
+    # пользователя 26.07.2026), чтобы не пришлось потом разгадывать в
+    # логах, кто куда делся.
+    try:
+        await send_message(new_group["chat_id"], T(
+            "group_switch_announce", get_group_lang(new_group), name=name, from_title=old_title, to_title=new_title
+        ))
+    except Exception as e:
+        log.warning("Group switch announce (new group) failed for %s in %s: %s", name, new_group["chat_id"], e)
+    try:
+        await send_message(old_group["chat_id"], T(
+            "group_switch_announce", get_group_lang(old_group), name=name, from_title=old_title, to_title=new_title
+        ))
+    except Exception as e:
+        log.warning("Group switch announce (old group) failed for %s in %s: %s", name, old_group["chat_id"], e)
+
+    log.info("Group switch: %s moved from group %s to %s", name, old_group["id"], new_group["id"])
+
+
 async def _finalize_upgrade_arrival(offer_id, existing_user, old_group, new_group, phone):
     """Студент реально вступил в предложенную pro-группу — теперь и только
     теперь деактивируем и физически кикаем его из старой relaxed-группы
@@ -396,13 +441,7 @@ async def _finalize_upgrade_arrival(offer_id, existing_user, old_group, new_grou
     группы, если студент так и не перейдёт по ссылке). Плюс короткое
     представление-поздравление в новую группу (решение пользователя 25.07.2026)."""
     name = existing_user["name"]
-    deactivate_student(existing_user["id"], old_group["id"])
-    try:
-        await ban_member(old_group["chat_id"], phone)
-        await unban_member(old_group["chat_id"], phone)
-    except Exception as e:
-        log.error("Upgrade kick from relaxed failed for %s in %s: %s", name, old_group["chat_id"], e)
-    add_student(name, new_group["id"], phone)
+    await _kick_and_register(existing_user, old_group, new_group, phone)
     resolve_upgrade_offer(offer_id)
 
     try:
