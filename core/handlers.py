@@ -1526,10 +1526,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # Короткий формат вместо "✅ Имя, принято! Слова\nосталось: ..." -
-    # "Имя, слова+. Осталось: ..." (решение пользователя 26.07.2026: минимум
-    # сообщений, короче).
+    # "Имя, слова +. Осталось: ..." (решение пользователя 26.07.2026:
+    # минимум сообщений, короче).
     new_names = [SHORT_TASKS.get(k, DEFAULT_TASKS[k]).lower() for k in group_tasks if k in new_tasks]
-    reply = s["name"] + ", " + ", ".join(new_names) + "+."
+    reply = s["name"] + ", " + ", ".join(new_names) + " +."
     if wait_list:
         reply += " " + T("remaining", glang) + " " + ", ".join(wait_list)
     if now_complete:
