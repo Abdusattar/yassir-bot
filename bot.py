@@ -228,11 +228,6 @@ async def main():
                         is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
                         if is_super or is_grp_admin or is_tadabbur:
                             continue
-                        with db() as c:
-                            c.execute(
-                                "INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
-                                (uid, chat_id)
-                            )
                         tg_name = (nm.get("first_name") or "").strip()
                         if nm.get("last_name"):
                             tg_name = (tg_name + " " + nm["last_name"]).strip()
@@ -244,6 +239,11 @@ async def main():
                             if existing_user:
                                 await handle_known_user_group_join(chat_id, group_info, uid, existing_user)
                             else:
+                                with db() as c:
+                                    c.execute(
+                                        "INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
+                                        (uid, chat_id)
+                                    )
                                 set_pending_name(uid, group_info["id"], "")
                                 greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
                                 await send_message(chat_id, greeting + T("ask_name", glang))
