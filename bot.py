@@ -19,7 +19,7 @@ from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_juz_answer
-from core.transfers import handle_known_user_group_join, handle_upgrade_answer
+from core.transfers import handle_known_user_group_join, handle_upgrade_answer, handle_member_left
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -126,6 +126,16 @@ async def main():
                         and old_m.get("status") in ("left", "kicked")
                         and not user.get("is_bot")
                     )
+                    left = (
+                        old_m.get("status") == "member"
+                        and new_m.get("status") in ("left", "kicked")
+                        and not user.get("is_bot")
+                    )
+                    if left:
+                        uid = str(user.get("id", ""))
+                        chat_id = str(cm.get("chat", {}).get("id", ""))
+                        await handle_member_left(chat_id, uid)
+                        continue
                     if joined:
                         uid = str(user.get("id", ""))
                         chat_id = str(cm.get("chat", {}).get("id", ""))

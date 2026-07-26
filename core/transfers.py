@@ -434,6 +434,32 @@ async def transfer_active_student(existing_user, old_group, new_group, phone):
     log.info("Group switch: %s moved from group %s to %s", name, old_group["id"], new_group["id"])
 
 
+async def handle_member_left(chat_id, uid):
+    """Студент физически покинул группу (сам вышел, или его убрали
+    нативной кнопкой Telegram - не через наши функции) - деактивируем его
+    именно в этой группе, БЕЗ pending_prep_return (решение пользователя
+    26.07.2026: такой уход - как ручной /remove, а не штраф; штрафников
+    кикает исключительно сам бот и уже помечает это отдельно).
+
+    Если студент здесь уже неактивен - ничего не делаем: это либо наш
+    собственный кик (deactivate_student в наших функциях всегда вызывается
+    ДО ban_member, так что к моменту этого события студент уже неактивен -
+    защита от задвоенной обработки своих же переводов), либо он и не был
+    тут студентом (админ, посторонний)."""
+    group = get_group(chat_id)
+    if not group:
+        return
+    student = find_by_phone(uid, group["id"])
+    if not student:
+        return
+    deactivate_student(student["id"], group["id"])
+    try:
+        await send_message(chat_id, T("student_left_group", get_group_lang(group), name=student["name"]))
+    except Exception as e:
+        log.warning("student_left_group announce failed for %s in %s: %s", student["name"], chat_id, e)
+    log.info("Student %s left group %s on their own/admin action - deactivated", student["name"], group["id"])
+
+
 async def _finalize_upgrade_arrival(offer_id, existing_user, old_group, new_group, phone):
     """Студент реально вступил в предложенную pro-группу — теперь и только
     теперь деактивируем и физически кикаем его из старой relaxed-группы

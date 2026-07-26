@@ -309,6 +309,9 @@ TR = {
     "group_switch_announce": {
         "ru": "🔄 {name} переведён из группы «{from_title}» в группу «{to_title}».",
     },
+    "student_left_group": {
+        "ru": "👋 {name} покинул группу.",
+    },
     "upgrade_nudge_group": {
         "ru": (
             "🌟 {name}, МашаАллах! Ты стабильно сдаёшь задания уже 30 дней — "
