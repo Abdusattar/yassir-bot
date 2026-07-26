@@ -31,7 +31,7 @@ from core.db import (
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
     get_published_curriculum_content, log_verify_check, get_prep_group
 )
-from core.transfers import block_return_if_pending_prep, handle_dm_unlocked
+from core.transfers import block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student
 
 log = logging.getLogger(__name__)
 
@@ -933,8 +933,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 if gtype_chk != "tadabbur":
                     existing_lg = get_learning_group(phone)
                     if existing_lg and existing_lg["id"] != group_id:
-                        await send_message(chat_id, T("already_in_group", glang,
-                            name=existing_user["name"], title=existing_lg["title"] or ""))
+                        # Известный активный студент написал текстом в другой
+                        # активной группе (не через join-событие) - тот же
+                        # автоперевод, что и в handle_known_user_group_join,
+                        # иначе получаем два разных поведения для одной и той
+                        # же ситуации в зависимости от того, как человек
+                        # оказался в группе (26.07.2026, инцидент с Саудом).
+                        await transfer_active_student(existing_user, existing_lg, group, phone)
                         return
                 if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], phone, chat_id, group):
                     return

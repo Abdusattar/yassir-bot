@@ -377,7 +377,7 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
             offer_id, _ = pending
             await _finalize_upgrade_arrival(offer_id, existing_user, existing_group, group_info, uid)
         else:
-            await _transfer_active_student(existing_user, existing_group, group_info, uid)
+            await transfer_active_student(existing_user, existing_group, group_info, uid)
         return
 
     if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
@@ -402,7 +402,7 @@ async def _kick_and_register(existing_user, old_group, new_group, phone):
     add_student(name, new_group["id"], phone)
 
 
-async def _transfer_active_student(existing_user, old_group, new_group, phone):
+async def transfer_active_student(existing_user, old_group, new_group, phone):
     """Известный активный студент вступил в другую активную pro/relaxed
     группу не через upgrade-предложение (напр. устаз объединяет отца и
     ребёнка в одной группе) — переводим автоматически, без ручного
