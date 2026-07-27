@@ -1349,6 +1349,25 @@ def get_published_curriculum_content(subject):
         return "\n\n".join(r["content"] for r in rows)
 
 
+def get_curriculum_content_for_reference(subject):
+    """Текст ВСЕХ частей по предмету, включая ещё НЕ опубликованные студентам —
+    для справочника AI-проверки. НЕ путать с get_published_curriculum_content():
+    та специально гейтится published_at, потому что рассылка урока в группы
+    завязана на тот же флаг. Здесь цель другая — фактическая точность модели
+    (напр. место выхода буквы), а не то, что уже официально объявлено
+    студентам. Раздел написан и вычитан заранее (реальные источники, тот же
+    процесс, что и для уже опубликованных частей) — ждать рассылки, чтобы
+    модель начала пользоваться готовым текстом, смысла нет (27.07.2026, кейс
+    id=119/154/179 — модель путалась в ك/ق без эталона, хотя текст уже был
+    готов и лежал в очереди на публикацию)."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT content FROM curriculum_parts WHERE subject=? ORDER BY order_index",
+            (subject,)
+        ).fetchall()
+        return "\n\n".join(r["content"] for r in rows)
+
+
 def set_curriculum_review_message(part_id, chat_id, message_id):
     with db() as c:
         c.execute(

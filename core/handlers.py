@@ -29,7 +29,8 @@ from core.db import (
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
-    get_published_curriculum_content, log_verify_check, get_prep_group
+    get_published_curriculum_content, get_curriculum_content_for_reference,
+    log_verify_check, get_prep_group
 )
 from core.transfers import block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
@@ -290,6 +291,19 @@ _Q_KEYWORDS = {
 }
 
 
+# 27.07.2026: только tajweed использует полный справочник (в т.ч. ещё не
+# опубликованные части) - у nahw есть неопубликованные части (id=9-11),
+# которые ещё ни разу не проверялись на реальных verdict'ах, а сегодня же
+# задеплоен nahw-фильтр (_strip_nahw_fabricated_letters), завязанный на
+# текущее поведение эталона - менять оба раздела разом не стали (совет
+# advisor). Скоуп можно расширить на "n" отдельно, когда там всплывёт та
+# же проблема (нет эталона для уже написанной, но неопубликованной части).
+def _curriculum_reference_content(key):
+    if key == "j":
+        return get_curriculum_content_for_reference(key)
+    return get_published_curriculum_content(key)
+
+
 def _build_reference_for_question(text: str) -> str:
     """Для ответа на вопрос: определяет тему и берёт нужную секцию.
     При неуверенности — возвращает весь PROGRAM_INFO (безопаснее, чем пропустить секцию).
@@ -302,13 +316,13 @@ def _build_reference_for_question(text: str) -> str:
         key = matched.pop()
         base = _with_knowledge(PROG_SECTIONS[key])
         if key in ("j", "n"):
-            published = get_published_curriculum_content(key)
+            published = _curriculum_reference_content(key)
             if published:
                 base += "\n\n" + published
         return base
     base = _with_knowledge(PROGRAM_INFO)
     for key in ("j", "n"):
-        published = get_published_curriculum_content(key)
+        published = _curriculum_reference_content(key)
         if published:
             base += "\n\n" + published
     return base
@@ -335,7 +349,7 @@ def _build_reference(checks):
             seen.add(key)
             parts.append(PROG_SECTIONS[key])
             if key in ("j", "n"):
-                published = get_published_curriculum_content(key)
+                published = _curriculum_reference_content(key)
                 if published:
                     parts.append(published)
     extra = get_knowledge()
