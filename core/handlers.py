@@ -436,6 +436,37 @@ def _strip_nahw_exact_phantoms(verdict):
     return "\n".join(keep).strip()
 
 
+# Придуманная буква в нахве (id=39, 27.07.2026): модель заявляет "не должно
+# быть X" / "лишняя буква X" про букву X, которой в слове студента ФИЗИЧЕСКИ
+# нет (напр. عَيْнًا — "не должно быть на конце ح", хотя ح в слове вообще
+# отсутствует). Узкий и детерминированный чек - буквенное присутствие, не
+# грамматика: если X встречается в слове студента дословно (БЕЗ снятия
+# огласовок - иначе ة/ه или أ/ا могут маскировать друг друга) - оставляем
+# строку (реальная претензия, "лишняя буква" тоже возможна, когда буква
+# есть, но не должна). Если X в слове нет вообще - строка выдумана, убираем.
+# По совету advisor: НЕ трогаем общие грамматические оценки (иъраб, роли
+# слов) - см. предупреждение 24.07.2026 у _strip_nahw_exact_phantoms выше,
+# это тот же принцип, просто другой паттерн фантома.
+_FABRICATED_LETTER_RE = re.compile(
+    r"(?:не должно быть|лишняя буква|нет буквы)\s*(?:на конце\s*)?([؀-ۿ])(?![؀-ۿ])"
+)
+
+
+def _strip_nahw_fabricated_letters(verdict):
+    lines = verdict.split("\n")
+    keep = []
+    for line in lines:
+        m = _FABRICATED_LETTER_RE.search(line)
+        if m:
+            word_part = _NAHW_VMESTO_RE.split(line, maxsplit=1)[0]
+            word_toks = _ARABIC_TOKEN_RE.findall(word_part)
+            word = word_toks[0] if word_toks else ""
+            if word and m.group(1) not in word:
+                continue  # буквы физически нет в слове студента - выдумка
+        keep.append(line)
+    return "\n".join(keep).strip()
+
+
 # "Нарушение молчания" в таджвиде (24.07.2026, пункт #2): когда в ответе
 # есть реальная ошибка по другой теме (нахв/муфрадат), модель заодно
 # пересказывает уже верные таджвид-буквы вместо молчания. Консервативное
@@ -627,6 +658,7 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
             result = _strip_tajweed_silence_violations(text, result) or "ВЕРНО"
         if result and any(c.startswith("arabic grammar") for c in checks):
             result = _strip_nahw_exact_phantoms(result) or "ВЕРНО"
+            result = _strip_nahw_fabricated_letters(result) or "ВЕРНО"
         # Точное совпадение, а не подстрока: "неверно" содержит "верно" как подстроку,
         # из-за чего ответы, начинающиеся с "Неверно ...", ошибочно считались "всё верно"
         # и реальные замечания молча терялись (не отправлялись студенту).
