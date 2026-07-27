@@ -32,7 +32,7 @@ from core.db import (
     get_published_curriculum_content, log_verify_check, get_prep_group
 )
 from core.transfers import block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student
-from core.quran_ref import strip_quran_confirmed_words
+from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 
 log = logging.getLogger(__name__)
 
@@ -606,6 +606,23 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         # хадиса у нас нет корпуса текста для сверки. См. core/quran_ref.py.
         if result and any(c.startswith("mufradat") for c in checks):
             result = strip_quran_confirmed_words(result, text) or "ВЕРНО"
+            # Обратная проверка (27.07.2026): слова студента, которых нет в
+            # тексте Корана, но которые однозначно близки (1 буква) к ровно
+            # одному реальному слову - вероятная ошибка, которую ИИ мог
+            # пропустить или ошибочно засчитать как верную (см. Бекхан
+            # هلفهم/خلفهم, Абдульвахид اخيه/أخيه, оба пропущены 25-26.07).
+            # Мягкая формулировка, не "исправление" - устаз/студент решают
+            # сами, это подсказка на основе точного текста, не диагноз ИИ.
+            for tok, canonical in find_unconfirmed_words(text):
+                # Пропускаем, только если ИИ уже ПОМЕТИЛ это слово как ошибку
+                # (строка с триггер-словом) - иначе это тот самый случай
+                # "молча пересказал без исправления", который мы и ловим.
+                tok_lines = [ln for ln in result.split("\n") if tok in ln]
+                if any(_has_phantom_trigger(ln) for ln in tok_lines):
+                    continue
+                note = f"{tok} — не найдено в тексте Корана, ближайшее слово: {canonical}"
+                is_verno = result.strip().rstrip(" ·.").upper() == "ВЕРНО"
+                result = note if is_verno else result + "\n" + note
         if result and any(c.startswith("tajweed") for c in checks):
             result = _strip_tajweed_silence_violations(text, result) or "ВЕРНО"
         if result and any(c.startswith("arabic grammar") for c in checks):
