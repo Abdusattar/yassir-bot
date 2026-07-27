@@ -32,6 +32,7 @@ from core.db import (
     get_published_curriculum_content, log_verify_check, get_prep_group
 )
 from core.transfers import block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student
+from core.quran_ref import strip_quran_confirmed_words
 
 log = logging.getLogger(__name__)
 
@@ -600,6 +601,11 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         # есть иъраб-ошибка) - фильтр только для mufradat/hadith.
         if result and any(c.startswith("mufradat") or c.startswith("hadith") for c in checks):
             result = _strip_phantom_errors(result) or "ВЕРНО"
+        # Детерминированная сверка с реальным текстом Корана (27.07.2026,
+        # аудит по 20 flagged-ответам): только mufradat, не hadith - для
+        # хадиса у нас нет корпуса текста для сверки. См. core/quran_ref.py.
+        if result and any(c.startswith("mufradat") for c in checks):
+            result = strip_quran_confirmed_words(result, text) or "ВЕРНО"
         if result and any(c.startswith("tajweed") for c in checks):
             result = _strip_tajweed_silence_violations(text, result) or "ВЕРНО"
         if result and any(c.startswith("arabic grammar") for c in checks):
