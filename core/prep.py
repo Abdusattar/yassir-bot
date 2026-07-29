@@ -37,7 +37,7 @@ from core.db import (
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
     clear_pending_prep_return, prep_days_done, get_regular_group_sizes,
     get_best_group_for_transfer, get_group_by_title, get_dm_ok_by_phone,
-    get_group_by_id, get_event_time,
+    get_group_by_id, get_event_time, get_pending_prep_return_from_group_id,
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member, send_message_with_buttons
@@ -99,10 +99,11 @@ async def check_prep_students():
                 # не перешёл. Шлём ту же ссылку повторно каждую проверку, пока
                 # не вступит (announce_prep_graduate_arrival сам кикнет из prep,
                 # как только это произойдёт - тогда студент пропадёт из выборки).
-                _, target_group_id = answer
+                subcategory, target_group_id = answer
                 target = get_group_by_id(target_group_id)
                 if target and target["invite_link"]:
-                    await _send_dm_or_group(uid, s["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+                    text_key = "prep_return_to_origin" if subcategory == "pro_origin" else "prep_juz_result"
+                    await _send_dm_or_group(uid, s["chat_id"], T(text_key, glang, title=target["title"] or "", link=target["invite_link"]))
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "получил ссылку, но не вступил в группу",
                                        get_event_time(s["id"], group_id, "prep_juz_answer"))
         else:
@@ -310,11 +311,12 @@ async def remind_ustaz_about_graduate(phone):
     glang = row["lang"] or "ru"
     answer = _get_juz_answer(row["uid"], row["gid"])
     if answer:
-        _, target_group_id = answer
+        subcategory, target_group_id = answer
         with db() as c:
-            g = c.execute("SELECT invite_link FROM groups WHERE id=?", (target_group_id,)).fetchone()
+            g = c.execute("SELECT title, invite_link FROM groups WHERE id=?", (target_group_id,)).fetchone()
         if g and g["invite_link"]:
-            await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=g["invite_link"]))
+            text_key = "prep_return_to_origin" if subcategory == "pro_origin" else "prep_juz_result"
+            await _send_dm_or_group(phone, row["chat_id"], T(text_key, glang, title=g["title"] or "", link=g["invite_link"]))
     else:
         await send_juz_question(phone, row["name"], glang, days_done, row["chat_id"])
     log.info("prep graduate reminder: %s nudged (answer=%s)", row["name"], bool(answer))
@@ -387,7 +389,12 @@ async def handle_juz_answer(phone, knows_juz):
     (кыргызская исключается сама собой, если студент не из кыргызской
     подготовительной). Бот сам шлёт ссылку в личку - дальше как при обычном
     вступлении по ссылке (announce_prep_graduate_arrival сработает при
-    заходе в чат)."""
+    заходе в чат).
+
+    Исключение (решение пользователя 29.07.2026): если студент кикнут раньше
+    именно из Про-группы (pending_prep_return) и НЕ знает больше джуза -
+    возвращается в ТУ ЖЕ Про-группу, а не в обычную relaxed. Если знает
+    больше джуза - всё равно идёт в N-1, как и все остальные."""
     with db() as c:
         row = c.execute("""
             SELECT u.id as uid, u.name, ug.group_id as gid, ug.joined_date, g.lang, g.chat_id
@@ -403,9 +410,13 @@ async def handle_juz_answer(phone, knows_juz):
         return  # уже отвечал - не обрабатываем повторно (защита от двойного тапа)
 
     glang = row["lang"] or "ru"
+    origin_group = None if knows_juz else _pro_return_origin(phone)
     if knows_juz:
         target_type = "N-1"
         target = get_group_by_title(_PREP_JUZ_KNOWN_TARGET_TITLE)
+    elif origin_group:
+        target_type = "pro_origin"
+        target = origin_group
     else:
         target_type = "relaxed"
         target = get_best_group_for_transfer("relaxed", glang)
@@ -420,8 +431,25 @@ async def handle_juz_answer(phone, knows_juz):
 
     add_bonus(row["uid"], row["gid"], row["joined_date"], 0, "prep_juz_answer",
               subcategory=target_type, note=str(target["id"]))
-    await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+    text_key = "prep_return_to_origin" if target_type == "pro_origin" else "prep_juz_result"
+    await _send_dm_or_group(phone, row["chat_id"], T(text_key, glang, title=target["title"] or "", link=target["invite_link"]))
     log.info("prep juz answer: %s → %s (group=%s)", row["name"], target_type, target["title"])
+
+
+def _pro_return_origin(phone):
+    """Группа, из которой студента кикнули за пропуски (pending_prep_return),
+    если это была Про-группа - используется в handle_juz_answer: студент,
+    который НЕ знает больше джуза, возвращается именно в неё, а не в обычную
+    relaxed (решение пользователя 29.07.2026). Кто знает больше джуза -
+    всё равно идёт в N-1, как и все остальные (вопрос про джуз задаётся
+    как обычно). None, если маркера нет или кикнут был не из Про."""
+    gid = get_pending_prep_return_from_group_id(phone)
+    if not gid:
+        return None
+    group = get_group_by_id(gid)
+    if not group or not group["active"] or (group["group_type"] or "relaxed") != "pro":
+        return None
+    return group
 
 
 def _has_prep_offer(user_id, group_id):

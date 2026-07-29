@@ -803,6 +803,14 @@ def is_pending_prep_return(phone):
     return row is not None
 
 
+def get_pending_prep_return_from_group_id(phone):
+    with db() as c:
+        row = c.execute(
+            "SELECT from_group_id FROM pending_prep_return WHERE phone=?", (phone,)
+        ).fetchone()
+    return row["from_group_id"] if row else None
+
+
 def clear_pending_prep_return(phone):
     with db() as c:
         c.execute("DELETE FROM pending_prep_return WHERE phone=?", (phone,))
