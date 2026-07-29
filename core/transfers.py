@@ -135,7 +135,26 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
 
     log_transfer(sid, chat_id, target_chat_id, f"{reason}_{group['group_type']}")
 
-    # Уведомляем студента
+    # Личное объяснение студенту про возврат только через подготовительную -
+    # групповое сообщение ниже он уже не увидит, т.к. к этому моменту кикнут
+    # (29.07.2026: реальный случай, DM не отправлялся вообще).
+    dm_ok = True
+    if reason == "inactive":
+        prep_group = get_prep_group()
+        prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+        if detail:
+            dm_text = T("transfer_to_tadabbur_dm", lang, name=name,
+                        start=_fmt_dm(detail["start"]), end=_fmt_dm(detail["end"]),
+                        submitted=detail["submitted"], total=detail["total"],
+                        group_title=group["title"] or chat_id, prep_link=prep_link)
+        else:
+            dm_text = T("return_needs_prep_dm", lang, name=name, prep_link=prep_link)
+        dm_resp = await send_message(student["phone"], dm_text)
+        dm_ok = bool(dm_resp and dm_resp.get("ok"))
+
+    # Уведомляем группу - коротко и нейтрально, без деталей условий возврата
+    # (кикнутый студент это сообщение всё равно не увидит, оно для тех, кто
+    # остался в чате, чтобы не возникало лишних вопросов).
     if reason == "lessons":
         msg = T("transfer_to_tadabbur_lessons", lang, name=name, misses=count)
     elif detail:
@@ -155,6 +174,9 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     )
     for admin_id in SUPER_ADMIN_IDS:
         await send_message(admin_id, admin_msg)
+    if reason == "inactive" and not dm_ok:
+        for admin_id in SUPER_ADMIN_IDS:
+            await send_message(admin_id, T("transfer_dm_failed_notify_admin", "ru", name=name, group=group["title"] or chat_id))
 
     log.info("Student %s transferred from %s to tadabbur (reason=%s, count=%d)", name, chat_id, reason, count)
 
@@ -455,10 +477,12 @@ async def handle_member_left(chat_id, uid):
     if not student:
         return
     deactivate_student(student["id"], group["id"])
-    try:
-        await send_message(chat_id, T("student_left_group", get_group_lang(group), name=student["name"]))
-    except Exception as e:
-        log.warning("student_left_group announce failed for %s in %s: %s", student["name"], chat_id, e)
+    gtype = group["group_type"] or "relaxed"
+    if gtype != "tadabbur":
+        try:
+            await send_message(chat_id, T("student_left_group", get_group_lang(group), name=student["name"]))
+        except Exception as e:
+            log.warning("student_left_group announce failed for %s in %s: %s", student["name"], chat_id, e)
     log.info("Student %s left group %s on their own/admin action - deactivated", student["name"], group["id"])
 
 

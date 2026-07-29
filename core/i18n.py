@@ -252,11 +252,11 @@ TR = {
     },
     # ── Переводы для системы переводов между группами ──────────────────────────
     "transfer_to_tadabbur": {
-        "ru": "📿 {name}, за период с {start} по {end} сдано только {submitted} из {total} дней — переведён в группу Тадаббур.\nПравило: {threshold} пропущенных дней без отчёта за месяц → перевод в Тадаббур.\nТам нет обязательных заданий — можешь читать, размышлять, возвращаться когда будешь готов 🤲",
-        "ky": "📿 {name}, {start} — {end} аралыгында {total} күндүн ичинен {submitted} гана тапшырылды — Тадаббур тобуна которулдуң.\nЭреже: айга {threshold} күн отчётсуз болсо — Тадаббурга которуу.\nАнда милдеттүү тапшырмалар жок — окуй бер, ойлон, даяр болгондо кайт 🤲",
-        "uz": "📿 {name}, {start} — {end} oralig'ida {total} kundan atigi {submitted} tasi topshirildi — Tadabbur guruhiga o'tkazilding.\nQoida: oyiga {threshold} kun hisobotsiz bo'lsa — Tadabburga o'tkazish.\nU yerda majburiy vazifalar yo'q — o'qi, fikr yurgiz, tayyor bo'lganda qait 🤲",
-        "kk": "📿 {name}, {start} — {end} аралығында {total} күннің {submitted} ғана тапсырылды — Тадаббур тобына ауыстырылдың.\nЕреже: айына {threshold} күн есепсіз болса — Тадаббурға ауыстыру.\nОнда міндетті тапсырмалар жоқ — оқы, ойлан, дайын болғанда қайт 🤲",
-        "en": "📿 {name}, from {start} to {end} you submitted reports on only {submitted} of {total} days — you've been moved to Tadabbur group.\nRule: {threshold} days without reports in a month → move to Tadabbur.\nNo mandatory tasks there — read, reflect, return when ready 🤲",
+        "ru": "📿 {name}, за период с {start} по {end} сдано только {submitted} из {total} дней — переведён в группу Тадаббур.\nПравило: {threshold} пропущенных дней без отчёта за месяц → перевод в Тадаббур.",
+        "ky": "📿 {name}, {start} — {end} аралыгында {total} күндүн ичинен {submitted} гана тапшырылды — Тадаббур тобуна которулдуң.\nЭреже: айга {threshold} күн отчётсуз болсо — Тадаббурга которуу.",
+        "uz": "📿 {name}, {start} — {end} oralig'ida {total} kundan atigi {submitted} tasi topshirildi — Tadabbur guruhiga o'tkazilding.\nQoida: oyiga {threshold} kun hisobotsiz bo'lsa — Tadabburga o'tkazish.",
+        "kk": "📿 {name}, {start} — {end} аралығында {total} күннің {submitted} ғана тапсырылды — Тадаббур тобына ауыстырылдың.\nЕреже: айына {threshold} күн есепсіз болса — Тадаббурға ауыстыру.",
+        "en": "📿 {name}, from {start} to {end} you submitted reports on only {submitted} of {total} days — you've been moved to Tadabbur group.\nRule: {threshold} days without reports in a month → move to Tadabbur.",
     },
     "return_needs_prep_group": {
         "ru": "👋 {name}, в постоянную группу можно вернуться только после подготовительной — таков общий порядок для всех, кто переведён в Тадаббур из-за пропусков сдачи заданий. Пройдите её условия — и сможете вернуться сюда. Сейчас выводим вас из этого чата, ссылку на подготовительную отправили в личные сообщения 🤲",
@@ -267,11 +267,17 @@ TR = {
     "return_needs_prep_dm": {
         "ru": "Ассаляму алейкум, {name}.\n\nВы состоите в группе Тадаббур, потому что раньше были переведены туда из-за пропусков сдачи заданий. Чтобы вернуться в постоянную учебную группу, правила требуют сначала пройти подготовительный период: минимум 5 дней сдачи отчётов за 14 дней в подготовительной группе.\n\nПожалуйста, вступите в подготовительную группу по ссылке ниже и начните сдавать отчёты — как только выполните условие, вы автоматически перейдёте в постоянную группу.\n\n👉 {prep_link}\n\nДа облегчит Аллах ваш путь 🤲",
     },
+    "transfer_to_tadabbur_dm": {
+        "ru": "Ассаляму алейкум, {name}.\n\nЗа период с {start} по {end} сдано только {submitted} из {total} дней — поэтому вы исключены из группы «{group_title}».\n\nЧтобы вернуться, вступите в подготовительную группу и сдавайте отчёты минимум 5 дней из 14. После этого продолжите обучение — обычно с группы relaxed.\n\n👉 {prep_link}\n\nДа облегчит Аллах ваш путь 🤲",
+    },
     "return_blocked_notify_admin": {
         "ru": "⚠️ {name} попытался вернуться в «{group}» напрямую, минуя подготовительную (сейчас в Тадаббуре/prep) — выведен из чата, отправлена ссылка на подготовительную в личку.",
     },
     "return_blocked_notify_admin_dm_failed": {
         "ru": "⚠️ {name} попытался вернуться в «{group}» напрямую, минуя подготовительную (сейчас в Тадаббуре/prep) — выведен из чата. Личное сообщение НЕ доставлено (не писал боту в личку) — ссылку показали прямо в группе.",
+    },
+    "transfer_dm_failed_notify_admin": {
+        "ru": "⚠️ {name} переведён в Тадаббур из «{group}» за пропуски, но личное сообщение со ссылкой на подготовительную НЕ доставлено (не писал боту в личку) — нужно объяснить ему условия возврата вручную.",
     },
     "transfer_to_tadabbur_lessons": {
         "ru": "📿 {name}, ты пропустил {misses} онлайн урока в этом месяце и переведён в группу Тадаббур.\nТам нет обязательных заданий — можешь читать, размышлять, возвращаться когда будешь готов 🤲",
