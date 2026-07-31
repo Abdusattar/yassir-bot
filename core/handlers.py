@@ -25,6 +25,7 @@ from core.db import (
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db,
+    get_or_create_attendance_confirm, add_attendance_confirm_student, get_attendance_confirm_by_id,
     save_voice_submission, mark_voice_reviewed, save_umar_review,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
@@ -33,6 +34,7 @@ from core.db import (
     log_verify_check, get_prep_group
 )
 from core.transfers import block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student
+from core.attendance_confirm import ask_ustaz_attendance_confirm, resolve_attendance_confirm
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 
 log = logging.getLogger(__name__)
@@ -1443,20 +1445,36 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Отметка присутствия на уроке (u / у) ─────────────────────────────────
+    # Баллы не начисляются сразу - сначала подтверждение устаза, что урок
+    # реально был (дыра: студенты писали "у" без урока и получали баллы).
+    # См. core/attendance_confirm.py.
     text_lower = text.strip().lower()
     if text_lower in ("u", "у"):
         s_self = find_by_phone(phone, group_id)
         if s_self:
             if not has_attendance_this_week(s_self["id"], group_id):
-                add_bonus(s_self["id"], group_id, get_date(), 5, "attendance", "online")
-                await send_message(chat_id, T("present", glang, name=s_self["name"]))
+                today = get_date()
+                confirm_id, is_new = get_or_create_attendance_confirm(group_id, today)
+                confirm_row = get_attendance_confirm_by_id(confirm_id)
+                if confirm_row["decision"] == "yes":
+                    # Устаз уже подтвердил урок сегодня (например, сам отметился раньше)
+                    add_bonus(s_self["id"], group_id, today, 5, "attendance", "online")
+                    await send_message(chat_id, T("present", glang, name=s_self["name"]))
+                elif confirm_row["decision"] != "no":
+                    add_attendance_confirm_student(confirm_id, s_self["id"])
+                    await send_message(chat_id, T("attendance_pending", glang, name=s_self["name"]))
+                    if is_new:
+                        await ask_ustaz_attendance_confirm(confirm_id, group_id, glang)
         elif is_group_admin(phone, group_id):
             # Устаз отмечает, что урок состоялся, даже если ни один студент не отметился —
-            # без бонусных баллов, только факт для еженедельного отчёта (scheduler._week_ops_stats)
+            # без бонусных баллов, только факт для еженедельного отчёта (scheduler._week_ops_stats).
+            # Заодно это и есть подтверждение - закрывает висящий вопрос студентам, если он был.
             ustaz = find_user_by_phone(phone)
             if ustaz:
                 add_bonus(ustaz["id"], group_id, get_date(), 0, "attendance", "ustaz")
                 await send_message(chat_id, T("lesson_marked", glang))
+                confirm_id, _ = get_or_create_attendance_confirm(group_id, get_date())
+                await resolve_attendance_confirm(confirm_id, "yes")
         return
 
     s = find_by_phone(phone, group_id)

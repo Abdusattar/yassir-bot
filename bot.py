@@ -20,6 +20,7 @@ from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_juz_answer
 from core.transfers import handle_known_user_group_join, handle_upgrade_answer, handle_member_left
+from core.attendance_confirm import handle_attendance_confirm_answer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -110,6 +111,15 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
+                    # "att:yes:<uid>:<confirm_id>" / "att:no:<uid>:<confirm_id>" -
+                    # подтверждение устазом (или, при молчании, супер-админом),
+                    # что урок реально прошёл, перед начислением баллов за "у" (31.07.2026).
+                    elif cq_data.startswith("att:"):
+                        parts = cq_data.split(":", 3)
+                        if len(parts) == 4 and parts[2] == cq_uid:
+                            if cq_chat_id and cq_message_id:
+                                await remove_message_keyboard(cq_chat_id, cq_message_id)
+                            asyncio.create_task(handle_attendance_confirm_answer(cq_uid, parts[1], int(parts[3])))
                     continue
 
                 # Вступление по ссылке-приглашению (chat_member update)

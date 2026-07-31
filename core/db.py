@@ -222,6 +222,23 @@ def init():
             );
             CREATE INDEX IF NOT EXISTS idx_cp_subject_order ON curriculum_parts(subject, order_index);
 
+            CREATE TABLE IF NOT EXISTS attendance_confirm(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                asked_at TEXT NOT NULL DEFAULT (datetime('now')),
+                decision TEXT,
+                decided_at TEXT,
+                escalated_at TEXT,
+                UNIQUE(group_id, date)
+            );
+            CREATE TABLE IF NOT EXISTS attendance_confirm_students(
+                confirm_id INTEGER NOT NULL,
+                student_id INTEGER NOT NULL,
+                PRIMARY KEY(confirm_id, student_id),
+                FOREIGN KEY(confirm_id) REFERENCES attendance_confirm(id)
+            );
+
             CREATE TABLE IF NOT EXISTS verify_log(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id INTEGER NOT NULL,
@@ -1847,6 +1864,72 @@ def has_attendance_this_week(uid, group_id):
             " WHERE student_id=? AND group_id=? AND category='attendance' AND date>=?",
             (uid, group_id, week_start)
         ).fetchone() is not None
+
+
+def get_or_create_attendance_confirm(group_id, date):
+    """Возвращает (id, is_new). is_new=True - только что созданная запись
+    (первый студент за день), значит нужно спросить устаза; False - уже
+    была, значит студент просто добавляется в список ожидающих."""
+    with db() as c:
+        cur = c.execute(
+            "INSERT OR IGNORE INTO attendance_confirm(group_id,date) VALUES(?,?)",
+            (group_id, date)
+        )
+        is_new = cur.rowcount == 1
+        row = c.execute(
+            "SELECT id FROM attendance_confirm WHERE group_id=? AND date=?",
+            (group_id, date)
+        ).fetchone()
+        return row["id"], is_new
+
+
+def add_attendance_confirm_student(confirm_id, student_id):
+    with db() as c:
+        c.execute(
+            "INSERT OR IGNORE INTO attendance_confirm_students(confirm_id,student_id) VALUES(?,?)",
+            (confirm_id, student_id)
+        )
+
+
+def get_attendance_confirm_by_id(confirm_id):
+    with db() as c:
+        return c.execute(
+            "SELECT * FROM attendance_confirm WHERE id=?", (confirm_id,)
+        ).fetchone()
+
+
+def get_attendance_confirm_students(confirm_id):
+    with db() as c:
+        return c.execute("""
+            SELECT u.id, u.name, u.phone FROM attendance_confirm_students acs
+            JOIN users u ON u.id=acs.student_id
+            WHERE acs.confirm_id=?
+        """, (confirm_id,)).fetchall()
+
+
+def set_attendance_confirm_decision(confirm_id, decision):
+    with db() as c:
+        c.execute(
+            "UPDATE attendance_confirm SET decision=?, decided_at=datetime('now') WHERE id=?",
+            (decision, confirm_id)
+        )
+
+
+def get_stale_attendance_confirms(minutes):
+    with db() as c:
+        return c.execute("""
+            SELECT * FROM attendance_confirm
+            WHERE decision IS NULL AND escalated_at IS NULL
+              AND asked_at <= datetime('now', ?)
+        """, (f"-{minutes} minutes",)).fetchall()
+
+
+def mark_attendance_confirm_escalated(confirm_id):
+    with db() as c:
+        c.execute(
+            "UPDATE attendance_confirm SET escalated_at=datetime('now') WHERE id=?",
+            (confirm_id,)
+        )
 
 
 def get_dm_ok(uid):

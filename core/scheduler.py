@@ -21,6 +21,7 @@ from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
 from core.transfers import run_transfer_checks, send_return_nudges
 from core.prep import check_prep_students, send_prep_reminders
+from core.attendance_confirm import check_attendance_confirm_escalations
 import random
 import core.ai as ai
 import core.sampler as sampler
@@ -1388,6 +1389,11 @@ async def scheduler():
                     await coro_fn(*args)
 
             h, m, wd, d = slot
+
+            # Не привязано к конкретному времени - проверяется каждый цикл (~30с),
+            # чтобы эскалация к супер-админам не зависела от рестарта бота
+            # (таймер хранится в БД, а не в памяти процесса).
+            await check_attendance_confirm_escalations()
 
             if h == 7 and m == 0:
                 await maybe_run("morning_tadabbur_report", morning_tadabbur_report)
