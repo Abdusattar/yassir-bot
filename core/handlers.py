@@ -31,9 +31,12 @@ from core.db import (
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
     get_published_curriculum_content, get_curriculum_content_for_reference,
-    log_verify_check, get_prep_group
+    log_verify_check
 )
-from core.transfers import block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student
+from core.transfers import (
+    block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student,
+    send_new_student_prep_redirect,
+)
 from core.attendance_confirm import ask_ustaz_attendance_confirm, resolve_attendance_confirm
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 
@@ -1026,9 +1029,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # уйдёт сам, через 7 дней заберёт обычный kick_unregistered.
             gtype_new = group["group_type"] or "relaxed"
             if REQUIRE_PREP_FOR_NEW_STUDENTS and gtype_new in ("pro", "relaxed"):
-                prep_group = get_prep_group()
-                prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
-                await send_message(chat_id, T("new_student_needs_prep_group", glang, prep_link=prep_link))
+                await send_new_student_prep_redirect(phone, chat_id, sender_name, glang)
                 return
             if text.startswith("/"):
                 if is_pending_name(phone, group_id):

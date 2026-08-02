@@ -1866,6 +1866,22 @@ def has_attendance_this_week(uid, group_id):
         ).fetchone() is not None
 
 
+def has_attendance_in_week_of(uid, group_id, date_str):
+    """Как has_attendance_this_week, но неделя считается от конкретной даты,
+    не от 'сегодня' - нужно для attendance_confirm: подтверждение может
+    прийти через часы/сутки после самого дня, к тому моменту "сегодня" уже
+    другое (см. core/attendance_confirm.py)."""
+    d = datetime.strptime(date_str, "%Y-%m-%d").date()
+    week_start = str(d - timedelta(days=d.weekday()))
+    week_end = str(d + timedelta(days=6 - d.weekday()))
+    with db() as c:
+        return c.execute(
+            "SELECT 1 FROM score_events"
+            " WHERE student_id=? AND group_id=? AND category='attendance' AND date>=? AND date<=?",
+            (uid, group_id, week_start, week_end)
+        ).fetchone() is not None
+
+
 def get_or_create_attendance_confirm(group_id, date):
     """Возвращает (id, is_new). is_new=True - только что созданная запись
     (первый студент за день), значит нужно спросить устаза; False - уже
@@ -1922,6 +1938,15 @@ def get_stale_attendance_confirms(minutes):
             WHERE decision IS NULL AND escalated_at IS NULL
               AND asked_at <= datetime('now', ?)
         """, (f"-{minutes} minutes",)).fetchall()
+
+
+def get_unresolved_after_escalation(hours):
+    with db() as c:
+        return c.execute("""
+            SELECT * FROM attendance_confirm
+            WHERE decision IS NULL AND escalated_at IS NOT NULL
+              AND escalated_at <= datetime('now', ?)
+        """, (f"-{hours} hours",)).fetchall()
 
 
 def mark_attendance_confirm_escalated(confirm_id):

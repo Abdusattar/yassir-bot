@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytz
 
-from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, IS_FEMALE, SCALING_CHAT_ID, SCALING_INVITE_LINK
+from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
@@ -21,7 +21,7 @@ from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
 from core.transfers import run_transfer_checks, send_return_nudges
 from core.prep import check_prep_students, send_prep_reminders
-from core.attendance_confirm import check_attendance_confirm_escalations
+from core.attendance_confirm import check_attendance_confirm_escalations, check_attendance_confirm_auto_resolve
 import random
 import core.ai as ai
 import core.sampler as sampler
@@ -1244,14 +1244,11 @@ async def tadabbur_invite_reminder():
                     unreachable.append(s)
 
             if unreachable:
+                # Ссылку в группу больше не показываем (02.08.2026, тот же
+                # принцип, что и с подготовительной) - просим устаза лично
+                # позвать тех, до кого личка не достучалась.
                 names = "\n".join("• " + s["name"] for s in unreachable)
-                addr = "Сёстры" if IS_FEMALE else "Братья"
-                msg = (
-                    "📚 " + addr + ", напоминаем! Присоединяйтесь к нашей общей группе "
-                    "Тадаббур — пространство красоты и смыслов Корана, общих отчётов и объявлений 🌿\n\n"
-                    "Ещё не в группе:\n" + names + "\n\n"
-                    "👉 " + tadabbur["invite_link"]
-                )
+                msg = T("tadabbur_invite_unreachable", "ru", names=names)
                 await send_message(group["chat_id"], msg)
         except Exception as e:
             log.error("tadabbur_invite_reminder error in %s: %s", group["chat_id"], e)
@@ -1394,11 +1391,15 @@ async def scheduler():
             # чтобы эскалация к супер-админам не зависела от рестарта бота
             # (таймер хранится в БД, а не в памяти процесса).
             await check_attendance_confirm_escalations()
+            await check_attendance_confirm_auto_resolve()
 
             if h == 7 and m == 0:
                 await maybe_run("morning_tadabbur_report", morning_tadabbur_report)
                 await maybe_run("streak_bonuses", streak_bonuses)
-                await maybe_run("tadabbur_invite_morning", tadabbur_invite_reminder)
+                # Раз в 2 недели, не каждый день (02.08.2026: спамило тех, кто
+                # ещё не вступил в Тадаббур - понедельник по чётным ISO-неделям).
+                if wd == 0 and now.isocalendar()[1] % 2 == 0:
+                    await maybe_run("tadabbur_invite_biweekly", tadabbur_invite_reminder)
                 await maybe_run("prep_reminders", send_prep_reminders)
                 # Дублируем вечернюю проверку (21:00) с утра: студенты часто сдают
                 # отчёт поздно вечером (после 21:00), и раньше уведомление устазу

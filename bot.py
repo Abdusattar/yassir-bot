@@ -11,7 +11,7 @@
 import asyncio
 import logging
 
-from config import TELEGRAM_TOKEN, PROFILE
+from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone
 from config import SUPER_ADMIN_IDS
@@ -19,7 +19,10 @@ from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_juz_answer
-from core.transfers import handle_known_user_group_join, handle_upgrade_answer, handle_member_left
+from core.transfers import (
+    handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
+    send_new_student_prep_redirect,
+)
 from core.attendance_confirm import handle_attendance_confirm_answer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -173,10 +176,19 @@ async def main():
                                         "INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
                                         (uid, chat_id)
                                     )
-                                set_pending_name(uid, group_info["id"], "")
-                                greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
-                                log.info("chat_member: greeting new user %s in chat %s", uid, chat_id)
-                                await send_message(chat_id, greeting + T("ask_name", glang))
+                                gtype_join = group_info["group_type"] or "relaxed"
+                                if REQUIRE_PREP_FOR_NEW_STUDENTS and gtype_join in ("pro", "relaxed"):
+                                    # Сразу шлём в личку ссылку на подготовительную, не
+                                    # ждём первого сообщения/кика через сутки (02.08.2026,
+                                    # см. send_new_student_prep_redirect в transfers.py).
+                                    # pending_name не ставим - тут регистрация не начинается.
+                                    log.info("chat_member: new user %s in prep-bypass group %s - redirecting to prep", uid, chat_id)
+                                    await send_new_student_prep_redirect(uid, chat_id, tg_name, glang)
+                                else:
+                                    set_pending_name(uid, group_info["id"], "")
+                                    greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
+                                    log.info("chat_member: greeting new user %s in chat %s", uid, chat_id)
+                                    await send_message(chat_id, greeting + T("ask_name", glang))
                     continue
 
                 mr = upd.get("message_reaction")
@@ -254,9 +266,14 @@ async def main():
                                         "INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
                                         (uid, chat_id)
                                     )
-                                set_pending_name(uid, group_info["id"], "")
-                                greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
-                                await send_message(chat_id, greeting + T("ask_name", glang))
+                                gtype_nm = group_info["group_type"] or "relaxed"
+                                if REQUIRE_PREP_FOR_NEW_STUDENTS and gtype_nm in ("pro", "relaxed"):
+                                    log.info("new_chat_members: new user %s in prep-bypass group %s - redirecting to prep", uid, chat_id)
+                                    await send_new_student_prep_redirect(uid, chat_id, tg_name, glang)
+                                else:
+                                    set_pending_name(uid, group_info["id"], "")
+                                    greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
+                                    await send_message(chat_id, greeting + T("ask_name", glang))
 
                 if (text or is_media) and chat_id:
                     message_id = msg.get("message_id")

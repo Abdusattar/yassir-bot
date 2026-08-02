@@ -89,12 +89,6 @@ async def _check_group_for_transfers(group, gtype):
             log.error("Transfer check error for student %s: %s", student["id"], e)
 
 
-def _fmt_dm(iso_date):
-    """'2026-07-01' → '01.07'"""
-    d = datetime.strptime(iso_date, "%Y-%m-%d").date()
-    return "{:02d}.{:02d}".format(d.day, d.month)
-
-
 async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason="inactive", detail=None, threshold=None):
     chat_id = group["chat_id"]
     name = student["name"]
@@ -135,16 +129,31 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
 
     log_transfer(sid, chat_id, target_chat_id, f"{reason}_{group['group_type']}")
 
-    # Уведомляем студента
+    # Личное объяснение студенту про возврат только через подготовительную -
+    # групповое сообщение ниже он уже не увидит, т.к. к этому моменту кикнут
+    # (29.07.2026: реальный случай, DM не отправлялся вообще).
+    dm_ok = True
+    if reason == "inactive":
+        prep_group = get_prep_group()
+        prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+        if detail:
+            dm_text = T("transfer_to_tadabbur_dm", lang, name=name,
+                        group_title=group["title"] or chat_id, prep_link=prep_link)
+        else:
+            dm_text = T("return_needs_prep_dm", lang, name=name, prep_link=prep_link)
+        dm_resp = await send_message(student["phone"], dm_text)
+        dm_ok = bool(dm_resp and dm_resp.get("ok"))
+
+    # Уведомляем группу - коротко и нейтрально, без деталей условий возврата
+    # и без слов "переведён в Тадаббур" (кикнутый студент это сообщение всё
+    # равно не увидит, оно для тех, кто остался в чате; Тадаббур и так
+    # регулярно рекламируется всем через tadabbur_invite_reminder - не
+    # штрафная новость, см. 02.08.2026).
+    group_title = group["title"] or chat_id
     if reason == "lessons":
-        msg = T("transfer_to_tadabbur_lessons", lang, name=name, misses=count)
-    elif detail:
-        msg = T("transfer_to_tadabbur", lang, name=name,
-                 start=_fmt_dm(detail["start"]), end=_fmt_dm(detail["end"]),
-                 submitted=detail["submitted"], total=detail["total"], threshold=threshold)
+        msg = T("transfer_to_tadabbur_lessons", lang, name=name, group_title=group_title)
     else:
-        msg = T("transfer_to_tadabbur", lang, name=name,
-                 start="", end="", submitted=0, total=count, threshold=threshold or count)
+        msg = T("transfer_to_tadabbur", lang, name=name, group_title=group_title)
     await send_message(chat_id, msg)
 
     # Уведомляем всех глобальных админов
@@ -155,6 +164,9 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     )
     for admin_id in SUPER_ADMIN_IDS:
         await send_message(admin_id, admin_msg)
+    if reason == "inactive" and not dm_ok:
+        for admin_id in SUPER_ADMIN_IDS:
+            await send_message(admin_id, T("transfer_dm_failed_notify_admin", "ru", name=name, group=group["title"] or chat_id))
 
     log.info("Student %s transferred from %s to tadabbur (reason=%s, count=%d)", name, chat_id, reason, count)
 
@@ -203,7 +215,10 @@ async def block_return_if_pending_prep(uid, name, phone, chat_id, group):
         await send_message(chat_id, T("return_needs_prep_group", lang, name=name))
         admin_msg = T("return_blocked_notify_admin", "ru", name=name, group=group["title"] or chat_id)
     else:
-        await send_message(chat_id, T("return_needs_prep_group_dm_failed", lang, name=name, prep_link=prep_link))
+        # Ссылку в группу больше не показываем (по ней случайно переходили
+        # активные студенты, см. инцидент с Мустафой 02.08.2026) - просим
+        # устаза переслать её вручную.
+        await send_message(chat_id, T("return_needs_prep_group_dm_failed", lang, name=name))
         admin_msg = T("return_blocked_notify_admin_dm_failed", "ru", name=name, group=group["title"] or chat_id)
 
     for admin_id in SUPER_ADMIN_IDS:
@@ -351,6 +366,25 @@ async def handle_upgrade_answer(phone, choice, offer_id):
     log.info("Upgrade offer: %s chose pro, sent link to %s", name, target["title"])
 
 
+async def send_new_student_prep_redirect(phone, chat_id, display_name, lang):
+    """Совсем новый человек (никогда не был в системе) оказался в pro/relaxed
+    группе напрямую, минуя подготовительную - ссылку на подготовительную не
+    показываем публично в группе (по ней случайно переходили активные
+    студенты, см. инцидент с Мустафой 02.08.2026), сначала личка, а если не
+    доставилась - просим устаза переслать вручную. Используется и при
+    вступлении в группу (bot.py), и при первом сообщении (handlers.py) -
+    единая точка, чтобы не разъезжались тексты."""
+    prep_group = get_prep_group()
+    prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+    dm_resp = await send_message(phone, T("new_student_needs_prep_dm", lang, prep_link=prep_link))
+    dm_ok = bool(dm_resp and dm_resp.get("ok"))
+    name = display_name or "Пользователь"
+    if dm_ok:
+        await send_message(chat_id, T("new_student_needs_prep_group_notify", lang, name=name))
+    else:
+        await send_message(chat_id, T("new_student_needs_prep_group_dm_failed", lang, name=name))
+
+
 async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
     """Общая логика для уже известного пользователя, вступившего в группу по
     приглашению (chat_member update) или добавленного вручную (new_chat_members).
@@ -369,6 +403,27 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
       4) Обычная авторегистрация + возможный выпуск из подготовительной."""
     existing_group = get_learning_group(uid)
     gtype = group_info["group_type"] or "relaxed"
+
+    if existing_group and gtype == "prep":
+        # Уже активен в pro/relaxed (значит не штрафник и не новенький -
+        # у них existing_group всегда пусто, см. докстринг выше) и просто
+        # зашёл в подготовительную - по чужой ссылке, случайно и т.п.
+        # Подготовительная ему не нужна: кикаем обратно, текущую группу не
+        # трогаем (раньше это ошибочно обрабатывалось как автоперевод,
+        # см. transfer_active_student - баг нашли 02.08.2026 на Мустафе).
+        try:
+            await ban_member(chat_id, uid)
+            await unban_member(chat_id, uid)
+        except Exception as e:
+            log.error("Kick from prep (already active elsewhere) failed for %s in %s: %s", uid, chat_id, e)
+        lang = get_group_lang(existing_group)
+        text = T("prep_not_needed", lang, name=existing_user["name"],
+                  group=existing_group["title"] or existing_group["chat_id"])
+        target = uid if get_dm_ok_by_phone(uid) else existing_group["chat_id"]
+        await send_message(target, text)
+        log.info("Blocked prep entry for already-active student %s (group=%s)",
+                  existing_user["name"], existing_group["id"])
+        return
 
     if existing_group and gtype != "tadabbur":
         if existing_group["id"] == group_info["id"]:
@@ -455,10 +510,12 @@ async def handle_member_left(chat_id, uid):
     if not student:
         return
     deactivate_student(student["id"], group["id"])
-    try:
-        await send_message(chat_id, T("student_left_group", get_group_lang(group), name=student["name"]))
-    except Exception as e:
-        log.warning("student_left_group announce failed for %s in %s: %s", student["name"], chat_id, e)
+    gtype = group["group_type"] or "relaxed"
+    if gtype != "tadabbur":
+        try:
+            await send_message(chat_id, T("student_left_group", get_group_lang(group), name=student["name"]))
+        except Exception as e:
+            log.warning("student_left_group announce failed for %s in %s: %s", student["name"], chat_id, e)
     log.info("Student %s left group %s on their own/admin action - deactivated", student["name"], group["id"])
 
 
@@ -490,11 +547,11 @@ async def _finalize_upgrade_arrival(offer_id, existing_user, old_group, new_grou
 
 UNREG_DAYS = 7  # общий порог (относится к prep/tadabbur-подобным случаям)
 
-# Кто зашёл напрямую в pro/relaxed, минуя подготовительную, и за сутки не
-# представился — кикаем быстрее общего порога и шлём ссылку именно на
-# подготовительную, а не на Тадаббур (решение пользователя 25.07.2026,
-# см. new_student_needs_prep_group в handlers.py — это тот же сценарий,
-# только для тех, кто игнорирует напоминание и ничего не пишет дальше).
+# Кто зашёл напрямую в pro/relaxed, минуя подготовительную, кикаем быстрее
+# общего порога (решение пользователя 25.07.2026). Ссылку на подготовительную
+# такой человек уже получил в личку при самом вступлении, см.
+# send_new_student_prep_redirect - это просто финальный кик тех, кто
+# проигнорировал и ничего не сделал за сутки.
 UNREG_DAYS_PREP_BYPASS = 1
 
 
@@ -504,7 +561,6 @@ async def kick_unregistered():
     через UNREG_DAYS (ссылка на Тадаббур)."""
     from core.tg import ban_member, unban_member
     tadabbur = get_tadabbur_group()
-    prep_group = get_prep_group()
     overdue = get_overdue_unregistered(min(UNREG_DAYS, UNREG_DAYS_PREP_BYPASS))
     for row in overdue:
         uid = row["user_id"]
@@ -532,17 +588,15 @@ async def kick_unregistered():
             if str(uid) in SUPER_ADMIN_IDS or is_any_group_admin(str(uid)):
                 remove_unregistered(uid, chat_id)
                 continue
-            # Сначала сообщение — чтобы студент успел прочитать, пока ещё в группе,
-            # и только потом кик (ban + unban = мягкое удаление, может вернуться)
+            # Сначала сообщение — чтобы было видно в группе, что произошло,
+            # и только потом кик (ban + unban = мягкое удаление, может вернуться).
+            # Ссылку тут больше не показываем - её уже отправили в личку при
+            # самом вступлении (bot.py, send_new_student_prep_redirect,
+            # 02.08.2026), это просто уведомление о факте.
             if group:
                 addr = "Сёстры" if IS_FEMALE else "Братья"
-                if is_prep_bypass and prep_group and prep_group["invite_link"]:
-                    msg = (
-                        "👋 Участник зашёл напрямую, минуя подготовительную, и не представился — "
-                        "сейчас будет удалён из группы.\n"
-                        + addr + ", регистрация начинается с подготовительной группы:\n"
-                        "👉 " + prep_group["invite_link"]
-                    )
+                if is_prep_bypass:
+                    msg = T("kick_unreg_prep", "ru")
                 else:
                     msg = "👋 Участник не представился в течение " + str(threshold) + " дней и сейчас будет удалён из группы."
                     if tadabbur and tadabbur["invite_link"]:
