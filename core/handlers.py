@@ -548,6 +548,56 @@ def _strip_tajweed_silence_violations(submitted_text, verdict):
     return "\n".join(l for idx, l in enumerate(lines) if not drop[idx]).strip()
 
 
+# 05.08.2026: промпт прямо запрещает упоминать верные пункты ("если пункт
+# верный - просто НЕ пиши о нём") - модель (Gemini 2.5 Flash) регулярно это
+# нарушает на смешанных отчётах (часть пунктов верна, часть нет), перечисляя
+# верные слова по одному вместо молчания о них. Устаз явно попросил: бот
+# должен только коротко указывать на ошибку, про верное - молчать, реплай
+# "верно" на каждое верное слово забивает ленту сдачи заданий. Промпт это
+# не удерживает надёжно (см. другие _strip_* фильтры выше - тот же паттерн),
+# поэтому детерминированный фильтр после ответа ИИ. Строка считается голым
+# подтверждением (снимается), если заканчивается словом верно/правильно и
+# НЕ содержит признаков реальной ошибки/исправления - т.е. это просто "X -
+# верно" без указания, что и на что исправить.
+_BARE_CORRECT_END_RE = re.compile(r"верн\w*|правильн\w*|туура", re.IGNORECASE)
+_ERROR_HINT_RE = re.compile(
+    r"неверн|ошибк|неправильн|туура эмес|пропущен|лишн|должно быть|надо|не хватает",
+    re.IGNORECASE,
+)
+# Голый заголовок раздела ("Муфрадат:", "Тажвид:") - короткая строка,
+# заканчивается двоеточием, без содержательного текста после.
+_HEADER_LINE_RE = re.compile(r"^[\w\sа-яА-ЯёЁ]{1,30}:\s*$", re.UNICODE)
+
+
+def _strip_bare_correct_confirmations(verdict):
+    lines = verdict.split("\n")
+    keep = []
+    dropped_any = False
+    for line in lines:
+        stripped = line.strip().rstrip(" ·.")
+        m = _BARE_CORRECT_END_RE.search(stripped)
+        if m and m.end() == len(stripped) and not _ERROR_HINT_RE.search(stripped):
+            dropped_any = True
+            continue
+        keep.append(line)
+    result = "\n".join(keep).strip()
+    # Заголовки разделов (промпт их и так запрещает, но модель их всё равно
+    # иногда пишет) переживают построчный фильтр выше, потому что сами по
+    # себе не заканчиваются на "верно". Схлопываем в пустоту ТОЛЬКО если
+    # что-то реально было вырезано выше, нигде в остатке нет признака
+    # ошибки, и все оставшиеся непустые строки выглядят как голый заголовок
+    # раздела - иначе рискуем проглотить настоящую правку без единого
+    # арабского слова (например таджвид, описанный целиком кириллицей).
+    if (
+        dropped_any
+        and result
+        and not _ERROR_HINT_RE.search(result)
+        and all(not l.strip() or _HEADER_LINE_RE.match(l.strip()) for l in keep)
+    ):
+        return ""
+    return result
+
+
 async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, checks, glang="ru", message_id=None, student_id=None):
     try:
         system = (
@@ -678,6 +728,8 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         if result and any(c.startswith("arabic grammar") for c in checks):
             result = _strip_nahw_exact_phantoms(result) or "ВЕРНО"
             result = _strip_nahw_fabricated_letters(result) or "ВЕРНО"
+        if result:
+            result = _strip_bare_correct_confirmations(result) or "ВЕРНО"
         # Точное совпадение, а не подстрока: "неверно" содержит "верно" как подстроку,
         # из-за чего ответы, начинающиеся с "Неверно ...", ошибочно считались "всё верно"
         # и реальные замечания молча терялись (не отправлялись студенту).
