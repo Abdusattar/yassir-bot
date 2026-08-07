@@ -37,7 +37,7 @@ from core.db import (
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
     clear_pending_prep_return, prep_days_done, get_regular_group_sizes,
     get_best_group_for_transfer, get_group_by_title, get_dm_ok_by_phone,
-    get_group_by_id, get_event_time,
+    get_group_by_id, get_event_time, get_date,
 )
 from core.i18n import T, get_group_lang
 from core.tg import send_message, ban_member, unban_member, send_message_with_buttons
@@ -82,6 +82,8 @@ async def check_prep_students():
                 await send_message(s["chat_id"], T("prep_success_group", glang, name=s["name"], days=days_done))
 
             answer = _get_juz_answer(s["id"], group_id)
+            today = get_date()
+            already_nudged = _has_nudge_today(s["id"], group_id, today)
             if not answer:
                 # Вопрос студенту в личку про джуз — повторяем КАЖДУЮ проверку,
                 # пока не ответит (не одноразовый флаг!). Иначе если бот ещё
@@ -90,8 +92,13 @@ async def check_prep_students():
                 # тихо не доходит, а студент остаётся зависшим навсегда
                 # (тот же класс бага, что уже ловили сегодня на Мураде вручную,
                 # см. feedback про add_bonus до отправки — 24.07.2026).
-                await send_juz_question(uid, s["name"], glang, days_done, s["chat_id"])
-                log.info("prep check: student=%s days_done=%d → juz question (re)sent", s["name"], days_done)
+                # check_prep_students вызывается дважды в день (07:00 и 21:00,
+                # см. scheduler.py) — маркер prep_daily_nudge не даёт слать
+                # дважды за один день (07.08.2026).
+                if not already_nudged:
+                    await send_juz_question(uid, s["name"], glang, days_done, s["chat_id"])
+                    add_bonus(s["id"], group_id, today, 0, "prep_daily_nudge")
+                    log.info("prep check: student=%s days_done=%d → juz question (re)sent", s["name"], days_done)
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "не отвечает на вопрос про джуз",
                                        get_event_time(s["id"], group_id, "prep_offer"))
             else:
@@ -99,10 +106,13 @@ async def check_prep_students():
                 # не перешёл. Шлём ту же ссылку повторно каждую проверку, пока
                 # не вступит (announce_prep_graduate_arrival сам кикнет из prep,
                 # как только это произойдёт - тогда студент пропадёт из выборки).
-                _, target_group_id = answer
-                target = get_group_by_id(target_group_id)
-                if target and target["invite_link"]:
-                    await _send_dm_or_group(uid, s["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+                # Тот же дневной guard, что и выше — не слать дважды за день.
+                if not already_nudged:
+                    _, target_group_id = answer
+                    target = get_group_by_id(target_group_id)
+                    if target and target["invite_link"]:
+                        await _send_dm_or_group(uid, s["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+                        add_bonus(s["id"], group_id, today, 0, "prep_daily_nudge")
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "получил ссылку, но не вступил в группу",
                                        get_event_time(s["id"], group_id, "prep_juz_answer"))
         else:
@@ -429,6 +439,17 @@ def _has_prep_offer(user_id, group_id):
         return c.execute(
             "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_offer'",
             (user_id, group_id)
+        ).fetchone() is not None
+
+
+def _has_nudge_today(user_id, group_id, today):
+    """Уже слали сегодня напоминание (вопрос про джуз или повтор ссылки)? -
+    check_prep_students вызывается дважды в день, это защита от дубля
+    (07.08.2026)."""
+    with db() as c:
+        return c.execute(
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_daily_nudge' AND date=?",
+            (user_id, group_id, today)
         ).fetchone() is not None
 
 
