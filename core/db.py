@@ -1760,20 +1760,6 @@ def count_report_days_since(uid, group_id, since_date):
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
 
-def get_cumulative_avg(group_id):
-    with db() as c:
-        result = c.execute("""
-            SELECT ROUND(AVG(daily_score), 2) as avg FROM (
-                SELECT e.student_id, e.date, COUNT(*) as daily_score
-                FROM score_events e
-                JOIN user_groups ug ON ug.user_id=e.student_id AND ug.group_id=e.group_id
-                WHERE e.group_id=? AND e.category='task'
-                  AND ug.role='student' AND ug.active=1
-                GROUP BY e.student_id, e.date
-            )
-        """, (group_id,)).fetchone()
-    return result["avg"] if result and result["avg"] else 0
-
 
 def get_today_avg(group_id, for_date=None):
     if for_date is None:
@@ -2078,7 +2064,6 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None, submi
 
     lines.append("\n📊 Сдали хоть что-то: " + str(done_count) + "/" + str(len(students)))
     lines.append("📈 Средний балл сегодня: " + str(get_today_avg(group_id)))
-    lines.append("📊 Средний за всё время: " + str(get_cumulative_avg(group_id)))
     return "\n".join(lines)
 
 
@@ -2143,8 +2128,6 @@ def format_period_report(group_id, group_title, group_tasks, days):
             medal + " " + name + " — 💎 " + str(total) + " очков"
             + " (" + str(days_done) + " " + day_word(days_done) + ")" + bonus_str
         )
-    lines.append("\n📊 Средний балл за всё время: " + str(get_cumulative_avg(group_id)))
-
     with db() as c:
         lessons = c.execute(
             "SELECT id, date FROM online_lessons WHERE group_id=? AND date>=? ORDER BY date",
