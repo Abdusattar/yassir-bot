@@ -2080,9 +2080,33 @@ def get_period_winner(group_id, days):
         """, (group_id, start, group_id)).fetchone()
 
 
-def format_period_report(group_id, group_title, group_tasks, days):
-    start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days - 1)).isoformat()
-    label = "неделю" if days == 7 else ("месяц" if days == 30 else ("год" if days == 365 else str(days) + " дн."))
+def get_period_winner_range(group_id, start, end):
+    """Лидер за закрытый календарный период (квартал/полугодие/год) -
+    в отличие от get_period_winner (скользящее окно "N дней назад по
+    сегодня"), тут границы фиксированные с обеих сторон (07.08.2026)."""
+    with db() as c:
+        return c.execute("""
+            SELECT u.name, COALESCE(SUM(e.points),0) as points
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=? AND e.date<=?
+            WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
+            GROUP BY u.id ORDER BY points DESC LIMIT 1
+        """, (group_id, start, end, group_id)).fetchone()
+
+
+def format_period_report(group_id, group_title, group_tasks, days=None, start=None, end=None, label=None):
+    """days - скользящее окно "N дней назад по сегодня" (/week, /month, /year -
+    handlers.py). Либо явные календарные start/end/label (квартал/полугодие/
+    год - quarterly_leaders_report, 07.08.2026) - тогда days не нужен."""
+    tz = pytz.timezone(TZ)
+    today = datetime.now(tz).date()
+    if start is None:
+        start = (today - timedelta(days=days - 1)).isoformat()
+    if end is None:
+        end = today.isoformat()
+    if label is None:
+        label = "неделю" if days == 7 else ("месяц" if days == 30 else ("год" if days == 365 else str(days) + " дн."))
     with db() as c:
         students = c.execute("""
             SELECT u.id, u.name FROM users u
@@ -2094,15 +2118,15 @@ def format_period_report(group_id, group_title, group_tasks, days):
                    COUNT(*) as task_points,
                    COUNT(DISTINCT date) as days_done
             FROM score_events
-            WHERE group_id=? AND date>=? AND category='task'
+            WHERE group_id=? AND date>=? AND date<=? AND category='task'
             GROUP BY student_id
-        """, (group_id, start)).fetchall()
+        """, (group_id, start, end)).fetchall()
         bonus_agg = c.execute("""
             SELECT student_id, COALESCE(SUM(points),0) as bonus
             FROM score_events
-            WHERE group_id=? AND date>=? AND category != 'task'
+            WHERE group_id=? AND date>=? AND date<=? AND category != 'task'
             GROUP BY student_id
-        """, (group_id, start)).fetchall()
+        """, (group_id, start, end)).fetchall()
 
     task_map  = {r["student_id"]: (r["task_points"], r["days_done"]) for r in task_agg}
     bonus_map = {r["student_id"]: r["bonus"] for r in bonus_agg}
@@ -2130,8 +2154,8 @@ def format_period_report(group_id, group_title, group_tasks, days):
         )
     with db() as c:
         lessons = c.execute(
-            "SELECT id, date FROM online_lessons WHERE group_id=? AND date>=? ORDER BY date",
-            (group_id, start)
+            "SELECT id, date FROM online_lessons WHERE group_id=? AND date>=? AND date<=? ORDER BY date",
+            (group_id, start, end)
         ).fetchall()
     if lessons:
         total_students = len(students)

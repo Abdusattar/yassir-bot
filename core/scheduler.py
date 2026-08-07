@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 import pytz
 
@@ -8,7 +8,7 @@ from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID,
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
-    format_daily_report, format_period_report, get_period_winner,
+    format_daily_report, format_period_report, get_period_winner, get_period_winner_range,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, set_setting, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
@@ -1346,20 +1346,65 @@ async def yassir_asks_admin():
         log.error("yassir_asks_admin error: %s", e)
 
 
-# ── Годовой отчёт (1 января 11:00) ────────────────────────────────────────────
+# ── Квартальный/полугодовой/годовой отчёт (1 число квартала, календарные
+#    границы) ─────────────────────────────────────────────────────────────────
 
-async def yearly_report():
+async def quarterly_leaders_report():
+    """Заменяет старый yearly_report (скользящее окно 365 дней) - решение
+    пользователя 07.08.2026: календарные границы, единый стиль с
+    weekly_report/monthly_report (полный список + AI-похвала лидеру).
+    Расписание (месяц запуска → что показываем):
+      апрель  → 1-й квартал (янв-мар)
+      июль    → 2-й квартал (апр-июн) + первое полугодие (янв-июн)
+      октябрь → 3-й квартал (июл-сен)
+      январь  → 4-й квартал (окт-дек) + второе полугодие (июл-дек) +
+                год (янв-дек) - все три за ПРОШЛЫЙ календарный год.
+    Полугодие/год показываются только там, где реально завершились -
+    не на каждой квартальной отметке (иначе они бы дублировали квартал)."""
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
+    today = datetime.now(pytz.timezone(TZ)).date()
+    y = today.year
+    if today.month == 4:
+        periods = [("1-й квартал", date(y, 1, 1), date(y, 3, 31))]
+    elif today.month == 7:
+        periods = [
+            ("2-й квартал", date(y, 4, 1), date(y, 6, 30)),
+            ("первое полугодие", date(y, 1, 1), date(y, 6, 30)),
+        ]
+    elif today.month == 10:
+        periods = [("3-й квартал", date(y, 7, 1), date(y, 9, 30))]
+    elif today.month == 1:
+        py = y - 1
+        periods = [
+            ("4-й квартал", date(py, 10, 1), date(py, 12, 31)),
+            ("второе полугодие", date(py, 7, 1), date(py, 12, 31)),
+            ("год", date(py, 1, 1), date(py, 12, 31)),
+        ]
+    else:
+        return
+
     for group in get_all_groups():
         if (group["group_type"] or "relaxed") == "tadabbur":
             continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
+        glang = get_group_lang(group)
         try:
-            report = format_period_report(group["id"], group["title"] or chat_id, group_tasks, 365)
-            await send_message(chat_id, "🎊 ИТОГИ ГОДА! 🎊\n\n" + report)
-            await asyncio.sleep(1)
+            for label, start, end in periods:
+                report = format_period_report(
+                    group["id"], group["title"] or chat_id, group_tasks,
+                    start=start.isoformat(), end=end.isoformat(), label=label
+                )
+                await send_message(chat_id, report)
+                winner = get_period_winner_range(group["id"], start.isoformat(), end.isoformat())
+                if winner and winner["points"] > 0:
+                    praise = await ai.winner_praise(winner["name"], label, winner["points"], glang, hadith=hadith, ayah=ayah)
+                    if praise:
+                        await send_message(chat_id, praise)
+                await asyncio.sleep(1)
         except Exception as e:
-            log.error("yearly_report error in %s: %s", chat_id, e)
+            log.error("quarterly_leaders_report error in %s: %s", chat_id, e)
 
 
 # ── Главный планировщик ────────────────────────────────────────────────────────
@@ -1437,8 +1482,8 @@ async def scheduler():
                 await maybe_run("yassir_asks_admin", yassir_asks_admin)
             elif d == 1 and h == 19 and m == 0:
                 await maybe_run("monthly_report", monthly_report)
-            elif d == 1 and now.month == 1 and h == 11 and m == 0:
-                await maybe_run("yearly_report", yearly_report)
+                if now.month in (1, 4, 7, 10):
+                    await maybe_run("quarterly_leaders_report", quarterly_leaders_report)
 
             await asyncio.sleep(30)
 
