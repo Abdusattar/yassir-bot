@@ -96,7 +96,7 @@ def test_streak_zero_for_new_student(test_db):
     save_group("-100555", "Группа З")
     g = get_group("-100555")
     sid = add_student("Мирлан", g["id"])
-    assert get_streak_days(sid) == 0
+    assert get_streak_days(sid, g["id"], ["m", "r", "t"]) == 0
 
 
 def test_streak_one_day(test_db):
@@ -104,7 +104,30 @@ def test_streak_one_day(test_db):
     g = get_group("-100556")
     sid = add_student("Санжар", g["id"])
     save_report(sid, g["id"], get_date(), {"m": True, "r": True, "t": True})
-    assert get_streak_days(sid) == 1
+    assert get_streak_days(sid, g["id"], ["m", "r", "t"]) == 1
+
+
+def test_streak_broken_by_partial_day(test_db):
+    """Строгое правило (07.08.2026): не все 3 задания в день - день не
+    засчитывается в серию, даже если что-то сдано."""
+    save_group("-100558", "Группа Л")
+    g = get_group("-100558")
+    sid = add_student("Нурлан", g["id"])
+    save_report(sid, g["id"], get_date(), {"m": True, "r": True, "t": False})
+    assert get_streak_days(sid, g["id"], ["m", "r", "t"]) == 0
+
+
+def test_streak_grace_for_today_not_yet_reported(test_db):
+    """Без явной даты (for_date=None) и без сегодняшнего отчёта серия не
+    обнуляется - считается по вчерашний день включительно."""
+    from datetime import timedelta
+    from core.db import get_now
+    save_group("-100559", "Группа М")
+    g = get_group("-100559")
+    sid = add_student("Ислам", g["id"])
+    yesterday = (get_now() - timedelta(days=1)).date().isoformat()
+    save_report(sid, g["id"], yesterday, {"m": True, "r": True, "t": True})
+    assert get_streak_days(sid, g["id"], ["m", "r", "t"]) == 1
 
 
 def test_skip_count_zero_for_new_student(test_db):

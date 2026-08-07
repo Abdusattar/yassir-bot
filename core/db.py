@@ -1587,10 +1587,40 @@ def get_miss_count_last_30_days(uid, group_id=None):
     return misses
 
 
-def get_streak_days(uid, for_date=None):
+def _full_task_dates(uid, group_id, group_tasks, limit=400):
+    """Даты, когда студент сдал ВСЕ обязательные задания группы (узр не
+    защищает) - для строгого стрика (07.08.2026, решение пользователя:
+    "страйк есть страйк, обнуляется если не сдал все 3, даже если узр").
+    Отдельно от _active_dates - та по-прежнему "хоть одно событие" для
+    других метрик (пропуски, get_days_since_last_report и т.д.), их
+    трогать не нужно."""
+    if not group_tasks:
+        return set()
+    placeholders = ",".join("?" * len(group_tasks))
+    with db() as c:
+        rows = c.execute(
+            "SELECT date FROM score_events"
+            " WHERE student_id=? AND group_id=? AND category='task' AND subcategory IN (%s)"
+            " GROUP BY date HAVING COUNT(DISTINCT subcategory)=?"
+            " ORDER BY date DESC LIMIT ?" % placeholders,
+            (uid, group_id, *group_tasks, len(group_tasks), limit)
+        ).fetchall()
+    return {r["date"] for r in rows}
+
+
+def get_streak_days(uid, group_id, group_tasks, for_date=None):
+    """Серия дней подряд, когда сданы ВСЕ задания группы. Без явной даты
+    (for_date=None, "прямо сейчас") - грейс на сегодня: если сегодняшний
+    день ещё не закрыт, не обнуляем серию, считаем от вчера (07.08.2026,
+    иначе счётчик на дисплее студента ежедневно падал в 0 до его же
+    сегодняшней сдачи). Явная дата (используется для завершённых прошлых
+    дней - утренний Тадаббур-отчёт, лидеры стрика) грейс не получает,
+    там день уже закончился по определению."""
     tz = pytz.timezone(TZ)
-    dates = _active_dates(uid)
+    dates = _full_task_dates(uid, group_id, group_tasks)
     anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else datetime.now(tz).date()
+    if for_date is None and anchor.isoformat() not in dates:
+        anchor -= timedelta(days=1)
     streak = 0
     for i in range(400):
         day = (anchor - timedelta(days=i)).isoformat()

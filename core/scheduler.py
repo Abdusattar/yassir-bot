@@ -117,7 +117,7 @@ async def morning_tadabbur_report():
                 partial_titles.append(title)
             else:
                 full_lines = [
-                    c["name"] + " — 🌟" + str(get_streak_days(c["id"], yesterday))
+                    c["name"] + " — 🌟" + str(get_streak_days(c["id"], group["id"], group_tasks, yesterday))
                     for c in full
                 ]
                 groups_info.append({
@@ -662,10 +662,11 @@ def _streak_leaders(anchor_date, threshold):
     for group in get_all_groups():
         if (group["group_type"] or "relaxed") == "tadabbur":
             continue
+        group_tasks = get_group_tasks(group)
         for s in get_students(group["id"]):
             if my_id and s["phone"] == my_id:
                 continue
-            streak = get_streak_days(s["id"], anchor_date)
+            streak = get_streak_days(s["id"], group["id"], group_tasks, anchor_date)
             if streak >= threshold:
                 result.append((s["name"], streak, group["title"] or str(group["chat_id"])))
     result.sort(key=lambda x: -x[1])
@@ -966,10 +967,11 @@ async def streak_bonuses():
         if gtype == "tadabbur":
             continue
         glang = get_group_lang(group)
+        group_tasks = get_group_tasks(group)
         try:
             bonus_names = []
             for s in get_students(group["id"]):
-                streak = get_streak_days(s["id"])
+                streak = get_streak_days(s["id"], group["id"], group_tasks)
                 if streak > 0 and streak % 7 == 0:
                     subcat = "week_" + str(streak // 7)
                     with db() as c:

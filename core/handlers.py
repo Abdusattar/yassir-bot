@@ -138,7 +138,7 @@ async def _send_rating_to(target_chat_id, group, group_id, glang):
 
 
 async def _send_mystats_to(target_chat_id, s_check, group, group_id, group_tasks, glang):
-    streak = get_streak_days(s_check["id"])
+    streak = get_streak_days(s_check["id"], group_id, group_tasks)
     skips_month = get_skip_count_month(s_check["id"], group_id)
     with db() as c:
         total_row = c.execute(
