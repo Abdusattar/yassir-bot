@@ -40,7 +40,7 @@ from core.db import (
     get_group_by_id, get_event_time, get_date,
 )
 from core.i18n import T, get_group_lang
-from core.tg import send_message, ban_member, unban_member, send_message_with_buttons
+from core.tg import send_message, ban_member, unban_member, send_message_with_buttons, get_dm_start_link
 
 log = logging.getLogger(__name__)
 
@@ -64,8 +64,9 @@ _LATE_ALERT_ADMIN_ID = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else ""
 
 
 async def check_prep_students():
-    """Вызывается ежедневно в 21:00 рядом с check_transfers."""
+    """Вызывается дважды в день (07:00 и 21:00, см. scheduler.py)."""
     students = get_prep_students_active()
+    need_dm_start = {}  # group_id -> {"chat_id", "glang", "names": [...]}
     for s in students:
         uid = s["phone"]
         group_id = s["group_id"]
@@ -96,9 +97,22 @@ async def check_prep_students():
                 # см. scheduler.py) — маркер prep_daily_nudge не даёт слать
                 # дважды за один день (07.08.2026).
                 if not already_nudged:
-                    await send_juz_question(uid, s["name"], glang, days_done, s["chat_id"])
+                    if get_dm_ok_by_phone(uid):
+                        await send_juz_question(uid, s["name"], glang, days_done, s["chat_id"])
+                        log.info("prep check: student=%s days_done=%d → juz question (re)sent", s["name"], days_done)
+                    else:
+                        # dm_ok=0: сам вопрос (со статусом "знает/не знает джуз") в
+                        # группу не публикуем - его увидят и смогут нажать все, кому
+                        # он не адресован (реальный кейс - Мухаммад, 07.08.2026).
+                        # Вместо этого копим имена всех таких студентов группы и
+                        # шлём один общий призыв нажать Start - как только dm_ok
+                        # станет 1, следующая же проверка отправит сам вопрос в
+                        # личку (решение пользователя 07.08.2026).
+                        need_dm_start.setdefault(
+                            group_id, {"chat_id": s["chat_id"], "glang": glang, "names": []}
+                        )["names"].append(s["name"])
+                        log.info("prep check: student=%s days_done=%d → dm-start nudge (dm_ok=0)", s["name"], days_done)
                     add_bonus(s["id"], group_id, today, 0, "prep_daily_nudge")
-                    log.info("prep check: student=%s days_done=%d → juz question (re)sent", s["name"], days_done)
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "не отвечает на вопрос про джуз",
                                        get_event_time(s["id"], group_id, "prep_offer"))
             else:
@@ -136,6 +150,14 @@ async def check_prep_students():
             except Exception as e:
                 log.error("prep fail kick error student=%s chat=%s: %s", s["name"], s["chat_id"], e)
             log.info("prep check: student=%s days_done=%d < %d after %d days (deadline=%d) → failed, kicked", s["name"], days_done, PREP_MIN_DAYS, elapsed, deadline)
+
+    if need_dm_start:
+        link = await get_dm_start_link()
+        for info in need_dm_start.values():
+            await send_message(info["chat_id"], T(
+                "prep_need_dm_start", info["glang"],
+                names=", ".join(info["names"]), link=link or "https://t.me/"
+            ))
 
 
 async def send_prep_reminders():
