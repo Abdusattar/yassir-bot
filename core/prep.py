@@ -84,7 +84,6 @@ async def check_prep_students():
 
             answer = _get_juz_answer(s["id"], group_id)
             today = get_date()
-            already_nudged = _has_nudge_today(s["id"], group_id, today)
             if not answer:
                 # Вопрос студенту в личку про джуз — повторяем КАЖДУЮ проверку,
                 # пока не ответит (не одноразовый флаг!). Иначе если бот ещё
@@ -94,25 +93,32 @@ async def check_prep_students():
                 # (тот же класс бага, что уже ловили сегодня на Мураде вручную,
                 # см. feedback про add_bonus до отправки — 24.07.2026).
                 # check_prep_students вызывается дважды в день (07:00 и 21:00,
-                # см. scheduler.py) — маркер prep_daily_nudge не даёт слать
-                # дважды за один день (07.08.2026).
-                if not already_nudged:
-                    if get_dm_ok_by_phone(uid):
+                # см. scheduler.py) — маркер не даёт слать дважды за один день
+                # (07.08.2026). ВАЖНО: "вопрос в личку" и "призыв нажать Start"
+                # — РАЗНЫЕ маркеры (prep_juz_q_nudge / prep_dm_start_nudge), а
+                # не общий "уже что-то слали сегодня". Иначе если студент жмёт
+                # /start между утренней и вечерней проверкой, общий маркер от
+                # утреннего призыва блокировал бы вечерний реальный вопрос до
+                # завтра — тот самый баг, который мы чиним.
+                if get_dm_ok_by_phone(uid):
+                    if not _has_nudge_today(s["id"], group_id, today, "prep_juz_q_nudge"):
                         await send_juz_question(uid, s["name"], glang, days_done, s["chat_id"])
+                        add_bonus(s["id"], group_id, today, 0, "prep_juz_q_nudge")
                         log.info("prep check: student=%s days_done=%d → juz question (re)sent", s["name"], days_done)
-                    else:
-                        # dm_ok=0: сам вопрос (со статусом "знает/не знает джуз") в
-                        # группу не публикуем - его увидят и смогут нажать все, кому
-                        # он не адресован (реальный кейс - Мухаммад, 07.08.2026).
-                        # Вместо этого копим имена всех таких студентов группы и
-                        # шлём один общий призыв нажать Start - как только dm_ok
-                        # станет 1, следующая же проверка отправит сам вопрос в
-                        # личку (решение пользователя 07.08.2026).
+                else:
+                    # dm_ok=0: сам вопрос (со статусом "знает/не знает джуз") в
+                    # группу не публикуем - его увидят и смогут нажать все, кому
+                    # он не адресован (реальный кейс - Мухаммад, 07.08.2026).
+                    # Вместо этого копим имена всех таких студентов группы и
+                    # шлём один общий призыв нажать Start - как только dm_ok
+                    # станет 1, следующая же проверка отправит сам вопрос в
+                    # личку (решение пользователя 07.08.2026).
+                    if not _has_nudge_today(s["id"], group_id, today, "prep_dm_start_nudge"):
                         need_dm_start.setdefault(
                             group_id, {"chat_id": s["chat_id"], "glang": glang, "names": []}
                         )["names"].append(s["name"])
+                        add_bonus(s["id"], group_id, today, 0, "prep_dm_start_nudge")
                         log.info("prep check: student=%s days_done=%d → dm-start nudge (dm_ok=0)", s["name"], days_done)
-                    add_bonus(s["id"], group_id, today, 0, "prep_daily_nudge")
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "не отвечает на вопрос про джуз",
                                        get_event_time(s["id"], group_id, "prep_offer"))
             else:
@@ -120,13 +126,13 @@ async def check_prep_students():
                 # не перешёл. Шлём ту же ссылку повторно каждую проверку, пока
                 # не вступит (announce_prep_graduate_arrival сам кикнет из prep,
                 # как только это произойдёт - тогда студент пропадёт из выборки).
-                # Тот же дневной guard, что и выше — не слать дважды за день.
-                if not already_nudged:
+                # Свой независимый дневной guard — не слать дважды за день.
+                if not _has_nudge_today(s["id"], group_id, today, "prep_link_nudge"):
                     _, target_group_id = answer
                     target = get_group_by_id(target_group_id)
                     if target and target["invite_link"]:
                         await _send_dm_or_group(uid, s["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
-                        add_bonus(s["id"], group_id, today, 0, "prep_daily_nudge")
+                        add_bonus(s["id"], group_id, today, 0, "prep_link_nudge")
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "получил ссылку, но не вступил в группу",
                                        get_event_time(s["id"], group_id, "prep_juz_answer"))
         else:
@@ -464,14 +470,16 @@ def _has_prep_offer(user_id, group_id):
         ).fetchone() is not None
 
 
-def _has_nudge_today(user_id, group_id, today):
-    """Уже слали сегодня напоминание (вопрос про джуз или повтор ссылки)? -
-    check_prep_students вызывается дважды в день, это защита от дубля
-    (07.08.2026)."""
+def _has_nudge_today(user_id, group_id, today, category):
+    """Уже слали сегодня напоминание этого типа? - check_prep_students
+    вызывается дважды в день, это защита от дубля (07.08.2026). category
+    разная для разных каналов (prep_juz_q_nudge / prep_dm_start_nudge /
+    prep_link_nudge) - НЕ общий маркер, иначе флип dm_ok между утренней и
+    вечерней проверкой блокировал бы реальный вопрос до завтра."""
     with db() as c:
         return c.execute(
-            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_daily_nudge' AND date=?",
-            (user_id, group_id, today)
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category=? AND date=?",
+            (user_id, group_id, category, today)
         ).fetchone() is not None
 
 
