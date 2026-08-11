@@ -1608,6 +1608,13 @@ def _full_task_dates(uid, group_id, group_tasks, limit=400):
     return {r["date"] for r in rows}
 
 
+def get_full_task_days_count(uid, group_id, group_tasks):
+    """Сколько дней студент сдал ВСЕ задания группы целиком (12.08.2026,
+    решение пользователя для /mystats: "Дней выполнено" = полная сдача,
+    та же логика, что у стрика, а не "хоть одно задание")."""
+    return len(_full_task_dates(uid, group_id, group_tasks))
+
+
 def get_streak_days(uid, group_id, group_tasks, for_date=None):
     """Серия дней подряд, когда сданы ВСЕ задания группы. Без явной даты
     (for_date=None, "прямо сейчас") - грейс на сегодня: если сегодняшний
@@ -1629,6 +1636,50 @@ def get_streak_days(uid, group_id, group_tasks, for_date=None):
         else:
             break
     return streak
+
+
+def get_group_streaks(group_id, group_tasks, for_date=None):
+    """Текущие стрики всех студентов группы ОДНИМ SQL-запросом (12.08.2026,
+    решение пользователя: избежать N+1 при выводе /rating на больших группах
+    вроде Тадаббура - 113 активных студентов). "Остров" последовательных
+    полных дней на студента через julianday(date) - ROW_NUMBER() (стандартный
+    gaps-and-islands приём); берём только остров, оканчивающийся на anchor
+    (тот же грейс на сегодня, что и в get_streak_days). Отсутствие student_id
+    в результате значит стрик=0 - вызывающий код должен делать .get(uid, 0)."""
+    if not group_tasks:
+        return {}
+    tz = pytz.timezone(TZ)
+    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else datetime.now(tz).date()
+    yesterday = anchor - timedelta(days=1)
+    placeholders = ",".join("?" * len(group_tasks))
+    with db() as c:
+        rows = c.execute(
+            "WITH full_days AS ("
+            "  SELECT student_id, date FROM score_events"
+            "  WHERE group_id=? AND category='task' AND subcategory IN (%s)"
+            "  GROUP BY student_id, date HAVING COUNT(DISTINCT subcategory)=?"
+            "), grouped AS ("
+            "  SELECT student_id, date,"
+            "         julianday(date) - ROW_NUMBER() OVER (PARTITION BY student_id ORDER BY date) AS grp"
+            "  FROM full_days"
+            "), runs AS ("
+            "  SELECT student_id, MAX(date) AS run_end, COUNT(*) AS run_len"
+            "  FROM grouped GROUP BY student_id, grp"
+            ")"
+            " SELECT student_id, run_end, run_len FROM runs WHERE run_end IN (?, ?)"
+            % placeholders,
+            (group_id, *group_tasks, len(group_tasks), anchor.isoformat(), yesterday.isoformat())
+        ).fetchall()
+    by_student = {}
+    for r in rows:
+        by_student.setdefault(r["student_id"], {})[r["run_end"]] = r["run_len"]
+    result = {}
+    for sid, ends in by_student.items():
+        if anchor.isoformat() in ends:
+            result[sid] = ends[anchor.isoformat()]
+        elif for_date is None and yesterday.isoformat() in ends:
+            result[sid] = ends[yesterday.isoformat()]
+    return result
 
 
 def check_no_skip_week(uid):

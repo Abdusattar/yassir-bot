@@ -19,7 +19,7 @@ from core.db import (
     add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
-    get_streak_days, get_skip_count_month, add_bonus,
+    get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month, add_bonus,
     has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
@@ -115,40 +115,44 @@ async def _resolve_dm_target(phone, group_chat_id, glang):
 
 async def _send_rating_to(target_chat_id, group, group_id, glang):
     import pytz
-    from datetime import timedelta
+    from datetime import datetime as _dt, timedelta
     from config import TZ
-    week_ago = (__import__('datetime').datetime.now(pytz.timezone(TZ)).date() - timedelta(days=7)).isoformat()
+    today = _dt.now(pytz.timezone(TZ)).date()
+    week_start = today - timedelta(days=6)
+    group_tasks = get_group_tasks(group)
     with db() as c:
         rows = c.execute("""
-            SELECT u.name,
-                   COALESCE(SUM(e.points),0) as total,
-                   COUNT(DISTINCT CASE WHEN e.category='task' THEN e.date END) as days
+            SELECT u.id, u.name, COALESCE(SUM(e.points),0) as total
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
-            LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=?
+            LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=? AND e.date<=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
             GROUP BY u.id ORDER BY total DESC
-        """, (group_id, week_ago, group_id)).fetchall()
+        """, (group_id, week_start.isoformat(), today.isoformat(), group_id)).fetchall()
+    streaks = get_group_streaks(group_id, group_tasks)
     medals = ["🥇", "🥈", "🥉"]
-    lines = [T("rating_header", glang, title=group["title"] or group["chat_id"])]
+    lines = [T("rating_header", glang, title=group["title"] or group["chat_id"],
+               start=week_start.strftime("%d.%m"), end=today.strftime("%d.%m"))]
     for i, r in enumerate(rows):
         medal = medals[i] if i < 3 else str(i + 1) + "."
-        lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " " + T("rating_points", glang) + " (" + str(r["days"]) + " " + T("rating_days", glang) + ")")
+        streak = streaks.get(r["id"], 0)
+        lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " " + T("rating_points", glang) +
+                     " · 🔥 " + str(streak) + " " + T("rating_streak", glang))
     await send_message(target_chat_id, "\n".join(lines))
 
 
 async def _send_mystats_to(target_chat_id, s_check, group, group_id, group_tasks, glang):
     streak = get_streak_days(s_check["id"], group_id, group_tasks)
     skips_month = get_skip_count_month(s_check["id"], group_id)
+    days_done = get_full_task_days_count(s_check["id"], group_id, group_tasks)
     with db() as c:
         total_row = c.execute(
-            "SELECT COALESCE(SUM(points),0) as total FROM score_events WHERE student_id=?",
-            (s_check["id"],)
+            "SELECT COALESCE(SUM(points),0) as total FROM score_events WHERE student_id=? AND group_id=?",
+            (s_check["id"], group_id)
         ).fetchone()
-        days_row = c.execute(
-            "SELECT COUNT(DISTINCT date) as days FROM score_events"
-            " WHERE student_id=? AND category='task'",
-            (s_check["id"],)
+        prev_row = c.execute(
+            "SELECT COALESCE(SUM(points),0) as total FROM score_events WHERE student_id=? AND group_id!=?",
+            (s_check["id"], group_id)
         ).fetchone()
         rank_rows = c.execute("""
             SELECT u.id, COALESCE(SUM(e.points),0) as grand
@@ -159,7 +163,7 @@ async def _send_mystats_to(target_chat_id, s_check, group, group_id, group_tasks
             GROUP BY u.id ORDER BY grand DESC
         """, (group_id, group_id)).fetchall()
     total_score = total_row["total"] or 0
-    days_done = days_row["days"] or 0
+    prev_score = prev_row["total"] or 0
     rank = next((i + 1 for i, r in enumerate(rank_rows) if r["id"] == s_check["id"]), "?")
     today_rep = get_today_report(s_check["id"], group_id)
     today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
@@ -171,11 +175,15 @@ async def _send_mystats_to(target_chat_id, s_check, group, group_id, group_tasks
     _cur_month = _dt.now().month
     month_label = _month_names_ru[_cur_month - 1]
 
+    points_line = T("mystats_points", glang, n=total_score)
+    if prev_score:
+        points_line += " " + T("mystats_points_prev", glang, n=prev_score)
+
     lines = [
         T("mystats_title", glang, name=s_check["name"]),
         T("mystats_streak", glang, n=streak),
         T("mystats_rank", glang, n=rank),
-        T("mystats_points", glang, n=total_score),
+        points_line,
         T("mystats_days", glang, n=days_done),
         T("mystats_skips", glang, n=skips_month, limit=limit_days, month=month_label),
         T("mystats_today", glang, done=today_done, total=len(group_tasks)),
