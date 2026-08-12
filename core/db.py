@@ -1560,6 +1560,21 @@ def get_skip_count_month(uid, group_id=None):
     return detail["missed"] if detail else 0
 
 
+def get_excuse_count_month(uid, group_id):
+    """Сколько раз студент уже использовал узр в текущем календарном месяце
+    в этой группе (12.08.2026, решение пользователя: лимит 3/месяц, дальше
+    день считается обычным пропуском - EXCUSE_MONTHLY_LIMIT в handlers.py)."""
+    tz = pytz.timezone(TZ)
+    month_start = datetime.now(tz).replace(day=1).date().isoformat()
+    with db() as c:
+        row = c.execute(
+            "SELECT COUNT(*) as cnt FROM score_events"
+            " WHERE student_id=? AND group_id=? AND category='excuse' AND date>=?",
+            (uid, group_id, month_start)
+        ).fetchone()
+    return row["cnt"] if row else 0
+
+
 def get_miss_count_last_30_days(uid, group_id=None):
     tz = pytz.timezone(TZ)
     today = datetime.now(tz).date()

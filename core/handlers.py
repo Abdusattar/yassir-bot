@@ -19,7 +19,8 @@ from core.db import (
     add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
-    get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month, add_bonus,
+    get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month,
+    get_excuse_count_month, add_bonus,
     has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
@@ -241,6 +242,12 @@ def detect_yassir(text):
 _YASSIR_MAX_ANSWERS = 2
 _YASSIR_WINDOW_SECONDS = 3600
 _yassir_answer_times: dict = {}
+
+# Лимит узров в календарный месяц на студента/группу (12.08.2026, решение
+# пользователя после разбора реального кейса - Изат, G-2c, 6 дней подряд
+# голым словом "Узр" без причины). После лимита день не засчитывается узром
+# и не даёт балл - считается обычным пропуском.
+EXCUSE_MONTHLY_LIMIT = 3
 
 
 def _yassir_quota_ok(phone):
@@ -1561,12 +1568,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
                 (s["id"], group_id, get_date())
             ).fetchone()
-        if not already_excuse:
+        if already_excuse:
+            await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
+        elif get_excuse_count_month(s["id"], group_id) >= EXCUSE_MONTHLY_LIMIT:
+            await send_message(chat_id,
+                "⚠️ " + s["name"] + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
+                ") уже исчерпан. Этот день будет считаться пропуском.")
+        else:
             add_bonus(s["id"], group_id, get_date(), 1, "excuse", note=reason or None)
             await send_message(chat_id,
                 "✅ " + s["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
-        else:
-            await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
         return
 
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
@@ -1612,12 +1623,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
                     (s["id"], group_id, get_date())
                 ).fetchone()
-            if not already_excuse:
+            if already_excuse:
+                await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
+            elif get_excuse_count_month(s["id"], group_id) >= EXCUSE_MONTHLY_LIMIT:
+                await send_message(chat_id,
+                    "⚠️ " + s["name"] + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
+                    ") уже исчерпан. Этот день будет считаться пропуском.")
+            else:
                 add_bonus(s["id"], group_id, get_date(), 1, "excuse")
                 await send_message(chat_id,
                     "✅ " + s["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
-            else:
-                await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
             return
         if not is_media and _yassir_quota_ok(phone):
             answer = await ai.answer_if_relevant(
