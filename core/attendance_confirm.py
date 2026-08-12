@@ -7,14 +7,20 @@
 уходит вопрос с кнопками Да/Нет. Пока решения нет - баллы всем, кто успел
 отметиться в этот день, висят в подвешенном состоянии (записи в
 attendance_confirm_students, не в score_events). "Да" -> баллы начисляются
-всем сразу. "Нет" -> никому не начисляются + предупреждение в группу.
-Если устаз молчит ATTENDANCE_ESCALATE_MINUTES минут - тот же вопрос уходит
-супер-админам (проверка в core/scheduler.py, переживает рестарт бота, т.к.
-таймер хранится в БД, а не в памяти процесса).
+всем сразу. "Нет" -> никому не начисляются + сообщение в группу.
+
+12.08.2026, решение пользователя (пересмотр прежней схемы): если устаз
+молчит ATTENDANCE_ESCALATE_MINUTES минут - вместо приватной эскалации
+супер-админам теперь публичный пинг в саму группу (студенты сами могут
+напомнить устазу). Если устаз так и не ответил за
+ATTENDANCE_AUTO_RESOLVE_HOURS часов после пинга - баллы НЕ начисляются
+(разворот прежнего "в пользу студента" - раньше это защищало от дыры
+"баллы никогда не начисляются", но теперь есть публичный пинг как
+смягчение риска, что устаз просто не увидел вопрос). Владельцу личных
+уведомлений больше нет - вся история видна прямо в группе.
 """
 import logging
 
-from config import SUPER_ADMIN_IDS
 from core.db import (
     get_attendance_confirm_by_id, get_attendance_confirm_students,
     set_attendance_confirm_decision, get_stale_attendance_confirms,
@@ -27,10 +33,6 @@ from core.tg import send_message, send_message_with_buttons
 log = logging.getLogger(__name__)
 
 ATTENDANCE_ESCALATE_MINUTES = 30
-# Если и супер-админы молчат - не наказывать студентов бессрочной потерей
-# баллов за нерасторопность администрации (найдено на review 02.08.2026:
-# без этого дыра просто поменяла направление - "баллы никогда не начисляются"
-# вместо "начисляются незаслуженно"). Засчитываем в пользу студента.
 ATTENDANCE_AUTO_RESOLVE_HOURS = 24
 
 
@@ -51,9 +53,10 @@ async def ask_ustaz_attendance_confirm(confirm_id, group_id, lang):
         await send_message_with_buttons(admin_phone, text, buttons)
 
 
-async def resolve_attendance_confirm(confirm_id, decision):
-    """decision: 'yes' | 'no'. Общая точка выхода и для устаза, и для
-    супер-админа, и для случая "устаз сам отметил урок в группе"."""
+async def resolve_attendance_confirm(confirm_id, decision, reason="manual"):
+    """decision: 'yes' | 'no'. reason: 'manual' (устаз лично нажал кнопку)
+    | 'auto' (тайм-аут ATTENDANCE_AUTO_RESOLVE_HOURS без ответа) - разные
+    тексты в группу и разное поведение при позднем "у" (handlers.py)."""
     row = get_attendance_confirm_by_id(confirm_id)
     if not row or row["decision"] is not None:
         return False  # нет такой записи или уже решено (защита от повторного тапа)
@@ -62,7 +65,7 @@ async def resolve_attendance_confirm(confirm_id, decision):
     group = get_group_by_id(row["group_id"])
     lang = get_group_lang(group) if group else "ru"
 
-    set_attendance_confirm_decision(confirm_id, decision)
+    set_attendance_confirm_decision(confirm_id, decision, reason)
 
     if decision == "yes":
         # Подтверждение может прийти через часы/сутки (эскалация, авто-решение) -
@@ -78,53 +81,46 @@ async def resolve_attendance_confirm(confirm_id, decision):
             await send_message(group["chat_id"], T("attendance_confirmed_group", lang, names=_names(awarded)))
     else:
         if group and students:
-            await send_message(group["chat_id"], T("attendance_denied_group", lang))
+            key = "attendance_auto_denied_group" if reason == "auto" else "attendance_denied_group"
+            await send_message(group["chat_id"], T(key, lang))
 
-    log.info("Attendance confirm #%s (group=%s date=%s) resolved: %s",
-              confirm_id, row["group_id"], row["date"], decision)
+    log.info("Attendance confirm #%s (group=%s date=%s) resolved: %s (%s)",
+              confirm_id, row["group_id"], row["date"], decision, reason)
     return True
 
 
 async def handle_attendance_confirm_answer(phone, choice, confirm_id):
-    """Колбэк кнопки Да/Нет (от устаза или от супер-админа при эскалации)."""
-    await resolve_attendance_confirm(confirm_id, choice)
+    """Колбэк кнопки Да/Нет (устаз лично, всегда 'manual' - эскалации
+    с кнопками супер-админам больше нет, см. check_attendance_confirm_escalations)."""
+    await resolve_attendance_confirm(confirm_id, choice, reason="manual")
 
 
 async def check_attendance_confirm_escalations():
     """Вызывается из scheduler() каждые ~30 секунд. Если устаз не ответил
-    за ATTENDANCE_ESCALATE_MINUTES - тот же вопрос уходит супер-админам."""
+    за ATTENDANCE_ESCALATE_MINUTES - публичный пинг в саму группу (не
+    приватно супер-админам, как было раньше) - студенты сами могут
+    напомнить устазу. Один раз, без повтора (get_stale_attendance_confirms
+    фильтрует escalated_at IS NULL, так что запись сюда больше не попадёт)."""
     for row in get_stale_attendance_confirms(ATTENDANCE_ESCALATE_MINUTES):
         mark_attendance_confirm_escalated(row["id"])
-        students = get_attendance_confirm_students(row["id"])
         group = get_group_by_id(row["group_id"])
-        if not group or not students:
+        if not group:
             continue
         lang = get_group_lang(group)
-        text = T("attendance_ask_superadmin", lang, group=group["title"] or "", names=_names(students))
-        for admin_id in SUPER_ADMIN_IDS:
-            buttons = [
-                (T("attendance_yes_btn", lang), f"att:yes:{admin_id}:{row['id']}"),
-                (T("attendance_no_btn", lang), f"att:no:{admin_id}:{row['id']}"),
-            ]
-            await send_message_with_buttons(admin_id, text, buttons)
-        log.info("Attendance confirm #%s (group=%s date=%s) escalated to super admins",
+        await send_message(group["chat_id"], T("attendance_reminder_group", lang))
+        log.info("Attendance confirm #%s (group=%s date=%s) reminder posted to group",
                   row["id"], row["group_id"], row["date"])
 
 
 async def check_attendance_confirm_auto_resolve():
-    """Вызывается из scheduler() каждые ~30 секунд. Если даже супер-админы
-    не ответили за ATTENDANCE_AUTO_RESOLVE_HOURS часов после эскалации -
-    автоматически засчитываем "Да" (в пользу студента) и сообщаем админам
-    постфактум, чтобы было видно, что решение принято автоматически."""
+    """Вызывается из scheduler() каждые ~30 секунд. Если устаз не ответил
+    за ATTENDANCE_AUTO_RESOLVE_HOURS часов после пинга в группу - баллы НЕ
+    начисляются (reason='auto'), сообщение об этом уходит прямо в группу
+    (resolve_attendance_confirm сам выбирает нейтральный текст для этого
+    случая) - отдельного приватного уведомления владельцу больше нет."""
     for row in get_unresolved_after_escalation(ATTENDANCE_AUTO_RESOLVE_HOURS):
-        ok = await resolve_attendance_confirm(row["id"], "yes")
+        ok = await resolve_attendance_confirm(row["id"], "no", reason="auto")
         if not ok:
             continue
-        group = get_group_by_id(row["group_id"])
-        group_title = group["title"] if group else row["group_id"]
-        for admin_id in SUPER_ADMIN_IDS:
-            await send_message(admin_id, T(
-                "attendance_auto_resolved", "ru", group=group_title, date=row["date"]
-            ))
-        log.info("Attendance confirm #%s (group=%s date=%s) auto-resolved as yes after %sh silence",
+        log.info("Attendance confirm #%s (group=%s date=%s) auto-resolved as NO after %sh silence",
                   row["id"], row["group_id"], row["date"], ATTENDANCE_AUTO_RESOLVE_HOURS)

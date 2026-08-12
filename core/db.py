@@ -295,6 +295,12 @@ def _run_migrations(c):
     if "channel" not in uocols:
         c.execute("ALTER TABLE upgrade_offers ADD COLUMN channel TEXT NOT NULL DEFAULT 'dm'")
 
+    accols = [r["name"] for r in c.execute("PRAGMA table_info(attendance_confirm)").fetchall()]
+    if "decision_reason" not in accols:
+        # 'manual' - устаз лично нажал кнопку; 'auto' - тайм-аут 24ч без ответа
+        # (12.08.2026, нужно различать при позднем "у" и при выборе текста в группу).
+        c.execute("ALTER TABLE attendance_confirm ADD COLUMN decision_reason TEXT")
+
     migrated = c.execute(
         "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
     ).fetchone()
@@ -2005,11 +2011,11 @@ def get_attendance_confirm_students(confirm_id):
         """, (confirm_id,)).fetchall()
 
 
-def set_attendance_confirm_decision(confirm_id, decision):
+def set_attendance_confirm_decision(confirm_id, decision, reason="manual"):
     with db() as c:
         c.execute(
-            "UPDATE attendance_confirm SET decision=?, decided_at=datetime('now') WHERE id=?",
-            (decision, confirm_id)
+            "UPDATE attendance_confirm SET decision=?, decided_at=datetime('now'), decision_reason=? WHERE id=?",
+            (decision, reason, confirm_id)
         )
 
 

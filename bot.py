@@ -115,8 +115,9 @@ async def main():
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
                     # "att:yes:<uid>:<confirm_id>" / "att:no:<uid>:<confirm_id>" -
-                    # подтверждение устазом (или, при молчании, супер-админом),
-                    # что урок реально прошёл, перед начислением баллов за "у" (31.07.2026).
+                    # подтверждение устазом, что урок реально прошёл, перед
+                    # начислением баллов за "у" (31.07.2026, пересмотрено 12.08.2026 -
+                    # молчание больше не эскалируется супер-админам, см. attendance_confirm.py).
                     elif cq_data.startswith("att:"):
                         parts = cq_data.split(":", 3)
                         if len(parts) == 4 and parts[2] == cq_uid:

@@ -1534,6 +1534,17 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     await send_message(chat_id, T("attendance_pending", glang, name=s_self["name"]))
                     if is_new:
                         await ask_ustaz_attendance_confirm(confirm_id, group_id, glang)
+                else:
+                    # Решение "Нет" уже принято (устазом лично или тайм-аутом) -
+                    # студент отмечается позже. Устаза пингуем ТОЛЬКО если решение
+                    # реально его (не тайм-аут - иначе сообщение "нарушил ваше
+                    # решение" было бы враньём, он ничего не решал, см.
+                    # attendance_confirm.py).
+                    await send_message(chat_id, T("attendance_no_after_decision", glang, name=s_self["name"]))
+                    if confirm_row["decision_reason"] == "manual":
+                        for admin_phone in get_group_admins(group_id):
+                            await send_message(admin_phone,
+                                T("attendance_late_mark_notify_ustaz", glang, name=s_self["name"]))
         elif is_group_admin(phone, group_id):
             # Устаз отмечает, что урок состоялся, даже если ни один студент не отметился —
             # без бонусных баллов, только факт для еженедельного отчёта (scheduler._week_ops_stats).
