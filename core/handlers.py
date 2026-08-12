@@ -22,6 +22,7 @@ from core.db import (
     get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month,
     get_excuse_count_month, add_bonus,
     has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone, is_active_prep_student,
+    get_survey_stage, save_survey_location, save_survey_age,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -815,6 +816,22 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # ~5 сек (6 сообщений + 3 фото) - не держим lock на этого
             # отправителя, иначе его собственное следующее сообщение ждёт.
             asyncio.create_task(send_prep_onboarding_if_pending(phone))
+
+        # ── Анкета "откуда и сколько лет" (13.08.2026) ─────────────────────
+        # Команды (/help и т.п.) не считаем ответом - анкета просто ждёт
+        # следующее обычное сообщение.
+        if text and not text.startswith("/"):
+            survey_stage = get_survey_stage(phone)
+            if survey_stage in ("asked_location", "asked_age"):
+                survey_group = get_learning_group(phone)
+                survey_lang = get_group_lang(survey_group) if survey_group else "ru"
+                if survey_stage == "asked_location":
+                    save_survey_location(phone, text)
+                    await send_message(chat_id, T("profile_survey_q_age", survey_lang))
+                else:
+                    save_survey_age(phone, text)
+                    await send_message(chat_id, T("profile_survey_thanks", survey_lang))
+                return
 
     # ── Личка устаза-рецензента программы: любое сообщение = одобрение ────────
     # Устаз не всегда ставит настоящую Telegram-реакцию — может ответить

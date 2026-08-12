@@ -15,7 +15,7 @@ from core.db import (
     get_group_admins, get_dm_ok, get_learning_group,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
     get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date,
-    count_unpublished_parts
+    count_unpublished_parts, get_users_due_for_survey, start_survey
 )
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
@@ -1129,6 +1129,35 @@ async def dm_connect_reminder():
             log.error("dm_connect_reminder error in %s: %s", chat_id, e)
 
 
+async def profile_survey_intro():
+    """Раз в день - разовый личный вопрос "откуда ты и сколько лет" через 30
+    дней после регистрации (users.added_date), задаётся по очереди в два
+    шага (13.08.2026, задача пользователя - "лучше узнать студентов
+    проекта"). Ответы приходят обычным текстом в личку и ловятся в
+    handlers.py по survey_stage - здесь только отправляем первый вопрос и
+    переводим анкету в состояние ожидания.
+
+    Выключено по умолчанию (bot_settings["profile_survey_enabled"] != "1") -
+    пользователь решил сперва обсудить с Умар устазом деликатный момент
+    (стоит ли вообще спрашивать устазов, которые сами тоже студенты где-то)
+    прежде чем запускать на живых 95 подходящих студентах. Включать: явно
+    set_setting("profile_survey_enabled", "1"). Запускается порциями
+    (bot_settings["profile_survey_batch_size"], по умолчанию 5) - не всем
+    сразу, тоже решение пользователя."""
+    if get_setting("profile_survey_enabled") != "1":
+        return
+    batch_size = int(get_setting("profile_survey_batch_size") or 5)
+    for row in get_users_due_for_survey(limit=batch_size):
+        try:
+            group = get_learning_group(row["phone"])
+            glang = get_group_lang(group) if group else "ru"
+            await send_message(row["phone"], T("profile_survey_q_location", glang, name=row["name"]))
+            start_survey(row["phone"])
+            await asyncio.sleep(0.3)
+        except Exception as e:
+            log.error("profile_survey_intro error for %s: %s", row["name"], e)
+
+
 # ── Вечерний отчёт (20:00) ────────────────────────────────────────────────────
 
 async def evening_report():
@@ -1564,6 +1593,7 @@ async def scheduler():
                 # Утренняя проверка ловит такие случаи на ~14 часов раньше (24.07.2026).
                 await maybe_run("prep_check_morning", check_prep_students)
                 await maybe_run("voice_review_report", voice_review_report)
+                await maybe_run("profile_survey_intro", profile_survey_intro)
                 if wd in (0, 1):
                     await maybe_run("weekly_ops_report", weekly_ops_report)
                     await maybe_run("weekly_partial_report", weekly_partial_report)

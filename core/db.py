@@ -290,6 +290,13 @@ def _run_migrations(c):
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
         c.execute("ALTER TABLE users ADD COLUMN dm_ok INTEGER DEFAULT 0")
+    if "survey_stage" not in ucols:
+        # NULL - анкета ещё не начата, 'asked_location'/'asked_age' - ждём
+        # ответа на соответствующий вопрос, 'done' - оба ответа получены
+        # (13.08.2026, разовая анкета "откуда и сколько лет" через 30 дней).
+        c.execute("ALTER TABLE users ADD COLUMN survey_stage TEXT")
+        c.execute("ALTER TABLE users ADD COLUMN survey_location TEXT")
+        c.execute("ALTER TABLE users ADD COLUMN survey_age TEXT")
 
     uocols = [r["name"] for r in c.execute("PRAGMA table_info(upgrade_offers)").fetchall()]
     if "channel" not in uocols:
@@ -2103,6 +2110,65 @@ def mark_dm_ok_by_phone(phone):
             "INSERT INTO users(name, phone, dm_ok) VALUES('', ?, 1) "
             "ON CONFLICT(phone) DO UPDATE SET dm_ok=1",
             (phone,)
+        )
+
+
+# ── Анкета "откуда и сколько лет" (13.08.2026) ──────────────────────────────────
+
+def get_users_due_for_survey(limit=5):
+    """Активные студенты (любая группа), с момента регистрации (added_date)
+    прошло ≥30 дней, Start нажат, анкета ещё не начата. dm_ok=0 просто не
+    попадают сюда - подхватятся сами в один из следующих ежедневных
+    прогонов, как только нажмут Start.
+
+    Исключены те, у кого есть активная роль 'admin' хоть в одной группе
+    (13.08.2026, найдено эдвайзери до запуска: устаз, который сам ещё и
+    студент где-то, иначе попал бы в опрос и его следующий вопрос боту
+    ушёл бы в survey_location вместо ответа - перехват в handlers.py стоит
+    раньше проверки is_admin/is_any_group_admin). limit - постепенный
+    запуск порциями (решение пользователя, вопрос деликатный - опрос
+    ставить всем 95 подходящим сразу не стали)."""
+    with db() as c:
+        return c.execute("""
+            SELECT DISTINCT u.id, u.name, u.phone
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            WHERE ug.role='student' AND ug.active=1
+              AND u.phone IS NOT NULL AND u.dm_ok=1
+              AND u.survey_stage IS NULL
+              AND julianday('now') - julianday(u.added_date) >= 30
+              AND u.id NOT IN (
+                  SELECT user_id FROM user_groups WHERE role='admin' AND active=1
+              )
+            ORDER BY u.added_date ASC
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+
+def start_survey(phone):
+    with db() as c:
+        c.execute("UPDATE users SET survey_stage='asked_location' WHERE phone=?", (phone,))
+
+
+def get_survey_stage(phone):
+    with db() as c:
+        row = c.execute("SELECT survey_stage FROM users WHERE phone=?", (phone,)).fetchone()
+    return row["survey_stage"] if row else None
+
+
+def save_survey_location(phone, text):
+    with db() as c:
+        c.execute(
+            "UPDATE users SET survey_location=?, survey_stage='asked_age' WHERE phone=?",
+            (text, phone)
+        )
+
+
+def save_survey_age(phone, text):
+    with db() as c:
+        c.execute(
+            "UPDATE users SET survey_age=?, survey_stage='done' WHERE phone=?",
+            (text, phone)
         )
 
 

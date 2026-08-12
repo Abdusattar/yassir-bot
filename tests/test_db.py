@@ -8,6 +8,9 @@ from core.db import (
     get_attendance_confirm_by_id, get_attendance_confirm_students,
     set_attendance_confirm_decision, get_stale_attendance_confirms,
     mark_attendance_confirm_escalated,
+    get_users_due_for_survey, start_survey, get_survey_stage,
+    save_survey_location, save_survey_age, mark_dm_ok_by_phone, db,
+    add_group_admin,
 )
 
 
@@ -273,3 +276,92 @@ def test_attendance_confirm_resolved_not_stale(test_db):
         )
 
     assert get_stale_attendance_confirms(30) == []
+
+
+# ── Анкета "откуда и сколько лет" ───────────────────────────────────────────────
+
+def _make_survey_candidate(test_db, phone="700111", days_ago=30, dm_ok=1):
+    save_group("-100790", "Группа С")
+    g = get_group("-100790")
+    sid = add_student("Гульнара", g["id"], phone=phone)
+    with db() as c:
+        c.execute(
+            "UPDATE users SET added_date=date('now', ?), dm_ok=? WHERE id=?",
+            (f"-{days_ago} days", dm_ok, sid)
+        )
+    return sid
+
+
+def test_get_users_due_for_survey_includes_eligible(test_db):
+    _make_survey_candidate(test_db, phone="700111", days_ago=31, dm_ok=1)
+    due = get_users_due_for_survey()
+    assert [r["phone"] for r in due] == ["700111"]
+
+
+def test_get_users_due_for_survey_excludes_too_recent(test_db):
+    _make_survey_candidate(test_db, phone="700112", days_ago=10, dm_ok=1)
+    assert get_users_due_for_survey() == []
+
+
+def test_get_users_due_for_survey_excludes_dm_not_ok(test_db):
+    _make_survey_candidate(test_db, phone="700113", days_ago=31, dm_ok=0)
+    assert get_users_due_for_survey() == []
+
+
+def test_get_users_due_for_survey_excludes_already_started(test_db):
+    _make_survey_candidate(test_db, phone="700114", days_ago=31, dm_ok=1)
+    start_survey("700114")
+    assert get_users_due_for_survey() == []
+
+
+def test_survey_flow_location_then_age(test_db):
+    _make_survey_candidate(test_db, phone="700115", days_ago=31, dm_ok=1)
+    assert get_survey_stage("700115") is None
+
+    start_survey("700115")
+    assert get_survey_stage("700115") == "asked_location"
+
+    save_survey_location("700115", "Бишкек")
+    assert get_survey_stage("700115") == "asked_age"
+
+    save_survey_age("700115", "22")
+    assert get_survey_stage("700115") == "done"
+
+    with db() as c:
+        row = c.execute(
+            "SELECT survey_location, survey_age FROM users WHERE phone=?", ("700115",)
+        ).fetchone()
+    assert row["survey_location"] == "Бишкек"
+    assert row["survey_age"] == "22"
+
+
+def test_get_users_due_for_survey_excludes_group_admin(test_db):
+    """Устаз, который сам тоже студент где-то (30+ дней, dm_ok=1) - не должен
+    попадать в анкету, иначе его следующий вопрос боту перехватится как
+    ответ на survey_location (13.08.2026, найдено эдвайзери)."""
+    save_group("-100791", "Группа Т")
+    g1 = get_group("-100791")
+    save_group("-100792", "Группа У")
+    g2 = get_group("-100792")
+    sid = add_student("Умар", g1["id"], phone="700116")
+    add_group_admin(g2["id"], "700116")
+    with db() as c:
+        c.execute(
+            "UPDATE users SET added_date=date('now', '-31 days'), dm_ok=1 WHERE id=?",
+            (sid,)
+        )
+    assert get_users_due_for_survey() == []
+
+
+def test_get_users_due_for_survey_respects_limit(test_db):
+    save_group("-100793", "Группа Ф")
+    g = get_group("-100793")
+    for i in range(7):
+        sid = add_student(f"Студент{i}", g["id"], phone=f"70012{i}")
+        with db() as c:
+            c.execute(
+                "UPDATE users SET added_date=date('now', '-31 days'), dm_ok=1 WHERE id=?",
+                (sid,)
+            )
+    assert len(get_users_due_for_survey(limit=3)) == 3
+    assert len(get_users_due_for_survey(limit=100)) == 7
