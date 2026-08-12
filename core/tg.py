@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import aiohttp
@@ -68,11 +69,13 @@ async def send_message(chat_id, text, reply_to_message_id=None):
     return await _raw_send(cid, text or "", reply_to_message_id=reply_to_message_id)
 
 
-async def _raw_send_photo(cid, photo_path, caption=None):
+async def _raw_send_photo(cid, photo_path, caption=None, reply_markup=None):
     data = aiohttp.FormData()
     data.add_field("chat_id", str(cid))
     if caption:
         data.add_field("caption", caption)
+    if reply_markup:
+        data.add_field("reply_markup", json.dumps(reply_markup))
     try:
         with open(photo_path, "rb") as f:
             data.add_field("photo", f, filename=os.path.basename(photo_path), content_type="image/png")
@@ -110,6 +113,18 @@ async def send_photo(chat_id, photo_path, caption=None):
         return None
 
     return await _raw_send_photo(cid, photo_path, caption)
+
+
+async def send_photo_with_buttons(chat_id, photo_path, buttons, caption=None):
+    """buttons: список (label, callback_data) - одна кнопка на строку.
+    Без shadow-режима - используется только для личных экранов онбординга,
+    в группу этим путём ничего не уходит."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    keyboard = {"inline_keyboard": [[{"text": label, "callback_data": data}] for label, data in buttons]}
+    return await _raw_send_photo(cid, photo_path, caption, reply_markup=keyboard)
 
 
 async def send_message_with_buttons(chat_id, text, buttons):

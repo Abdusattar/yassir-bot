@@ -18,7 +18,7 @@ from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
-from core.prep import handle_juz_answer
+from core.prep import handle_juz_answer, handle_prep_onboarding_next
 from core.transfers import (
     handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
     send_new_student_prep_redirect,
@@ -124,6 +124,16 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_attendance_confirm_answer(cq_uid, parts[1], int(parts[3])))
+                    # "ponb:<next_screen_idx>:<uid>" - кнопка "Далее" в онбординге
+                    # подготовительной (13.08.2026, 6 экранов вместо потока из 9
+                    # сообщений). Только личка - но uid всё равно сверяем, для
+                    # единообразия с остальными callback-веткам.
+                    elif cq_data.startswith("ponb:"):
+                        parts = cq_data.split(":", 2)
+                        if len(parts) == 3 and parts[2] == cq_uid:
+                            if cq_chat_id and cq_message_id:
+                                await remove_message_keyboard(cq_chat_id, cq_message_id)
+                            asyncio.create_task(handle_prep_onboarding_next(cq_uid, int(parts[1])))
                     continue
 
                 # Вступление по ссылке-приглашению (chat_member update)

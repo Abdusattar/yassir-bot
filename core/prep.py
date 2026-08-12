@@ -50,13 +50,26 @@ from core.db import (
 from core.i18n import T, get_group_lang
 from core.tg import (
     send_message, ban_member, unban_member, send_message_with_buttons,
-    get_dm_start_link, send_photo,
+    get_dm_start_link, send_photo, send_photo_with_buttons,
 )
 
 log = logging.getLogger(__name__)
 
 _ONBOARDING_DIR = Path(__file__).parent.parent / "knowledge"
-_ONBOARDING_DELAY = 1  # сек. между сообщениями онбординга - чтобы не выглядело спамом
+
+# (text_key, photo_filename|None) - один экран = один шаг с кнопкой "Далее"
+# (13.08.2026, было 9 сообщений подряд, пользователь: "чтобы всё скопом не
+# приходило"). Текст+фото идут отдельными сообщениями (caption ограничен
+# 1024 символами, prep_onboarding_m длиннее), кнопка - на последнем
+# сообщении экрана.
+_ONBOARDING_STEPS = [
+    ("prep_onboarding_intro", None),
+    ("prep_onboarding_m", "Заучивание.PNG"),
+    ("prep_onboarding_r", "Повторение.PNG"),
+    ("prep_onboarding_t", "Слова.PNG"),
+    ("prep_onboarding_rules", None),
+    ("prep_onboarding_adab", None),
+]
 
 PREP_DAYS = 14
 PREP_MIN_DAYS = 5
@@ -578,34 +591,72 @@ async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok):
         ))
 
 
+async def _onboarding_lang(phone):
+    """Резолв языка для экрана, открытого по кнопке "Далее" (нет глобальной
+    сессии/состояния - каждый клик независим). Последняя группа студента
+    по joined_date - работает и для prep, и после выпуска, если студент
+    поздно дожимает предыдущие экраны."""
+    with db() as c:
+        row = c.execute("""
+            SELECT g.lang FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            WHERE ug.user_id=(SELECT id FROM users WHERE phone=?)
+              AND ug.role='student' AND ug.active=1
+            ORDER BY ug.joined_date DESC LIMIT 1
+        """, (phone,)).fetchone()
+    return row["lang"] if row and row["lang"] else "ru"
+
+
+async def _send_onboarding_screen(phone, screen_idx, glang):
+    if screen_idx >= len(_ONBOARDING_STEPS):
+        return
+    text_key, photo_name = _ONBOARDING_STEPS[screen_idx]
+    has_next = screen_idx + 1 < len(_ONBOARDING_STEPS)
+    text = T(text_key, glang)
+    buttons = [(T("prep_onboarding_next_btn", glang), f"ponb:{screen_idx + 1}:{phone}")] if has_next else None
+
+    if photo_name:
+        await send_message(phone, text)
+        photo_path = str(_ONBOARDING_DIR / photo_name)
+        if buttons:
+            result = await send_photo_with_buttons(phone, photo_path, buttons)
+            if not (result and result.get("ok")):
+                # Фото не ушло (битый файл/сбой Telegram) - без этого стал
+                # бы некликабельный тупик, состояние нигде не хранится,
+                # студенту неоткуда продолжить. Дублируем кнопку текстом.
+                log.error("prep onboarding: send_photo_with_buttons failed for %s, screen photo=%s", phone, photo_name)
+                await send_message_with_buttons(phone, T("prep_onboarding_photo_failed", glang), buttons)
+        else:
+            await send_photo(phone, photo_path)
+    elif buttons:
+        await send_message_with_buttons(phone, text, buttons)
+    else:
+        await send_message(phone, text)
+
+
 async def send_prep_onboarding_dm(phone, glang):
-    """Полная методика сдачи трёх заданий подготовительной, в личку,
-    6 сообщений подряд с реальными скриншотами студентов из knowledge/."""
-    await send_message(phone, T("prep_onboarding_intro", glang))
-    await asyncio.sleep(_ONBOARDING_DELAY)
+    """Точка входа онбординга - первый из 6 экранов (13.08.2026, было 9
+    сообщений подряд без остановки). Дальше студент идёт сам по кнопке
+    "Далее" - см. handle_prep_onboarding_next(), роутинг в bot.py по
+    префиксу callback_data "ponb:". Если не нажимает - ничего не
+    происходит, ждём сколько угодно (решение пользователя, без
+    напоминаний про недожатый онбординг)."""
+    await _send_onboarding_screen(phone, 0, glang)
 
-    await send_message(phone, T("prep_onboarding_m", glang))
-    await send_photo(phone, str(_ONBOARDING_DIR / "Заучивание.PNG"))
-    await asyncio.sleep(_ONBOARDING_DELAY)
 
-    await send_message(phone, T("prep_onboarding_r", glang))
-    await send_photo(phone, str(_ONBOARDING_DIR / "Повторение.PNG"))
-    await asyncio.sleep(_ONBOARDING_DELAY)
-
-    await send_message(phone, T("prep_onboarding_t", glang))
-    await send_photo(phone, str(_ONBOARDING_DIR / "Слова.PNG"))
-    await asyncio.sleep(_ONBOARDING_DELAY)
-
-    await send_message(phone, T("prep_onboarding_rules", glang))
-    await asyncio.sleep(_ONBOARDING_DELAY)
-
-    await send_message(phone, T("prep_onboarding_adab", glang))
+async def handle_prep_onboarding_next(phone, screen_idx):
+    """Обработчик клика по кнопке "Далее" (bot.py, callback_data
+    "ponb:<screen_idx>:<phone>"). Язык резолвится заново на каждый клик -
+    короче, чем тащить его через callback_data, и учитывает случай, когда
+    студент уже успел перейти в другую группу между экранами."""
+    glang = await _onboarding_lang(phone)
+    await _send_onboarding_screen(phone, screen_idx, glang)
 
 
 async def send_prep_onboarding_if_pending(phone):
     """Вызывается из handlers.py ровно в момент, когда личка со студентом
     открылась впервые (dm_ok 0→1). Если это активный студент подготовительной
-    - отправляет подробный онбординг. Если он не студент prep (или уже успел
+    - отправляет первый экран онбординга. Если он не студент prep (или уже успел
     получить онбординг напрямую при регистрации, см. handlers.py) - тихо
     ничего не делает."""
     with db() as c:

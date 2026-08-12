@@ -813,8 +813,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not was_dm_ok:
             await handle_dm_unlocked(phone)
             from core.prep import send_prep_onboarding_if_pending
-            # ~5 сек (6 сообщений + 3 фото) - не держим lock на этого
-            # отправителя, иначе его собственное следующее сообщение ждёт.
+            # Не держим lock на этого отправителя, иначе его собственное
+            # следующее сообщение ждёт (актуально и сейчас, когда
+            # отправляется только первый экран, а не весь поток - 13.08.2026).
             asyncio.create_task(send_prep_onboarding_if_pending(phone))
 
         # ── Анкета "откуда и сколько лет" (13.08.2026) ─────────────────────
