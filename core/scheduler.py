@@ -1677,7 +1677,7 @@ async def scheduler():
                 await maybe_run("weekly_report", weekly_report)
             elif wd == 6 and h == 20 and m == 30:
                 await maybe_run("yassir_asks_admin", yassir_asks_admin)
-            elif wd == 3 and h == 10 and m == 0 and now.isocalendar()[1] % 2 == 0:
+            elif wd == 3 and h == 10 and m == 0 and now.isocalendar()[1] % 2 == 1:
                 await maybe_run("invite_friend_broadcast", invite_friend_broadcast)
             elif d == 1 and h == 19 and m == 0:
                 await maybe_run("monthly_report", monthly_report)
