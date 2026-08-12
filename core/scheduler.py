@@ -15,7 +15,7 @@ from core.db import (
     get_group_admins, get_dm_ok, get_learning_group,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
     get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date,
-    count_unpublished_parts, get_users_due_for_survey, start_survey
+    count_unpublished_parts, get_users_due_for_survey, start_survey, get_prep_group
 )
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
@@ -1158,6 +1158,61 @@ async def profile_survey_intro():
             log.error("profile_survey_intro error for %s: %s", row["name"], e)
 
 
+_INVITE_FRIEND_KEYS = [
+    "invite_friend_1", "invite_friend_2", "invite_friend_3",
+    "invite_friend_4", "invite_friend_5", "invite_friend_6",
+]
+
+
+async def invite_friend_broadcast():
+    """Раз в 2 недели (чётные ISO-недели, четверг, см. главный цикл) - призыв
+    в личку пригласить друга, всем активным студентам кроме подготовительной
+    (13.08.2026, задача пользователя). Изначально обсуждали раз в месяц
+    (боязнь "замыливания"), но пользователь передумал в этой же сессии,
+    увидев финальный текст - "они настолько простые, короткие и
+    эффективные" - решил раз в 2 недели. Без трекинга и бонусов - просто
+    напоминание, что это доброе дело. Ссылка ведёт в подготовительную
+    (единая точка входа новых студентов, тот же invite_link, что
+    используют переводы/предложения в transfers.py). Условие для друга -
+    он уже должен уметь читать Коран (не с нуля, таджвид/регулярность) -
+    во всех вариантах текста, тоже решение пользователя.
+    Текст ротируется по кругу через 6 коротких вариантов
+    (bot_settings["invite_friend_last_index"]), чтобы не приедалось одно и
+    то же сообщение из раза в раз.
+
+    Дедуп по phone (13.08.2026, найдено эдвайзери): студент может состоять
+    в нескольких группах одновременно (например обычная + Тадаббур - "общая
+    группа где все студенты находятся") - без дедупа получал бы это
+    сообщение по разу за каждую группу (на проде это 181 строка против 104
+    реальных людей)."""
+    prep_group = get_prep_group()
+    link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+    if not link:
+        log.error("invite_friend_broadcast: prep group has no invite_link, skip")
+        return
+
+    idx = (int(get_setting("invite_friend_last_index") or -1) + 1) % len(_INVITE_FRIEND_KEYS)
+    set_setting("invite_friend_last_index", str(idx))
+    key = _INVITE_FRIEND_KEYS[idx]
+
+    recipients = {}  # phone -> (name, lang), дедуп для студентов сразу в нескольких группах
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "prep":
+            continue
+        glang = get_group_lang(group)
+        for s in get_students(group["id"]):
+            if not s["phone"] or not get_dm_ok(s["id"]) or s["phone"] in recipients:
+                continue
+            recipients[s["phone"]] = (s["name"], glang)
+
+    for phone, (name, glang) in recipients.items():
+        try:
+            await send_message(phone, T(key, glang, link=link))
+            await asyncio.sleep(0.3)
+        except Exception as e:
+            log.error("invite_friend_broadcast error for %s: %s", name, e)
+
+
 # ── Вечерний отчёт (20:00) ────────────────────────────────────────────────────
 
 async def evening_report():
@@ -1622,6 +1677,8 @@ async def scheduler():
                 await maybe_run("weekly_report", weekly_report)
             elif wd == 6 and h == 20 and m == 30:
                 await maybe_run("yassir_asks_admin", yassir_asks_admin)
+            elif wd == 3 and h == 10 and m == 0 and now.isocalendar()[1] % 2 == 0:
+                await maybe_run("invite_friend_broadcast", invite_friend_broadcast)
             elif d == 1 and h == 19 and m == 0:
                 await maybe_run("monthly_report", monthly_report)
                 if now.month in (1, 4, 7, 10):
