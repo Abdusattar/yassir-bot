@@ -1608,7 +1608,7 @@ def get_miss_count_last_30_days(uid, group_id=None):
     return misses
 
 
-def _full_task_dates(uid, group_id, group_tasks, limit=400):
+def _full_task_dates(uid, group_id, group_tasks, limit=400, since_date=None):
     """Даты, когда студент сдал ВСЕ обязательные задания группы (узр не
     защищает) - для строгого стрика (07.08.2026, решение пользователя:
     "страйк есть страйк, обнуляется если не сдал все 3, даже если узр").
@@ -1618,13 +1618,18 @@ def _full_task_dates(uid, group_id, group_tasks, limit=400):
     if not group_tasks:
         return set()
     placeholders = ",".join("?" * len(group_tasks))
+    since_clause = " AND date>=?" if since_date else ""
+    params = [uid, group_id, *group_tasks]
+    if since_date:
+        params.append(since_date)
+    params += [len(group_tasks), limit]
     with db() as c:
         rows = c.execute(
             "SELECT date FROM score_events"
-            " WHERE student_id=? AND group_id=? AND category='task' AND subcategory IN (%s)"
+            " WHERE student_id=? AND group_id=? AND category='task' AND subcategory IN (%s)%s"
             " GROUP BY date HAVING COUNT(DISTINCT subcategory)=?"
-            " ORDER BY date DESC LIMIT ?" % placeholders,
-            (uid, group_id, *group_tasks, len(group_tasks), limit)
+            " ORDER BY date DESC LIMIT ?" % (placeholders, since_clause),
+            params
         ).fetchall()
     return {r["date"] for r in rows}
 
@@ -1820,14 +1825,21 @@ def get_prep_students_active():
 
 
 def count_report_days_since(uid, group_id, since_date):
-    """Количество дней с заданиями начиная с даты (для prep проверки). Узр не считается."""
+    """Количество дней начиная с даты, когда сданы ВСЕ обязательные задания
+    группы (для prep-проверки). Узр не считается.
+
+    12.08.2026, решение пользователя: раньше засчитывался день с ЛЮБЫМ
+    одним заданием - лазейка, которая противоречила решению устаза от
+    19.07 (все три задания обязательны с первого дня, без поблажек для
+    prep). Единый строгий критерий - та же логика, что у стрика
+    (_full_task_dates), просто с нижней границей по дате вступления.
+    Проверено на живых данных 12.08.2026 перед деплоем: ни один активный
+    студент prep не был близко к порогу 5 дней, откат уже объявленного
+    перехода никому не грозил."""
     with db() as c:
-        row = c.execute(
-            "SELECT COUNT(DISTINCT date) as cnt FROM score_events"
-            " WHERE student_id=? AND group_id=? AND date>=? AND category='task'",
-            (uid, group_id, since_date)
-        ).fetchone()
-        return row["cnt"] if row else 0
+        tasks_row = c.execute("SELECT tasks FROM groups WHERE id=?", (group_id,)).fetchone()
+    group_tasks = tasks_row["tasks"].split(",") if tasks_row and tasks_row["tasks"] else ["m", "r", "t"]
+    return len(_full_task_dates(uid, group_id, group_tasks, since_date=since_date))
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────

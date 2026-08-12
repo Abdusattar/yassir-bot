@@ -3,7 +3,7 @@ from core.db import (
     save_group, get_group, add_student, get_students,
     find_by_phone, find_by_name, register_student, deactivate_student,
     save_report, get_today_report, get_streak_days, get_skip_count_month,
-    add_bonus, get_date,
+    add_bonus, get_date, count_report_days_since,
     get_or_create_attendance_confirm, add_attendance_confirm_student,
     get_attendance_confirm_by_id, get_attendance_confirm_students,
     set_attendance_confirm_decision, get_stale_attendance_confirms,
@@ -128,6 +128,42 @@ def test_streak_grace_for_today_not_yet_reported(test_db):
     yesterday = (get_now() - timedelta(days=1)).date().isoformat()
     save_report(sid, g["id"], yesterday, {"m": True, "r": True, "t": True})
     assert get_streak_days(sid, g["id"], ["m", "r", "t"]) == 1
+
+
+def test_count_report_days_since_ignores_partial_days(test_db):
+    """12.08.2026: раньше день засчитывался в prep-порог с ЛЮБЫМ одним
+    заданием - лазейка, противоречившая решению устаза (все три
+    обязательны с первого дня). Теперь тот же строгий критерий, что у
+    стрика."""
+    save_group("-100560", "Группа Н", tasks="m,r,t")
+    g = get_group("-100560")
+    sid = add_student("Азим", g["id"])
+    save_report(sid, g["id"], get_date(), {"m": True, "r": False, "t": False})
+    assert count_report_days_since(sid, g["id"], get_date()) == 0
+
+
+def test_count_report_days_since_counts_full_days(test_db):
+    from datetime import timedelta
+    from core.db import get_now
+    save_group("-100561", "Группа О", tasks="m,r,t")
+    g = get_group("-100561")
+    sid = add_student("Бахтияр", g["id"])
+    yesterday = (get_now() - timedelta(days=1)).date().isoformat()
+    save_report(sid, g["id"], yesterday, {"m": True, "r": True, "t": True})
+    save_report(sid, g["id"], get_date(), {"m": True, "r": True, "t": True})
+    assert count_report_days_since(sid, g["id"], yesterday) == 2
+
+
+def test_count_report_days_since_respects_lower_bound(test_db):
+    from datetime import timedelta
+    from core.db import get_now
+    save_group("-100562", "Группа П", tasks="m,r,t")
+    g = get_group("-100562")
+    sid = add_student("Умар", g["id"])
+    old_day = (get_now() - timedelta(days=20)).date().isoformat()
+    save_report(sid, g["id"], old_day, {"m": True, "r": True, "t": True})
+    save_report(sid, g["id"], get_date(), {"m": True, "r": True, "t": True})
+    assert count_report_days_since(sid, g["id"], get_date()) == 1
 
 
 def test_skip_count_zero_for_new_student(test_db):
