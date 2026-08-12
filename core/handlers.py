@@ -139,6 +139,7 @@ async def _send_rating_to(target_chat_id, group, group_id, glang):
         streak = streaks.get(r["id"], 0)
         lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " " + T("rating_points", glang) +
                      " · 🔥 " + str(streak) + " " + T("rating_streak", glang))
+    lines.append(T("rating_footer", glang))
     await send_message(target_chat_id, "\n".join(lines))
 
 
