@@ -1294,6 +1294,90 @@ async def weekly_report():
             log.error("weekly_report error in %s: %s", chat_id, e)
 
 
+# ── Еженедельный список неполных сдач (понедельник 07:00, вторник - подстраховка) ──
+
+async def weekly_partial_report():
+    """Список студентов, кто хотя бы раз за неделю сдал НЕ ВСЕ задания дня
+    (1 или несколько из N, но не 0 - полный пропуск, тот уже виден в
+    weekly_report - и не все N). Решение пользователя 12.08.2026, повод -
+    Umar (G-11, 18 таких дней за месяц) и Юсуф (G-9, 14) систематически
+    сдают по одному заданию месяцами - точечные напоминания дали бы мало
+    эффекта, нужен системный еженедельный список прямо в группу, с
+    предупреждением наверху.
+    Календарная неделя пн-вс, ПРОШЕДШАЯ целиком (не скользящее окно, как у
+    weekly_report/Sunday 19:00) - пользователь указал, что в воскресенье
+    вечером неделя ещё не закончилась (сегодняшний день мог быть не досдан).
+    Тот же паттерн дедупа по неделе, что у weekly_ops_report (bot_settings,
+    ключ хранит понедельник прошедшей недели) - запуск на пн и вт безопасен,
+    вторник просто подстраховка, если понедельничный прогон не сработал.
+    Ростер и исключение устаза - как в _full_period_students (только
+    активные студенты группы через get_students, SUPER_ADMIN_IDS[0] по
+    личной просьбе не попадает в списки). Подкатегория задания жёстко
+    отфильтрована под group_tasks - без этого студент, сдавший 1 нужное +
+    доп. предмет вне списка группы (реальный кейс - Изат, G-2c, 'n' в
+    m,r,t-группе), либо выпал бы из списка вовсе, либо посчитался бы как
+    "2 из 3" вместо честного "1 из 3"."""
+    now = _now()
+    week_monday = (now - timedelta(days=now.weekday())).date()
+    last_monday = week_monday - timedelta(days=7)
+    last_sunday = week_monday - timedelta(days=1)
+    week_key = last_monday.isoformat()
+    if get_setting("partial_report_week") == week_key:
+        return
+    my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
+    for group in get_all_groups():
+        gtype = group["group_type"] or "relaxed"
+        # prep не участвует (решение пользователя 12.08.2026): там свой
+        # отдельный механизм - не наберёт 5 дней из 14, не переведётся
+        # дальше вообще, публичное предупреждение о частичной сдаче поверх
+        # этого не нужно для совсем новых людей на пробном периоде.
+        if gtype in ("tadabbur", "prep"):
+            continue
+        chat_id = group["chat_id"]
+        group_id = group["id"]
+        group_tasks = get_group_tasks(group)
+        n_tasks = len(group_tasks)
+        if n_tasks < 2:
+            continue
+        start = last_monday.isoformat()
+        end = last_sunday.isoformat()
+        try:
+            placeholders = ",".join("?" * len(group_tasks))
+            with db() as c:
+                rows = c.execute(
+                    "SELECT student_id, date, COUNT(DISTINCT subcategory) as n"
+                    " FROM score_events"
+                    " WHERE group_id=? AND category='task' AND subcategory IN (%s)"
+                    " AND date>=? AND date<=?"
+                    " GROUP BY student_id, date" % placeholders,
+                    (group_id, *group_tasks, start, end)
+                ).fetchall()
+            roster = {s["id"]: s for s in get_students(group_id)}
+            counts = {}
+            for r in rows:
+                s = roster.get(r["student_id"])
+                if not s or (my_id and s["phone"] == my_id):
+                    continue
+                if 0 < r["n"] < n_tasks:
+                    counts[r["student_id"]] = counts.get(r["student_id"], 0) + 1
+            if not counts:
+                continue
+            lines = [
+                "⚠️ Частичная сдача заданий за неделю (" + last_monday.strftime("%d.%m") +
+                "–" + last_sunday.strftime("%d.%m") + ")\n"
+                "Ниже — кто хотя бы раз за неделю сдал не все задания дня (не 0, но и не все). "
+                "Эффект от частичной сдачи намного меньше полной — старайтесь сдавать все задания целиком.\n"
+            ]
+            for sid, cnt in sorted(counts.items(), key=lambda x: -x[1]):
+                lines.append("• " + roster[sid]["name"] + " — " + str(cnt) + " дн. частично")
+            await send_message(chat_id, "\n".join(lines))
+            await asyncio.sleep(1)
+        except Exception as e:
+            log.error("weekly_partial_report error in %s: %s", chat_id, e)
+
+    set_setting("partial_report_week", week_key)
+
+
 # ── Ежемесячный отчёт (1-е число 19:00) ──────────────────────────────────────
 
 async def monthly_report():
@@ -1456,6 +1540,7 @@ async def scheduler():
                 await maybe_run("voice_review_report", voice_review_report)
                 if wd in (0, 1):
                     await maybe_run("weekly_ops_report", weekly_ops_report)
+                    await maybe_run("weekly_partial_report", weekly_partial_report)
                 if d in (1, 2):
                     await maybe_run("monthly_ops_report", monthly_ops_report)
                     await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
