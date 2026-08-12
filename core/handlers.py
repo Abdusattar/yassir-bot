@@ -21,7 +21,7 @@ from core.db import (
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month,
     get_excuse_count_month, add_bonus,
-    has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone,
+    has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone, is_active_prep_student,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -811,6 +811,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # прямо сейчас (25.07.2026).
         if not was_dm_ok:
             await handle_dm_unlocked(phone)
+            from core.prep import send_prep_onboarding_if_pending
+            # ~5 сек (6 сообщений + 3 фото) - не держим lock на этого
+            # отправителя, иначе его собственное следующее сообщение ждёт.
+            asyncio.create_task(send_prep_onboarding_if_pending(phone))
 
     # ── Личка устаза-рецензента программы: любое сообщение = одобрение ────────
     # Устаз не всегда ставит настоящую Telegram-реакцию — может ответить
@@ -999,6 +1003,15 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             reminded_name, reminded_lang = reminded
             await send_message(chat_id, T("prep_remind_sent", reminded_lang, name=reminded_name))
             return
+        if is_active_prep_student(phone):
+            # Уже зарегистрирован в подготовительной, просто ещё не выполнил
+            # условие перехода (иначе отработала бы ветка reminded выше) -
+            # онбординг ему либо уже ушёл раньше, либо запущен фоновой
+            # задачей чуть выше в этом же вызове (хук was_dm_ok,
+            # asyncio.create_task - порядок доставки не гарантирован
+            # относительно этого return, но она гарантированно уйдёт) -
+            # "чтобы зарегистрироваться" тут в любом случае было бы враньём.
+            return
         await send_message(chat_id,
             "Ассаляму алейкум! 🕌\n"
             "Чтобы зарегистрироваться — напиши любое сообщение в своей учебной группе, "
@@ -1152,7 +1165,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 # Засчитать сохранённый первый отчёт если был
                 saved = get_pending_text(phone, group_id)
                 clear_pending_name(phone, group_id)
-                await _send_registered(chat_id, glang, new_name, phone)
+                if gtype == "prep":
+                    from core.prep import send_prep_onboarding_group_message, send_prep_onboarding_dm
+                    dm_ok_now = get_dm_ok_by_phone(phone)
+                    await send_prep_onboarding_group_message(chat_id, new_name, glang, dm_ok_now)
+                    if dm_ok_now:
+                        # 6 сообщений + 3 фото, ~5 сек - не блокируем очередь
+                        # этого же отправителя (bot.py: lock на chat_id+sender),
+                        # иначе подтверждение первого отчёта ниже придёт с
+                        # задержкой (найдено на ревью, 12.08.2026).
+                        asyncio.create_task(send_prep_onboarding_dm(phone, glang))
+                else:
+                    await _send_registered(chat_id, glang, new_name, phone)
                 for ap in SUPER_ADMIN_IDS:
                     await send_message(ap, "👤 " + new_name + " зарегистрировался в «" + (group["title"] or str(chat_id)) + "»")
                 if saved and saved.strip():

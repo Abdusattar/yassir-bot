@@ -975,6 +975,22 @@ def get_learning_group(phone):
         """, (phone,)).fetchone()
 
 
+def is_active_prep_student(phone):
+    """Уже зарегистрирован в подготовительной группе (12.08.2026, фикс: ЛС
+    /start у такого студента раньше показывало 'чтобы зарегистрироваться -
+    напиши в группе' - неверно, он уже зарегистрирован, просто не в
+    pro/relaxed, см. handlers.py)."""
+    with db() as c:
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? AND ug.role='student' AND ug.active=1 AND g.group_type='prep'
+            LIMIT 1
+        """, (phone,)).fetchone()
+    return row is not None
+
+
 def add_student(name, group_id, phone=None):
     """Найти или создать пользователя и добавить его в группу как студента."""
     with db() as c:

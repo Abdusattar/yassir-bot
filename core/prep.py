@@ -22,14 +22,22 @@
                         иначе дыра авторегистрации: следующим же сообщением
                         в этом чате студент молча вернётся активным (было
                         реальным инцидентом, см. wiki/prep_group.md).
-                        Дедлайн — 14 дней с joined_date, но если студент успел
-                        сдать хотя бы 1 отчёт (значит реально начал), даём ему
-                        +5 дней (до 19) — решение пользователя от 20.07.2026:
-                        не резать тех, кто уже втянулся, только за то, что не
-                        успел набрать все 5 дней ровно к 14-му дню.
+                        Дедлайн — 14 дней с joined_date + количество уже
+                        сданных ПОЛНЫХ дней (12.08.2026, решение пользователя:
+                        14 дней достаточно тому, кто реально хочет пройти;
+                        но если студент уже начал сдавать целые дни - каждый
+                        такой день продлевает дедлайн на 1, а не единоразовый
+                        бонус +5 за любую частичную сдачу, как было раньше
+                        (20.07.2026, закрыто как несовместимое со строгим
+                        счётом дней от 12.08 - см. project_prep_strict_day_count_fix
+                        в памяти). Максимум +4 дня, т.к. на 5 полных днях
+                        студент уже переходит в постоянную группу и в эту
+                        ветку не попадает.
 """
+import asyncio
 import logging
 from datetime import datetime
+from pathlib import Path
 
 from config import IS_FEMALE, SUPER_ADMIN_IDS
 from core.db import (
@@ -40,13 +48,18 @@ from core.db import (
     get_group_by_id, get_event_time, get_date,
 )
 from core.i18n import T, get_group_lang
-from core.tg import send_message, ban_member, unban_member, send_message_with_buttons, get_dm_start_link
+from core.tg import (
+    send_message, ban_member, unban_member, send_message_with_buttons,
+    get_dm_start_link, send_photo,
+)
 
 log = logging.getLogger(__name__)
 
+_ONBOARDING_DIR = Path(__file__).parent.parent / "knowledge"
+_ONBOARDING_DELAY = 1  # сек. между сообщениями онбординга - чтобы не выглядело спамом
+
 PREP_DAYS = 14
 PREP_MIN_DAYS = 5
-PREP_EXTENSION_DAYS = 5  # доп. дни к дедлайну, если студент сдал ≥1 отчёт
 
 # Кому лично уходит уведомление о выпускнике подготовительной — один
 # конкретный человек на профиль, не все супер-админы (решение 23.07.2026,
@@ -136,7 +149,13 @@ async def check_prep_students():
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "получил ссылку, но не вступил в группу",
                                        get_event_time(s["id"], group_id, "prep_juz_answer"))
         else:
-            deadline = PREP_DAYS + (PREP_EXTENSION_DAYS if days_done >= 1 else 0)
+            # Ещё не выполнил условие перехода. Напоминание "нажми Start" для
+            # dm_ok=0 отдельно тут не нужно - им уже занимается общий
+            # dm_connect_reminder (scheduler.py, пн и чт 08:00, все группы
+            # кроме Тадаббура) - свой канал тут дублировал бы то же
+            # сообщение в тот же день (12.08.2026, найдено при обсуждении
+            # с пользователем - не стали изобретать второй механизм).
+            deadline = PREP_DAYS + days_done  # каждый уже сданный полный день продлевает срок
             if elapsed < deadline:
                 continue
             _deactivate_from_prep(s["id"], group_id)
@@ -528,3 +547,75 @@ def _group_title(group_id):
     with db() as c:
         g = c.execute("SELECT title FROM groups WHERE id=?", (group_id,)).fetchone()
         return (g["title"] if g else None) or ""
+
+
+# ── Онбординг новичка подготовительной (12.08.2026) ─────────────────────────
+#
+# Регистрация в prep всегда шлёт короткое сообщение В ГРУППУ (заменяет общий
+# _send_registered для этого типа группы, handlers.py): если Start уже нажат
+# (dm_ok=1, редко - но возможно, если человек жал Start ещё до вступления
+# в группу или где-то раньше в системе) - подробный онбординг (6 сообщений
+# с методикой) уходит в личку сразу же. Если нет - группа получает ссылку
+# на Start, а подробности приходят в личку как только dm_ok реально
+# станет 1 - через уже существующий хук "личка только что открылась
+# впервые" (handlers.py, `if not was_dm_ok: ...`), без отдельной
+# таблицы-очереди и без поллинга (dm_ok меняется 0→1 ровно один раз в
+# жизни номера, так что хук сам гарантирует ровно одну отправку).
+#
+# Если студент так и не жмёт Start - напоминанием занимается уже
+# существующий общий `dm_connect_reminder` (scheduler.py, пн и чт 08:00,
+# все группы кроме Тадаббура) - отдельного канала специально для prep не
+# заводили, чтобы не дублировать то же сообщение в тот же день.
+
+
+async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok):
+    if dm_ok:
+        await send_message(chat_id, T("prep_onboarding_group_dm_ready", glang, name=name))
+    else:
+        link = await get_dm_start_link()
+        await send_message(chat_id, T(
+            "prep_onboarding_group_dm_needed", glang, name=name, link=link or "https://t.me/"
+        ))
+
+
+async def send_prep_onboarding_dm(phone, glang):
+    """Полная методика сдачи трёх заданий подготовительной, в личку,
+    6 сообщений подряд с реальными скриншотами студентов из knowledge/."""
+    await send_message(phone, T("prep_onboarding_intro", glang))
+    await asyncio.sleep(_ONBOARDING_DELAY)
+
+    await send_message(phone, T("prep_onboarding_m", glang))
+    await send_photo(phone, str(_ONBOARDING_DIR / "Заучивание.PNG"))
+    await asyncio.sleep(_ONBOARDING_DELAY)
+
+    await send_message(phone, T("prep_onboarding_r", glang))
+    await send_photo(phone, str(_ONBOARDING_DIR / "Повторение.PNG"))
+    await asyncio.sleep(_ONBOARDING_DELAY)
+
+    await send_message(phone, T("prep_onboarding_t", glang))
+    await send_photo(phone, str(_ONBOARDING_DIR / "Слова.PNG"))
+    await asyncio.sleep(_ONBOARDING_DELAY)
+
+    await send_message(phone, T("prep_onboarding_rules", glang))
+    await asyncio.sleep(_ONBOARDING_DELAY)
+
+    await send_message(phone, T("prep_onboarding_adab", glang))
+
+
+async def send_prep_onboarding_if_pending(phone):
+    """Вызывается из handlers.py ровно в момент, когда личка со студентом
+    открылась впервые (dm_ok 0→1). Если это активный студент подготовительной
+    - отправляет подробный онбординг. Если он не студент prep (или уже успел
+    получить онбординг напрямую при регистрации, см. handlers.py) - тихо
+    ничего не делает."""
+    with db() as c:
+        row = c.execute("""
+            SELECT g.lang FROM user_groups ug
+            JOIN groups g ON ug.group_id=g.id
+            WHERE ug.user_id=(SELECT id FROM users WHERE phone=?)
+              AND ug.role='student' AND ug.active=1 AND g.group_type='prep'
+            LIMIT 1
+        """, (phone,)).fetchone()
+    if not row:
+        return
+    await send_prep_onboarding_dm(phone, row["lang"] or "ru")

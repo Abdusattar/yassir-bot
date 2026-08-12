@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import aiohttp
 from config import TG_API, SHADOW_CHAT_IDS
 
@@ -65,6 +66,50 @@ async def send_message(chat_id, text, reply_to_message_id=None):
         return None  # в группу НЕ отправляем
 
     return await _raw_send(cid, text or "", reply_to_message_id=reply_to_message_id)
+
+
+async def _raw_send_photo(cid, photo_path, caption=None):
+    data = aiohttp.FormData()
+    data.add_field("chat_id", str(cid))
+    if caption:
+        data.add_field("caption", caption)
+    try:
+        with open(photo_path, "rb") as f:
+            data.add_field("photo", f, filename=os.path.basename(photo_path), content_type="image/png")
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    TG_API + "/sendPhoto", data=data,
+                    timeout=aiohttp.ClientTimeout(total=35)
+                ) as r:
+                    result = await r.json()
+                    if result and not result.get("ok"):
+                        log.error("sendPhoto failed: %s", result.get("description", result))
+                    return result
+    except Exception as e:
+        log.error("sendPhoto error: %s: %s", type(e).__name__, e)
+        return None
+
+
+async def send_photo(chat_id, photo_path, caption=None):
+    """caption ограничен 1024 символами Telegram - вызывающий код должен
+    укладываться сам, здесь не обрезаем и не проверяем."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+
+    if SHADOW_CHAT_IDS and str(chat_id).startswith("-"):
+        header = "👁 [shadow → " + str(chat_id) + "]:\n"
+        shadow_caption = header + (caption or "")
+        for observer in SHADOW_CHAT_IDS:
+            try:
+                obs_id = int(observer)
+            except (ValueError, TypeError):
+                obs_id = observer
+            await _raw_send_photo(obs_id, photo_path, shadow_caption)
+        return None
+
+    return await _raw_send_photo(cid, photo_path, caption)
 
 
 async def send_message_with_buttons(chat_id, text, buttons):
