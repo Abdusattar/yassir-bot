@@ -1,0 +1,16 @@
+{
+  "target_text": "mā nansakh min āyatin aw nunsihā nati bikhayrin min'hā aw mith'lihā alam taʿlam anna l-laha ʿalā kulli shayin qadīrun",
+  "missing_chars": [],
+  "target_len": 117,
+  "emission_shape": [
+    1,
+    1463,
+    40
+  ],
+  "aligned_shape": [
+    1,
+    1463
+  ],
+  "mean_score": -0.36799001693725586,
+  "ok": true
+}

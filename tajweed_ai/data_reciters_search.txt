@@ -1,0 +1,5 @@
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+RECITERS_METADATA rows: 22
+cols: ['arabic_name', 'moshaf_set_ids', 'english_name', 'country_code', 'id']
+{'arabic_name': 'مشاري راشد الفاسي', 'moshaf_set_ids': ['19.0'], 'english_name': 'Mishary Rashid Al-Fasi', 'country_code': 'KW', 'id': 19}

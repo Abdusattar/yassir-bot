@@ -1,0 +1,62 @@
+[
+  {
+    "word_ar": "مَا",
+    "expected_tr": "mā",
+    "decoded": "mā",
+    "match": true
+  },
+  {
+    "word_ar": "نَنْسَخْ",
+    "expected_tr": "nansakh",
+    "decoded": "nansakh",
+    "match": true
+  },
+  {
+    "word_ar": "مِنْ",
+    "expected_tr": "min",
+    "decoded": "min",
+    "match": true
+  },
+  {
+    "word_ar": "ءَايَةٍ",
+    "expected_tr": "āyatin",
+    "decoded": "āyatin",
+    "match": true
+  },
+  {
+    "word_ar": "أَوْ",
+    "expected_tr": "aw",
+    "decoded": "aw",
+    "match": true
+  },
+  {
+    "word_ar": "نُنْسِهَا",
+    "expected_tr": "nunsihā",
+    "decoded": "nunsihā",
+    "match": true
+  },
+  {
+    "word_ar": "نَأْتِ",
+    "expected_tr": "nati",
+    "decoded": "nati",
+    "match": true
+  },
+  {
+    "word_ar": "بِخَيْرٍ",
+    "expected_tr": "bikhayrin",
+    "decoded": "bikhayrin",
+    "match": true
+  },
+  {
+    "word_ar": "مِنْهَا",
+    "expected_tr": "min'hā",
+    "decoded": "min'hā",
+    "match": true
+  },
+  {
+    "word_ar": "أَوْ",
+    "expected_tr": "aw",
+    "decoded": "aw",
+    "match": true
+  }
+]

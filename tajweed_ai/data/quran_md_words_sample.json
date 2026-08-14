@@ -1,0 +1,152 @@
+[
+  {
+    "surah_id": 1,
+    "ayah_id": 1,
+    "word_id": "001",
+    "word_index": 1,
+    "word_ar": "بِسْمِ",
+    "word_en": "In (the) name",
+    "word_tr": "bis'mi",
+    "ayah_ar": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 1,
+    "word_id": "002",
+    "word_index": 2,
+    "word_ar": "اللَّهِ",
+    "word_en": "(of) Allah",
+    "word_tr": "l-lahi",
+    "ayah_ar": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 1,
+    "word_id": "003",
+    "word_index": 3,
+    "word_ar": "الرَّحْمَنِ",
+    "word_en": "the Most Gracious",
+    "word_tr": "l-raḥmāni",
+    "ayah_ar": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 1,
+    "word_id": "004",
+    "word_index": 4,
+    "word_ar": "الرَّحِيمِ",
+    "word_en": "the Most Merciful",
+    "word_tr": "l-raḥīmi",
+    "ayah_ar": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 2,
+    "word_id": "001",
+    "word_index": 1,
+    "word_ar": "الْحَمْدُ",
+    "word_en": "All praises and thanks",
+    "word_tr": "al-ḥamdu",
+    "ayah_ar": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 2,
+    "word_id": "002",
+    "word_index": 2,
+    "word_ar": "لِلَّهِ",
+    "word_en": "(be) to Allah",
+    "word_tr": "lillahi",
+    "ayah_ar": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 2,
+    "word_id": "003",
+    "word_index": 3,
+    "word_ar": "رَبِّ",
+    "word_en": "(the) Lord",
+    "word_tr": "rabbi",
+    "ayah_ar": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 2,
+    "word_id": "004",
+    "word_index": 4,
+    "word_ar": "الْعَالَمِينَ",
+    "word_en": "(of all) the worlds",
+    "word_tr": "l-ʿālamīna",
+    "ayah_ar": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 3,
+    "word_id": "001",
+    "word_index": 1,
+    "word_ar": "الرَّحْمَنِ",
+    "word_en": "The Most Gracious",
+    "word_tr": "al-raḥmāni",
+    "ayah_ar": "الرَّحْمَٰنِ الرَّحِيمِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 3,
+    "word_id": "002",
+    "word_index": 2,
+    "word_ar": "الرَّحِيمِ",
+    "word_en": "the Most Merciful",
+    "word_tr": "l-raḥīmi",
+    "ayah_ar": "الرَّحْمَٰنِ الرَّحِيمِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 4,
+    "word_id": "001",
+    "word_index": 1,
+    "word_ar": "مَالِكِ",
+    "word_en": "Master",
+    "word_tr": "māliki",
+    "ayah_ar": "مَالِكِ يَوْمِ الدِّينِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 4,
+    "word_id": "002",
+    "word_index": 2,
+    "word_ar": "يَوْمِ",
+    "word_en": "(of the) Day",
+    "word_tr": "yawmi",
+    "ayah_ar": "مَالِكِ يَوْمِ الدِّينِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 4,
+    "word_id": "003",
+    "word_index": 3,
+    "word_ar": "الدِّينِ",
+    "word_en": "(of) [the] Judgment",
+    "word_tr": "l-dīni",
+    "ayah_ar": "مَالِكِ يَوْمِ الدِّينِ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 5,
+    "word_id": "001",
+    "word_index": 1,
+    "word_ar": "إِيَّاكَ",
+    "word_en": "You Alone",
+    "word_tr": "iyyāka",
+    "ayah_ar": "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ"
+  },
+  {
+    "surah_id": 1,
+    "ayah_id": 5,
+    "word_id": "002",
+    "word_index": 2,
+    "word_ar": "نَعْبُدُ",
+    "word_en": "we worship",
+    "word_tr": "naʿbudu",
+    "ayah_ar": "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ"
+  }
+]

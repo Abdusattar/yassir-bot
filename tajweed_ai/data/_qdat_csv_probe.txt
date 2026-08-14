@@ -1,0 +1,25 @@
+shape: (1510, 8)
+columns: ['Unnamed: 0', 'title', 'Separate tide', 'The tight noon', 'Concealment', 'Target', 'Age', 'Gender']
+
+   Unnamed: 0  title  Separate tide  The tight noon  Concealment  Target  Age  Gender
+0  14??? ????   S0_1              0             1.0            1       0   14       1
+1         NaN   S0_2              0             1.0            1       0   14       1
+2         NaN   S0_3              0             1.0            1       0   14       1
+3         NaN   S0_4              0             1.0            1       0   14       1
+4         NaN   S0_5              0             1.0            1       0   14       1
+5         NaN   S0_6              0             1.0            1       0   14       1
+6         NaN   S0_7              0             1.0            1       0   14       1
+7         NaN   S0_8              0             1.0            1       0   14       1
+8         NaN   S0_9              0             1.0            1       0   14       1
+9         NaN  S0_10              0             1.0            1       0   14       1
+
+dtypes:
+Unnamed: 0            str
+title                 str
+Separate tide       int64
+The tight noon    float64
+Concealment         int64
+Target              int64
+Age                 int64
+Gender              int64
+dtype: object

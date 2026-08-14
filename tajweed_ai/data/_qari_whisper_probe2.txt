@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "<string>", line 13, in <module>
+  File "C:\Users\Admi\AppData\Local\Programs\Python\Python311\Lib\site-packages\transformers\models\whisper\generation_whisper.py", line 682, in generate
+    self._set_language_and_task(
+  File "C:\Users\Admi\AppData\Local\Programs\Python\Python311\Lib\site-packages\transformers\models\whisper\generation_whisper.py", line 1451, in _set_language_and_task
+    raise ValueError(
+ValueError: The generation config is outdated and is thus not compatible with the `language` argument to `generate`. Please update the generation config as per the instructions https://github.com/huggingface/transformers/issues/25084#issuecomment-1664398224
+loading...
+loaded

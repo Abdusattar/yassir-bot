@@ -25,3 +25,4 @@ audio/
 
 # Личные локальные настройки Claude Code
 .claude/settings.local.json
+.aider*

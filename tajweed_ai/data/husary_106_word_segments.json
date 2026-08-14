@@ -1,0 +1,154 @@
+[
+  {
+    "word_ar": "مَا",
+    "expected_tr": "mā",
+    "decoded_segment": "na",
+    "match": false,
+    "start_sec": 1.081,
+    "end_sec": 1.221
+  },
+  {
+    "word_ar": "نَنْسَخْ",
+    "expected_tr": "nansakh",
+    "decoded_segment": "nasah",
+    "match": false,
+    "start_sec": 1.761,
+    "end_sec": 3.263
+  },
+  {
+    "word_ar": "مِنْ",
+    "expected_tr": "min",
+    "decoded_segment": "n",
+    "match": false,
+    "start_sec": 3.543,
+    "end_sec": 3.823
+  },
+  {
+    "word_ar": "ءَايَةٍ",
+    "expected_tr": "āyatin",
+    "decoded_segment": "yahi",
+    "match": false,
+    "start_sec": 4.223,
+    "end_sec": 5.384
+  },
+  {
+    "word_ar": "أَوْ",
+    "expected_tr": "aw",
+    "decoded_segment": "a",
+    "match": false,
+    "start_sec": 5.885,
+    "end_sec": 6.065
+  },
+  {
+    "word_ar": "نُنْسِهَا",
+    "expected_tr": "nunsihā",
+    "decoded_segment": "nūsi",
+    "match": false,
+    "start_sec": 6.485,
+    "end_sec": 7.926
+  },
+  {
+    "word_ar": "نَأْتِ",
+    "expected_tr": "nati",
+    "decoded_segment": "nati",
+    "match": true,
+    "start_sec": 8.487,
+    "end_sec": 9.247
+  },
+  {
+    "word_ar": "بِخَيْرٍ",
+    "expected_tr": "bikhayrin",
+    "decoded_segment": "likhayri",
+    "match": false,
+    "start_sec": 9.367,
+    "end_sec": 10.729
+  },
+  {
+    "word_ar": "مِنْهَا",
+    "expected_tr": "min'hā",
+    "decoded_segment": "min'ha",
+    "match": false,
+    "start_sec": 11.509,
+    "end_sec": 12.25
+  },
+  {
+    "word_ar": "أَوْ",
+    "expected_tr": "aw",
+    "decoded_segment": "",
+    "match": false,
+    "start_sec": 14.191,
+    "end_sec": 14.231
+  },
+  {
+    "word_ar": "مِثْلِهَا",
+    "expected_tr": "mith'lihā",
+    "decoded_segment": "if'lia",
+    "match": false,
+    "start_sec": 14.511,
+    "end_sec": 15.572
+  },
+  {
+    "word_ar": "أَلَمْ",
+    "expected_tr": "alam",
+    "decoded_segment": "alam",
+    "match": true,
+    "start_sec": 17.674,
+    "end_sec": 18.034
+  },
+  {
+    "word_ar": "تَعْلَمْ",
+    "expected_tr": "taʿlam",
+    "decoded_segment": "tarla",
+    "match": false,
+    "start_sec": 18.415,
+    "end_sec": 19.335
+  },
+  {
+    "word_ar": "أَنَّ",
+    "expected_tr": "anna",
+    "decoded_segment": "l-na",
+    "match": false,
+    "start_sec": 19.836,
+    "end_sec": 20.997
+  },
+  {
+    "word_ar": "اللَّهَ",
+    "expected_tr": "l-laha",
+    "decoded_segment": "ḍa",
+    "match": false,
+    "start_sec": 21.157,
+    "end_sec": 21.637
+  },
+  {
+    "word_ar": "عَلَى",
+    "expected_tr": "ʿalā",
+    "decoded_segment": "āla",
+    "match": false,
+    "start_sec": 22.158,
+    "end_sec": 22.938
+  },
+  {
+    "word_ar": "كُلِّ",
+    "expected_tr": "kulli",
+    "decoded_segment": "urr",
+    "match": false,
+    "start_sec": 23.519,
+    "end_sec": 24.259
+  },
+  {
+    "word_ar": "شَيْءٍ",
+    "expected_tr": "shayin",
+    "decoded_segment": "jayhin",
+    "match": false,
+    "start_sec": 24.459,
+    "end_sec": 25.5
+  },
+  {
+    "word_ar": "قَدِيرٌ",
+    "expected_tr": "qadīrun",
+    "decoded_segment": "khadīd",
+    "match": false,
+    "start_sec": 26.441,
+    "end_sec": 28.383
+  }
+]

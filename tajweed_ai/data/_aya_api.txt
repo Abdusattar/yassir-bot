@@ -1,0 +1,3 @@
+['aya_idx', 'bismillah_imlaey_key', 'bismillah_map_key', 'bismillah_uthmani_key', 'decoding_cache', 'get', 'get_ayat_after', 'get_by_imlaey_words', 'get_formatted_rasm_map', 'get_start_imlaey_word_idx', 'imlaey_key', 'imlaey_to_uthmani', 'is_last', 'istiaatha_imlaey', 'istiaatha_uthmani', 'join_prefix', 'map_key', 'quran_dict', 'quran_path', 'save_quran_dict', 'set', 'set_new', 'set_rasm_map', 'start_imlaey_word_idx', 'step', 'step_by_imlaey_words', 'sura_idx', 'sura_name_key', 'uthmani_key']
+uthmani attr: False
+'مَا نَنسَخْ مِنْ ءَايَةٍ أَوْ نُنسِهَا نَأْتِ بِخَيْرٍۢ مِّنْهَآ أَوْ مِثْلِهَآ أَلَمْ تَعْلَمْ أَنَّ ٱللَّهَ عَلَىٰ كُلِّ شَىْءٍۢ قَدِيرٌ'

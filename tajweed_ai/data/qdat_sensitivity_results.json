@@ -1,0 +1,548 @@
+[
+  {
+    "title": "S63_10",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 12.42
+  },
+  {
+    "title": "S124_1",
+    "true_madd": 0,
+    "true_ghunnah": 0,
+    "true_ikhfa": 0,
+    "pred_madd_len": 2,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 5.9
+  },
+  {
+    "title": "S40_5",
+    "true_madd": 0,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 2,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 5.7
+  },
+  {
+    "title": "S64_5",
+    "true_madd": 0,
+    "true_ghunnah": 0,
+    "true_ikhfa": 0,
+    "pred_madd_len": 2,
+    "pred_ghunnah": true,
+    "pred_ikhfa": false,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": false,
+        "predicted_phonemes": null,
+        "expected_phonemes": null
+      }
+    },
+    "duration_sec": 3.8
+  },
+  {
+    "title": "S105_5",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 10.6115625
+  },
+  {
+    "title": "S126_9",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 13.58
+  },
+  {
+    "title": "S19_5",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 11.3
+  },
+  {
+    "title": "S117_8",
+    "true_madd": 0,
+    "true_ghunnah": 1,
+    "true_ikhfa": 0,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 9.12
+  },
+  {
+    "title": "S78_1",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 8.86
+  },
+  {
+    "title": "S119_8",
+    "true_madd": 0,
+    "true_ghunnah": 0,
+    "true_ikhfa": 0,
+    "pred_madd_len": 2,
+    "pred_ghunnah": false,
+    "pred_ikhfa": false,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "not_maghnoon"
+      },
+      "ikhfa": {
+        "aligned": false,
+        "predicted_phonemes": null,
+        "expected_phonemes": null
+      }
+    },
+    "duration_sec": 3.42
+  },
+  {
+    "title": "S153_7",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 11.1
+  },
+  {
+    "title": "S33_2",
+    "true_madd": 0,
+    "true_ghunnah": 0,
+    "true_ikhfa": 0,
+    "pred_madd_len": 2,
+    "pred_ghunnah": true,
+    "pred_ikhfa": false,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": false,
+        "predicted_phonemes": null,
+        "expected_phonemes": null
+      }
+    },
+    "duration_sec": 4.14
+  },
+  {
+    "title": "S95_6",
+    "true_madd": 0,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 2,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 10.62
+  },
+  {
+    "title": "S86_3",
+    "true_madd": 0,
+    "true_ghunnah": 0,
+    "true_ikhfa": 0,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": false,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": false,
+        "predicted_phonemes": null,
+        "expected_phonemes": null
+      }
+    },
+    "duration_sec": 7.7786875
+  },
+  {
+    "title": "S142_8",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 9.4
+  },
+  {
+    "title": "S66_8",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 10.48
+  },
+  {
+    "title": "S100_9",
+    "true_madd": 1,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 12.8406875
+  },
+  {
+    "title": "S50_8",
+    "true_madd": 0,
+    "true_ghunnah": 0,
+    "true_ikhfa": 0,
+    "pred_madd_len": 2,
+    "pred_ghunnah": true,
+    "pred_ikhfa": false,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": false,
+        "predicted_phonemes": null,
+        "expected_phonemes": null
+      }
+    },
+    "duration_sec": 8.3591875
+  },
+  {
+    "title": "S107_3",
+    "true_madd": 0,
+    "true_ghunnah": 1,
+    "true_ikhfa": 1,
+    "pred_madd_len": 4,
+    "pred_ghunnah": true,
+    "pred_ikhfa": true,
+    "signals": {
+      "madd_munfasil": {
+        "aligned": true,
+        "predicted_phonemes": "اااا",
+        "expected_phonemes": "اااا"
+      },
+      "ghunnah": {
+        "aligned": true,
+        "predicted_phonemes": "ننننَ",
+        "expected_phonemes": "ننننَ",
+        "ghonna": "maghnoon"
+      },
+      "ikhfa": {
+        "aligned": true,
+        "predicted_phonemes": "ںںں",
+        "expected_phonemes": "ںںں",
+        "ghonna": "maghnoon"
+      }
+    },
+    "duration_sec": 10.2186875
+  }
+]

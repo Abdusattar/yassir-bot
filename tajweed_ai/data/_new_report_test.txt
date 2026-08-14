@@ -1,0 +1,18 @@
+`generation_config` default values have been modified to match model-specific defaults: {'begin_suppress_tokens': [220, 50257]}. If this is not desired, please set these values explicitly.
+The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
+A custom logits processor of type <class 'transformers.generation.logits_process.SuppressTokensAtBeginLogitsProcessor'> has been passed to `.generate()`, but it was also created in `.generate()`, given its parameterization. The custom <class 'transformers.generation.logits_process.SuppressTokensAtBeginLogitsProcessor'> will take precedence. Please check the docstring of <class 'transformers.generation.logits_process.SuppressTokensAtBeginLogitsProcessor'> to see related `.generate()` flags.
+ayah: 77 score: 86.11111111111111
+
+🎙 Теневая проверка таджвида (пилот, R&D)
+Студент: Сатар (2026-07-23T19:15:59)
+Найденный аят: 2:77 — أَوَلَا يَعْلَمُونَ أَنَّ ٱللَّهَ يَعْلَمُ مَا يُسِرُّونَ وَمَا يُعْلِنُونَ
+Уверенность определения аята: 86%
+Сырая ASR-транскрипция (для сверки, могут быть свои ошибки распознавания): أَوَلَا يَظْلَمُونَ أَنَّ اللَّهَ يَظْلَمُوا مَا يُسَّرُّونَ وَمَا يُغْلِنُونَ وَمِنْهُمْ
+
+🔎 Возможно, стоит перепроверить произношение в словах:
+  • يَعْلَمُونَ
+  • يَعْلَمُ
+  • يُسِرُّونَ
+  • يُعْلِنُونَ
+
+(экспериментальная проверка, гунна не проверяется — её сигнал ненадёжен; не замена устаза/проверяющего)

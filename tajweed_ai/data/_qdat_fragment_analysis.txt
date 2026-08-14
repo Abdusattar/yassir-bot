@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "<string>", line 11, in <module>
+  File "C:\Users\Admi\AppData\Local\Programs\Python\Python311\Lib\site-packages\quran_transcript\phonetics\phonetizer.py", line 32, in quran_phonetizer
+    sifat = process_sifat(
+            ^^^^^^^^^^^^^^
+  File "C:\Users\Admi\AppData\Local\Programs\Python\Python311\Lib\site-packages\quran_transcript\phonetics\sifa.py", line 314, in process_sifat
+    alif_state = alif_tafkheem_and_tarqeeq[alif_idx]
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+IndexError: list index out of range

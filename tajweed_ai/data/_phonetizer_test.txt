@@ -1,0 +1,4 @@
+phonemes: مَاانَںںںسَخمِنءَاايَتِنءَونُںںںسِهَاانَءتِبِخَيرِممممِنهَااءَومِثلِهَااءَلَمتَعلَمءَننننَللَااهَعَلَااكُللِشَيءِںںںقَدِۦۦر
+n sifat: 63
+sifat[0]: phonemes='مَ' hams_or_jahr='jahr' shidda_or_rakhawa='between' tafkheem_or_taqeeq='moraqaq' itbaq='monfateh' safeer='no_safeer' qalqla='not_moqalqal' tikraar='not_mokarar' tafashie='not_motafashie' istitala='not_mostateel' ghonna='maghnoon'
+sifat[0] type: <class 'quran_transcript.phonetics.sifa.SifaOutput'>

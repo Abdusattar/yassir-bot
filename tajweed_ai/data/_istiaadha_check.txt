@@ -1,0 +1,3 @@
+istiaatha_uthmani: أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
+get() attrs: ['aya_idx', 'bismillah_imlaey', 'bismillah_map', 'bismillah_uthmani', 'get_formatted_rasm_map', 'imlaey', 'imlaey_words', 'istiaatha_imlaey', 'istiaatha_uthmani', 'num_ayat_in_sura', 'rasm_map', 'sura_idx', 'sura_name', 'uthmani', 'uthmani_words']
+no bismillah attr on get() result: 'AyaFormat' object has no attribute 'bismillah'

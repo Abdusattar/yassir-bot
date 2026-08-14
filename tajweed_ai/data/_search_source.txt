@@ -1,0 +1,125 @@
+def search(
+    text: str,
+    start_aya: Aya = Aya(1, 1),
+    window: int = 2,
+    suffix=" ",
+    **kwargs,
+) -> list[SearchItem]:
+    """searches the Holy Quran of Imlaey script to match the given text
+
+    searches the Holy quran for a given Imlaey text of specifc window arround
+    the `start_aya` applying some filters of the search string
+
+    Example:
+        >> results = search('الحمد لله',
+            start_aya=Aya(1, 1), window=4, ignore_tashkeel=True)
+        >> results
+    Args:
+        text (str): the text to search with (expected with imlaey script)
+
+        start_aya (Aya): The Pivot Aya to set Search with.
+
+        winodw (int): the search winodw:
+        [start_aya - winowd //2, start_aya + winodw //2]
+
+        suffix (str): the suffix that sperate the quran words either imlaey or uthmani
+        the rest of **kwargs are from normalize_aya function below
+    Returns:
+        list[SearchItem]: Every SearchItem is:
+        * start_aya (Aya): the start aya of the first search
+
+        * num_aya: (int): number of ayat that is included in the search item
+
+        * has_bismillah (bool): True if the search item has bismliilah
+        (not the Aya in El-Fatiha of in the Alnaml)
+
+        * has_istiaatha (bool): True if the search item has istiaatha
+
+        * imlaey_word_span (WordSpan):
+        start: the start word idx of the imlaey scriptin thestart_aya
+        end: the end imlaey_idx of the imlaey (start_aya + num_ayat - 1)
+
+        * uthmani_script (str) the equvilent uthmani script of the given imlaey script
+        NOTE: if istiaatha is only will return:
+        start_aya=None, num_ayat=None, imlaey_word_span=None, has_bismillah=None
+    """
+    normalized_text: str = normalize_aya(text, remove_spaces=True, **kwargs)
+    if normalized_text == "":
+        return []
+
+    # Prepare ayat within [-window/2, window/2]
+    loop_aya = start_aya.step(-window // 2)
+
+    # ----------------------------------
+    # Checking for Itiaatha
+    # ----------------------------------
+    # NOTE: Assuming Istiaatha is at the first only
+    has_istiaatha = False
+    istiaatha_imlaey_words = normalize_aya(
+        start_aya.get().istiaatha_imlaey,
+        remove_spaces=False,
+        **kwargs,
+    ).split(suffix)
+    istiaatha_imlaey_str = "".join(istiaatha_imlaey_words)
+    re_span = re.search(istiaatha_imlaey_str, normalized_text)
+    if re_span:
+        normalized_text = normalized_text[re_span.span()[1] :]
+        has_istiaatha = True
+        if normalized_text == "":
+            # return istiaatha only
+            return [
+                SearchItem(
+                    start_aya=None,
+                    num_ayat=0,
+                    imlaey_word_span=None,
+                    has_bismillah=False,
+                    has_istiaatha=has_istiaatha,
+                    uthmani_script=start_aya.get().istiaatha_uthmani,
+                )
+            ]
+
+    found = []
+    for bismillah_flag in [False, True]:
+        aya_imlaey_words, aya_imlaey_str = _get_imlaey_words_and_str(
+            start_aya=loop_aya,
+            window=window,
+            suffix=suffix,
+            include_bismillah=bismillah_flag,
+            **kwargs,
+        )
+
+        for re_search in re.finditer(normalized_text, aya_imlaey_str):
+            if re_search is not None:
+                span = _get_words_span(
+                    start=re_search.span()[0],
+                    end=re_search.span()[1],
+                    words_list=aya_imlaey_words,
+                )
+                if span is not None:
+                    start_vertex, end_vertex = span
+                    found.append(
+                        SearchItem(
+                            start_aya=loop_aya.step(start_vertex.aya_idx),
+                            num_ayat=end_vertex.aya_idx - start_vertex.aya_idx + 1,
+                            imlaey_word_span=WordSpan(
+                                start=start_vertex.word_idx, end=end_vertex.word_idx
+                            ),
+                            has_bismillah=bismillah_flag,
+                            has_istiaatha=has_istiaatha,
+                            uthmani_script="",
+                        )
+                    )
+                    found[-1].uthmani_script = _get_uthmani_of_result_item(
+                        found[-1], suffix=suffix
+                    )
+        if found != []:
+            # add istiaatah uthamni script
+            if has_istiaatha:
+                for item in found:
+                    item.uthmani_script = (
+                        start_aya.get().istiaatha_uthmani + suffix + item.uthmani_script
+                    )
+            return found
+
+    return found
+

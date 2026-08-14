@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+  File "C:\Users\Admi\AppData\Local\Programs\Python\Python311\Lib\dataclasses.py", line 1246, in fields
+    raise TypeError('must be called with a dataclass type or instance') from None
+TypeError: must be called with a dataclass type or instance
+QuranPhoneticScriptOutput fields: ['phonemes', 'sifat', 'mappings']
