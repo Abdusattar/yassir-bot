@@ -57,6 +57,16 @@ async def main():
     if me and me.get("ok"):
         username = me["result"].get("username", "?")
         log.info("Бот запущен: @%s  [profile=%s]", username, PROFILE)
+        # Меню команд Telegram (кнопка "/" рядом с полем ввода) - имя
+        # команды технически латиницей (ограничение Telegram), но описание
+        # в меню на русском, чтобы находили не зная английского (17.08.2026).
+        await tg_call("setMyCommands", {
+            "commands": [
+                {"command": "invite", "description": "Ссылка для друга — позвать к Корану"},
+            ],
+            "scope": {"type": "all_private_chats"},
+            "language_code": "ru",
+        })
     else:
         log.error("Не удалось подключиться к Telegram. Проверь токен.")
         return

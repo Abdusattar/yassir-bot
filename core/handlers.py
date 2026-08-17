@@ -819,6 +819,19 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # отправляется только первый экран, а не весь поток - 13.08.2026).
             asyncio.create_task(send_prep_onboarding_if_pending(phone))
 
+        # ── Ссылка для друга (17.08.2026) - для ВСЕХ в личке, не только
+        # студентов: устаз тоже может захотеть переслать другу, а он же и
+        # сам студент. Даёт ссылку на подготовительную (единая точка входа
+        # новых людей) - та же, что в invite_friend_broadcast.
+        if text == "/invite":
+            prep = get_prep_group()
+            link = prep["invite_link"] if prep and prep["invite_link"] else ""
+            if link:
+                await send_message(chat_id, T("dm_get_invite_link", "ru", link=link))
+            else:
+                await send_message(chat_id, "Ссылка пока не настроена, спроси устаза 🤲")
+            return
+
         # ── Анкета "откуда и сколько лет" (13.08.2026, окно 17.08.2026) ────
         # Команды (/help и т.п.) не считаем ответом - анкета просто ждёт
         # следующее обычное сообщение. Перехватываем только если сообщение
