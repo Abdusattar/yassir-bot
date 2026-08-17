@@ -12,6 +12,7 @@ from core.db import (
     get_survey_stage,
     save_survey_location, save_survey_age, survey_answer_in_window, mark_dm_ok_by_phone, db,
     add_group_admin, get_now,
+    has_any_group_history, save_dm_registration_name,
 )
 
 
@@ -481,3 +482,76 @@ def test_get_users_due_for_survey_nudge(test_db):
     start_survey("700119")
     phones = [r["phone"] for r in get_users_due_for_survey_nudge()]
     assert "700119" not in phones
+
+
+# ── DM-регистрация нового человека (17.08.2026) ─────────────────────────────────
+
+def test_has_any_group_history(test_db):
+    save_group("-100796", "Группа Х")
+    g = get_group("-100796")
+    add_student("Хасан", g["id"], phone="700123")
+    assert has_any_group_history("700123") is True
+    assert has_any_group_history("700999") is False
+
+
+def test_save_dm_registration_name_simple(test_db):
+    """Нет предварительно добавленного тёзки - просто ставим имя на
+    строку, которую создал mark_dm_ok_by_phone."""
+    mark_dm_ok_by_phone("700124")
+    save_dm_registration_name("700124", "Азамат")
+    with db() as c:
+        row = c.execute("SELECT name, phone, dm_ok FROM users WHERE phone=?", ("700124",)).fetchone()
+    assert row["name"] == "Азамат"
+    assert row["dm_ok"] == 1
+
+
+def test_save_dm_registration_name_merges_with_preadded_student(test_db):
+    """Устаз уже добавил "Азамат" через /add (phone IS NULL, есть в группе).
+    Тот же Азамат потом жмёт новую Start-ссылку и называет своё имя -
+    должен связаться с уже существующей записью, а не создать вторую
+    личность (17.08.2026, поймано advisor до коммита)."""
+    save_group("-100797", "Группа Ц")
+    g = get_group("-100797")
+    preadded_uid = add_student("Азамат", g["id"], phone=None)
+
+    mark_dm_ok_by_phone("700125")
+    save_dm_registration_name("700125", "Азамат")
+
+    with db() as c:
+        # Заглушка (name='', phone='700125') не должна остаться отдельной строкой
+        stub = c.execute("SELECT * FROM users WHERE phone=? AND name=''", ("700125",)).fetchone()
+        assert stub is None
+
+        merged = c.execute("SELECT * FROM users WHERE id=?", (preadded_uid,)).fetchone()
+        assert merged["phone"] == "700125"
+        assert merged["name"] == "Азамат"
+
+        # Только одна строка с этим телефоном, не две
+        count = c.execute("SELECT count(*) as n FROM users WHERE phone=?", ("700125",)).fetchone()["n"]
+        assert count == 1
+
+    # Уже привязан к группе (Group Ц) со времён /add - has_any_group_history
+    # должен это видеть, чтобы дальше не предлагать подготовительную заново.
+    assert has_any_group_history("700125") is True
+
+
+def test_save_dm_registration_name_no_unique_conflict_if_stub_already_named(test_db):
+    """Если строка-заглушка на этом телефоне почему-то уже не пустая (гонка
+    / неожиданное состояние) - DELETE не находит её, и код не должен потом
+    упасть на UNIQUE(phone) при попытке привязать тот же телефон к
+    найденной по имени /add-записи (17.08.2026, поймано advisor)."""
+    save_group("-100798", "Группа Ч")
+    g = get_group("-100798")
+    add_student("Азамат", g["id"], phone=None)
+
+    mark_dm_ok_by_phone("700126")
+    with db() as c:
+        c.execute("UPDATE users SET name='Уже-Не-Пусто' WHERE phone=?", ("700126",))
+
+    save_dm_registration_name("700126", "Азамат")
+
+    with db() as c:
+        count = c.execute("SELECT count(*) as n FROM users WHERE phone=?", ("700126",)).fetchone()["n"]
+        row = c.execute("SELECT name FROM users WHERE phone=?", ("700126",)).fetchone()
+    assert count == 1
+    assert row["name"] == "Азамат"

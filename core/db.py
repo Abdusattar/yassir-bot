@@ -2220,7 +2220,7 @@ _GREETING_PATTERN = re.compile(
 )
 
 
-def _looks_like_greeting(text):
+def looks_like_greeting(text):
     """Ответ на вопрос про локацию - это просто рефлекторное приветствие в
     ответ на "Ассаляму алейкум" в начале вопроса, а не попытка ответить
     (17.08.2026, найдено на реальных ответах - 3 из первых 10 ответили
@@ -2240,7 +2240,7 @@ def save_survey_location(phone, text):
     with db() as c:
         row = c.execute("SELECT survey_stage FROM users WHERE phone=?", (phone,)).fetchone()
         is_retry = bool(row and row["survey_stage"] == "location_retry")
-        if _looks_like_greeting(text) and not is_retry:
+        if looks_like_greeting(text) and not is_retry:
             c.execute(
                 "UPDATE users SET survey_location=?, survey_stage='location_retry', "
                 "survey_stage_at=datetime('now') WHERE phone=?",
@@ -2314,6 +2314,49 @@ def survey_answer_in_window(phone, hours=24):
             "FROM users WHERE phone=?", (phone,)
         ).fetchone()
     return bool(row and row["hours_passed"] is not None and row["hours_passed"] <= hours)
+
+
+# ── DM-регистрация нового человека (17.08.2026, фаза 1 новой воронки) ──────────
+#
+# Совсем новый человек нажимает Start-ссылку (личка, до вступления в любую
+# группу) - бот спрашивает только имя, потом даёт ссылку на подготовительную.
+# Откуда/возраст остаются на своём месте - анкета через 2 дня после перевода
+# в постоянную группу (get_users_due_for_survey выше), это разные этапы
+# воронки, не конкурируют. За флагом bot_settings["dm_registration_enabled"].
+
+def has_any_group_history(phone):
+    """Хоть раз состоял в какой-то группе (активно или нет). Отличает
+    совсем нового человека (безопасно повторно слать ссылку на
+    подготовительную) от, например, уже провалившего prep и осевшего в
+    Тадаббуре - ему НЕ надо снова предлагать подготовительную."""
+    with db() as c:
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? LIMIT 1
+        """, (phone,)).fetchone()
+    return row is not None
+
+
+def save_dm_registration_name(phone, name):
+    """Сохраняет имя, полученное через DM-регистрацию. Если устаз уже
+    предварительно добавил такого же по имени через /add Имя (запись с
+    phone IS NULL) - связываем с ней вместо создания второй личности (тот
+    же паттерн дедупа, что в add_student), убирая временную
+    запись-заглушку (её создаёт mark_dm_ok_by_phone: name='', тот же
+    phone - до слияния оставлять нельзя, phone UNIQUE)."""
+    with db() as c:
+        unlinked = c.execute(
+            "SELECT id FROM users WHERE LOWER(name)=LOWER(?) AND phone IS NULL",
+            (name,)
+        ).fetchone()
+        if unlinked:
+            deleted = c.execute("DELETE FROM users WHERE phone=? AND name=''", (phone,))
+            if deleted.rowcount == 1:
+                c.execute("UPDATE users SET phone=?, dm_ok=1 WHERE id=?", (phone, unlinked["id"]))
+                return
+            # Заглушка уже не пустая (гонка/неожиданное состояние) - не рискуем
+            # UNIQUE(phone) конфликтом, просто ставим имя как в обычном случае.
+        c.execute("UPDATE users SET name=? WHERE phone=?", (name, phone))
 
 
 # ── Formatting ─────────────────────────────────────────────────────────────────

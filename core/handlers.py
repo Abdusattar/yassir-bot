@@ -26,7 +26,8 @@ from core.db import (
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
-    get_missing_students, get_date, db,
+    get_missing_students, get_date, db, get_setting, get_prep_group,
+    has_any_group_history, save_dm_registration_name, looks_like_greeting,
     get_or_create_attendance_confirm, add_attendance_confirm_student, get_attendance_confirm_by_id,
     save_voice_submission, mark_voice_reviewed, save_umar_review,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
@@ -1039,6 +1040,39 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # относительно этого return, но она гарантированно уйдёт) -
             # "чтобы зарегистрироваться" тут в любом случае было бы враньём.
             return
+
+        # ── DM-регистрация нового человека (17.08.2026, фаза 1 новой ───────
+        # воронки) - за флагом, выключено по умолчанию, тот же паттерн что
+        # profile_survey_enabled. mark_dm_ok_by_phone (выше, в первом
+        # `if not is_group:`) уже гарантирует строку в users - reg_user не
+        # должен быть None, но проверяем явно (users.active сейчас всегда 1,
+        # но код не должен на это молча полагаться).
+        if get_setting("dm_registration_enabled") == "1":
+            reg_user = find_user_by_phone(phone)
+            if reg_user and reg_user["name"] == "":
+                if not was_dm_ok:
+                    await send_message(chat_id, T("dm_reg_ask_name", "ru"))
+                elif text and not text.startswith("/"):
+                    if looks_like_greeting(text):
+                        await send_message(chat_id, T("dm_reg_ask_name_again", "ru"))
+                    else:
+                        name = await ai.extract_name(text) or await ai.extract_name(sender_name)
+                        if not name:
+                            await send_message(chat_id, T("dm_reg_ask_name_again", "ru"))
+                        else:
+                            save_dm_registration_name(phone, name)
+                            prep = get_prep_group()
+                            link = prep["invite_link"] if prep and prep["invite_link"] else ""
+                            await send_message(chat_id, T("dm_reg_send_prep_link", "ru", name=name, link=link))
+                return
+            if reg_user and reg_user["name"] and not has_any_group_history(phone):
+                # DM-регистрация уже пройдена (имя есть), но в подготовительную
+                # ещё не вступил - напоминаем ссылку вместо "напиши в группе"
+                prep = get_prep_group()
+                link = prep["invite_link"] if prep and prep["invite_link"] else ""
+                await send_message(chat_id, T("dm_reg_send_prep_link", "ru", name=reg_user["name"], link=link))
+                return
+
         await send_message(chat_id,
             "Ассаляму алейкум! 🕌\n"
             "Чтобы зарегистрироваться — напиши любое сообщение в своей учебной группе, "
