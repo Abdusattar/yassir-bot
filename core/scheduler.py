@@ -317,7 +317,11 @@ def _week_ops_stats(start, end):
     voice_by_group = []
     group_tasks = {}
     for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
+        # Тадаббур не учебная (без уроков по определению). Подготовительная
+        # исключена отдельно (17.08.2026, решение пользователя) - студенты
+        # там максимум 5-14 дней, урок им в принципе не положен, включать её
+        # в "не провели урок" было бы нечестным попрёком.
+        if (group["group_type"] or "relaxed") in ("tadabbur", "prep"):
             continue
         title = group["title"] or str(group["chat_id"])
         with db() as c:
