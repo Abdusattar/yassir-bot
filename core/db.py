@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from datetime import datetime, timedelta
 import pytz
@@ -297,6 +298,22 @@ def _run_migrations(c):
         c.execute("ALTER TABLE users ADD COLUMN survey_stage TEXT")
         c.execute("ALTER TABLE users ADD COLUMN survey_location TEXT")
         c.execute("ALTER TABLE users ADD COLUMN survey_age TEXT")
+    if "survey_stage_at" not in ucols:
+        # Момент последнего перехода survey_stage - нужен, чтобы повторить
+        # незавершённый вопрос через неделю молчания, не спрашивая заново с
+        # начала (17.08.2026, редизайн анкеты).
+        c.execute("ALTER TABLE users ADD COLUMN survey_stage_at TEXT")
+        # Бэкфилл для рядов, где анкета уже была начата ДО этой колонки -
+        # иначе julianday(NULL) всегда NULL и nudge их никогда не найдёт.
+        c.execute(
+            "UPDATE users SET survey_stage_at=datetime('now') "
+            "WHERE survey_stage IS NOT NULL AND survey_stage != '' AND survey_stage_at IS NULL"
+        )
+    if "survey_birth_year" not in ucols:
+        # Год рождения, посчитанный из ответа на "сколько лет" - не сам
+        # возраст, чтобы не устаревал (17.08.2026). survey_age хранит сырой
+        # ответ как есть, для сверки.
+        c.execute("ALTER TABLE users ADD COLUMN survey_birth_year INTEGER")
 
     uocols = [r["name"] for r in c.execute("PRAGMA table_info(upgrade_offers)").fetchall()]
     if "channel" not in uocols:
@@ -2113,41 +2130,80 @@ def mark_dm_ok_by_phone(phone):
         )
 
 
-# ── Анкета "откуда и сколько лет" (13.08.2026) ──────────────────────────────────
+# ── Анкета "откуда и сколько лет" (13.08.2026, редизайн 17.08.2026) ─────────────
 
-def get_users_due_for_survey(limit=5):
-    """Активные студенты (любая группа), с момента регистрации (added_date)
-    прошло ≥30 дней, Start нажат, анкета ещё не начата. dm_ok=0 просто не
-    попадают сюда - подхватятся сами в один из следующих ежедневных
-    прогонов, как только нажмут Start.
+def get_users_due_for_survey():
+    """Активные студенты уже в постоянной группе (pro/relaxed), с момента
+    перевода туда (user_groups.joined_date) прошло ≥2 дня, анкета ещё не
+    начата. Триггер сменён с "30 дней после регистрации" на "2 дня после
+    перевода в постоянную группу" (17.08.2026, решение пользователя - у
+    старых студентов между регистрацией и реальным началом мог быть
+    большой разрыв). dm_ok=0 просто не попадают сюда - если появится
+    позже, подхватятся в один из следующих ежедневных прогонов.
 
     Исключены те, у кого есть активная роль 'admin' хоть в одной группе
     (13.08.2026, найдено эдвайзери до запуска: устаз, который сам ещё и
     студент где-то, иначе попал бы в опрос и его следующий вопрос боту
     ушёл бы в survey_location вместо ответа - перехват в handlers.py стоит
-    раньше проверки is_admin/is_any_group_admin). limit - постепенный
-    запуск порциями (решение пользователя, вопрос деликатный - опрос
-    ставить всем 95 подходящим сразу не стали)."""
+    раньше проверки is_admin/is_any_group_admin).
+
+    Без LIMIT - раньше был батч по 5/день из осторожности, снято прямым
+    решением пользователя 17.08.2026 (разовый запуск всем подходящим
+    сразу; дальше пополнение органическое, по мере перевода новых)."""
     with db() as c:
         return c.execute("""
             SELECT DISTINCT u.id, u.name, u.phone
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
+            JOIN groups g ON ug.group_id=g.id
             WHERE ug.role='student' AND ug.active=1
               AND u.phone IS NOT NULL AND u.dm_ok=1
-              AND u.survey_stage IS NULL
-              AND julianday('now') - julianday(u.added_date) >= 30
+              AND (u.survey_stage IS NULL OR u.survey_stage='')
+              AND (g.group_type='pro' OR g.group_type='relaxed' OR g.group_type IS NULL)
+              AND julianday('now') - julianday(ug.joined_date) >= 2
               AND u.id NOT IN (
                   SELECT user_id FROM user_groups WHERE role='admin' AND active=1
               )
-            ORDER BY u.added_date ASC
-            LIMIT ?
-        """, (limit,)).fetchall()
+            ORDER BY ug.joined_date ASC
+        """).fetchall()
+
+
+def get_users_due_for_survey_nudge(days=7):
+    """Застряли на 'asked_location'/'asked_age' ≥N дней без ответа - повтор
+    ТОГО ЖЕ вопроса (не с начала), еженедельно, пока не ответят
+    (17.08.2026). Заодно частично лечит случаи, когда dm_ok=1 в базе
+    устарел и первая отправка реально не дошла - повтор через неделю
+    попробует снова."""
+    with db() as c:
+        return c.execute("""
+            SELECT DISTINCT u.id, u.name, u.phone, u.survey_stage
+            FROM users u
+            JOIN user_groups ug ON u.id=ug.user_id
+            JOIN groups g ON ug.group_id=g.id
+            WHERE ug.role='student' AND ug.active=1
+              AND u.phone IS NOT NULL AND u.dm_ok=1
+              AND (g.group_type='pro' OR g.group_type='relaxed' OR g.group_type IS NULL)
+              AND u.survey_stage IN ('asked_location', 'asked_age', 'asked_age_retry')
+              AND julianday('now') - julianday(u.survey_stage_at) >= ?
+              AND u.id NOT IN (
+                  SELECT user_id FROM user_groups WHERE role='admin' AND active=1
+              )
+        """, (days,)).fetchall()
 
 
 def start_survey(phone):
     with db() as c:
-        c.execute("UPDATE users SET survey_stage='asked_location' WHERE phone=?", (phone,))
+        c.execute(
+            "UPDATE users SET survey_stage='asked_location', survey_stage_at=datetime('now') WHERE phone=?",
+            (phone,)
+        )
+
+
+def touch_survey_stage(phone):
+    """Сбрасывает таймер 'молчит N дней' после повторной отправки того же
+    вопроса (nudge) - иначе следующий прогон резенднул бы снова сразу же."""
+    with db() as c:
+        c.execute("UPDATE users SET survey_stage_at=datetime('now') WHERE phone=?", (phone,))
 
 
 def get_survey_stage(phone):
@@ -2159,17 +2215,71 @@ def get_survey_stage(phone):
 def save_survey_location(phone, text):
     with db() as c:
         c.execute(
-            "UPDATE users SET survey_location=?, survey_stage='asked_age' WHERE phone=?",
+            "UPDATE users SET survey_location=?, survey_stage='asked_age', "
+            "survey_stage_at=datetime('now') WHERE phone=?",
             (text, phone)
         )
+
+
+def _parse_birth_year(text):
+    """Возраст из свободного текста ('23', 'мне 23', '23 года') -> год
+    рождения. Если в тексте похоже на прямой год рождения (4 цифры,
+    1925-совр.год-5) - берёт его как есть. Возраст ограничен разумными
+    рамками (5-100 лет) - на бессмысленный ответ возвращает None, а не
+    случайное число (17.08.2026)."""
+    nums = re.findall(r"\d+", text or "")
+    if not nums:
+        return None
+    current_year = get_now().year
+    for n in nums:
+        val = int(n)
+        if 1925 <= val <= current_year - 5:
+            return val
+    for n in nums:
+        age = int(n)
+        if 5 <= age <= 100:
+            return current_year - age
+    return None
 
 
 def save_survey_age(phone, text):
+    """Возвращает новый survey_stage ('asked_age_retry' или 'done'), чтобы
+    handlers.py знал, какое сообщение отправить в ответ. Если год рождения
+    не распознан - переспрашивает один раз ('asked_age_retry'); если и
+    повторный ответ не распознан - принимает как есть, не мучает дальше
+    (17.08.2026)."""
+    birth_year = _parse_birth_year(text)
     with db() as c:
+        row = c.execute("SELECT survey_stage FROM users WHERE phone=?", (phone,)).fetchone()
+        is_retry = bool(row and row["survey_stage"] == "asked_age_retry")
+        if birth_year is None and not is_retry:
+            c.execute(
+                "UPDATE users SET survey_age=?, survey_stage='asked_age_retry', "
+                "survey_stage_at=datetime('now') WHERE phone=?",
+                (text, phone)
+            )
+            return "asked_age_retry"
         c.execute(
-            "UPDATE users SET survey_age=?, survey_stage='done' WHERE phone=?",
-            (text, phone)
+            "UPDATE users SET survey_age=?, survey_birth_year=?, survey_stage='done', "
+            "survey_stage_at=datetime('now') WHERE phone=?",
+            (text, birth_year, phone)
         )
+        return "done"
+
+
+def survey_answer_in_window(phone, hours=24):
+    """Прошло ли меньше `hours` часов с момента как был задан текущий вопрос
+    анкеты. Нужно, чтобы не перехватывать случайное сообщение, пришедшее
+    спустя дни после вопроса, как будто это ответ на анкету (17.08.2026,
+    пользователь: "чтобы мы поняли что это точно ответы на анкету"). Если
+    окно прошло - вопрос остаётся висеть, откроется заново еженедельным
+    повтором (profile_survey_nudge)."""
+    with db() as c:
+        row = c.execute(
+            "SELECT (julianday('now') - julianday(survey_stage_at)) * 24 AS hours_passed "
+            "FROM users WHERE phone=?", (phone,)
+        ).fetchone()
+    return bool(row and row["hours_passed"] is not None and row["hours_passed"] <= hours)
 
 
 # ── Formatting ─────────────────────────────────────────────────────────────────

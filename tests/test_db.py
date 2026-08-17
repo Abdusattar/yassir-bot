@@ -8,9 +8,10 @@ from core.db import (
     get_attendance_confirm_by_id, get_attendance_confirm_students,
     set_attendance_confirm_decision, get_stale_attendance_confirms,
     mark_attendance_confirm_escalated,
-    get_users_due_for_survey, start_survey, get_survey_stage,
-    save_survey_location, save_survey_age, mark_dm_ok_by_phone, db,
-    add_group_admin,
+    get_users_due_for_survey, get_users_due_for_survey_nudge, start_survey,
+    get_survey_stage,
+    save_survey_location, save_survey_age, survey_answer_in_window, mark_dm_ok_by_phone, db,
+    add_group_admin, get_now,
 )
 
 
@@ -279,43 +280,47 @@ def test_attendance_confirm_resolved_not_stale(test_db):
 
 
 # ── Анкета "откуда и сколько лет" ───────────────────────────────────────────────
+# Триггер - 2 дня после joined_date в постоянной (pro/relaxed) группе, не
+# added_date (редизайн 17.08.2026).
 
-def _make_survey_candidate(test_db, phone="700111", days_ago=30, dm_ok=1):
-    save_group("-100790", "Группа С")
-    g = get_group("-100790")
+def _make_survey_candidate(test_db, phone="700111", days_ago=3, dm_ok=1, chat_id="-100790"):
+    save_group(chat_id, "Группа С")
+    g = get_group(chat_id)
     sid = add_student("Гульнара", g["id"], phone=phone)
     with db() as c:
         c.execute(
-            "UPDATE users SET added_date=date('now', ?), dm_ok=? WHERE id=?",
-            (f"-{days_ago} days", dm_ok, sid)
+            "UPDATE user_groups SET joined_date=date('now', ?) "
+            "WHERE user_id=? AND group_id=?",
+            (f"-{days_ago} days", sid, g["id"])
         )
+        c.execute("UPDATE users SET dm_ok=? WHERE id=?", (dm_ok, sid))
     return sid
 
 
 def test_get_users_due_for_survey_includes_eligible(test_db):
-    _make_survey_candidate(test_db, phone="700111", days_ago=31, dm_ok=1)
+    _make_survey_candidate(test_db, phone="700111", days_ago=3, dm_ok=1)
     due = get_users_due_for_survey()
     assert [r["phone"] for r in due] == ["700111"]
 
 
 def test_get_users_due_for_survey_excludes_too_recent(test_db):
-    _make_survey_candidate(test_db, phone="700112", days_ago=10, dm_ok=1)
+    _make_survey_candidate(test_db, phone="700112", days_ago=1, dm_ok=1)
     assert get_users_due_for_survey() == []
 
 
 def test_get_users_due_for_survey_excludes_dm_not_ok(test_db):
-    _make_survey_candidate(test_db, phone="700113", days_ago=31, dm_ok=0)
+    _make_survey_candidate(test_db, phone="700113", days_ago=3, dm_ok=0)
     assert get_users_due_for_survey() == []
 
 
 def test_get_users_due_for_survey_excludes_already_started(test_db):
-    _make_survey_candidate(test_db, phone="700114", days_ago=31, dm_ok=1)
+    _make_survey_candidate(test_db, phone="700114", days_ago=3, dm_ok=1)
     start_survey("700114")
     assert get_users_due_for_survey() == []
 
 
 def test_survey_flow_location_then_age(test_db):
-    _make_survey_candidate(test_db, phone="700115", days_ago=31, dm_ok=1)
+    _make_survey_candidate(test_db, phone="700115", days_ago=3, dm_ok=1)
     assert get_survey_stage("700115") is None
 
     start_survey("700115")
@@ -329,16 +334,64 @@ def test_survey_flow_location_then_age(test_db):
 
     with db() as c:
         row = c.execute(
-            "SELECT survey_location, survey_age FROM users WHERE phone=?", ("700115",)
+            "SELECT survey_location, survey_age, survey_birth_year FROM users WHERE phone=?",
+            ("700115",)
         ).fetchone()
     assert row["survey_location"] == "Бишкек"
     assert row["survey_age"] == "22"
+    assert row["survey_birth_year"] == get_now().year - 22
+
+
+def test_save_survey_age_garbage_triggers_one_retry_then_accepts(test_db):
+    """Первый нераспознанный ответ -> один переспрос (asked_age_retry), а не
+    сразу 'done'. Второй нераспознанный ответ -> принимается как есть, год
+    рождения остаётся NULL, анкета не виснет вечно (17.08.2026)."""
+    _make_survey_candidate(test_db, phone="700117", days_ago=3, dm_ok=1)
+    start_survey("700117")
+    save_survey_location("700117", "Бишкек")
+
+    stage = save_survey_age("700117", "не скажу")
+    assert stage == "asked_age_retry"
+    assert get_survey_stage("700117") == "asked_age_retry"
+
+    stage = save_survey_age("700117", "секрет")
+    assert stage == "done"
+    with db() as c:
+        row = c.execute(
+            "SELECT survey_age, survey_birth_year FROM users WHERE phone=?", ("700117",)
+        ).fetchone()
+    assert row["survey_age"] == "секрет"
+    assert row["survey_birth_year"] is None
+
+
+def test_save_survey_age_retry_recovers_with_valid_number(test_db):
+    _make_survey_candidate(test_db, phone="700120", days_ago=3, dm_ok=1)
+    start_survey("700120")
+    save_survey_location("700120", "Ош")
+    assert save_survey_age("700120", "не скажу") == "asked_age_retry"
+    assert save_survey_age("700120", "мне 30") == "done"
+    with db() as c:
+        row = c.execute("SELECT survey_birth_year FROM users WHERE phone=?", ("700120",)).fetchone()
+    assert row["survey_birth_year"] == get_now().year - 30
+
+
+def test_survey_answer_in_window(test_db):
+    _make_survey_candidate(test_db, phone="700121", days_ago=3, dm_ok=1)
+    start_survey("700121")
+    assert survey_answer_in_window("700121") is True
+
+    with db() as c:
+        c.execute(
+            "UPDATE users SET survey_stage_at=datetime('now', '-25 hours') WHERE phone=?",
+            ("700121",)
+        )
+    assert survey_answer_in_window("700121") is False
 
 
 def test_get_users_due_for_survey_excludes_group_admin(test_db):
-    """Устаз, который сам тоже студент где-то (30+ дней, dm_ok=1) - не должен
-    попадать в анкету, иначе его следующий вопрос боту перехватится как
-    ответ на survey_location (13.08.2026, найдено эдвайзери)."""
+    """Устаз, который сам тоже студент где-то (в постоянной группе 2+ дня,
+    dm_ok=1) - не должен попадать в анкету, иначе его следующий вопрос боту
+    перехватится как ответ на survey_location (13.08.2026, найдено эдвайзери)."""
     save_group("-100791", "Группа Т")
     g1 = get_group("-100791")
     save_group("-100792", "Группа У")
@@ -347,21 +400,43 @@ def test_get_users_due_for_survey_excludes_group_admin(test_db):
     add_group_admin(g2["id"], "700116")
     with db() as c:
         c.execute(
-            "UPDATE users SET added_date=date('now', '-31 days'), dm_ok=1 WHERE id=?",
-            (sid,)
+            "UPDATE user_groups SET joined_date=date('now', '-3 days') "
+            "WHERE user_id=? AND group_id=?",
+            (sid, g1["id"])
         )
+        c.execute("UPDATE users SET dm_ok=1 WHERE id=?", (sid,))
     assert get_users_due_for_survey() == []
 
 
-def test_get_users_due_for_survey_respects_limit(test_db):
+def test_get_users_due_for_survey_returns_all_eligible(test_db):
     save_group("-100793", "Группа Ф")
     g = get_group("-100793")
     for i in range(7):
         sid = add_student(f"Студент{i}", g["id"], phone=f"70012{i}")
         with db() as c:
             c.execute(
-                "UPDATE users SET added_date=date('now', '-31 days'), dm_ok=1 WHERE id=?",
-                (sid,)
+                "UPDATE user_groups SET joined_date=date('now', '-3 days') "
+                "WHERE user_id=? AND group_id=?",
+                (sid, g["id"])
             )
-    assert len(get_users_due_for_survey(limit=3)) == 3
-    assert len(get_users_due_for_survey(limit=100)) == 7
+            c.execute("UPDATE users SET dm_ok=1 WHERE id=?", (sid,))
+    assert len(get_users_due_for_survey()) == 7
+
+
+def test_get_users_due_for_survey_nudge(test_db):
+    """Застрял на asked_location 8 дней без ответа -> попадает в nudge;
+    свежий (1 день назад) - не попадает (17.08.2026)."""
+    _make_survey_candidate(test_db, phone="700118", days_ago=3, dm_ok=1, chat_id="-100794")
+    start_survey("700118")
+    with db() as c:
+        c.execute(
+            "UPDATE users SET survey_stage_at=datetime('now', '-8 days') WHERE phone=?",
+            ("700118",)
+        )
+    due = get_users_due_for_survey_nudge()
+    assert [r["phone"] for r in due] == ["700118"]
+
+    _make_survey_candidate(test_db, phone="700119", days_ago=3, dm_ok=1, chat_id="-100795")
+    start_survey("700119")
+    phones = [r["phone"] for r in get_users_due_for_survey_nudge()]
+    assert "700119" not in phones

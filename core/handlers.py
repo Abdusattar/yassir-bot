@@ -22,7 +22,7 @@ from core.db import (
     get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month,
     get_excuse_count_month, add_bonus,
     has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone, is_active_prep_student,
-    get_survey_stage, save_survey_location, save_survey_age,
+    get_survey_stage, save_survey_location, save_survey_age, survey_answer_in_window,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
     format_daily_report, format_period_report, get_period_winner,
@@ -818,21 +818,29 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # отправляется только первый экран, а не весь поток - 13.08.2026).
             asyncio.create_task(send_prep_onboarding_if_pending(phone))
 
-        # ── Анкета "откуда и сколько лет" (13.08.2026) ─────────────────────
+        # ── Анкета "откуда и сколько лет" (13.08.2026, окно 17.08.2026) ────
         # Команды (/help и т.п.) не считаем ответом - анкета просто ждёт
-        # следующее обычное сообщение.
+        # следующее обычное сообщение. Перехватываем только если сообщение
+        # пришло в пределах 24ч с момента вопроса - иначе это, скорее всего,
+        # обычное сообщение "не в тему", а не ответ на анкету (пользователь:
+        # "чтобы мы поняли что это точно ответы на анкету"). Вне окна вопрос
+        # остаётся висеть - откроется заново еженедельным повтором.
         if text and not text.startswith("/"):
             survey_stage = get_survey_stage(phone)
-            if survey_stage in ("asked_location", "asked_age"):
-                survey_group = get_learning_group(phone)
-                survey_lang = get_group_lang(survey_group) if survey_group else "ru"
-                if survey_stage == "asked_location":
-                    save_survey_location(phone, text)
-                    await send_message(chat_id, T("profile_survey_q_age", survey_lang))
+            if survey_stage in ("asked_location", "asked_age", "asked_age_retry"):
+                if not survey_answer_in_window(phone):
+                    log.info("survey window expired for %s (stage=%s), treating as normal message", phone, survey_stage)
                 else:
-                    save_survey_age(phone, text)
-                    await send_message(chat_id, T("profile_survey_thanks", survey_lang))
-                return
+                    survey_group = get_learning_group(phone)
+                    survey_lang = get_group_lang(survey_group) if survey_group else "ru"
+                    if survey_stage == "asked_location":
+                        save_survey_location(phone, text)
+                        await send_message(chat_id, T("profile_survey_q_age", survey_lang))
+                    else:
+                        new_stage = save_survey_age(phone, text)
+                        reply_key = "profile_survey_q_age_retry" if new_stage == "asked_age_retry" else "profile_survey_thanks"
+                        await send_message(chat_id, T(reply_key, survey_lang))
+                    return
 
     # ── Личка устаза-рецензента программы: любое сообщение = одобрение ────────
     # Устаз не всегда ставит настоящую Telegram-реакцию — может ответить
