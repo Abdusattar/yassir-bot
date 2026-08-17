@@ -233,9 +233,12 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     feedback = "✅ Верно!" if correct else f"❌ Не то, правильно: {state['target']}"
     # Короткая подсказка до порога зачёта задания "Слова" - решение
     # пользователя 17.08.2026 (тот же день, что и снижение порога 20->15).
+    # Первая формулировка ("и «Слова» засчитается") была неясной - непонятно,
+    # ЧТО именно засчитается (пользователь: "не совсем понятно до чего
+    # осталось") - расписано явно.
     if count_today < DAILY_WORDS_FOR_TASK_CREDIT:
         remaining = DAILY_WORDS_FOR_TASK_CREDIT - count_today
-        feedback += f"\n📝 Отметь ещё {remaining} слов — и «Слова» засчитается"
+        feedback += f"\n📝 Ещё {remaining} разных слов сегодня — и дневное задание «Слова» будет засчитано"
 
     if q is None:
         _active_question.pop(user_id, None)
