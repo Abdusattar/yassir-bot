@@ -388,10 +388,12 @@ def test_survey_answer_in_window(test_db):
     assert survey_answer_in_window("700121") is False
 
 
-def test_get_users_due_for_survey_excludes_group_admin(test_db):
+def test_get_users_due_for_survey_includes_admin_who_is_also_student(test_db):
     """Устаз, который сам тоже студент где-то (в постоянной группе 2+ дня,
-    dm_ok=1) - не должен попадать в анкету, иначе его следующий вопрос боту
-    перехватится как ответ на survey_location (13.08.2026, найдено эдвайзери)."""
+    dm_ok=1) - раньше исключался (13.08.2026, найдено эдвайзери: перехват
+    ответа анкеты мог поймать его обычную команду). С 17.08.2026 - общая
+    политика ВКЛЮЧАТЬ (решение пользователя, сам в такой ситуации) - теперь
+    безопасно благодаря 24-часовому окну (survey_answer_in_window)."""
     save_group("-100791", "Группа Т")
     g1 = get_group("-100791")
     save_group("-100792", "Группа У")
@@ -405,7 +407,7 @@ def test_get_users_due_for_survey_excludes_group_admin(test_db):
             (sid, g1["id"])
         )
         c.execute("UPDATE users SET dm_ok=1 WHERE id=?", (sid,))
-    assert get_users_due_for_survey() == []
+    assert [r["phone"] for r in get_users_due_for_survey()] == ["700116"]
 
 
 def test_get_users_due_for_survey_returns_all_eligible(test_db):

@@ -2141,11 +2141,17 @@ def get_users_due_for_survey():
     большой разрыв). dm_ok=0 просто не попадают сюда - если появится
     позже, подхватятся в один из следующих ежедневных прогонов.
 
-    Исключены те, у кого есть активная роль 'admin' хоть в одной группе
-    (13.08.2026, найдено эдвайзери до запуска: устаз, который сам ещё и
-    студент где-то, иначе попал бы в опрос и его следующий вопрос боту
-    ушёл бы в survey_location вместо ответа - перехват в handlers.py стоит
-    раньше проверки is_admin/is_any_group_admin).
+    Устазы/админы, которые ГДЕ-ТО ТОЖЕ студенты (активная роль 'student' в
+    какой-то группе), теперь ВКЛЮЧЕНЫ - общая политика с 17.08.2026
+    (решение пользователя: сам такой, "я студент"). Раньше (13.08.2026) их
+    исключали - тогда перехват ответа анкеты в handlers.py ничем не был
+    ограничен по времени, и застрявший навсегда 'survey_stage' мог
+    перехватить обычную команду устаза как ответ на анкету. Теперь это
+    больше не проблема - ответ засчитывается только в 24-часовом окне
+    (survey_answer_in_window), вне его сообщение не перехватывается вообще.
+    Чистых админов без активной роли 'student' нигде (например Умар устаз)
+    это не касается в принципе - они и так не проходят JOIN по
+    role='student' ниже, фильтровать их отдельно не нужно.
 
     Без LIMIT - раньше был батч по 5/день из осторожности, снято прямым
     решением пользователя 17.08.2026 (разовый запуск всем подходящим
@@ -2161,9 +2167,6 @@ def get_users_due_for_survey():
               AND (u.survey_stage IS NULL OR u.survey_stage='')
               AND (g.group_type='pro' OR g.group_type='relaxed' OR g.group_type IS NULL)
               AND julianday('now') - julianday(ug.joined_date) >= 2
-              AND u.id NOT IN (
-                  SELECT user_id FROM user_groups WHERE role='admin' AND active=1
-              )
             ORDER BY ug.joined_date ASC
         """).fetchall()
 
@@ -2173,7 +2176,8 @@ def get_users_due_for_survey_nudge(days=7):
     ТОГО ЖЕ вопроса (не с начала), еженедельно, пока не ответят
     (17.08.2026). Заодно частично лечит случаи, когда dm_ok=1 в базе
     устарел и первая отправка реально не дошла - повтор через неделю
-    попробует снова."""
+    попробует снова. Устазов-студентов не исключает, симметрично
+    get_users_due_for_survey (17.08.2026, общая политика)."""
     with db() as c:
         return c.execute("""
             SELECT DISTINCT u.id, u.name, u.phone, u.survey_stage
@@ -2185,9 +2189,6 @@ def get_users_due_for_survey_nudge(days=7):
               AND (g.group_type='pro' OR g.group_type='relaxed' OR g.group_type IS NULL)
               AND u.survey_stage IN ('asked_location', 'asked_age', 'asked_age_retry')
               AND julianday('now') - julianday(u.survey_stage_at) >= ?
-              AND u.id NOT IN (
-                  SELECT user_id FROM user_groups WHERE role='admin' AND active=1
-              )
         """, (days,)).fetchall()
 
 
