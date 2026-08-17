@@ -132,10 +132,19 @@ def word_weight(progress_row):
     Вызывается только для слов, прошедших фильтр в pick_question_word -
     т.е. либо не "выученных" совсем, либо "выученных", но просроченных
     (см. RECHECK_AFTER_DAYS) - те получают вес 1.0 (разовая перепроверка,
-    не выше обычного нового слова)."""
+    не выше обычного нового слова).
+
+    Условие - ПРОСТО _is_stale, без is_mastered: слово, ЧАСТИЧНО
+    продемотированное после проваленной перепроверки (см. record_answer -
+    streak снижается, но last_correct_date остаётся старым), тоже должно
+    получать полный приоритет, а не средний по formula 1/(1+streak) -
+    иначе частично сохранённый прогресс конфликтовал бы с "слабое слово в
+    приоритете" (advisor 17.08.2026, шестой заход - поймал, что мой
+    предыдущий фикс "streak=0" был избыточным overcorrection именно
+    из-за этого условия)."""
     if not progress_row:
         return 1.0 / (1 + 1)
-    if is_mastered(progress_row) and _is_stale(progress_row):
+    if _is_stale(progress_row):
         return 1.0
     return 1.0 / (1 + progress_row["correct_streak"])
 
@@ -240,9 +249,14 @@ def record_answer(user_id, word_id, correct):
     ЕДИНСТВЕННОЕ исключение - провал разовой перепроверки просроченного
     "выученного" слова (см. RECHECK_AFTER_DAYS, pick_question_word): это
     не случайная опечатка, а прямое доказательство забывания, поэтому
-    correct_streak снижается на 1 (чуть ниже порога MASTERY_STREAK) и
-    слово возвращается в общий пул наравне с остальными (решение
-    пользователя 17.08.2026, четвёртый заход)."""
+    correct_streak снижается на 4 (7→3, нужно ещё 4 верных для повторного
+    "выучено", не все 7 заново - полный сброс в 0 был избыточным
+    наказанием, замечание пользователя 17.08.2026, шестой заход).
+    last_correct_date НЕ трогается (остаётся старым) - поэтому слово
+    сохраняет вес 1.0 в word_weight (см. там, ветка _is_stale) до первого
+    же верного ответа - частичный прогресс сохранён И приоритет
+    максимальный одновременно, никакого противоречия (advisor, тот же
+    заход)."""
     today = _today()
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.row_factory = sqlite3.Row
@@ -260,7 +274,7 @@ def record_answer(user_id, word_id, correct):
             was_due_recheck = row and is_mastered(row) and _is_stale(row)
             wrong += 1
             if was_due_recheck:
-                streak = max(0, streak - 1)
+                streak = max(0, streak - 4)
         conn.execute(
             "INSERT OR REPLACE INTO mufradat_progress "
             "(user_id, word_id, correct_streak, wrong_count, last_correct_date) "
@@ -332,7 +346,7 @@ def get_words_for_trained_pages(user_id):
     return words
 
 
-def compute_overall_score(user_id):
+def compute_overall_score(user_id, words=None, progress=None):
     """Общий вес студента среди ВСЕХ слов на страницах, которые он реально
     тренировал (не "текущая страница", см. mufradat_trained_pages выше).
     Возвращает None, если студент ещё не тренировал ни одной страницы.
@@ -342,13 +356,20 @@ def compute_overall_score(user_id):
     достигших MASTERY_STREAK (используется в /muftop), "score10" - плавная
     доля пути к этому же порогу по ВСЕМ словам (word_stimulus_credit),
     двигается с каждым верным ответом, даже в первый день - иначе студент
-    не видит прогресса и теряет мотивацию (решение пользователя 17.08.2026)."""
-    words = get_words_for_trained_pages(user_id)
+    не видит прогресса и теряет мотивацию (решение пользователя 17.08.2026).
+
+    words/progress - опционально, если вызывающий код уже их получил
+    (карточка тренажёра на каждом тапе итак ходит за пулом и прогрессом
+    для generate_question) - не дублируем те же 2 запроса к БД
+    (advisor 17.08.2026, пятый заход)."""
+    if words is None:
+        words = get_words_for_trained_pages(user_id)
     if not words:
         return None
+    if progress is None:
+        progress = get_progress_map(user_id, [w["id"] for w in words])
 
     word_ids = [w["id"] for w in words]
-    progress = get_progress_map(user_id, word_ids)
     mastered = sum(1 for wid in word_ids if is_mastered(progress.get(wid)))
     stimulus_sum = sum(word_stimulus_credit(progress.get(wid)) for wid in word_ids)
     total = len(word_ids)

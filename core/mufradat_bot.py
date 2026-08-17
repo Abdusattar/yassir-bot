@@ -97,7 +97,7 @@ def _format_overall_score(score):
     реально достигших MASTERY_STREAK) - одна и та же метрика, просто
     агрегированная по-разному (core/mufradat.py:compute_overall_score),
     поэтому разные слова в тексте, не "выучено" для обеих."""
-    return f"📊 Общий вес: {score['score10']}/10 (закреплено {score['mastered']} из {score['total']} слов)"
+    return f"📊 Общий вес: {score['score10']:.2f}/10 (закреплено {score['mastered']} из {score['total']} слов)"
 
 
 def _render_card(user_id, q, session_correct, overall_score=None, feedback=None):
@@ -183,7 +183,7 @@ async def _credit_task_if_applicable(user_id, chat_id):
 
     if group["chat_id"]:
         score = compute_overall_score(user_id)
-        score_part = f" (вес {score['score10']}/10)" if score else ""
+        score_part = f" (вес {score['score10']:.2f}/10)" if score else ""
         await send_message(
             group["chat_id"],
             f"📖 {user['name']} отработал(а) дневной сет 20 слов на тренажёре муфрадат{score_part}."
@@ -223,10 +223,18 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
 
     if q is None:
         _active_question.pop(user_id, None)
-        await edit_message_with_button_rows(chat_id, message_id, feedback, [])
+        # Раньше это было недостижимо (слова только теряли вес, не
+        # исключались) - с жёстким исключением "отдыхающих" выученных слов
+        # (RECHECK_AFTER_DAYS) пул реально может опустеть, если студент
+        # прошёл всю страницу - тупик без объяснения и кнопок был багом
+        # (advisor 17.08.2026, пятый заход).
+        text = feedback + "\n\nСлова на этой странице пока закончились 🤲 Добавь ещё одну."
+        await edit_message_with_button_rows(
+            chat_id, message_id, text, [[("➕ Новая страница", f"mufpg:{user_id}")]]
+        )
         return
 
-    overall_score = compute_overall_score(user_id)
+    overall_score = compute_overall_score(user_id, words=pool, progress=progress)
     text, rows = _render_card(user_id, q, session_correct, overall_score, feedback)
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
@@ -267,9 +275,9 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
         if start10 is not None:
             delta = round(end_score["score10"] - start10, 2)
             if delta > 0:
-                lines.append(f"📈 Вырос за сеанс на +{delta}")
+                lines.append(f"📈 Вырос за сеанс на +{delta:.2f}")
             elif delta < 0:
-                lines.append(f"📉 Снизился за сеанс на {delta}")
+                lines.append(f"📉 Снизился за сеанс на {delta:.2f}")
             else:
                 lines.append("Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲")
 
@@ -317,7 +325,7 @@ def _render_leaderboard_text(user_id, leaderboard):
     if my_bracket and my_rank > 3:
         lines.append(
             f"Ты среди изучающих стр. {my_bracket}: место {my_rank}, "
-            f"{my_score['mastered']} слов выучено (вес {my_score['score10']}/10)."
+            f"{my_score['mastered']} слов выучено (вес {my_score['score10']:.2f}/10)."
         )
     elif my_bracket is None:
         lines.append("Ты ещё не тренировал ни одной страницы — набери /muf 🤲")
