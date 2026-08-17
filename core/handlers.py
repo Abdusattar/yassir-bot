@@ -827,15 +827,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # остаётся висеть - откроется заново еженедельным повтором.
         if text and not text.startswith("/"):
             survey_stage = get_survey_stage(phone)
-            if survey_stage in ("asked_location", "asked_age", "asked_age_retry"):
+            if survey_stage in ("asked_location", "location_retry", "asked_age", "asked_age_retry"):
                 if not survey_answer_in_window(phone):
                     log.info("survey window expired for %s (stage=%s), treating as normal message", phone, survey_stage)
                 else:
                     survey_group = get_learning_group(phone)
                     survey_lang = get_group_lang(survey_group) if survey_group else "ru"
-                    if survey_stage == "asked_location":
-                        save_survey_location(phone, text)
-                        await send_message(chat_id, T("profile_survey_q_age", survey_lang))
+                    if survey_stage in ("asked_location", "location_retry"):
+                        new_stage = save_survey_location(phone, text)
+                        reply_key = "profile_survey_q_location_retry" if new_stage == "location_retry" else "profile_survey_q_age"
+                        await send_message(chat_id, T(reply_key, survey_lang))
                     else:
                         new_stage = save_survey_age(phone, text)
                         reply_key = "profile_survey_q_age_retry" if new_stage == "asked_age_retry" else "profile_survey_thanks"

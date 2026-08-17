@@ -2187,7 +2187,7 @@ def get_users_due_for_survey_nudge(days=7):
             WHERE ug.role='student' AND ug.active=1
               AND u.phone IS NOT NULL AND u.dm_ok=1
               AND (g.group_type='pro' OR g.group_type='relaxed' OR g.group_type IS NULL)
-              AND u.survey_stage IN ('asked_location', 'asked_age', 'asked_age_retry')
+              AND u.survey_stage IN ('asked_location', 'location_retry', 'asked_age', 'asked_age_retry')
               AND julianday('now') - julianday(u.survey_stage_at) >= ?
         """, (days,)).fetchall()
 
@@ -2213,13 +2213,46 @@ def get_survey_stage(phone):
     return row["survey_stage"] if row else None
 
 
+_GREETING_PATTERN = re.compile(
+    r"(ассаляму|ассалам|ваалейкум|валейкум|уаалейкум|уалейкум|"
+    r"ва\s*алейкум|уа\s*алейкум|ас[\s-]*сал[яа]м|салям|салам|алейкум)",
+    re.IGNORECASE
+)
+
+
+def _looks_like_greeting(text):
+    """Ответ на вопрос про локацию - это просто рефлекторное приветствие в
+    ответ на "Ассаляму алейкум" в начале вопроса, а не попытка ответить
+    (17.08.2026, найдено на реальных ответах - 3 из первых 10 ответили
+    приветствием вместо места). Узкий признак: после вычитания известных
+    приветственных фраз почти ничего не остаётся. Короткие легитимные
+    ответы вроде "Ош" не задевает - не пересекаются со списком фраз."""
+    stripped = _GREETING_PATTERN.sub("", text or "")
+    stripped = re.sub(r"[^\wа-яёА-ЯЁa-zA-Z0-9]", "", stripped)
+    return len(stripped) == 0
+
+
 def save_survey_location(phone, text):
+    """Возвращает новый survey_stage ('location_retry' или 'asked_age'),
+    аналогично save_survey_age - handlers.py по нему решает, какое
+    сообщение отправить в ответ. Один переспрос на голое приветствие,
+    второй ответ принимается как есть (17.08.2026)."""
     with db() as c:
+        row = c.execute("SELECT survey_stage FROM users WHERE phone=?", (phone,)).fetchone()
+        is_retry = bool(row and row["survey_stage"] == "location_retry")
+        if _looks_like_greeting(text) and not is_retry:
+            c.execute(
+                "UPDATE users SET survey_location=?, survey_stage='location_retry', "
+                "survey_stage_at=datetime('now') WHERE phone=?",
+                (text, phone)
+            )
+            return "location_retry"
         c.execute(
             "UPDATE users SET survey_location=?, survey_stage='asked_age', "
             "survey_stage_at=datetime('now') WHERE phone=?",
             (text, phone)
         )
+        return "asked_age"
 
 
 def _parse_birth_year(text):

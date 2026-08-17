@@ -1172,6 +1172,7 @@ async def profile_survey_nudge():
             glang = get_group_lang(group) if group else "ru"
             key = {
                 "asked_location": "profile_survey_q_location",
+                "location_retry": "profile_survey_q_location_retry",
                 "asked_age": "profile_survey_q_age",
                 "asked_age_retry": "profile_survey_q_age_retry",
             }[row["survey_stage"]]

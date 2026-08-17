@@ -342,6 +342,45 @@ def test_survey_flow_location_then_age(test_db):
     assert row["survey_birth_year"] == get_now().year - 22
 
 
+def test_save_survey_location_greeting_triggers_one_retry_then_accepts(test_db):
+    """Ответ на вопрос про локацию - голое приветствие (рефлекс на прошлый
+    текст вопроса) - переспрашиваем один раз, второй ответ принимаем как
+    есть, даже если снова не похож на место (17.08.2026, найдено на
+    реальных ответах: 3 из первых 10 ответили приветствием)."""
+    _make_survey_candidate(test_db, phone="700122", days_ago=3, dm_ok=1)
+    start_survey("700122")
+
+    stage = save_survey_location("700122", "Ваалейкум ассалам")
+    assert stage == "location_retry"
+    assert get_survey_stage("700122") == "location_retry"
+
+    stage = save_survey_location("700122", "Сокулук")
+    assert stage == "asked_age"
+    with db() as c:
+        row = c.execute("SELECT survey_location FROM users WHERE phone=?", ("700122",)).fetchone()
+    assert row["survey_location"] == "Сокулук"
+
+
+@pytest.mark.parametrize("text,expected_stage", [
+    ("Ваалейкум ассалам", "location_retry"),
+    ("Уа Алейкум Ас Салям", "location_retry"),
+    ("Ассаляму алейкум", "location_retry"),
+    ("Ош", "asked_age"),
+    ("Сокулук", "asked_age"),
+    ("Кыргызстан Бишкек", "asked_age"),
+    ("Германия", "asked_age"),
+])
+def test_save_survey_location_greeting_detection(test_db, text, expected_stage):
+    """Короткие легитимные ответы ("Ош" - 2 буквы) не должны попадать под
+    переспрос - регресс-тест на баг, пойманный до коммита (17.08.2026).
+    Каждый вызов параметризован на свою изолированную test_db, так что
+    фиксированные phone/chat_id между вариантами не конфликтуют."""
+    phone = "700199"
+    _make_survey_candidate(test_db, phone=phone, days_ago=3, dm_ok=1, chat_id="-100799")
+    start_survey(phone)
+    assert save_survey_location(phone, text) == expected_stage
+
+
 def test_save_survey_age_garbage_triggers_one_retry_then_accepts(test_db):
     """Первый нераспознанный ответ -> один переспрос (asked_age_retry), а не
     сразу 'done'. Второй нераспознанный ответ -> принимается как есть, год
