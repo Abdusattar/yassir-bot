@@ -231,6 +231,11 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     progress = get_progress_map(user_id, [w["id"] for w in pool])
     q = generate_question(pool, progress)
     feedback = "✅ Верно!" if correct else f"❌ Не то, правильно: {state['target']}"
+    # Короткая подсказка до порога зачёта задания "Слова" - решение
+    # пользователя 17.08.2026 (тот же день, что и снижение порога 20->15).
+    if count_today < DAILY_WORDS_FOR_TASK_CREDIT:
+        remaining = DAILY_WORDS_FOR_TASK_CREDIT - count_today
+        feedback += f"\n📝 Отметь ещё {remaining} слов — и «Слова» засчитается"
 
     if q is None:
         _active_question.pop(user_id, None)
