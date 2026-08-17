@@ -8,30 +8,27 @@
 новую карточку без начисления балла за этот тап (advisor 17.08.2026,
 пункт устойчивости к рестарту).
 
-Студент называет НОМЕР СТРАНИЦЫ печатного мусхафа (core/quran_pages.py),
-не диапазон аятов - так он реально ориентируется в Коране (17.08.2026,
-второй заход после прямого вопроса пользователя об удобстве навигации).
-
-Слова вопросов идут ВПЕРЕМЕШКУ со ВСЕХ страниц, которые студент уже
-тренировал (get_words_for_trained_pages), не с одной "текущей" страницы -
-решение пользователя 17.08.2026 (третий заход): раньше сессия держалась
-одной страницы (взвешенный случайный выбор среди тренированных), но это
-всё ещё позволяло старым страницам "простаивать" весь сеанс. Теперь у
-каждого вопроса своя страница (page_for_ayah), заголовок карточки её
-показывает, а "вес" на карточке - ОБЩИЙ (compute_overall_score), не
-одной страницы. mufradat_page (set_current_page) больше не читается для
-выбора пула - только пишется, как побочный след явного выбора номера.
+Номер страницы - это ЗАКЛАДКА студента ("дошёл до этой страницы"), не
+"добавь именно эту одну страницу" (решение пользователя 17.08.2026,
+пятый заход, после прямой жалобы "почему у меня страница не меняется,
+слова должны идти рандомно автоматом"). Слова вопросов идут вперемешку
+со ВСЕХ страниц от начала суры до закладки разом (get_words_for_bookmark,
+core/mufradat.py) - студенту не нужно вручную добавлять каждую страницу.
+Первый ввод страницы - текстом (студент явно не ориентируется, пока
+закладки нет), дальше - кнопки ➕/➖ (на 1 страницу), без повторного
+набора текста - именно так описал пользователь: "рядом кнопка плюс,
+кнопка минус тоже".
 """
 import logging
 import re
 
 from core.db import find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date, get_today_report
 from core.mufradat import (
-    get_words_in_range, generate_question, get_progress_map, record_answer,
-    set_current_page, mark_page_trained, get_leaderboard, get_words_for_trained_pages,
+    generate_question, get_progress_map, record_answer,
+    set_current_page, get_current_page, get_words_for_bookmark, mark_page_trained, get_leaderboard,
     record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT, compute_overall_score,
 )
-from core.quran_pages import resolve_page, page_for_ayah, BAQARA_SURAH, BAQARA_FIRST_PAGE, BAQARA_LAST_PAGE
+from core.quran_pages import resolve_page, page_for_ayah, BAQARA_FIRST_PAGE, BAQARA_LAST_PAGE
 from core.tg import send_message, send_message_with_button_rows, edit_message_with_button_rows
 
 log = logging.getLogger(__name__)
@@ -51,18 +48,18 @@ def _page_prompt_text():
 
 
 async def start_trainer(user_id, chat_id):
-    pool = get_words_for_trained_pages(user_id)
-    if not pool:
+    if get_current_page(user_id) is None:
         _awaiting_page.add(user_id)
         await send_message(chat_id, _page_prompt_text())
         return
-    await _send_new_card(user_id, chat_id, pool)
+    await _send_new_card(user_id, chat_id, get_words_for_bookmark(user_id))
 
 
 async def handle_page_text(user_id, chat_id, text):
     """Возвращает True, если сообщение перехвачено (студент ждал вопрос
-    про номер страницы) - вызывающий код тогда не должен обрабатывать
-    text дальше."""
+    про номер страницы - только ПЕРВЫЙ ввод, пока закладки ещё нет,
+    дальше закладка двигается кнопками ➕/➖) - вызывающий код тогда не
+    должен обрабатывать text дальше."""
     if user_id not in _awaiting_page:
         return False
 
@@ -83,10 +80,7 @@ async def handle_page_text(user_id, chat_id, text):
 
     _awaiting_page.discard(user_id)
     set_current_page(user_id, page_number, *ayah_range)
-    # Сразу открываем карточку именно с ЭТОЙ новой страницы (не общий пул) -
-    # иначе только что добавленная страница потеряется среди старых слов.
-    words = get_words_in_range(BAQARA_SURAH, *ayah_range)
-    await _send_new_card(user_id, chat_id, words)
+    await _send_new_card(user_id, chat_id, get_words_for_bookmark(user_id))
     return True
 
 
@@ -110,12 +104,13 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
     только в начале/конце сеанса (решение пользователя 17.08.2026,
     третий заход - старая причина прятать её была в том, что дневная
     метрика не успевала сдвинуться за один сеанс, это больше не так)."""
-    page_number = page_for_ayah(q["word"]["ayah_number"])
+    word_page = page_for_ayah(q["word"]["ayah_number"])
+    bookmark_page = get_current_page(user_id)
     lines = []
     if feedback:
         lines.append(feedback)
         lines.append("")
-    lines.append(f"📖 Бакара, стр. {page_number}")
+    lines.append(f"📖 Твоя страница: {bookmark_page}  (слово со стр. {word_page})")
     lines.append(f"Слово: <b>{q['word']['arabic_text']}</b>")
     lines.append(f"\n✅ Верно за сеанс: {session_correct}")
     if overall_score:
@@ -127,7 +122,12 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
     for i in range(0, len(opts), 2):
         row = [(opts[j], f"muf:{user_id}:{j}") for j in (i, i + 1) if j < len(opts)]
         rows.append(row)
-    rows.append([("➕ Новая страница", f"mufpg:{user_id}"), ("✅ Закончить", f"mufend:{user_id}")])
+    # ➕/➖ двигают ЗАКЛАДКУ на 1 страницу (не текстовый ввод - решение
+    # пользователя 17.08.2026, пятый заход) - "-" неактивна на BAQARA_FIRST_PAGE,
+    # "+" на BAQARA_LAST_PAGE, но Telegram не умеет отключать кнопки без
+    # изменения callback_data - тап на границе просто no-op в обработчике.
+    rows.append([("➖", f"mufdec:{user_id}"), ("➕", f"mufinc:{user_id}")])
+    rows.append([("✅ Закончить", f"mufend:{user_id}")])
     rows.append([("🏆 Рейтинг", f"muftop:{user_id}")])
     return text, rows
 
@@ -136,7 +136,10 @@ async def _send_new_card(user_id, chat_id, words_pool):
     progress = get_progress_map(user_id, [w["id"] for w in words_pool])
     q = generate_question(words_pool, progress)
     if q is None:
-        await send_message(chat_id, "Пока маловато слов для тренажёра 🤲 Попробуй добавить ещё страницу.")
+        await send_message_with_button_rows(
+            chat_id, "Пока маловато слов для тренажёра 🤲 Сдвинь страницу дальше.",
+            [[("➖", f"mufdec:{user_id}"), ("➕", f"mufinc:{user_id}")]]
+        )
         return
 
     overall_score = compute_overall_score(user_id)
@@ -195,7 +198,7 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     if not state or state.get("message_id") != message_id:
         # Память потеряна (рестарт бота) или тап по устаревшей карточке -
         # не молчим, шлём свежую карточку, без начисления балла за этот тап.
-        pool = get_words_for_trained_pages(user_id)
+        pool = get_words_for_bookmark(user_id)
         if not pool:
             await send_message(chat_id, "Сессия тренажёра сброшена, набери /muf заново 🤲")
             return
@@ -208,7 +211,15 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     chosen = opts[slot]
     correct = (chosen == state["target"])
     record_answer(user_id, state["word_id"], correct)
-    mark_page_trained(user_id, state["word_page"])
+    # Отмечаем ЗАКЛАДКУ, не страницу слова (state["word_page"]) - вопрос
+    # взят из пула 2..закладка равномерно, страница СЛУЧАЙНОГО слова почти
+    # всегда НИЖЕ закладки (1 из N шанс совпасть с ней) - если отмечать её,
+    # MAX(page_number) в mufradat_trained_pages (глубина для /muftop) годами
+    # отставал бы от реальной закладки студента (advisor 17.08.2026, восьмой
+    # заход). Закладка - и есть честное свидетельство "дошёл досюда и хотя
+    # бы раз ответил", подделать её нельзя не отвечая (mark_page_trained
+    # вызывается только здесь, после реального ответа).
+    mark_page_trained(user_id, get_current_page(user_id))
 
     session_correct = state.get("session_correct", 0) + (1 if correct else 0)
 
@@ -216,7 +227,7 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     if count_today >= DAILY_WORDS_FOR_TASK_CREDIT:
         await _credit_task_if_applicable(user_id, chat_id)
 
-    pool = get_words_for_trained_pages(user_id)
+    pool = get_words_for_bookmark(user_id)
     progress = get_progress_map(user_id, [w["id"] for w in pool])
     q = generate_question(pool, progress)
     feedback = "✅ Верно!" if correct else f"❌ Не то, правильно: {state['target']}"
@@ -226,14 +237,16 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
         # Раньше это было недостижимо (слова только теряли вес, не
         # исключались) - с жёстким исключением "отдыхающих" выученных слов
         # (RECHECK_AFTER_DAYS) пул реально может опустеть, если студент
-        # прошёл всю страницу - тупик без объяснения и кнопок был багом
+        # прошёл всю закладку - тупик без объяснения и кнопок был багом
         # (advisor 17.08.2026, пятый заход).
-        text = feedback + "\n\nСлова на этой странице пока закончились 🤲 Добавь ещё одну."
+        text = feedback + "\n\nСлова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше."
         await edit_message_with_button_rows(
-            chat_id, message_id, text, [[("➕ Новая страница", f"mufpg:{user_id}")]]
+            chat_id, message_id, text, [[("➕", f"mufinc:{user_id}")]]
         )
         return
 
+    # pool/progress уже те же, что читает compute_overall_score по умолчанию
+    # (закладка), не дублируем поход в БД (advisor 17.08.2026, пятый заход).
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
     text, rows = _render_card(user_id, q, session_correct, overall_score, feedback)
     _active_question[user_id] = {
@@ -245,10 +258,55 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     await edit_message_with_button_rows(chat_id, message_id, text, rows)
 
 
-async def handle_change_page_tap(user_id, chat_id):
-    _active_question.pop(user_id, None)
-    _awaiting_page.add(user_id)
-    await send_message(chat_id, _page_prompt_text())
+async def handle_page_step_tap(user_id, chat_id, message_id, delta):
+    """Кнопки ➕/➖ - двигают закладку на 1 страницу без текстового ввода
+    (решение пользователя 17.08.2026, пятый заход). Если закладки ещё нет
+    вообще (не должно случиться - кнопка появляется только на карточке,
+    а карточка требует закладку - но на случай гонки/старой карточки)
+    откатываемся на текстовый первый ввод."""
+    current = get_current_page(user_id)
+    if current is None:
+        _active_question.pop(user_id, None)
+        _awaiting_page.add(user_id)
+        await send_message(chat_id, _page_prompt_text())
+        return
+
+    new_page = max(BAQARA_FIRST_PAGE, min(BAQARA_LAST_PAGE, current + delta))
+    if new_page == current:
+        return  # уже на границе диапазона - no-op, Telegram не отключает кнопки
+
+    set_current_page(user_id, new_page, *resolve_page(new_page))
+
+    pool = get_words_for_bookmark(user_id)
+    progress = get_progress_map(user_id, [w["id"] for w in pool])
+    q = generate_question(pool, progress)
+    overall_score = compute_overall_score(user_id, words=pool, progress=progress)
+    if q is None:
+        _active_question.pop(user_id, None)
+        await edit_message_with_button_rows(
+            chat_id, message_id, "Пока маловато слов для тренажёра 🤲",
+            [[("➖", f"mufdec:{user_id}"), ("➕", f"mufinc:{user_id}")]]
+        )
+        return
+
+    # Тап по устаревшей карточке (другой message_id) не наследует её
+    # session_correct - та же защита, что в handle_answer_tap.
+    state = _active_question.get(user_id)
+    session_correct = state.get("session_correct", 0) if state and state.get("message_id") == message_id else 0
+
+    # start_score10 ВСЕГДА пересчитывается заново, не наследуется - шаг
+    # закладки меняет знаменатель (total слов), сравнение со старым
+    # start_score10 сравнивало бы разные знаменатели и могло показать
+    # ложное падение веса на "Закончить" без единой ошибки студента
+    # (advisor 17.08.2026, восьмой заход).
+    text, rows = _render_card(user_id, q, session_correct, overall_score)
+    _active_question[user_id] = {
+        "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
+        "word_page": page_for_ayah(q["word"]["ayah_number"]),
+        "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
+        "start_score10": overall_score["score10"] if overall_score else None,
+    }
+    await edit_message_with_button_rows(chat_id, message_id, text, rows)
 
 
 def _leaderboard_for_this_bot():

@@ -27,7 +27,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from core.sampler import HADITHS_DB
-from core.quran_pages import resolve_page, BAQARA_SURAH
+from core.quran_pages import resolve_page, page_for_ayah, BAQARA_SURAH, BAQARA_FIRST_PAGE
 
 _TZ = ZoneInfo("Asia/Bishkek")  # created_at в score_events хранится в UTC,
 # а date - в этом поясе; здесь той же путаницы не будет, т.к. столбца даты
@@ -158,13 +158,31 @@ def _repeated_glosses(words, min_count=3):
     return {norm for norm, cnt in counts.items() if cnt >= min_count}
 
 
-def pick_question_word(words, progress_by_id, min_repeat_exclude=3):
+def _scaled_repeat_threshold(words):
+    """Порог "часто повторяющийся перевод" (3 на одну страницу, см.
+    модульный docstring) НЕ масштабируется с диапазоном напрямую -
+    измерено эмпирически (advisor 17.08.2026, седьмой заход, после
+    перехода на пул "вся закладка 2..N" вместо одной страницы): при
+    фиксированном 3 доля годных целей падает с 83% (1 страница) до 49%
+    (2-49 страницы) - настоящие содержательные слова, случайно встретившиеся
+    3+ раза в большой выборке, начинают исключаться наравне с частицами.
+    Формула 3 + 1.5×(страниц-1) держит долю в районе 85-91% на любом
+    диапазоне (проверено на страницах 1, 13, 24, 48)."""
+    pages = {page_for_ayah(w["ayah_number"]) for w in words}
+    n = max(1, len(pages))
+    return max(3, round(3 + 1.5 * (n - 1)))
+
+
+def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
     """words - результат get_words_in_range. Целью вопроса не может быть
     слово с пояснением в скобках (не проверяет знание слова, угадывается
     по форме ответа), слово с часто повторяющимся переводом (см. модульный
-    docstring), а также "выученное" слово, которое ещё не отдохнуло
-    положенные RECHECK_AFTER_DAYS дней - убрано из пула совсем, не просто
-    с низким весом (решение пользователя 17.08.2026, четвёртый заход)."""
+    docstring и _scaled_repeat_threshold), а также "выученное" слово,
+    которое ещё не отдохнуло положенные RECHECK_AFTER_DAYS дней - убрано
+    из пула совсем, не просто с низким весом (решение пользователя
+    17.08.2026, четвёртый заход)."""
+    if min_repeat_exclude is None:
+        min_repeat_exclude = _scaled_repeat_threshold(words)
     repeated = _repeated_glosses(words, min_repeat_exclude)
     candidates = []
     for w in words:
@@ -299,13 +317,15 @@ def word_stimulus_credit(progress_row):
 
 
 def set_current_page(user_id, page_number, start_ayah, end_ayah):
-    """Пишет последнюю явно введённую студентом страницу - НЕ читается
-    нигде для выбора пула тренажёра (слова идут вперемешку со всех
-    тренированных страниц, см. get_words_for_trained_pages). Оставлено
-    как побочный, потенциально полезный след истории на будущее -
-    удаление читателя (get_current_page) не создаёт гонки с активной
-    карточкой, т.к. она хранит page_number вопроса отдельно
-    (advisor 17.08.2026, финальный заход)."""
+    """Пишет ЗАКЛАДКУ студента - "дошёл до этой страницы" (не "добавь
+    именно эту одну страницу"). ЯВЛЯЕТСЯ источником истины для пула
+    тренажёра - get_words_for_bookmark берёт слова со ВСЕХ страниц от
+    начала суры до этой закладки разом (решение пользователя 17.08.2026,
+    пятый заход: "рандомно должно идти... без ручного добавления каждой
+    страницы"). Раньше эта таблица была почти мёртвой (пул строился по
+    mufradat_trained_pages) - теперь наоборот, mufradat_trained_pages
+    осталась только как ДОКАЗАТЕЛЬСТВО глубины для рейтинга (см.
+    get_leaderboard), а не источник пула."""
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(_PAGE_SCHEMA)
         conn.execute(
@@ -314,9 +334,46 @@ def set_current_page(user_id, page_number, start_ayah, end_ayah):
         )
 
 
+def get_current_page(user_id):
+    """Текущая закладка студента (номер страницы) или None, если ещё не
+    установлена (студент ни разу не вводил страницу)."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_PAGE_SCHEMA)
+        row = conn.execute(
+            "SELECT page_number FROM mufradat_page WHERE user_id=?", (user_id,)
+        ).fetchone()
+    return row[0] if row else None
+
+
+def get_words_for_bookmark(user_id):
+    """Пул слов тренажёра - ВСЕ страницы от начала суры (BAQARA_FIRST_PAGE)
+    до закладки студента разом, вперемешку (не только последняя введённая
+    страница) - решение пользователя 17.08.2026, пятый заход. Страницы не
+    разрывают аяты (проверено в core/quran_pages.py), поэтому диапазон
+    2..N - это просто один непрерывный отрезок аятов, не нужно объединять
+    по одной странице за раз."""
+    page_number = get_current_page(user_id)
+    if not page_number:
+        return []
+    start_ayah = resolve_page(BAQARA_FIRST_PAGE)[0]
+    end_ayah = resolve_page(page_number)[1]
+    return get_words_in_range(BAQARA_SURAH, start_ayah, end_ayah)
+
+
 def mark_page_trained(user_id, page_number):
-    """Вызывается при КАЖДОМ ответе (не при открытии карточки) - "трогал"
-    страницу значит реально на ней отвечал, не просто зашёл посмотреть."""
+    """Вызывается при КАЖДОМ ответе (не при открытии карточки). Вызывающий
+    код (core/mufradat_bot.py) обязан передавать ЗАКЛАДКУ студента
+    (get_current_page), НЕ страницу конкретного заданного слова - вопросы
+    берутся равномерно из всего диапазона 2..закладка, поэтому страница
+    случайного слова почти всегда НИЖЕ закладки (шанс совпасть ~1/N) -
+    если бы отмечали её, MAX(page_number) в mufradat_trained_pages (полка
+    рейтинга, см. get_leaderboard) годами отставал бы от реальной глубины
+    студента (баг найден advisor 17.08.2026, восьмой заход, до деплоя).
+
+    НЕ источник пула тренажёра (см. get_words_for_bookmark) - только
+    доказательство глубины для полок рейтинга: "дошёл до этой страницы
+    И хотя бы раз ответил" - подделать нельзя не отвечая (защита от
+    "вписал 49 и сразу попал в верхнюю полку", advisor, седьмой заход)."""
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(_TRAINED_PAGES_SCHEMA)
         conn.execute(
@@ -325,45 +382,32 @@ def mark_page_trained(user_id, page_number):
         )
 
 
-def get_trained_pages(user_id):
-    with sqlite3.connect(HADITHS_DB) as conn:
-        conn.execute(_TRAINED_PAGES_SCHEMA)
-        return [r[0] for r in conn.execute(
-            "SELECT page_number FROM mufradat_trained_pages WHERE user_id=?", (user_id,)
-        ).fetchall()]
-
-
-def get_words_for_trained_pages(user_id):
-    """Пул слов со ВСЕХ тренированных страниц студента разом, вперемешку -
-    не одна страница за раз, чтобы старые страницы естественно повторялись
-    вместе с новой работой (решение пользователя 17.08.2026, второй заход
-    после жалобы на залипание на одной странице)."""
-    words = []
-    for page_number in get_trained_pages(user_id):
-        ayah_range = resolve_page(page_number)
-        if ayah_range:
-            words.extend(get_words_in_range(BAQARA_SURAH, *ayah_range))
-    return words
-
-
 def compute_overall_score(user_id, words=None, progress=None):
-    """Общий вес студента среди ВСЕХ слов на страницах, которые он реально
-    тренировал (не "текущая страница", см. mufradat_trained_pages выше).
-    Возвращает None, если студент ещё не тренировал ни одной страницы.
+    """Общий вес студента среди ВСЕХ слов на закладке (get_words_for_bookmark,
+    2..N, ТОТ ЖЕ пул, что и у тренажёра, не только реально тронутые
+    страницы). Возвращает None, если закладка ещё не установлена.
+
+    Деноминатор - именно закладка, не mufradat_trained_pages (было так в
+    первой версии этой правки) - иначе знаменатель рос НЕПРЕДСКАЗУЕМО
+    посреди сеанса (каждый тап на новую страницу пула резко увеличивал
+    total), из-за чего score10 мог УПАСТЬ после верного ответа - тот же
+    "вес не растёт" эффект, который вся эта правка должна была устранить
+    (баг найден advisor 17.08.2026, седьмой заход, до деплоя). Защита от
+    "вписал 49 и получил дутый вес" здесь не нужна - score10 личное
+    отображаемое число, не критерий ранжирования в /muftop (там сортировка
+    по mastered ВНУТРИ полки, а полка - по mufradat_trained_pages, которая
+    осталась честной).
 
     "mastered"/"total" и "score10" - одна и та же метрика (correct_streak),
     просто по-разному агрегированная: "mastered" - целое число слов,
-    достигших MASTERY_STREAK (используется в /muftop), "score10" - плавная
-    доля пути к этому же порогу по ВСЕМ словам (word_stimulus_credit),
-    двигается с каждым верным ответом, даже в первый день - иначе студент
-    не видит прогресса и теряет мотивацию (решение пользователя 17.08.2026).
+    достигших MASTERY_STREAK, "score10" - плавная доля пути к этому же
+    порогу по ВСЕМ словам (word_stimulus_credit), двигается с каждым
+    верным ответом, даже в первый день (решение пользователя 17.08.2026).
 
-    words/progress - опционально, если вызывающий код уже их получил
-    (карточка тренажёра на каждом тапе итак ходит за пулом и прогрессом
-    для generate_question) - не дублируем те же 2 запроса к БД
-    (advisor 17.08.2026, пятый заход)."""
+    words/progress - опционально, если вызывающий код уже их получил -
+    не дублируем те же 2 запроса к БД (advisor, пятый заход)."""
     if words is None:
-        words = get_words_for_trained_pages(user_id)
+        words = get_words_for_bookmark(user_id)
     if not words:
         return None
     if progress is None:
@@ -380,12 +424,11 @@ def compute_overall_score(user_id, words=None, progress=None):
 
 
 def compute_page_score(user_id, page_number):
-    """Вес ОДНОЙ страницы (не всех тренированных, как compute_overall_score) -
+    """Вес ОДНОЙ страницы (не всей закладки, как compute_overall_score) -
     доля выученных слов именно на ней. Сейчас не используется в самом
-    тренажёре (слова вперемешку со всех страниц, см.
-    get_words_for_trained_pages) - оставлен для будущего экрана
-    цветовой шкалы по страницам (project_mufradat_trainer_engine,
-    "не начато")."""
+    тренажёре (слова вперемешку со всей закладки, см.
+    get_words_for_bookmark) - оставлен для будущего экрана цветовой шкалы
+    по страницам (project_mufradat_trainer_engine, "не начато")."""
     ayah_range = resolve_page(page_number)
     if ayah_range is None:
         return None

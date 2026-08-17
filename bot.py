@@ -153,12 +153,14 @@ async def main():
                         if len(parts) == 3 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
                             from core.mufradat_bot import handle_answer_tap
                             asyncio.create_task(handle_answer_tap(cq_uid, cq_chat_id, cq_message_id, int(parts[2])))
-                    # "mufpg:<uid>" - кнопка "Новая страница" в тренажёре муфрадата
-                    elif cq_data.startswith("mufpg:"):
+                    # "mufinc:<uid>"/"mufdec:<uid>" - кнопки ➕/➖ в тренажёре
+                    # муфрадата, двигают закладку студента на 1 страницу
+                    elif cq_data.startswith("mufinc:") or cq_data.startswith("mufdec:"):
                         parts = cq_data.split(":", 1)
-                        if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id:
-                            from core.mufradat_bot import handle_change_page_tap
-                            asyncio.create_task(handle_change_page_tap(cq_uid, cq_chat_id))
+                        if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
+                            from core.mufradat_bot import handle_page_step_tap
+                            delta = 1 if cq_data.startswith("mufinc:") else -1
+                            asyncio.create_task(handle_page_step_tap(cq_uid, cq_chat_id, cq_message_id, delta))
                     # "mufend:<uid>" - кнопка "Закончить" в тренажёре муфрадата
                     elif cq_data.startswith("mufend:"):
                         parts = cq_data.split(":", 1)
