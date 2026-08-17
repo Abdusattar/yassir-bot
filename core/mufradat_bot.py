@@ -11,20 +11,32 @@
 Студент называет НОМЕР СТРАНИЦЫ печатного мусхафа (core/quran_pages.py),
 не диапазон аятов - так он реально ориентируется в Коране (17.08.2026,
 второй заход после прямого вопроса пользователя об удобстве навигации).
+
+Слова вопросов идут ВПЕРЕМЕШКУ со ВСЕХ страниц, которые студент уже
+тренировал (get_words_for_trained_pages), не с одной "текущей" страницы -
+решение пользователя 17.08.2026 (третий заход): раньше сессия держалась
+одной страницы (взвешенный случайный выбор среди тренированных), но это
+всё ещё позволяло старым страницам "простаивать" весь сеанс. Теперь у
+каждого вопроса своя страница (page_for_ayah), заголовок карточки её
+показывает, а "вес" на карточке - ОБЩИЙ (compute_overall_score), не
+одной страницы. mufradat_page (set_current_page) больше не читается для
+выбора пула - только пишется, как побочный след явного выбора номера.
 """
 import logging
 import re
 
+from core.db import find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date, get_today_report
 from core.mufradat import (
     get_words_in_range, generate_question, get_progress_map, record_answer,
-    get_current_page, set_current_page,
+    set_current_page, mark_page_trained, get_leaderboard, get_words_for_trained_pages,
+    record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT, compute_overall_score,
 )
-from core.quran_pages import resolve_page, BAQARA_FIRST_PAGE, BAQARA_LAST_PAGE, BAQARA_SURAH
+from core.quran_pages import resolve_page, page_for_ayah, BAQARA_SURAH, BAQARA_FIRST_PAGE, BAQARA_LAST_PAGE
 from core.tg import send_message, send_message_with_button_rows, edit_message_with_button_rows
 
 log = logging.getLogger(__name__)
 
-_active_question = {}  # user_id -> {word_id, target, options, page, chat_id, message_id}
+_active_question = {}  # user_id -> {word_id, target, options, word_page, chat_id, message_id, session_correct, start_score10}
 _awaiting_page = set()  # user_id, ждём текстовый ответ с номером страницы
 
 _PAGE_NUM_RE = re.compile(r"^\s*(\d{1,3})\s*$")
@@ -39,12 +51,12 @@ def _page_prompt_text():
 
 
 async def start_trainer(user_id, chat_id):
-    page = get_current_page(user_id)
-    if page is None:
+    pool = get_words_for_trained_pages(user_id)
+    if not pool:
         _awaiting_page.add(user_id)
         await send_message(chat_id, _page_prompt_text())
         return
-    await _send_new_card(user_id, chat_id, page)
+    await _send_new_card(user_id, chat_id, pool)
 
 
 async def handle_page_text(user_id, chat_id, text):
@@ -71,18 +83,32 @@ async def handle_page_text(user_id, chat_id, text):
 
     _awaiting_page.discard(user_id)
     set_current_page(user_id, page_number, *ayah_range)
-    await _send_new_card(user_id, chat_id, (page_number, *ayah_range))
+    # Сразу открываем карточку именно с ЭТОЙ новой страницы (не общий пул) -
+    # иначе только что добавленная страница потеряется среди старых слов.
+    words = get_words_in_range(BAQARA_SURAH, *ayah_range)
+    await _send_new_card(user_id, chat_id, words)
     return True
 
 
-def _render_card(user_id, q, page, feedback=None):
-    page_number = page[0]
+def _render_card(user_id, q, session_correct, overall_score=None, feedback=None):
+    """session_correct - счётчик верных ответов ЭТОГО сеанса (живёт в
+    _active_question, монотонно растёт, никогда не падает от ошибки) -
+    показывается на КАЖДОЙ карточке, для мгновенной обратной связи.
+    overall_score ("общий вес", days_correct-based) показывается ТОЛЬКО
+    при старте сеанса - это многодневная метрика, в рамках одного сеанса
+    почти никогда не сдвигается (days_correct растёт максимум раз в
+    календарный день), показ её на каждом тапе создавал ложное ощущение
+    "вес не растёт" (advisor 17.08.2026, реконсиляция)."""
+    page_number = page_for_ayah(q["word"]["ayah_number"])
     lines = []
     if feedback:
         lines.append(feedback)
         lines.append("")
     lines.append(f"📖 Бакара, стр. {page_number}")
-    lines.append(f"Слово: {q['word']['arabic_text']}")
+    lines.append(f"Слово: <b>{q['word']['arabic_text']}</b>")
+    lines.append(f"\n✅ Верно за сеанс: {session_correct}")
+    if overall_score:
+        lines.append(f"📊 Общий вес: {overall_score['score10']}/10  ({overall_score['mastered']}/{overall_score['total']})")
     text = "\n".join(lines)
 
     opts = q["options"]
@@ -90,28 +116,52 @@ def _render_card(user_id, q, page, feedback=None):
     for i in range(0, len(opts), 2):
         row = [(opts[j], f"muf:{user_id}:{j}") for j in (i, i + 1) if j < len(opts)]
         rows.append(row)
-    rows.append([("🔄 Сменить страницу", f"mufpg:{user_id}")])
+    rows.append([("➕ Новая страница", f"mufpg:{user_id}"), ("✅ Закончить", f"mufend:{user_id}")])
     return text, rows
 
 
-async def _send_new_card(user_id, chat_id, page):
-    page_number, start_ayah, end_ayah = page
-    words = get_words_in_range(BAQARA_SURAH, start_ayah, end_ayah)
-    progress = get_progress_map(user_id, [w["id"] for w in words])
-    q = generate_question(words, progress)
+async def _send_new_card(user_id, chat_id, words_pool):
+    progress = get_progress_map(user_id, [w["id"] for w in words_pool])
+    q = generate_question(words_pool, progress)
     if q is None:
-        await send_message(chat_id, "На этой странице пока маловато слов для тренажёра 🤲 Попробуй другую страницу.")
+        await send_message(chat_id, "Пока маловато слов для тренажёра 🤲 Попробуй добавить ещё страницу.")
         return
 
-    text, rows = _render_card(user_id, q, page)
+    overall_score = compute_overall_score(user_id)
+    text, rows = _render_card(user_id, q, 0, overall_score)
     resp = await send_message_with_button_rows(chat_id, text, rows)
     msg_id = ((resp or {}).get("result") or {}).get("message_id")
     if not msg_id:
         return
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
-        "page": page, "chat_id": chat_id, "message_id": msg_id,
+        "word_page": page_for_ayah(q["word"]["ayah_number"]),
+        "chat_id": chat_id, "message_id": msg_id, "session_correct": 0,
+        "start_score10": overall_score["score10"] if overall_score else None,
     }
+
+
+async def _credit_task_if_applicable(user_id, chat_id):
+    """20+ разных слов за день - засчитываем задание 't' ("Слова (или
+    Перевод)", core/handlers.py), если оно вообще есть в группе студента.
+    Порог в вызывающем коде - "count_today >= ...", не "==": два тапа
+    почти одновременно (без лока, в отличие от queued_process_message)
+    могут оба увидеть count=19→20 или проскочить ровно 20 - save_report
+    идемпотентен (INSERT OR IGNORE), поэтому лишний вызов не страшен.
+    Но чтобы не слать поздравление на КАЖДЫЙ следующий тап после 20-го,
+    сверяемся с get_today_report - шлём текст только при первой отметке
+    (advisor 17.08.2026, поймал и гонку, и повторный спам)."""
+    group = get_learning_group(user_id)
+    if not group or "t" not in get_group_tasks(group):
+        return
+    user = find_user_by_phone(user_id)
+    if not user:
+        return
+    already = get_today_report(user["id"], group["id"]) or {}
+    if already.get("t"):
+        return
+    save_report(user["id"], group["id"], get_date(), {"t": True})
+    await send_message(chat_id, "🎉 Задание «Слова» на сегодня засчитано — 20 разных слов проработано!")
 
 
 async def handle_answer_tap(user_id, chat_id, message_id, slot):
@@ -119,11 +169,11 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     if not state or state.get("message_id") != message_id:
         # Память потеряна (рестарт бота) или тап по устаревшей карточке -
         # не молчим, шлём свежую карточку, без начисления балла за этот тап.
-        page = get_current_page(user_id)
-        if not page:
+        pool = get_words_for_trained_pages(user_id)
+        if not pool:
             await send_message(chat_id, "Сессия тренажёра сброшена, набери /muf заново 🤲")
             return
-        await _send_new_card(user_id, chat_id, page)
+        await _send_new_card(user_id, chat_id, pool)
         return
 
     opts = state["options"]
@@ -132,12 +182,17 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     chosen = opts[slot]
     correct = (chosen == state["target"])
     record_answer(user_id, state["word_id"], correct)
+    mark_page_trained(user_id, state["word_page"])
 
-    page = state["page"]
-    _, start_ayah, end_ayah = page
-    words = get_words_in_range(BAQARA_SURAH, start_ayah, end_ayah)
-    progress = get_progress_map(user_id, [w["id"] for w in words])
-    q = generate_question(words, progress)
+    session_correct = state.get("session_correct", 0) + (1 if correct else 0)
+
+    count_today = record_daily_answered_word(user_id, state["word_id"])
+    if count_today >= DAILY_WORDS_FOR_TASK_CREDIT:
+        await _credit_task_if_applicable(user_id, chat_id)
+
+    pool = get_words_for_trained_pages(user_id)
+    progress = get_progress_map(user_id, [w["id"] for w in pool])
+    q = generate_question(pool, progress)
     feedback = "✅ Верно!" if correct else f"❌ Не то, правильно: {state['target']}"
 
     if q is None:
@@ -145,10 +200,12 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
         await edit_message_with_button_rows(chat_id, message_id, feedback, [])
         return
 
-    text, rows = _render_card(user_id, q, page, feedback)
+    text, rows = _render_card(user_id, q, session_correct, feedback=feedback)
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
-        "page": page, "chat_id": chat_id, "message_id": message_id,
+        "word_page": page_for_ayah(q["word"]["ayah_number"]),
+        "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
+        "start_score10": state.get("start_score10"),
     }
     await edit_message_with_button_rows(chat_id, message_id, text, rows)
 
@@ -157,3 +214,90 @@ async def handle_change_page_tap(user_id, chat_id):
     _active_question.pop(user_id, None)
     _awaiting_page.add(user_id)
     await send_message(chat_id, _page_prompt_text())
+
+
+def _find_rank(leaderboard, user_id):
+    for label, entries in leaderboard:
+        for i, (uid, score) in enumerate(entries, start=1):
+            if uid == user_id:
+                return label, i, len(entries), score
+    return None
+
+
+async def handle_end_session_tap(user_id, chat_id, message_id):
+    """Кнопка "Закончить" - студент явно завершает сеанс (пользователь
+    спросил "как закрывается тренажёр", 17.08.2026 - карточка до этого
+    висела активной бесконечно, без явного конца). Показывает итоговый
+    вес, насколько он вырос за сеанс (от start_score10), и место в
+    рейтинге (пользователь: "покажи его бал, топов, насколько улучшил")."""
+    state = _active_question.pop(user_id, None)
+    lines = ["Сессия завершена 🤲"]
+
+    end_score = compute_overall_score(user_id)
+    if end_score:
+        lines.append(f"📊 Общий вес: {end_score['score10']}/10  ({end_score['mastered']}/{end_score['total']})")
+        start10 = state.get("start_score10") if state else None
+        if start10 is not None:
+            delta = round(end_score["score10"] - start10, 2)
+            if delta > 0:
+                lines.append(f"📈 Вырос за сеанс на +{delta}")
+            elif delta < 0:
+                lines.append(f"📉 Снизился за сеанс на {delta}")
+            else:
+                lines.append("Вес за сеанс не изменился — для роста нужно несколько РАЗНЫХ дней 🤲")
+
+        rank_info = _find_rank(get_leaderboard(), user_id)
+        if rank_info:
+            label, rank, total_in_bracket, _score = rank_info
+            lines.append(f"🏆 Место в полке {label} стр.: {rank} из {total_in_bracket}")
+
+    await edit_message_with_button_rows(chat_id, message_id, "\n".join(lines), [])
+
+
+def _display_name(user_id):
+    user = find_user_by_phone(user_id)
+    return user["name"] if user else f"Студент {user_id[-4:]}"
+
+
+def _group_name(user_id):
+    group = get_learning_group(user_id)
+    return group["title"] if group and group["title"] else "—"
+
+
+def _render_leaderboard_text(user_id, leaderboard):
+    """leaderboard - результат get_leaderboard():
+    [(bracket_label, [(uid, score_dict), ...]), ...], уже отсортировано
+    внутри каждой полки по числу выученных слов (см. модульный docstring
+    core/mufradat.py:get_leaderboard)."""
+    if not any(entries for _, entries in leaderboard):
+        return "Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲 Начни первым: /muf"
+
+    lines = ["🏆 Топ по муфрадату (Бакара) — по глубине прохождения\n"]
+    my_bracket = my_rank = my_score = None
+
+    for label, entries in leaderboard:
+        if not entries:
+            continue
+        lines.append(f"📄 Стр. {label}:")
+        for i, (uid, score) in enumerate(entries, start=1):
+            if uid == user_id:
+                my_bracket, my_rank, my_score = label, i, score
+            if i <= 3:
+                marker = "👉 " if uid == user_id else ""
+                lines.append(f"  {marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — {score['mastered']} слов")
+        lines.append("")
+
+    if my_bracket and my_rank > 3:
+        lines.append(
+            f"Ты в полке {my_bracket} стр.: место {my_rank}, "
+            f"{my_score['mastered']} слов выучено (вес {my_score['score10']}/10)."
+        )
+    elif my_bracket is None:
+        lines.append("Ты ещё не тренировал ни одной страницы — набери /muf 🤲")
+
+    return "\n".join(lines).rstrip()
+
+
+async def show_leaderboard(user_id, chat_id):
+    leaderboard = get_leaderboard()
+    await send_message(chat_id, _render_leaderboard_text(user_id, leaderboard))

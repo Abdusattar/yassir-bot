@@ -838,6 +838,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             await start_trainer(phone, chat_id)
             return
 
+        if text == "/muftop":
+            from core.mufradat_bot import show_leaderboard
+            await show_leaderboard(phone, chat_id)
+            return
+
         # ── Тренажёр муфрадата - ответ на "какой диапазон аятов" ────────────
         if text and not text.startswith("/"):
             from core.mufradat_bot import handle_page_text

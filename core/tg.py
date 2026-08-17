@@ -147,7 +147,9 @@ async def send_message_with_button_rows(chat_id, text, rows):
         cid = int(str(chat_id))
     except (ValueError, TypeError):
         cid = chat_id
-    return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": _build_keyboard(rows)})
+    return await tg_call("sendMessage", {
+        "chat_id": cid, "text": text, "parse_mode": "HTML", "reply_markup": _build_keyboard(rows)
+    })
 
 
 async def edit_message_with_button_rows(chat_id, message_id, text, rows):
@@ -156,7 +158,8 @@ async def edit_message_with_button_rows(chat_id, message_id, text, rows):
     except (ValueError, TypeError):
         cid = chat_id
     return await tg_call("editMessageText", {
-        "chat_id": cid, "message_id": message_id, "text": text, "reply_markup": _build_keyboard(rows)
+        "chat_id": cid, "message_id": message_id, "text": text, "parse_mode": "HTML",
+        "reply_markup": _build_keyboard(rows)
     })
 
 

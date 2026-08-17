@@ -73,3 +73,14 @@ def resolve_page(page_number):
     """Возвращает (start_ayah, end_ayah) для номера страницы Бакары, или
     None, если номер вне диапазона (не Бакара / за пределами суры)."""
     return BAQARA_PAGES.get(page_number)
+
+
+def page_for_ayah(ayah_number):
+    """Обратная функция - номер страницы, на которой лежит аят. Нужна,
+    когда слова вопроса берутся из ПУЛА нескольких пройденных страниц
+    сразу (17.08.2026) - у каждого вопроса своя страница, надо знать,
+    какая именно, для заголовка карточки и отметки mark_page_trained."""
+    for page_number, (start, end) in BAQARA_PAGES.items():
+        if start <= ayah_number <= end:
+            return page_number
+    return None

@@ -27,6 +27,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from core.sampler import HADITHS_DB
+from core.quran_pages import resolve_page, BAQARA_SURAH
 
 _TZ = ZoneInfo("Asia/Bishkek")  # created_at в score_events хранится в UTC,
 # а date - в этом поясе; здесь той же путаницы не будет, т.к. столбца даты
@@ -53,10 +54,34 @@ _PAGE_SCHEMA = """
     )
 """
 
+# Страницы, которые студент РЕАЛЬНО тренировал (хотя бы раз ответил) -
+# отдельно от mufradat_page (там только ТЕКУЩАЯ страница, одна строка,
+# перезаписывается). Общий вес считается по объединению этих страниц, а
+# не по "текущей" или "до текущей" - иначе рейтинг ломается в обе стороны:
+# студент, который прыгнул сразу на стр.30, получил бы в знаменатель ~4000
+# слов, которые никогда не видел, а переписав номер на маленький - искусственно
+# поднял бы вес. Так вес растёт только от реальной работы (advisor 17.08.2026).
+_TRAINED_PAGES_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mufradat_trained_pages(
+        user_id TEXT NOT NULL,
+        page_number INTEGER NOT NULL,
+        PRIMARY KEY (user_id, page_number)
+    )
+"""
+
 # "Выучено" = верный ответ в 3 РАЗНЫХ дня, не N раз подряд за один присест -
 # подряд за один сеанс проверяет кратковременную память, не долговременную
 # (эффект беглости), см. разбор advisor 17.08.2026 и project_mufradat_trainer_engine.
 MASTERY_DAYS = 3
+
+# Даже "выученное" (days_correct >= MASTERY_DAYS) слово залёживается - без
+# повторной проверки долговременная память не гарантирована (та же логика,
+# что и у Anki: "зрелая" карточка всё равно ревьюится, просто редко). Если
+# с последнего верного ответа прошло RECHECK_AFTER_DAYS+ дней - слово
+# получает вес как у только что ошибочного (не выше!), чтобы не спрашиваться
+# ЧАЩЕ слов, которые студент реально сейчас учит (решение пользователя
+# 17.08.2026, второй заход после моей правки "по-научному" MASTERY_DAYS).
+RECHECK_AFTER_DAYS = 60
 
 _SCAFFOLD_RE = re.compile(r"[()]")
 _HAS_LETTER_RE = re.compile(r"[a-zа-яё]", re.IGNORECASE)
@@ -90,12 +115,20 @@ def get_words_in_range(surah_number, start_ayah, end_ayah):
 
 
 def word_weight(progress_row):
-    """progress_row - словарь с correct_streak/wrong_count или None (слово
-    ещё не спрашивали). Новое слово получает вес как у слова с одной
-    верной серией подряд - не перегружаем вопросами непройденные слова,
-    но и не игнорируем их (согласовано с пользователем 17.08.2026)."""
-    streak = progress_row["correct_streak"] if progress_row else 1
-    return 1.0 / (1 + streak)
+    """progress_row - словарь с correct_streak/wrong_count/days_correct/
+    last_correct_date или None (слово ещё не спрашивали). Новое слово
+    получает вес как у слова с одной верной серией подряд - не
+    перегружаем вопросами непройденные слова, но и не игнорируем их
+    (согласовано с пользователем 17.08.2026).
+
+    Залежавшееся "выученное" слово (см. RECHECK_AFTER_DAYS) получает вес
+    как у только что ошибочного (1.0), НЕ выше - иначе оно бы спрашивалось
+    ЧАЩЕ слов, которые студент реально сейчас учит, что неправильно."""
+    if not progress_row:
+        return 1.0 / (1 + 1)
+    if is_mastered(progress_row) and _is_stale(progress_row):
+        return 1.0
+    return 1.0 / (1 + progress_row["correct_streak"])
 
 
 def _repeated_glosses(words, min_count=3):
@@ -156,6 +189,18 @@ def _today():
     return datetime.now(_TZ).strftime("%Y-%m-%d")
 
 
+def _days_since(date_str):
+    if not date_str:
+        return None
+    d = datetime.strptime(date_str, "%Y-%m-%d").date()
+    return (datetime.now(_TZ).date() - d).days
+
+
+def _is_stale(progress_row):
+    days_ago = _days_since(progress_row["last_correct_date"])
+    return days_ago is not None and days_ago >= RECHECK_AFTER_DAYS
+
+
 def get_progress_map(user_id, word_ids):
     if not word_ids:
         return {}
@@ -174,26 +219,35 @@ def record_answer(user_id, word_id, correct):
     """Обновляет прогресс по одной строке mufradat_words. correct_streak
     двигает вес вопроса В РАМКАХ сеанса (может расти хоть за одну сессию).
     days_correct двигает "выучено" (MASTERY_DAYS) и растёт максимум раз в
-    календарный день - ошибка сбрасывает только серию, НЕ дни, чтобы одна
-    случайная опечатка не стирала недели занятий (нет цели "гонять
-    железно", решение пользователя 17.08.2026)."""
+    календарный день - обычная ошибка сбрасывает только серию, НЕ дни,
+    чтобы одна случайная опечатка не стирала недели занятий (нет цели
+    "гонять железно", решение пользователя 17.08.2026).
+
+    ИСКЛЮЧЕНИЕ: если слово было "выученным", но залежалось (см.
+    RECHECK_AFTER_DAYS) - это настоящая повторная проверка, и провал на
+    ней действительно означает "уже не выучено" - days_correct снижается
+    на 1 (решение пользователя 17.08.2026, второй заход)."""
     today = _today()
     with sqlite3.connect(HADITHS_DB) as conn:
+        conn.row_factory = sqlite3.Row
         conn.execute(_PROGRESS_SCHEMA)
         row = conn.execute(
             "SELECT correct_streak, wrong_count, days_correct, last_correct_date "
             "FROM mufradat_progress WHERE user_id=? AND word_id=?",
             (user_id, word_id)
         ).fetchone()
-        streak, wrong, days, last_date = row if row else (0, 0, 0, None)
+        streak, wrong, days, last_date = tuple(row) if row else (0, 0, 0, None)
         if correct:
             streak += 1
             if last_date != today:
                 days += 1
                 last_date = today
         else:
+            was_stale_mastered = row and is_mastered(row) and _is_stale(row)
             streak = 0
             wrong += 1
+            if was_stale_mastered:
+                days = max(0, days - 1)
         conn.execute(
             "INSERT OR REPLACE INTO mufradat_progress "
             "(user_id, word_id, correct_streak, wrong_count, days_correct, last_correct_date) "
@@ -206,24 +260,172 @@ def is_mastered(progress_row):
     return bool(progress_row) and progress_row["days_correct"] >= MASTERY_DAYS
 
 
-def get_current_page(user_id):
-    """Возвращает (page_number, start_ayah, end_ayah) или None. page_number
-    хранится отдельно от диапазона - нужен для заголовка карточки ("стр.
-    23") и для будущей цветовой шкалы по страницам (агрегация по
-    page_number, не по произвольному диапазону) - advisor 17.08.2026."""
-    with sqlite3.connect(HADITHS_DB) as conn:
-        conn.row_factory = sqlite3.Row
-        conn.execute(_PAGE_SCHEMA)
-        row = conn.execute(
-            "SELECT page_number, start_ayah, end_ayah FROM mufradat_page WHERE user_id=?", (user_id,)
-        ).fetchone()
-    return (row["page_number"], row["start_ayah"], row["end_ayah"]) if row else None
-
-
 def set_current_page(user_id, page_number, start_ayah, end_ayah):
+    """Пишет последнюю явно введённую студентом страницу - НЕ читается
+    нигде для выбора пула тренажёра (слова идут вперемешку со всех
+    тренированных страниц, см. get_words_for_trained_pages). Оставлено
+    как побочный, потенциально полезный след истории на будущее -
+    удаление читателя (get_current_page) не создаёт гонки с активной
+    карточкой, т.к. она хранит page_number вопроса отдельно
+    (advisor 17.08.2026, финальный заход)."""
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(_PAGE_SCHEMA)
         conn.execute(
             "INSERT OR REPLACE INTO mufradat_page (user_id, page_number, start_ayah, end_ayah) VALUES (?,?,?,?)",
             (user_id, page_number, start_ayah, end_ayah)
         )
+
+
+def mark_page_trained(user_id, page_number):
+    """Вызывается при КАЖДОМ ответе (не при открытии карточки) - "трогал"
+    страницу значит реально на ней отвечал, не просто зашёл посмотреть."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_TRAINED_PAGES_SCHEMA)
+        conn.execute(
+            "INSERT OR IGNORE INTO mufradat_trained_pages (user_id, page_number) VALUES (?,?)",
+            (user_id, page_number)
+        )
+
+
+def get_trained_pages(user_id):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_TRAINED_PAGES_SCHEMA)
+        return [r[0] for r in conn.execute(
+            "SELECT page_number FROM mufradat_trained_pages WHERE user_id=?", (user_id,)
+        ).fetchall()]
+
+
+def get_words_for_trained_pages(user_id):
+    """Пул слов со ВСЕХ тренированных страниц студента разом, вперемешку -
+    не одна страница за раз, чтобы старые страницы естественно повторялись
+    вместе с новой работой (решение пользователя 17.08.2026, второй заход
+    после жалобы на залипание на одной странице)."""
+    words = []
+    for page_number in get_trained_pages(user_id):
+        ayah_range = resolve_page(page_number)
+        if ayah_range:
+            words.extend(get_words_in_range(BAQARA_SURAH, *ayah_range))
+    return words
+
+
+def compute_overall_score(user_id):
+    """Общий вес студента - доля ВЫУЧЕННЫХ слов (is_mastered, days_correct
+    >= MASTERY_DAYS) среди ВСЕХ слов на страницах, которые он реально
+    тренировал (не "текущая страница", см. mufradat_trained_pages выше).
+    Возвращает None, если студент ещё не тренировал ни одной страницы."""
+    words = get_words_for_trained_pages(user_id)
+    if not words:
+        return None
+
+    word_ids = [w["id"] for w in words]
+    progress = get_progress_map(user_id, word_ids)
+    mastered = sum(1 for wid in word_ids if is_mastered(progress.get(wid)))
+    total = len(word_ids)
+    return {
+        "total": total, "mastered": mastered, "remaining": total - mastered,
+        "score10": round(10 * mastered / total, 2),
+    }
+
+
+def compute_page_score(user_id, page_number):
+    """Вес ОДНОЙ страницы (не всех тренированных, как compute_overall_score) -
+    доля выученных слов именно на ней. Сейчас не используется в самом
+    тренажёре (слова вперемешку со всех страниц, см.
+    get_words_for_trained_pages) - оставлен для будущего экрана
+    цветовой шкалы по страницам (project_mufradat_trainer_engine,
+    "не начато")."""
+    ayah_range = resolve_page(page_number)
+    if ayah_range is None:
+        return None
+    words = get_words_in_range(BAQARA_SURAH, *ayah_range)
+    if not words:
+        return None
+    progress = get_progress_map(user_id, [w["id"] for w in words])
+    mastered = sum(1 for w in words if is_mastered(progress.get(w["id"])))
+    total = len(words)
+    return {"total": total, "mastered": mastered, "score10": round(10 * mastered / total, 2)}
+
+
+# Полки рейтинга по ГЛУБИНЕ прохождения (max тренированная страница),
+# границы включительно, без пересечений.
+PAGE_BRACKETS = [
+    ("2-5", 2, 5),
+    ("6-10", 6, 10),
+    ("11-15", 11, 15),
+    ("16-25", 16, 25),
+    ("26-49", 26, 49),
+]
+
+
+def _bracket_for_page(max_page):
+    for label, lo, hi in PAGE_BRACKETS:
+        if lo <= max_page <= hi:
+            return label
+    return None
+
+
+def get_leaderboard():
+    """Список (bracket_label, [(user_id, score_dict), ...]) - полки по
+    глубине прохождения (max пройденная страница), не единый общий
+    список: студент, прошедший 20 страниц, и студент, допрыгнувший сразу
+    на 30-ю и тренировавший только её, иначе оказались бы в одном ряду.
+
+    Внутри полки сортировка по ЧИСЛУ выученных слов (mastered), НЕ по
+    доле (score10) - доля не защищена от того же самого трюка (у
+    "прыгнувшего" знаменатель маленький, доля может быть выше при
+    меньшей реальной работе). score10 остаётся личным числом на
+    карточке/в статистике, не рейтинговым критерием (разбор advisor
+    17.08.2026, четвёртый заход)."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_TRAINED_PAGES_SCHEMA)
+        rows = conn.execute(
+            "SELECT user_id, MAX(page_number) FROM mufradat_trained_pages GROUP BY user_id"
+        ).fetchall()
+
+    buckets = {label: [] for label, _, _ in PAGE_BRACKETS}
+    for uid, max_page in rows:
+        label = _bracket_for_page(max_page)
+        if label is None:
+            continue
+        score = compute_overall_score(uid)
+        if score:
+            buckets[label].append((uid, score))
+
+    for label in buckets:
+        buckets[label].sort(key=lambda item: (-item[1]["mastered"], -item[1]["score10"]))
+
+    return [(label, buckets[label]) for label, _, _ in PAGE_BRACKETS]
+
+
+_DAILY_ANSWERED_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mufradat_daily_answered_words(
+        user_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        word_id INTEGER NOT NULL,
+        PRIMARY KEY (user_id, date, word_id)
+    )
+"""
+
+# Столько РАЗНЫХ слов за день - засчитывается как сдача задания "t"
+# ("Слова (или Перевод)", core/handlers.py) - решение пользователя
+# 17.08.2026. Разных, не любых ответов - иначе можно закрыть задание,
+# тапая по одному и тому же лёгкому слову 20 раз.
+DAILY_WORDS_FOR_TASK_CREDIT = 20
+
+
+def record_daily_answered_word(user_id, word_id):
+    """Отмечает, что студент СЕГОДНЯ отвечал на это слово (не важно,
+    верно или нет - "поработал", не "выучил"). Возвращает число РАЗНЫХ
+    слов за сегодня после этой записи."""
+    today = _today()
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_DAILY_ANSWERED_SCHEMA)
+        conn.execute(
+            "INSERT OR IGNORE INTO mufradat_daily_answered_words (user_id, date, word_id) VALUES (?,?,?)",
+            (user_id, today, word_id)
+        )
+        count = conn.execute(
+            "SELECT COUNT(*) FROM mufradat_daily_answered_words WHERE user_id=? AND date=?",
+            (user_id, today)
+        ).fetchone()[0]
+    return count
