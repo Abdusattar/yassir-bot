@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, date
 
 import pytz
 
-from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK
+from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK, IS_FEMALE
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
@@ -1277,21 +1277,50 @@ async def skip_warnings():
             log.error("skip_warnings error in %s: %s", chat_id, e)
 
 
-# ── Ежедневная насыха в Тадаббур (09:00) ─────────────────────────────────────
+# ── Ежедневная насыха в Тадаббур (08:55 подготовка, 09:00 отправка) ──────────
+#
+# Мужской и женский боты — два отдельных процесса, но делят один файл
+# sources/hadiths.db. Чтобы не тратить два LLM-вызова на один день, текст
+# готовит только мужской бот (08:55) и кладёт в общий кэш; оба бота в 09:00
+# читают готовый текст и подставляют своё приветствие. Если кэша нет (мужской
+# бот не работал) — бот, который сейчас отправляет, генерирует сам, чтобы
+# насыха всё равно ушла.
+
+async def _generate_and_cache_tadabbur_nasiha(date_str: str) -> str | None:
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
+    text = await ai.group_motivation_base(
+        "ru", "relaxed", hadith=hadith, ayah=ayah,
+        model="google/gemini-2.5-pro", max_tokens=3000, neutral=True,
+    )
+    if text and len(text) >= 50:
+        sampler.save_cached_nasiha(date_str, text)
+        return text
+    return None
+
+
+async def tadabbur_prepare_nasiha():
+    if IS_FEMALE:
+        return
+    try:
+        await _generate_and_cache_tadabbur_nasiha(get_date())
+    except Exception as e:
+        log.error("tadabbur_prepare_nasiha error: %s", e)
+
 
 async def tadabbur_nasiha():
     tadabbur = get_tadabbur_group()
     if not tadabbur:
         return
-    hadith = sampler.sample_hadith()
-    ayah   = sampler.sample_ayah()
     try:
-        text = await ai.group_motivation_base(
-            "ru", "relaxed", hadith=hadith, ayah=ayah,
-            model="google/gemini-2.5-pro", max_tokens=3000
-        )
-        if text and len(text) >= 50:
-            await send_message(tadabbur["chat_id"], "📖\n\n" + text)
+        date_str = get_date()
+        text = sampler.get_cached_nasiha(date_str)
+        if not text:
+            log.info("tadabbur_nasiha: кэш пуст за %s, генерирую сам", date_str)
+            text = await _generate_and_cache_tadabbur_nasiha(date_str)
+        if text:
+            greeting = "Ассаляму алейкум, сёстры!" if IS_FEMALE else "Ассаляму алейкум, братья!"
+            await send_message(tadabbur["chat_id"], "📖 " + greeting + "\n\n" + text)
     except Exception as e:
         log.error("tadabbur_nasiha error: %s", e)
 
@@ -1655,6 +1684,8 @@ async def scheduler():
                 if d in (1, 2):
                     await maybe_run("monthly_ops_report", monthly_ops_report)
                     await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
+            elif h == 8 and m == 55:
+                await maybe_run("tadabbur_prepare_nasiha", tadabbur_prepare_nasiha)
             elif h == 9 and m == 0:
                 await maybe_run("tadabbur_nasiha", tadabbur_nasiha)
             elif wd == 1 and h == 12 and m == 0:

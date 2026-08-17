@@ -170,3 +170,45 @@ def save_ayah_translation(sura: int, aya: int, lang: str, text: str) -> None:
             )
     except Exception:
         pass
+
+
+# ── Общий кэш дневной насыхи Тадаббур (мужской и женский боты делят один файл) ─
+#
+# Мужской бот генерирует текст раз в день и кладёт его сюда; женский читает
+# готовый текст и подставляет своё приветствие — вместо второго LLM-вызова.
+
+_NASIHA_CACHE_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS daily_nasiha_cache(
+        date TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        created_at TEXT
+    )
+"""
+
+
+def get_cached_nasiha(date: str) -> str | None:
+    if not HADITHS_DB.exists():
+        return None
+    try:
+        with sqlite3.connect(HADITHS_DB) as conn:
+            conn.execute(_NASIHA_CACHE_SCHEMA)
+            row = conn.execute(
+                "SELECT text FROM daily_nasiha_cache WHERE date=?", (date,)
+            ).fetchone()
+            return row[0] if row else None
+    except Exception:
+        return None
+
+
+def save_cached_nasiha(date: str, text: str) -> None:
+    if not HADITHS_DB.exists():
+        return
+    try:
+        with sqlite3.connect(HADITHS_DB) as conn:
+            conn.execute(_NASIHA_CACHE_SCHEMA)
+            conn.execute(
+                "INSERT OR REPLACE INTO daily_nasiha_cache (date, text, created_at) VALUES (?,?,?)",
+                (date, text, datetime.utcnow().isoformat())
+            )
+    except Exception:
+        pass
