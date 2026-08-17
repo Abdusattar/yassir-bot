@@ -69,18 +69,26 @@ _TRAINED_PAGES_SCHEMA = """
     )
 """
 
-# "Выучено" = верный ответ в 3 РАЗНЫХ дня, не N раз подряд за один присест -
-# подряд за один сеанс проверяет кратковременную память, не долговременную
-# (эффект беглости), см. разбор advisor 17.08.2026 и project_mufradat_trainer_engine.
-MASTERY_DAYS = 3
+# "Выучено" = 7 верных ответов (не обязательно подряд по времени - см.
+# record_answer, ошибка НЕ обнуляет счётчик, только верные ответы двигают
+# его вперёд, решение пользователя 17.08.2026, третий заход). Естественный
+# разброс по времени берётся не из календарных дней, а из самой механики
+# выбора вопроса - слово с большим числом верных ответов получает меньший
+# вес (word_weight) и реже выпадает, а слов на странице много, так что
+# "домотать" одно и то же слово до 7 за один присест почти невозможно.
+MASTERY_STREAK = 7
 
-# Даже "выученное" (days_correct >= MASTERY_DAYS) слово залёживается - без
-# повторной проверки долговременная память не гарантирована (та же логика,
-# что и у Anki: "зрелая" карточка всё равно ревьюится, просто редко). Если
-# с последнего верного ответа прошло RECHECK_AFTER_DAYS+ дней - слово
-# получает вес как у только что ошибочного (не выше!), чтобы не спрашиваться
-# ЧАЩЕ слов, которые студент реально сейчас учит (решение пользователя
-# 17.08.2026, второй заход после моей правки "по-научному" MASTERY_DAYS).
+# Даже "выученное" (correct_streak >= MASTERY_STREAK) слово освобождает
+# место в пуле вопросов на RECHECK_AFTER_DAYS дней ("убирается" - не
+# спрашивается вообще, см. pick_question_word), а не просто становится
+# редким - без повторной проверки долговременная память не гарантирована
+# (та же логика, что у Anki: "зрелая" карточка всё равно ревьюится, просто
+# редко). Когда срок истёк - слово ОДИН раз возвращается в пул (вес 1.0,
+# см. word_weight): верно - снова "убирается" на 60 дней (last_correct_date
+# обновляется), неверно - счётчик снижается на 1 и слово уходит в общий
+# режим проверки наравне с остальными (решение пользователя 17.08.2026,
+# четвёртый заход - единственный случай, где ошибка ЧТО-ТО снижает,
+# т.к. это настоящая проверка забывания, не случайная опечатка).
 RECHECK_AFTER_DAYS = 60
 
 _SCAFFOLD_RE = re.compile(r"[()]")
@@ -115,15 +123,16 @@ def get_words_in_range(surah_number, start_ayah, end_ayah):
 
 
 def word_weight(progress_row):
-    """progress_row - словарь с correct_streak/wrong_count/days_correct/
-    last_correct_date или None (слово ещё не спрашивали). Новое слово
-    получает вес как у слова с одной верной серией подряд - не
-    перегружаем вопросами непройденные слова, но и не игнорируем их
-    (согласовано с пользователем 17.08.2026).
+    """progress_row - словарь с correct_streak/wrong_count/last_correct_date
+    или None (слово ещё не спрашивали). Новое слово получает вес как у
+    слова с одной верной серией подряд - не перегружаем вопросами
+    непройденные слова, но и не игнорируем их (согласовано с пользователем
+    17.08.2026).
 
-    Залежавшееся "выученное" слово (см. RECHECK_AFTER_DAYS) получает вес
-    как у только что ошибочного (1.0), НЕ выше - иначе оно бы спрашивалось
-    ЧАЩЕ слов, которые студент реально сейчас учит, что неправильно."""
+    Вызывается только для слов, прошедших фильтр в pick_question_word -
+    т.е. либо не "выученных" совсем, либо "выученных", но просроченных
+    (см. RECHECK_AFTER_DAYS) - те получают вес 1.0 (разовая перепроверка,
+    не выше обычного нового слова)."""
     if not progress_row:
         return 1.0 / (1 + 1)
     if is_mastered(progress_row) and _is_stale(progress_row):
@@ -143,13 +152,19 @@ def _repeated_glosses(words, min_count=3):
 def pick_question_word(words, progress_by_id, min_repeat_exclude=3):
     """words - результат get_words_in_range. Целью вопроса не может быть
     слово с пояснением в скобках (не проверяет знание слова, угадывается
-    по форме ответа), а также слово с часто повторяющимся переводом
-    (см. модульный docstring)."""
+    по форме ответа), слово с часто повторяющимся переводом (см. модульный
+    docstring), а также "выученное" слово, которое ещё не отдохнуло
+    положенные RECHECK_AFTER_DAYS дней - убрано из пула совсем, не просто
+    с низким весом (решение пользователя 17.08.2026, четвёртый заход)."""
     repeated = _repeated_glosses(words, min_repeat_exclude)
-    candidates = [
-        w for w in words
-        if not _is_scaffold(w["translation"]) and _normalize_gloss(w["translation"]) not in repeated
-    ]
+    candidates = []
+    for w in words:
+        if _is_scaffold(w["translation"]) or _normalize_gloss(w["translation"]) in repeated:
+            continue
+        progress = progress_by_id.get(w["id"])
+        if is_mastered(progress) and not _is_stale(progress):
+            continue
+        candidates.append(w)
     if not candidates:
         return None
     weights = [word_weight(progress_by_id.get(w["id"])) for w in candidates]
@@ -216,48 +231,57 @@ def get_progress_map(user_id, word_ids):
 
 
 def record_answer(user_id, word_id, correct):
-    """Обновляет прогресс по одной строке mufradat_words. correct_streak
-    двигает вес вопроса В РАМКАХ сеанса (может расти хоть за одну сессию).
-    days_correct двигает "выучено" (MASTERY_DAYS) и растёт максимум раз в
-    календарный день - обычная ошибка сбрасывает только серию, НЕ дни,
-    чтобы одна случайная опечатка не стирала недели занятий (нет цели
-    "гонять железно", решение пользователя 17.08.2026).
+    """Обновляет прогресс по одной строке mufradat_words. Обычная ошибка
+    НИЧЕГО не снижает (только считается в wrong_count для статистики) -
+    вес растёт исключительно от верных ответов, по чуть-чуть (решение
+    пользователя 17.08.2026, третий заход - "неверные не должны снижать
+    вес, только верные добавляют").
 
-    ИСКЛЮЧЕНИЕ: если слово было "выученным", но залежалось (см.
-    RECHECK_AFTER_DAYS) - это настоящая повторная проверка, и провал на
-    ней действительно означает "уже не выучено" - days_correct снижается
-    на 1 (решение пользователя 17.08.2026, второй заход)."""
+    ЕДИНСТВЕННОЕ исключение - провал разовой перепроверки просроченного
+    "выученного" слова (см. RECHECK_AFTER_DAYS, pick_question_word): это
+    не случайная опечатка, а прямое доказательство забывания, поэтому
+    correct_streak снижается на 1 (чуть ниже порога MASTERY_STREAK) и
+    слово возвращается в общий пул наравне с остальными (решение
+    пользователя 17.08.2026, четвёртый заход)."""
     today = _today()
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute(_PROGRESS_SCHEMA)
         row = conn.execute(
-            "SELECT correct_streak, wrong_count, days_correct, last_correct_date "
+            "SELECT correct_streak, wrong_count, last_correct_date "
             "FROM mufradat_progress WHERE user_id=? AND word_id=?",
             (user_id, word_id)
         ).fetchone()
-        streak, wrong, days, last_date = tuple(row) if row else (0, 0, 0, None)
+        streak, wrong, last_date = tuple(row) if row else (0, 0, None)
         if correct:
-            streak += 1
-            if last_date != today:
-                days += 1
-                last_date = today
+            streak = min(MASTERY_STREAK, streak + 1)
+            last_date = today
         else:
-            was_stale_mastered = row and is_mastered(row) and _is_stale(row)
-            streak = 0
+            was_due_recheck = row and is_mastered(row) and _is_stale(row)
             wrong += 1
-            if was_stale_mastered:
-                days = max(0, days - 1)
+            if was_due_recheck:
+                streak = max(0, streak - 1)
         conn.execute(
             "INSERT OR REPLACE INTO mufradat_progress "
-            "(user_id, word_id, correct_streak, wrong_count, days_correct, last_correct_date) "
-            "VALUES (?,?,?,?,?,?)",
-            (user_id, word_id, streak, wrong, days, last_date)
+            "(user_id, word_id, correct_streak, wrong_count, last_correct_date) "
+            "VALUES (?,?,?,?,?)",
+            (user_id, word_id, streak, wrong, last_date)
         )
 
 
 def is_mastered(progress_row):
-    return bool(progress_row) and progress_row["days_correct"] >= MASTERY_DAYS
+    return bool(progress_row) and progress_row["correct_streak"] >= MASTERY_STREAK
+
+
+def word_stimulus_credit(progress_row):
+    """Доля пути слова к полному вкладу в "Общий вес" - 0..1, растёт с
+    каждым верным ответом. Тот же correct_streak, что и is_mastered -
+    при достижении MASTERY_STREAK обе метрики совпадают (не два разных
+    числа, как было в первой версии этой правки, а одно - решение
+    пользователя 17.08.2026, третий заход: "такого в моей логике не было")."""
+    if not progress_row:
+        return 0.0
+    return min(1.0, progress_row["correct_streak"] / MASTERY_STREAK)
 
 
 def set_current_page(user_id, page_number, start_ayah, end_ayah):
@@ -309,10 +333,16 @@ def get_words_for_trained_pages(user_id):
 
 
 def compute_overall_score(user_id):
-    """Общий вес студента - доля ВЫУЧЕННЫХ слов (is_mastered, days_correct
-    >= MASTERY_DAYS) среди ВСЕХ слов на страницах, которые он реально
+    """Общий вес студента среди ВСЕХ слов на страницах, которые он реально
     тренировал (не "текущая страница", см. mufradat_trained_pages выше).
-    Возвращает None, если студент ещё не тренировал ни одной страницы."""
+    Возвращает None, если студент ещё не тренировал ни одной страницы.
+
+    "mastered"/"total" и "score10" - одна и та же метрика (correct_streak),
+    просто по-разному агрегированная: "mastered" - целое число слов,
+    достигших MASTERY_STREAK (используется в /muftop), "score10" - плавная
+    доля пути к этому же порогу по ВСЕМ словам (word_stimulus_credit),
+    двигается с каждым верным ответом, даже в первый день - иначе студент
+    не видит прогресса и теряет мотивацию (решение пользователя 17.08.2026)."""
     words = get_words_for_trained_pages(user_id)
     if not words:
         return None
@@ -320,10 +350,11 @@ def compute_overall_score(user_id):
     word_ids = [w["id"] for w in words]
     progress = get_progress_map(user_id, word_ids)
     mastered = sum(1 for wid in word_ids if is_mastered(progress.get(wid)))
+    stimulus_sum = sum(word_stimulus_credit(progress.get(wid)) for wid in word_ids)
     total = len(word_ids)
     return {
         "total": total, "mastered": mastered, "remaining": total - mastered,
-        "score10": round(10 * mastered / total, 2),
+        "score10": round(10 * stimulus_sum / total, 2),
     }
 
 

@@ -92,20 +92,24 @@ async def handle_page_text(user_id, chat_id, text):
 
 def _format_overall_score(score):
     """"0.0/10 (0/117)" читалось как загадка (фидбек пользователя 17.08.2026,
-    второй заход) - расписываем словами, что это доля ВЫУЧЕННЫХ слов среди
-    ВСЕХ слов на тренированных страницах."""
-    return f"📊 Общий вес: {score['score10']}/10 — выучено {score['mastered']} из {score['total']} слов"
+    второй заход) - расписываем словами. score10 (плавная доля пути к
+    MASTERY_STREAK по всем словам) и "закреплено" (целое число слов,
+    реально достигших MASTERY_STREAK) - одна и та же метрика, просто
+    агрегированная по-разному (core/mufradat.py:compute_overall_score),
+    поэтому разные слова в тексте, не "выучено" для обеих."""
+    return f"📊 Общий вес: {score['score10']}/10 (закреплено {score['mastered']} из {score['total']} слов)"
 
 
 def _render_card(user_id, q, session_correct, overall_score=None, feedback=None):
     """session_correct - счётчик верных ответов ЭТОГО сеанса (живёт в
     _active_question, монотонно растёт, никогда не падает от ошибки) -
     показывается на КАЖДОЙ карточке, для мгновенной обратной связи.
-    overall_score ("общий вес", days_correct-based) показывается ТОЛЬКО
-    при старте сеанса - это многодневная метрика, в рамках одного сеанса
-    почти никогда не сдвигается (days_correct растёт максимум раз в
-    календарный день), показ её на каждом тапе создавал ложное ощущение
-    "вес не растёт" (advisor 17.08.2026, реконсиляция)."""
+    overall_score ("общий вес") теперь тоже двигается с каждым верным
+    ответом (correct_streak, не завязан на календарный день) - поэтому,
+    в отличие от первой версии, тоже показывается на каждом тапе, не
+    только в начале/конце сеанса (решение пользователя 17.08.2026,
+    третий заход - старая причина прятать её была в том, что дневная
+    метрика не успевала сдвинуться за один сеанс, это больше не так)."""
     page_number = page_for_ayah(q["word"]["ayah_number"])
     lines = []
     if feedback:
@@ -124,6 +128,7 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
         row = [(opts[j], f"muf:{user_id}:{j}") for j in (i, i + 1) if j < len(opts)]
         rows.append(row)
     rows.append([("➕ Новая страница", f"mufpg:{user_id}"), ("✅ Закончить", f"mufend:{user_id}")])
+    rows.append([("🏆 Рейтинг", f"muftop:{user_id}")])
     return text, rows
 
 
@@ -157,7 +162,13 @@ async def _credit_task_if_applicable(user_id, chat_id):
     идемпотентен (INSERT OR IGNORE), поэтому лишний вызов не страшен.
     Но чтобы не слать поздравление на КАЖДЫЙ следующий тап после 20-го,
     сверяемся с get_today_report - шлём текст только при первой отметке
-    (advisor 17.08.2026, поймал и гонку, и повторный спам)."""
+    (advisor 17.08.2026, поймал и гонку, и повторный спам).
+
+    Обычные задания студент сдаёт ТЕКСТОМ прямо в группе - там же и видно
+    подтверждение (core/handlers.py). Здесь сдача происходит в личке с
+    ботом (тренажёр), поэтому группа иначе не узнала бы - дублируем
+    короткое уведомление в group["chat_id"] с текущим весом (решение
+    пользователя 17.08.2026)."""
     group = get_learning_group(user_id)
     if not group or "t" not in get_group_tasks(group):
         return
@@ -169,6 +180,14 @@ async def _credit_task_if_applicable(user_id, chat_id):
         return
     save_report(user["id"], group["id"], get_date(), {"t": True})
     await send_message(chat_id, "🎉 Задание «Слова» на сегодня засчитано — 20 разных слов проработано!")
+
+    if group["chat_id"]:
+        score = compute_overall_score(user_id)
+        score_part = f" (вес {score['score10']}/10)" if score else ""
+        await send_message(
+            group["chat_id"],
+            f"📖 {user['name']} отработал(а) дневной сет 20 слов на тренажёре муфрадат{score_part}."
+        )
 
 
 async def handle_answer_tap(user_id, chat_id, message_id, slot):
@@ -207,7 +226,8 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
         await edit_message_with_button_rows(chat_id, message_id, feedback, [])
         return
 
-    text, rows = _render_card(user_id, q, session_correct, feedback=feedback)
+    overall_score = compute_overall_score(user_id)
+    text, rows = _render_card(user_id, q, session_correct, overall_score, feedback)
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
         "word_page": page_for_ayah(q["word"]["ayah_number"]),
@@ -251,7 +271,7 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
             elif delta < 0:
                 lines.append(f"📉 Снизился за сеанс на {delta}")
             else:
-                lines.append("Вес за сеанс не изменился — для роста нужно несколько РАЗНЫХ дней 🤲")
+                lines.append("Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲")
 
         rank_info = _find_rank(get_leaderboard(), user_id)
         if rank_info:

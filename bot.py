@@ -166,6 +166,13 @@ async def main():
                         if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
                             from core.mufradat_bot import handle_end_session_tap
                             asyncio.create_task(handle_end_session_tap(cq_uid, cq_chat_id, cq_message_id))
+                    # "muftop:<uid>" - кнопка "Рейтинг" в тренажёре муфрадата -
+                    # шлёт рейтинг ОТДЕЛЬНЫМ сообщением, не трогает активную карточку
+                    elif cq_data.startswith("muftop:"):
+                        parts = cq_data.split(":", 1)
+                        if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id:
+                            from core.mufradat_bot import show_leaderboard
+                            asyncio.create_task(show_leaderboard(cq_uid, cq_chat_id))
                     continue
 
                 # Вступление по ссылке-приглашению (chat_member update)
