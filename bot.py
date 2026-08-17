@@ -63,6 +63,7 @@ async def main():
         await tg_call("setMyCommands", {
             "commands": [
                 {"command": "invite", "description": "Ссылка для друга — позвать к Корану"},
+                {"command": "muf", "description": "Тренажёр слов Корана (муфрадат)"},
             ],
             "scope": {"type": "all_private_chats"},
             "language_code": "ru",
@@ -144,6 +145,20 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_prep_onboarding_next(cq_uid, int(parts[1])))
+                    # "muf:<uid>:<slot>" - тап по варианту ответа в тренажёре
+                    # муфрадата (17.08.2026). Не убираем клавиатуру заранее -
+                    # обработчик сам правит то же сообщение новым вопросом.
+                    elif cq_data.startswith("muf:"):
+                        parts = cq_data.split(":", 2)
+                        if len(parts) == 3 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
+                            from core.mufradat_bot import handle_answer_tap
+                            asyncio.create_task(handle_answer_tap(cq_uid, cq_chat_id, cq_message_id, int(parts[2])))
+                    # "mufpg:<uid>" - кнопка "Сменить страницу" в тренажёре муфрадата
+                    elif cq_data.startswith("mufpg:"):
+                        parts = cq_data.split(":", 1)
+                        if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id:
+                            from core.mufradat_bot import handle_change_page_tap
+                            asyncio.create_task(handle_change_page_tap(cq_uid, cq_chat_id))
                     continue
 
                 # Вступление по ссылке-приглашению (chat_member update)

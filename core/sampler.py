@@ -185,6 +185,36 @@ _NASIHA_CACHE_SCHEMA = """
     )
 """
 
+# ── Пословный словарь для тренажёра муфрадата (общий файл, оба бота) ──────────
+#
+# Источник: официальный API Quran Academy (Digital Quran), пословный перевод
+# на русский, проверен на совпадение с ручной выборкой 17.08.2026 (см.
+# project_mufradat_data_source_licensing в памяти). Загружается разово
+# скриптом scripts/ingest_mufradat.py, не в рантайме бота.
+
+_MUFRADAT_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mufradat_words(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        surah_number INTEGER NOT NULL,
+        ayah_number INTEGER NOT NULL,
+        position INTEGER NOT NULL,
+        arabic_text TEXT NOT NULL,
+        translation TEXT NOT NULL,
+        UNIQUE(surah_number, ayah_number, position)
+    )
+"""
+
+
+def save_mufradat_word(surah_number, ayah_number, position, arabic_text, translation):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_MUFRADAT_SCHEMA)
+        conn.execute(
+            "INSERT OR REPLACE INTO mufradat_words "
+            "(surah_number, ayah_number, position, arabic_text, translation) "
+            "VALUES (?,?,?,?,?)",
+            (surah_number, ayah_number, position, arabic_text, translation)
+        )
+
 
 def get_cached_nasiha(date: str) -> str | None:
     if not HADITHS_DB.exists():

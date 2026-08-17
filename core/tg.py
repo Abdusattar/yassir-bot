@@ -137,6 +137,29 @@ async def send_message_with_buttons(chat_id, text, buttons):
     return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": keyboard})
 
 
+def _build_keyboard(rows):
+    """rows - список рядов кнопок, каждый ряд - список (label, callback_data)."""
+    return {"inline_keyboard": [[{"text": l, "callback_data": d} for l, d in row] for row in rows]}
+
+
+async def send_message_with_button_rows(chat_id, text, rows):
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": _build_keyboard(rows)})
+
+
+async def edit_message_with_button_rows(chat_id, message_id, text, rows):
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    return await tg_call("editMessageText", {
+        "chat_id": cid, "message_id": message_id, "text": text, "reply_markup": _build_keyboard(rows)
+    })
+
+
 async def answer_callback_query(callback_query_id, text=None):
     payload = {"callback_query_id": callback_query_id}
     if text:

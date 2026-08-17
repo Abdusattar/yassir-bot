@@ -832,6 +832,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 await send_message(chat_id, "Ссылка пока не настроена, спроси устаза 🤲")
             return
 
+        # ── Тренажёр муфрадата (17.08.2026) - слова Бакары, личка ──────────
+        if text == "/muf":
+            from core.mufradat_bot import start_trainer
+            await start_trainer(phone, chat_id)
+            return
+
+        # ── Тренажёр муфрадата - ответ на "какой диапазон аятов" ────────────
+        if text and not text.startswith("/"):
+            from core.mufradat_bot import handle_page_text
+            if await handle_page_text(phone, chat_id, text):
+                return
+
         # ── Анкета "откуда и сколько лет" (13.08.2026, окно 17.08.2026) ────
         # Команды (/help и т.п.) не считаем ответом - анкета просто ждёт
         # следующее обычное сообщение. Перехватываем только если сообщение

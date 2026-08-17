@@ -1,2 +1,4 @@
 aiohttp
 pytz
+requests
+quran-transcript

@@ -29,6 +29,9 @@ DB = os.getenv("DB_PATH", f"quran_{PROFILE}.db")
 # включить обратно через ~2 месяца (решение пользователя 25.07.2026).
 REQUIRE_PREP_FOR_NEW_STUDENTS = os.getenv("REQUIRE_PREP_FOR_NEW_STUDENTS", "true").lower() == "true"
 
+# Quran Academy Digital Quran API (пословный перевод для тренажёра муфрадата)
+QURAN_ACADEMY_ACCESS_TOKEN = os.getenv("QURAN_ACADEMY_ACCESS_TOKEN", "")
+
 # OpenRouter API (совместим со старым CLAUDE_API_KEY)
 OR_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("CLAUDE_API_KEY", "")
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
