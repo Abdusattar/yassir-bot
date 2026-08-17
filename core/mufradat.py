@@ -156,7 +156,7 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=3):
     return random.choices(candidates, weights=weights, k=1)[0]
 
 
-def generate_question(words, progress_by_id, n_options=6):
+def generate_question(words, progress_by_id, n_options=8):
     """Возвращает {word, options} или None, если в диапазоне недостаточно
     слов для вопроса. options - список переводов (включая верный),
     перемешанный."""

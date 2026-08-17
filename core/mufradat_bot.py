@@ -90,6 +90,13 @@ async def handle_page_text(user_id, chat_id, text):
     return True
 
 
+def _format_overall_score(score):
+    """"0.0/10 (0/117)" читалось как загадка (фидбек пользователя 17.08.2026,
+    второй заход) - расписываем словами, что это доля ВЫУЧЕННЫХ слов среди
+    ВСЕХ слов на тренированных страницах."""
+    return f"📊 Общий вес: {score['score10']}/10 — выучено {score['mastered']} из {score['total']} слов"
+
+
 def _render_card(user_id, q, session_correct, overall_score=None, feedback=None):
     """session_correct - счётчик верных ответов ЭТОГО сеанса (живёт в
     _active_question, монотонно растёт, никогда не падает от ошибки) -
@@ -108,7 +115,7 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
     lines.append(f"Слово: <b>{q['word']['arabic_text']}</b>")
     lines.append(f"\n✅ Верно за сеанс: {session_correct}")
     if overall_score:
-        lines.append(f"📊 Общий вес: {overall_score['score10']}/10  ({overall_score['mastered']}/{overall_score['total']})")
+        lines.append(_format_overall_score(overall_score))
     text = "\n".join(lines)
 
     opts = q["options"]
@@ -235,7 +242,7 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
 
     end_score = compute_overall_score(user_id)
     if end_score:
-        lines.append(f"📊 Общий вес: {end_score['score10']}/10  ({end_score['mastered']}/{end_score['total']})")
+        lines.append(_format_overall_score(end_score))
         start10 = state.get("start_score10") if state else None
         if start10 is not None:
             delta = round(end_score["score10"] - start10, 2)
@@ -249,7 +256,7 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
         rank_info = _find_rank(get_leaderboard(), user_id)
         if rank_info:
             label, rank, total_in_bracket, _score = rank_info
-            lines.append(f"🏆 Место в полке {label} стр.: {rank} из {total_in_bracket}")
+            lines.append(f"🏆 Место среди изучающих стр. {label}: {rank} из {total_in_bracket}")
 
     await edit_message_with_button_rows(chat_id, message_id, "\n".join(lines), [])
 
@@ -289,7 +296,7 @@ def _render_leaderboard_text(user_id, leaderboard):
 
     if my_bracket and my_rank > 3:
         lines.append(
-            f"Ты в полке {my_bracket} стр.: место {my_rank}, "
+            f"Ты среди изучающих стр. {my_bracket}: место {my_rank}, "
             f"{my_score['mastered']} слов выучено (вес {my_score['score10']}/10)."
         )
     elif my_bracket is None:

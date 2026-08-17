@@ -63,7 +63,7 @@ async def main():
         await tg_call("setMyCommands", {
             "commands": [
                 {"command": "invite", "description": "Ссылка для друга — позвать к Корану"},
-                {"command": "muf", "description": "Тренажёр слов Корана (муфрадат)"},
+                {"command": "muf", "description": "Муфрадат"},
                 {"command": "muftop", "description": "Рейтинг по муфрадату"},
             ],
             "scope": {"type": "all_private_chats"},
