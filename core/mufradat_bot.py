@@ -251,6 +251,23 @@ async def handle_change_page_tap(user_id, chat_id):
     await send_message(chat_id, _page_prompt_text())
 
 
+def _leaderboard_for_this_bot():
+    """core/mufradat.py:get_leaderboard читает ОБЩУЮ sources/hadiths.db -
+    мужской и женский бот пишут в один файл, движок намеренно не знает о
+    поле (разделение полов - забота Telegram-обвязки, не движка). Рейтинг
+    ВСЕГДА раздельный по полу, никогда не смешивается (жёсткое правило
+    пользователя 17.08.2026, найдено advisor'ом как утечка "Студент XXXX
+    (—)" из другого бота). Фильтруем по тому, существует ли студент в БД
+    ИМЕННО ЭТОГО бота (users - per-profile, quran_male.db/quran_female.db,
+    см. config.DB) - явного поля "пол" в mufradat_* таблицах нет и не
+    нужно, разделение уже есть на уровне БД пользователей."""
+    filtered = []
+    for label, entries in get_leaderboard():
+        own = [(uid, score) for uid, score in entries if find_user_by_phone(uid)]
+        filtered.append((label, own))
+    return filtered
+
+
 def _find_rank(leaderboard, user_id):
     for label, entries in leaderboard:
         for i, (uid, score) in enumerate(entries, start=1):
@@ -281,7 +298,7 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
             else:
                 lines.append("Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲")
 
-        rank_info = _find_rank(get_leaderboard(), user_id)
+        rank_info = _find_rank(_leaderboard_for_this_bot(), user_id)
         if rank_info:
             label, rank, total_in_bracket, _score = rank_info
             lines.append(f"🏆 Место среди изучающих стр. {label}: {rank} из {total_in_bracket}")
@@ -334,5 +351,5 @@ def _render_leaderboard_text(user_id, leaderboard):
 
 
 async def show_leaderboard(user_id, chat_id):
-    leaderboard = get_leaderboard()
+    leaderboard = _leaderboard_for_this_bot()
     await send_message(chat_id, _render_leaderboard_text(user_id, leaderboard))

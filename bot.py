@@ -64,7 +64,6 @@ async def main():
             "commands": [
                 {"command": "invite", "description": "Ссылка для друга — позвать к Корану"},
                 {"command": "muf", "description": "Муфрадат"},
-                {"command": "muftop", "description": "Рейтинг по муфрадату"},
             ],
             "scope": {"type": "all_private_chats"},
             "language_code": "ru",
