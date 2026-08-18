@@ -447,13 +447,21 @@ def _render_leaderboard_text(user_id, leaderboard):
                 my_bracket, my_rank, my_score = label, i, score
             if i <= 3:
                 marker = "👉 " if uid == user_id else ""
-                lines.append(f"  {marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — {score['mastered']} слов")
+                # Раньше показывали mastered (выученные) - при MASTERY_STREAK=4
+                # это почти у всех 0 первые дни, рейтинг выглядел "сломанным"
+                # (пользователь 18.08.2026: "рейтинг не информативен - 0 слов").
+                # Показываем вес (плавный, двигается с первого правильного
+                # ответа) и общее число слов, прогнанных за всё время.
+                lines.append(
+                    f"  {marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — "
+                    f"вес {score['score10']:.2f}/10 ({score['attempted']} слов)"
+                )
         lines.append("")
 
     if my_bracket and my_rank > 3:
         lines.append(
             f"Ты среди изучающих стр. {my_bracket}: место {my_rank}, "
-            f"{my_score['mastered']} слов выучено (вес {my_score['score10']:.2f}/10)."
+            f"вес {my_score['score10']:.2f}/10 ({my_score['attempted']} слов проработано)."
         )
     elif my_bracket is None:
         lines.append("Ты ещё не тренировал ни одной страницы — набери /muf 🤲")

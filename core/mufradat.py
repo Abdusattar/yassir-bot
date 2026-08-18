@@ -461,6 +461,19 @@ def _bracket_for_page(max_page):
     return None
 
 
+def _attempted_counts():
+    """user_id -> число РАЗНЫХ слов, на которые студент хоть раз ответил
+    за всё время (не только на текущей закладке - строка в
+    mufradat_progress появляется один раз на слово и остаётся навсегда,
+    даже если закладка потом сдвинулась дальше). Один запрос на всех
+    сразу для лидерборда, не считаем в compute_overall_score - там это
+    лишний SQL на КАЖДЫЙ тап карточки, тут нужен только для /muftop."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_PROGRESS_SCHEMA)
+        rows = conn.execute("SELECT user_id, COUNT(*) FROM mufradat_progress GROUP BY user_id").fetchall()
+    return dict(rows)
+
+
 def get_leaderboard():
     """Список (bracket_label, [(user_id, score_dict), ...]) - полки по
     глубине прохождения (max пройденная страница), не единый общий
@@ -472,13 +485,18 @@ def get_leaderboard():
     "прыгнувшего" знаменатель маленький, доля может быть выше при
     меньшей реальной работе). score10 остаётся личным числом на
     карточке/в статистике, не рейтинговым критерием (разбор advisor
-    17.08.2026, четвёртый заход)."""
+    17.08.2026, четвёртый заход) - НО с 18.08.2026 (MASTERY_STREAK
+    7->4, порог мастерства ещё не пройден почти никем) именно score10
+    показываем в тексте лидерборда вместо mastered (пользователь:
+    "рейтинг не информативен - 0 слов"), сортировка при этом осталась
+    прежней (по mastered), просто напоказ идёт другое число."""
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(_TRAINED_PAGES_SCHEMA)
         rows = conn.execute(
             "SELECT user_id, MAX(page_number) FROM mufradat_trained_pages GROUP BY user_id"
         ).fetchall()
 
+    attempted = _attempted_counts()
     buckets = {label: [] for label, _, _ in PAGE_BRACKETS}
     for uid, max_page in rows:
         label = _bracket_for_page(max_page)
@@ -486,6 +504,7 @@ def get_leaderboard():
             continue
         score = compute_overall_score(uid)
         if score:
+            score["attempted"] = attempted.get(uid, 0)
             buckets[label].append((uid, score))
 
     for label in buckets:
@@ -507,8 +526,9 @@ _DAILY_ANSWERED_SCHEMA = """
 # ("Слова (или Перевод)", core/handlers.py) - решение пользователя
 # 17.08.2026. Разных, не любых ответов - иначе можно закрыть задание,
 # тапая по одному и тому же лёгкому слову. Было 20, снижено до 15 в тот
-# же день по решению пользователя.
-DAILY_WORDS_FOR_TASK_CREDIT = 15
+# же день, возвращено обратно к 20 решением пользователя 18.08.2026 -
+# 15 проходилось слишком быстро.
+DAILY_WORDS_FOR_TASK_CREDIT = 20
 
 
 def record_daily_answered_word(user_id, word_id):
