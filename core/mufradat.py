@@ -544,8 +544,11 @@ def _accuracy_totals():
             "SELECT user_id, SUM(correct_count), SUM(wrong_count), COUNT(*) "
             "FROM mufradat_progress GROUP BY user_id"
         ).fetchall()
+        conn.execute(_PAGE_SCHEMA)
+        pages = dict(conn.execute("SELECT user_id, page_number FROM mufradat_page").fetchall())
     return {
-        uid: {"correct": c or 0, "wrong": w or 0, "n": (c or 0) + (w or 0), "attempted": n}
+        uid: {"correct": c or 0, "wrong": w or 0, "n": (c or 0) + (w or 0), "attempted": n,
+              "page": pages.get(uid, 0)}
         for uid, c, w, n in rows
     }
 
@@ -557,30 +560,51 @@ def get_leaderboard():
     от размера знаменателя закладки), деление на полки только прятало бы
     студентов на ранних страницах от тех, кто прошёл дальше.
 
-    Сортировочный ключ - wilson * log10(1+attempted), НЕ чистый wilson
-    (была первая версия 19.08.2026, тай-брейк по attempted при точном
-    совпадении Wilson - см. docstring _wilson_lower_bound, почему не
-    сработало на практике). log10(1+attempted) даёт объёму ПОСТОЯННЫЙ, но
-    сублинейный вес - не позволяет маленькому объёму с чуть более высокой
-    точностью обгонять большой объём (Нурсултан 271/87.4% поднимается
-    выше Бехзода 46/93.9%, проверено на живых данных 19.08.2026), но и не
-    даёт бесконечно растущему объёму задавить точность (log, не линейно).
+    Сортировочный ключ - wilson * log10(1+attempted) * log10(1+page), НЕ
+    чистый wilson (была первая версия 19.08.2026, тай-брейк по attempted
+    при точном совпадении Wilson - см. docstring _wilson_lower_bound,
+    почему не сработало на практике), и не двучленная версия без страницы
+    (была вторая версия в тот же день). Три множителя решают три РАЗНЫЕ
+    проблемы, найденные на живых данных по очереди:
+      - wilson - точность НЕ равна голому %, малый объём не даёт вздутую
+        точность обогнать честную (1/1 не бьёт 190/200).
+      - log10(1+attempted) - объём (число открытых карточек) тянет
+        сортировку постоянно, но сублинейно - без него high-accuracy при
+        низком объёме обгоняла large-accuracy при высоком (Бехзод
+        46/93.9% выше Нурсултана 271/87.4% в версии без этого множителя).
+      - log10(1+page) - глубина продвижения по Корану (закладка) тоже
+        весит - без неё студент на маленьком пуле (стр.3, ~160 слов)
+        обгонял студента на большом пуле (стр.14, ~1500 слов) просто
+        потому что на маленьком пуле физически легче быстро набрать много
+        карточек (Муслим 72 карт/стр.3 выше Сатара 53 карт/стр.14 в
+        версии без этого множителя - прямой вопрос пользователя
+        "у них поменьше слов для заучивания", 19.08.2026, третий заход).
+    Все три - log10, не линейно и не деление на пул (та же ошибка, что
+    убила score10 на глубоких страницах, см. compute_overall_score) - ни
+    один фактор не может задавить остальные два бесконечно.
+
+    page=2 (FIRST_PAGE, минимум для реального студента) даёт наименьший
+    возможный множитель глубины (log10(3)=0.48) - это НЕ баг/перекос
+    против новичков, это по определению нижняя граница "как далеко можно
+    продвинуться меньше некуда" (проверено эмпирически, что log10(page)
+    без +1 сделал бы её ЕЩЁ ниже, не выше - альтернатива не годится).
+
     Итоговое число - НЕ вероятность, только внутренний ключ сортировки, не
     показывается студенту (на экране - accuracy% и n, см.
     core/mufradat_bot.py:_render_leaderboard_text).
 
     score_dict: wilson (промежуточный, для sort_key), accuracy (%, для
-    показа), correct/wrong/n (сырые числа), attempted."""
+    показа), correct/wrong/n (сырые числа), attempted, page."""
     totals = _accuracy_totals()
     entries = []
     for uid, t in totals.items():
         wilson = _wilson_lower_bound(t["correct"], t["n"])
         accuracy = round(100 * t["correct"] / t["n"], 1) if t["n"] else 0.0
-        sort_key = wilson * math.log10(1 + t["attempted"])
+        sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + t["page"])
         entries.append((uid, {
             "wilson": wilson, "accuracy": accuracy,
             "correct": t["correct"], "wrong": t["wrong"], "n": t["n"],
-            "attempted": t["attempted"], "_sort_key": sort_key,
+            "attempted": t["attempted"], "page": t["page"], "_sort_key": sort_key,
         }))
     entries.sort(key=lambda item: -item[1]["_sort_key"])
     return entries
