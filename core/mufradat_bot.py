@@ -35,7 +35,7 @@ from core.mufradat import (
     set_current_page, get_current_page, get_words_for_bookmark, mark_page_trained, get_leaderboard,
     record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT, compute_overall_score,
 )
-from core.quran_pages import resolve_page, page_for_ayah, BAQARA_FIRST_PAGE, BAQARA_LAST_PAGE
+from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.tg import (
     send_message, send_message_with_button_rows, edit_message_with_button_rows,
     send_photo_bytes_with_button_rows, edit_message_media_with_button_rows,
@@ -53,8 +53,8 @@ _PAGE_NUM_RE = re.compile(r"^\s*(\d{1,3})\s*$")
 
 def _page_prompt_text():
     return (
-        "📖 Какая страница мусхафа? (сура Бакара — страницы "
-        f"{BAQARA_FIRST_PAGE}-{BAQARA_LAST_PAGE})\n"
+        "📖 Какая страница мусхафа? (суры Аль-Бакара — Юнус, страницы "
+        f"{FIRST_PAGE}-{LAST_PAGE})\n"
         "Напиши номер страницы, например: 23"
     )
 
@@ -81,17 +81,16 @@ async def handle_page_text(user_id, chat_id, text):
         return True
 
     page_number = int(m.group(1))
-    ayah_range = resolve_page(page_number)
-    if ayah_range is None:
+    if resolve_page(page_number) is None:
         await send_message(
             chat_id,
-            f"Сура Бакара — это страницы {BAQARA_FIRST_PAGE}-{BAQARA_LAST_PAGE} мусхафа. "
+            f"Страницы {FIRST_PAGE}-{LAST_PAGE} мусхафа (суры Аль-Бакара — Юнус). "
             "Напиши номер в этом диапазоне, например: 23"
         )
         return True
 
     _awaiting_page.discard(user_id)
-    set_current_page(user_id, page_number, *ayah_range)
+    set_current_page(user_id, page_number)
     await _send_new_card(user_id, chat_id, get_words_for_bookmark(user_id))
     return True
 
@@ -116,7 +115,7 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
     только в начале/конце сеанса (решение пользователя 17.08.2026,
     третий заход - старая причина прятать её была в том, что дневная
     метрика не успевала сдвинуться за один сеанс, это больше не так)."""
-    word_page = page_for_ayah(q["word"]["ayah_number"])
+    word_page = page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"])
     bookmark_page = get_current_page(user_id)
     lines = []
     if feedback:
@@ -137,8 +136,8 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
         row = [(opts[j], f"muf:{user_id}:{j}") for j in (i, i + 1) if j < len(opts)]
         rows.append(row)
     # ➕/➖ двигают ЗАКЛАДКУ на 1 страницу (не текстовый ввод - решение
-    # пользователя 17.08.2026, пятый заход) - "-" неактивна на BAQARA_FIRST_PAGE,
-    # "+" на BAQARA_LAST_PAGE, но Telegram не умеет отключать кнопки без
+    # пользователя 17.08.2026, пятый заход) - "-" неактивна на FIRST_PAGE,
+    # "+" на LAST_PAGE, но Telegram не умеет отключать кнопки без
     # изменения callback_data - тап на границе просто no-op в обработчике.
     rows.append([("➖", f"mufdec:{user_id}"), ("➕", f"mufinc:{user_id}")])
     rows.append([("✅ Закончить", f"mufend:{user_id}")])
@@ -165,7 +164,7 @@ async def _send_new_card(user_id, chat_id, words_pool):
         return
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
-        "word_page": page_for_ayah(q["word"]["ayah_number"]),
+        "word_page": page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"]),
         "chat_id": chat_id, "message_id": msg_id, "session_correct": 0,
         "start_score10": overall_score["score10"] if overall_score else None,
     }
@@ -204,14 +203,16 @@ async def _credit_task_if_applicable(user_id, chat_id):
 
     if group["chat_id"]:
         score = compute_overall_score(user_id)
-        score_part = f" (вес {score['score10']:.2f}/10)" if score else ""
-        # Короткая расшифровка "что такое муфрадат" - в группе это видят
-        # ВСЕ, не только сам студент, а тренажёр живёт в личке с ботом
-        # (пользователь 18.08.2026: непонятно со стороны, что за муфрадат).
+        score_part = f", вес {score['score10']:.2f}/10" if score else ""
+        # Тот же короткий формат "Имя, Слова +.", что и у обычной сдачи
+        # текстом в группе (core/handlers.py, SHORT_TASKS) - раньше здесь
+        # было длинное отдельное предложение, из которого не считывалось
+        # "сдал дневное задание" (пользователь 18.08.2026). "через тренажёр"
+        # поясняет, откуда взялось выполнение - обычно сдача идёт текстом
+        # прямо в группе, здесь источник другой (личка с ботом).
         await send_message(
             group["chat_id"],
-            f"📖 {user['name']} отработал(а) дневной сет {DAILY_WORDS_FOR_TASK_CREDIT} слов на тренажёре "
-            f"муфрадат (карточки арабских слов Корана с переводом){score_part}."
+            f"{user['name']}, Слова + (через тренажёр{score_part})."
         )
 
 
@@ -283,7 +284,7 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     text, rows = _render_card(user_id, q, session_correct, overall_score, feedback)
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
-        "word_page": page_for_ayah(q["word"]["ayah_number"]),
+        "word_page": page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"]),
         "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
         "start_score10": state.get("start_score10"),
     }
@@ -304,11 +305,11 @@ async def handle_page_step_tap(user_id, chat_id, message_id, delta):
         await send_message(chat_id, _page_prompt_text())
         return
 
-    new_page = max(BAQARA_FIRST_PAGE, min(BAQARA_LAST_PAGE, current + delta))
+    new_page = max(FIRST_PAGE, min(LAST_PAGE, current + delta))
     if new_page == current:
         return  # уже на границе диапазона - no-op, Telegram не отключает кнопки
 
-    set_current_page(user_id, new_page, *resolve_page(new_page))
+    set_current_page(user_id, new_page)
 
     pool = get_words_for_bookmark(user_id)
     progress = get_progress_map(user_id, [w["id"] for w in pool])
@@ -354,7 +355,7 @@ async def handle_page_step_tap(user_id, chat_id, message_id, delta):
 
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
-        "word_page": page_for_ayah(q["word"]["ayah_number"]),
+        "word_page": page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"]),
         "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
         "start_score10": overall_score["score10"] if overall_score else None,
     }
@@ -450,22 +451,24 @@ def _render_leaderboard_text(user_id, leaderboard):
                 # Раньше показывали mastered (выученные) - при MASTERY_STREAK=4
                 # это почти у всех 0 первые дни, рейтинг выглядел "сломанным"
                 # (пользователь 18.08.2026: "рейтинг не информативен - 0 слов").
-                # Показываем вес (плавный, двигается с первого правильного
-                # ответа), общее число слов, прогнанных за всё время, и
-                # ТЕКУЩУЮ страницу закладки (не диапазон полки label - это
-                # разные вещи: полка "2-5" грубая, а тут точный номер).
+                # Вес - плавный, двигается с первого правильного ответа;
+                # "карточек" - attempted (разных слов, отвеченных хоть раз
+                # за всё время); "из N" - total, весь пул текущей закладки
+                # ("слова для заучивания" - пользователь 18.08.2026, привёл
+                # пример "я на 14 странице, у меня для заучивания более
+                # 1000 слов"). Плюс текущая страница закладки.
                 page = get_current_page(uid)
                 page_part = f", стр. {page}" if page else ""
                 lines.append(
                     f"  {marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — "
-                    f"вес {score['score10']:.2f}/10 ({score['attempted']} слов{page_part})"
+                    f"вес {score['score10']:.2f}/10 ({score['attempted']} карточек из {score['total']}{page_part})"
                 )
         lines.append("")
 
     if my_bracket and my_rank > 3:
         lines.append(
             f"Ты среди изучающих стр. {my_bracket}: место {my_rank}, "
-            f"вес {my_score['score10']:.2f}/10 ({my_score['attempted']} слов проработано)."
+            f"вес {my_score['score10']:.2f}/10 ({my_score['attempted']} карточек из {my_score['total']})."
         )
     elif my_bracket is None:
         lines.append("Ты ещё не тренировал ни одной страницы — набери /muf 🤲")

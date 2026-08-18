@@ -27,7 +27,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from core.sampler import HADITHS_DB
-from core.quran_pages import resolve_page, page_for_ayah, BAQARA_SURAH, BAQARA_FIRST_PAGE
+from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
 
 _TZ = ZoneInfo("Asia/Bishkek")  # created_at в score_events хранится в UTC,
 # а date - в этом поясе; здесь той же путаницы не будет, т.к. столбца даты
@@ -168,11 +168,26 @@ def _scaled_repeat_threshold(words):
     фиксированном 3 доля годных целей падает с 83% (1 страница) до 49%
     (2-49 страницы) - настоящие содержательные слова, случайно встретившиеся
     3+ раза в большой выборке, начинают исключаться наравне с частицами.
-    Формула 3 + 1.5×(страниц-1) держит долю в районе 85-91% на любом
-    диапазоне (проверено на страницах 1, 13, 24, 48)."""
-    pages = {page_for_ayah(w["ayah_number"]) for w in words}
-    n = max(1, len(pages))
-    return max(3, round(3 + 1.5 * (n - 1)))
+
+    ПЕРЕКАЛИБРОВАНО 18.08.2026 при расширении на суры 3-10 (7 длинных сур):
+    прежняя формула "3 + 1.5×(страниц-1)" росла ЛИНЕЙНО с числом страниц,
+    а реальная частота частиц растёт линейно с числом СЛОВ в пуле, не
+    страниц (на страницах разное число слов - от ~35 до ~140) - на полном
+    диапазоне (стр. 221, 27609 слов) формула давала порог 332, при этом
+    "в" (216 раз) и "из" (281 раз) уже НЕ попадали под исключение -
+    доля "годных целей" показывала обманчиво хорошие 95.5% именно потому
+    что фильтр перестал фильтровать (advisor поймал риск заранее, до
+    прогона реальных данных). Проверено эмпирически на 5 разных глубинах
+    пула (1042/5987/13195/18891/27609 слов, стр. 10/49/106/150/221) -
+    частицы "не"/"в"/"из"/"Аллах" стабильно держат долю ~0.5-0.8% от
+    РАЗМЕРА ПУЛА (не страниц), 0.6% исключает все известные частицы на
+    всех проверенных глубинах и даёт долю годных целей ~83% (на самом
+    большом пуле - меньше исходных 85-91%, но реальный сдвиг небольшой
+    и предпочтительнее сломанного фильтра). max(3, ...) сохраняет
+    поведение на маленьких пулах (1 страница, ~35 слов) - 0.6% от 35
+    округляется в 0, порог остаётся 3, как и было изначально."""
+    n = max(1, len(words))
+    return max(3, round(n * 0.006))
 
 
 def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
@@ -318,21 +333,28 @@ def word_stimulus_credit(progress_row):
     return min(1.0, progress_row["correct_streak"] / MASTERY_STREAK)
 
 
-def set_current_page(user_id, page_number, start_ayah, end_ayah):
+def set_current_page(user_id, page_number):
     """Пишет ЗАКЛАДКУ студента - "дошёл до этой страницы" (не "добавь
     именно эту одну страницу"). ЯВЛЯЕТСЯ источником истины для пула
-    тренажёра - get_words_for_bookmark берёт слова со ВСЕХ страниц от
-    начала суры до этой закладки разом (решение пользователя 17.08.2026,
-    пятый заход: "рандомно должно идти... без ручного добавления каждой
-    страницы"). Раньше эта таблица была почти мёртвой (пул строился по
+    тренажёра - get_words_for_bookmark берёт слова со ВСЕХ страниц (и
+    сур, с 18.08.2026 - расширение за пределы Бакары) от начала до этой
+    закладки разом (решение пользователя 17.08.2026, пятый заход:
+    "рандомно должно идти... без ручного добавления каждой страницы").
+    Раньше эта таблица была почти мёртвой (пул строился по
     mufradat_trained_pages) - теперь наоборот, mufradat_trained_pages
     осталась только как ДОКАЗАТЕЛЬСТВО глубины для рейтинга (см.
-    get_leaderboard), а не источник пула."""
+    get_leaderboard), а не источник пула.
+
+    start_ayah/end_ayah в схеме таблицы - МЁРТВЫЕ колонки (пишутся, но
+    нигде не читаются обратно - было так и до этой правки, просто раньше
+    вызывающий код честно передавал их, создавая иллюзию, что они нужны).
+    Пишем 0 - реальные диапазоны для пула всегда пересчитываются заново
+    через core.quran_pages при каждом обращении, не хранятся здесь."""
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(_PAGE_SCHEMA)
         conn.execute(
-            "INSERT OR REPLACE INTO mufradat_page (user_id, page_number, start_ayah, end_ayah) VALUES (?,?,?,?)",
-            (user_id, page_number, start_ayah, end_ayah)
+            "INSERT OR REPLACE INTO mufradat_page (user_id, page_number, start_ayah, end_ayah) VALUES (?,?,0,0)",
+            (user_id, page_number)
         )
 
 
@@ -347,19 +369,40 @@ def get_current_page(user_id):
     return row[0] if row else None
 
 
+def get_words_up_to_page(page_number):
+    """Пул слов от начала диапазона (FIRST_PAGE, сура 2) до заданной
+    страницы РАЗОМ, вперемешку - решение пользователя 17.08.2026, пятый
+    заход. С 18.08.2026 диапазон охватывает несколько сур (2-10, Бакара
+    по Юнус - "семь длинных сур", решение пользователя), не только
+    Бакару, поэтому простой BETWEEN по ayah_number внутри одной суры
+    больше не работает (номера аятов начинаются заново с 1 в каждой
+    суре) - берём ВСЕ слова каждой суры ПОЛНОСТЬЮ для сур строго до
+    суры закладки, и только до нужного аята для суры самой закладки."""
+    last = last_ayah_on_page(page_number)
+    if last is None:
+        return []
+    bookmark_surah, bookmark_ayah = last
+
+    words = []
+    for surah in SURAHS:
+        if surah < bookmark_surah:
+            words.extend(get_words_in_range(surah, 1, 9999))
+        elif surah == bookmark_surah:
+            words.extend(get_words_in_range(surah, 1, bookmark_ayah))
+            break
+        else:
+            break
+    return words
+
+
 def get_words_for_bookmark(user_id):
-    """Пул слов тренажёра - ВСЕ страницы от начала суры (BAQARA_FIRST_PAGE)
-    до закладки студента разом, вперемешку (не только последняя введённая
-    страница) - решение пользователя 17.08.2026, пятый заход. Страницы не
-    разрывают аяты (проверено в core/quran_pages.py), поэтому диапазон
-    2..N - это просто один непрерывный отрезок аятов, не нужно объединять
-    по одной странице за раз."""
+    """Пул слов тренажёра для ТЕКУЩЕЙ закладки студента (get_words_up_to_page,
+    см. там) - не только последняя введённая страница, а всё от начала
+    диапазона (решение пользователя 17.08.2026, пятый заход)."""
     page_number = get_current_page(user_id)
     if not page_number:
         return []
-    start_ayah = resolve_page(BAQARA_FIRST_PAGE)[0]
-    end_ayah = resolve_page(page_number)[1]
-    return get_words_in_range(BAQARA_SURAH, start_ayah, end_ayah)
+    return get_words_up_to_page(page_number)
 
 
 def mark_page_trained(user_id, page_number):
@@ -430,11 +473,17 @@ def compute_page_score(user_id, page_number):
     доля выученных слов именно на ней. Сейчас не используется в самом
     тренажёре (слова вперемешку со всей закладки, см.
     get_words_for_bookmark) - оставлен для будущего экрана цветовой шкалы
-    по страницам (project_mufradat_trainer_engine, "не начато")."""
-    ayah_range = resolve_page(page_number)
-    if ayah_range is None:
+    по страницам (project_mufradat_trainer_engine, "не начато").
+
+    entries - список (surah, start_ayah, end_ayah) от resolve_page, обычно
+    один элемент, два - на единственной переходной странице (см.
+    core/quran_pages.py) - суммируем слова по всем сурам страницы."""
+    entries = resolve_page(page_number)
+    if entries is None:
         return None
-    words = get_words_in_range(BAQARA_SURAH, *ayah_range)
+    words = []
+    for surah, start_ayah, end_ayah in entries:
+        words.extend(get_words_in_range(surah, start_ayah, end_ayah))
     if not words:
         return None
     progress = get_progress_map(user_id, [w["id"] for w in words])
@@ -444,13 +493,24 @@ def compute_page_score(user_id, page_number):
 
 
 # Полки рейтинга по ГЛУБИНЕ прохождения (max тренированная страница),
-# границы включительно, без пересечений.
+# границы включительно, без пересечений. Первые 5 полок - старые (Бакара,
+# стр. 2-49, не менялись с 17.08.2026, чтобы не переставлять студентов
+# между полками задним числом), дальше - по одной полке на суру
+# (расширение на 7 длинных сур до Юнуса, 18.08.2026, границы страниц из
+# core/quran_pages.py:PAGES).
 PAGE_BRACKETS = [
     ("2-5", 2, 5),
     ("6-10", 6, 10),
     ("11-15", 11, 15),
     ("16-25", 16, 25),
-    ("26-49", 26, 49),
+    ("26-49", 26, 49),      # конец Аль-Бакара
+    ("50-76", 50, 76),      # Али Имран
+    ("77-106", 77, 106),    # Ан-Ниса
+    ("107-127", 107, 127),  # Аль-Маида
+    ("128-150", 128, 150),  # Аль-Анам
+    ("151-176", 151, 176),  # Аль-Араф
+    ("177-207", 177, 207),  # Аль-Анфаль + Ат-Тауба
+    ("208-221", 208, 221),  # Юнус
 ]
 
 
