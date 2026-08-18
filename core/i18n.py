@@ -812,8 +812,7 @@ def task_name(key, lang="ru"):
 _HELP_STUDENT = {
     "ru": {
         "header": "📚 КАК СДАВАТЬ ОТЧЁТ\nПиши что выполнил:\n{tasks}\nЗа каждое задание +1 балл 💎\n\n"
-                  "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n"
-                  "📡 Онлайн урок: напиши у\n\n"
+                  "⛔ Уважительная причина:\nболею / уважительная / узр / причина есть\n\n"
                   "/mystats — твоя статистика\n/rating — рейтинг группы\nЯсир, ...? — задай вопрос боту",
         "pro":     "\n⚠️ Pro-группа: пропуск 10 дней → Тадаббур",
         "relaxed": "\n📅 Расслабленная: пропуск 20 дней → Тадаббур",
@@ -821,8 +820,7 @@ _HELP_STUDENT = {
     },
     "ky": {
         "header": "📚 ОТЧЁТ КАНТИП ТАПШЫРЫЛАТ\nЭмнени аткаргандыгыңды жаз:\n{tasks}\nАр бир тапшырма үчүн +1 упай 💎\n\n"
-                  "⛔ Узактуу себеп:\nооруп жатам / себебим бар / узр\n"
-                  "📡 Онлайн сабак: у деп жаз\n\n"
+                  "⛔ Узактуу себеп:\nооруп жатам / себебим бар / узр\n\n"
                   "/mystats — сенин статистикаң\n/rating — топтун рейтинги\nЯсир, ...? — боттон суроо бер",
         "pro":     "\n⚠️ Pro-топ: 10 күн өткөрүп жиберсең → Тадаббурга",
         "relaxed": "\n📅 Жеңил топ: 20 күн өткөрүп жиберсең → Тадаббурга",
@@ -830,8 +828,7 @@ _HELP_STUDENT = {
     },
     "uz": {
         "header": "📚 HISOBOT QANDAY TOPSHIRILADI\nNimani bajarganingni yoz:\n{tasks}\nHar bir topshiriq uchun +1 ball 💎\n\n"
-                  "⛔ Uzrli sabab:\nkasalman / sabab bor / uzr\n"
-                  "📡 Onlayn dars: u deb yoz\n\n"
+                  "⛔ Uzrli sabab:\nkasalman / sabab bor / uzr\n\n"
                   "/mystats — sening statistikang\n/rating — guruh reytingi\nYassir, ...? — botdan so'ra",
         "pro":     "\n⚠️ Pro-guruh: 10 kun o'tkazib yuborsang → Tadabbur",
         "relaxed": "\n📅 Yengil guruh: 20 kun o'tkazib yuborsang → Tadabbur",
@@ -839,8 +836,7 @@ _HELP_STUDENT = {
     },
     "kk": {
         "header": "📚 ЕСЕПТІ ҚАЛАЙ ТАПСЫРУ КЕРЕК\nНені орындағаныңды жаз:\n{tasks}\nӘр тапсырма үшін +1 ұпай 💎\n\n"
-                  "⛔ Дәлелді себеп:\nауырып жатырмын / себебім бар / узр\n"
-                  "📡 Онлайн сабақ: у деп жаз\n\n"
+                  "⛔ Дәлелді себеп:\nауырып жатырмын / себебім бар / узр\n\n"
                   "/mystats — сенің статистикаң\n/rating — топ рейтингі\nЯсир, ...? — боттан сұра",
         "pro":     "\n⚠️ Pro-топ: 10 күн өткізіп жіберсең → Тадаббур",
         "relaxed": "\n📅 Жеңіл топ: 20 күн өткізіп жіберсең → Тадаббур",
@@ -848,8 +844,7 @@ _HELP_STUDENT = {
     },
     "en": {
         "header": "📚 HOW TO SUBMIT A REPORT\nWrite what you completed:\n{tasks}\n+1 point per task 💎\n\n"
-                  "⛔ Valid excuse:\nI'm sick / valid reason / uzr\n"
-                  "📡 Online lesson: write u\n\n"
+                  "⛔ Valid excuse:\nI'm sick / valid reason / uzr\n\n"
                   "/mystats — your stats\n/rating — group rating\nYassir, ...? — ask the bot",
         "pro":     "\n⚠️ Pro group: 10 days missed → Tadabbur",
         "relaxed": "\n📅 Relaxed group: 20 days missed → Tadabbur",
