@@ -223,23 +223,6 @@ def init():
             );
             CREATE INDEX IF NOT EXISTS idx_cp_subject_order ON curriculum_parts(subject, order_index);
 
-            CREATE TABLE IF NOT EXISTS attendance_confirm(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_id INTEGER NOT NULL,
-                date TEXT NOT NULL,
-                asked_at TEXT NOT NULL DEFAULT (datetime('now')),
-                decision TEXT,
-                decided_at TEXT,
-                escalated_at TEXT,
-                UNIQUE(group_id, date)
-            );
-            CREATE TABLE IF NOT EXISTS attendance_confirm_students(
-                confirm_id INTEGER NOT NULL,
-                student_id INTEGER NOT NULL,
-                PRIMARY KEY(confirm_id, student_id),
-                FOREIGN KEY(confirm_id) REFERENCES attendance_confirm(id)
-            );
-
             CREATE TABLE IF NOT EXISTS verify_log(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id INTEGER NOT NULL,
@@ -318,12 +301,6 @@ def _run_migrations(c):
     uocols = [r["name"] for r in c.execute("PRAGMA table_info(upgrade_offers)").fetchall()]
     if "channel" not in uocols:
         c.execute("ALTER TABLE upgrade_offers ADD COLUMN channel TEXT NOT NULL DEFAULT 'dm'")
-
-    accols = [r["name"] for r in c.execute("PRAGMA table_info(attendance_confirm)").fetchall()]
-    if "decision_reason" not in accols:
-        # 'manual' - устаз лично нажал кнопку; 'auto' - тайм-аут 24ч без ответа
-        # (12.08.2026, нужно различать при позднем "у" и при выборе текста в группу).
-        c.execute("ALTER TABLE attendance_confirm ADD COLUMN decision_reason TEXT")
 
     migrated = c.execute(
         "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
@@ -2004,97 +1981,6 @@ def has_attendance_this_week(uid, group_id):
             " WHERE student_id=? AND group_id=? AND category='attendance' AND date>=?",
             (uid, group_id, week_start)
         ).fetchone() is not None
-
-
-def has_attendance_in_week_of(uid, group_id, date_str):
-    """Как has_attendance_this_week, но неделя считается от конкретной даты,
-    не от 'сегодня' - нужно для attendance_confirm: подтверждение может
-    прийти через часы/сутки после самого дня, к тому моменту "сегодня" уже
-    другое (см. core/attendance_confirm.py)."""
-    d = datetime.strptime(date_str, "%Y-%m-%d").date()
-    week_start = str(d - timedelta(days=d.weekday()))
-    week_end = str(d + timedelta(days=6 - d.weekday()))
-    with db() as c:
-        return c.execute(
-            "SELECT 1 FROM score_events"
-            " WHERE student_id=? AND group_id=? AND category='attendance' AND date>=? AND date<=?",
-            (uid, group_id, week_start, week_end)
-        ).fetchone() is not None
-
-
-def get_or_create_attendance_confirm(group_id, date):
-    """Возвращает (id, is_new). is_new=True - только что созданная запись
-    (первый студент за день), значит нужно спросить устаза; False - уже
-    была, значит студент просто добавляется в список ожидающих."""
-    with db() as c:
-        cur = c.execute(
-            "INSERT OR IGNORE INTO attendance_confirm(group_id,date) VALUES(?,?)",
-            (group_id, date)
-        )
-        is_new = cur.rowcount == 1
-        row = c.execute(
-            "SELECT id FROM attendance_confirm WHERE group_id=? AND date=?",
-            (group_id, date)
-        ).fetchone()
-        return row["id"], is_new
-
-
-def add_attendance_confirm_student(confirm_id, student_id):
-    with db() as c:
-        c.execute(
-            "INSERT OR IGNORE INTO attendance_confirm_students(confirm_id,student_id) VALUES(?,?)",
-            (confirm_id, student_id)
-        )
-
-
-def get_attendance_confirm_by_id(confirm_id):
-    with db() as c:
-        return c.execute(
-            "SELECT * FROM attendance_confirm WHERE id=?", (confirm_id,)
-        ).fetchone()
-
-
-def get_attendance_confirm_students(confirm_id):
-    with db() as c:
-        return c.execute("""
-            SELECT u.id, u.name, u.phone FROM attendance_confirm_students acs
-            JOIN users u ON u.id=acs.student_id
-            WHERE acs.confirm_id=?
-        """, (confirm_id,)).fetchall()
-
-
-def set_attendance_confirm_decision(confirm_id, decision, reason="manual"):
-    with db() as c:
-        c.execute(
-            "UPDATE attendance_confirm SET decision=?, decided_at=datetime('now'), decision_reason=? WHERE id=?",
-            (decision, reason, confirm_id)
-        )
-
-
-def get_stale_attendance_confirms(minutes):
-    with db() as c:
-        return c.execute("""
-            SELECT * FROM attendance_confirm
-            WHERE decision IS NULL AND escalated_at IS NULL
-              AND asked_at <= datetime('now', ?)
-        """, (f"-{minutes} minutes",)).fetchall()
-
-
-def get_unresolved_after_escalation(hours):
-    with db() as c:
-        return c.execute("""
-            SELECT * FROM attendance_confirm
-            WHERE decision IS NULL AND escalated_at IS NOT NULL
-              AND escalated_at <= datetime('now', ?)
-        """, (f"-{hours} hours",)).fetchall()
-
-
-def mark_attendance_confirm_escalated(confirm_id):
-    with db() as c:
-        c.execute(
-            "UPDATE attendance_confirm SET escalated_at=datetime('now') WHERE id=?",
-            (confirm_id,)
-        )
 
 
 def get_dm_ok(uid):

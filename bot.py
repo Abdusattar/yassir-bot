@@ -23,7 +23,6 @@ from core.transfers import (
     handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
     send_new_student_prep_redirect,
 )
-from core.attendance_confirm import handle_attendance_confirm_answer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -125,16 +124,6 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
-                    # "att:yes:<uid>:<confirm_id>" / "att:no:<uid>:<confirm_id>" -
-                    # подтверждение устазом, что урок реально прошёл, перед
-                    # начислением баллов за "у" (31.07.2026, пересмотрено 12.08.2026 -
-                    # молчание больше не эскалируется супер-админам, см. attendance_confirm.py).
-                    elif cq_data.startswith("att:"):
-                        parts = cq_data.split(":", 3)
-                        if len(parts) == 4 and parts[2] == cq_uid:
-                            if cq_chat_id and cq_message_id:
-                                await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            asyncio.create_task(handle_attendance_confirm_answer(cq_uid, parts[1], int(parts[3])))
                     # "ponb:<next_screen_idx>:<uid>" - кнопка "Далее" в онбординге
                     # подготовительной (13.08.2026, 6 экранов вместо потока из 9
                     # сообщений). Только личка - но uid всё равно сверяем, для

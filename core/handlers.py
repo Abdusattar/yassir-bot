@@ -28,7 +28,6 @@ from core.db import (
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
-    get_or_create_attendance_confirm, add_attendance_confirm_student, get_attendance_confirm_by_id,
     save_voice_submission, mark_voice_reviewed, save_umar_review,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
@@ -40,7 +39,6 @@ from core.transfers import (
     block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student,
     send_new_student_prep_redirect,
 )
-from core.attendance_confirm import ask_ustaz_attendance_confirm, resolve_attendance_confirm
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 
 log = logging.getLogger(__name__)
@@ -1629,47 +1627,28 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Отметка присутствия на уроке (u / у) ─────────────────────────────────
-    # Баллы не начисляются сразу - сначала подтверждение устаза, что урок
-    # реально был (дыра: студенты писали "у" без урока и получали баллы).
-    # См. core/attendance_confirm.py.
+    # Баллы начисляются сразу, без подтверждения устаза - решение пользователя
+    # 18.08.2026: часть уроков проходит офлайн, устаз не всегда в курсе и не
+    # успевает вовремя подтвердить (механизм подтверждения через кнопки
+    # Да/Нет введён 31.07.2026, отменён 18.08.2026 - "многие задания у нас на
+    # доверии, так как не все устазы вовремя подтверждали"). Единственная
+    # защита от повторного начисления - не чаще раза в календарную неделю
+    # (урок проходит раз в неделю, has_attendance_this_week), та же, что была
+    # и при механизме подтверждения.
     text_lower = text.strip().lower()
     if text_lower in ("u", "у"):
         s_self = find_by_phone(phone, group_id)
         if s_self:
             if not has_attendance_this_week(s_self["id"], group_id):
-                today = get_date()
-                confirm_id, is_new = get_or_create_attendance_confirm(group_id, today)
-                confirm_row = get_attendance_confirm_by_id(confirm_id)
-                if confirm_row["decision"] == "yes":
-                    # Устаз уже подтвердил урок сегодня (например, сам отметился раньше)
-                    add_bonus(s_self["id"], group_id, today, 5, "attendance", "online")
-                    await send_message(chat_id, T("present", glang, name=s_self["name"]))
-                elif confirm_row["decision"] != "no":
-                    add_attendance_confirm_student(confirm_id, s_self["id"])
-                    await send_message(chat_id, T("attendance_pending", glang, name=s_self["name"]))
-                    if is_new:
-                        await ask_ustaz_attendance_confirm(confirm_id, group_id, glang)
-                else:
-                    # Решение "Нет" уже принято (устазом лично или тайм-аутом) -
-                    # студент отмечается позже. Устаза пингуем ТОЛЬКО если решение
-                    # реально его (не тайм-аут - иначе сообщение "нарушил ваше
-                    # решение" было бы враньём, он ничего не решал, см.
-                    # attendance_confirm.py).
-                    await send_message(chat_id, T("attendance_no_after_decision", glang, name=s_self["name"]))
-                    if confirm_row["decision_reason"] == "manual":
-                        for admin_phone in get_group_admins(group_id):
-                            await send_message(admin_phone,
-                                T("attendance_late_mark_notify_ustaz", glang, name=s_self["name"]))
+                add_bonus(s_self["id"], group_id, get_date(), 5, "attendance", "online")
+                await send_message(chat_id, T("present", glang, name=s_self["name"]))
         elif is_group_admin(phone, group_id):
             # Устаз отмечает, что урок состоялся, даже если ни один студент не отметился —
             # без бонусных баллов, только факт для еженедельного отчёта (scheduler._week_ops_stats).
-            # Заодно это и есть подтверждение - закрывает висящий вопрос студентам, если он был.
             ustaz = find_user_by_phone(phone)
             if ustaz:
                 add_bonus(ustaz["id"], group_id, get_date(), 0, "attendance", "ustaz")
                 await send_message(chat_id, T("lesson_marked", glang))
-                confirm_id, _ = get_or_create_attendance_confirm(group_id, get_date())
-                await resolve_attendance_confirm(confirm_id, "yes")
         return
 
     s = find_by_phone(phone, group_id)

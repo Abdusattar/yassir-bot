@@ -4,10 +4,6 @@ from core.db import (
     find_by_phone, find_by_name, register_student, deactivate_student,
     save_report, get_today_report, get_streak_days, get_skip_count_month,
     add_bonus, get_date, count_report_days_since,
-    get_or_create_attendance_confirm, add_attendance_confirm_student,
-    get_attendance_confirm_by_id, get_attendance_confirm_students,
-    set_attendance_confirm_decision, get_stale_attendance_confirms,
-    mark_attendance_confirm_escalated,
     get_users_due_for_survey, get_users_due_for_survey_nudge, start_survey,
     get_survey_stage,
     save_survey_location, save_survey_age, survey_answer_in_window, mark_dm_ok_by_phone, db,
@@ -192,92 +188,6 @@ def test_add_bonus(test_db):
             (sid,)
         ).fetchone()
     assert row["total"] == 10
-
-
-# ── Подтверждение урока перед начислением баллов за "у" ────────────────────────
-
-def test_attendance_confirm_dedup_same_day(test_db):
-    """Первый студент за день создаёт запись, второй - переиспользует её."""
-    save_group("-100777", "Группа М")
-    g = get_group("-100777")
-    sid1 = add_student("Амир", g["id"])
-    sid2 = add_student("Рауф", g["id"])
-
-    cid1, is_new1 = get_or_create_attendance_confirm(g["id"], "2026-07-31")
-    add_attendance_confirm_student(cid1, sid1)
-    assert is_new1 is True
-
-    cid2, is_new2 = get_or_create_attendance_confirm(g["id"], "2026-07-31")
-    add_attendance_confirm_student(cid2, sid2)
-    assert is_new2 is False
-    assert cid1 == cid2
-
-    students = get_attendance_confirm_students(cid1)
-    assert {s["id"] for s in students} == {sid1, sid2}
-
-
-def test_attendance_confirm_different_days_separate_records(test_db):
-    save_group("-100778", "Группа Н")
-    g = get_group("-100778")
-    cid1, is_new1 = get_or_create_attendance_confirm(g["id"], "2026-07-30")
-    cid2, is_new2 = get_or_create_attendance_confirm(g["id"], "2026-07-31")
-    assert cid1 != cid2
-    assert is_new1 is True and is_new2 is True
-
-
-def test_attendance_confirm_decision_defaults_to_none(test_db):
-    save_group("-100779", "Группа О")
-    g = get_group("-100779")
-    cid, _ = get_or_create_attendance_confirm(g["id"], "2026-07-31")
-    row = get_attendance_confirm_by_id(cid)
-    assert row["decision"] is None
-    assert row["escalated_at"] is None
-
-    set_attendance_confirm_decision(cid, "yes")
-    row = get_attendance_confirm_by_id(cid)
-    assert row["decision"] == "yes"
-    assert row["decided_at"] is not None
-
-
-def test_attendance_confirm_stale_escalation(test_db):
-    """Не решённые в течение N минут записи попадают в список на эскалацию,
-    но только один раз - после mark_attendance_confirm_escalated не возвращаются снова."""
-    from core.db import db
-    save_group("-100780", "Группа П")
-    g = get_group("-100780")
-    cid, _ = get_or_create_attendance_confirm(g["id"], "2026-07-31")
-
-    assert get_stale_attendance_confirms(30) == []
-
-    with db() as c:
-        c.execute(
-            "UPDATE attendance_confirm SET asked_at=datetime('now','-40 minutes') WHERE id=?",
-            (cid,)
-        )
-
-    stale = get_stale_attendance_confirms(30)
-    assert len(stale) == 1
-    assert stale[0]["id"] == cid
-
-    mark_attendance_confirm_escalated(cid)
-    assert get_stale_attendance_confirms(30) == []
-
-
-def test_attendance_confirm_resolved_not_stale(test_db):
-    """Решённая запись не должна эскалироваться, даже если "просрочена"."""
-    from core.db import db
-    save_group("-100781", "Группа Р")
-    g = get_group("-100781")
-    cid, _ = get_or_create_attendance_confirm(g["id"], "2026-07-31")
-    set_attendance_confirm_decision(cid, "no")
-
-    with db() as c:
-        c.execute(
-            "UPDATE attendance_confirm SET asked_at=datetime('now','-40 minutes') WHERE id=?",
-            (cid,)
-        )
-
-    assert get_stale_attendance_confirms(30) == []
 
 
 # ── Анкета "откуда и сколько лет" ───────────────────────────────────────────────
