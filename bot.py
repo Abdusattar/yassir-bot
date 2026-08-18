@@ -145,14 +145,24 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_prep_onboarding_next(cq_uid, int(parts[1])))
-                    # "muf:<uid>:<slot>" - тап по варианту ответа в тренажёре
-                    # муфрадата (17.08.2026). Не убираем клавиатуру заранее -
-                    # обработчик сам правит то же сообщение новым вопросом.
+                    # "muf:<uid>:<word_id>:<slot>" - тап по варианту ответа в
+                    # тренажёре муфрадата (17.08.2026, word_id добавлен
+                    # 18.08.2026 - защита от гонки при двойном тапе на слабом
+                    # интернете, см. docstring handle_answer_tap). Не убираем
+                    # клавиатуру заранее - обработчик сам правит то же
+                    # сообщение новым вопросом. Старый 3-частный формат
+                    # (muf:<uid>:<slot>, без word_id) ещё может висеть у
+                    # студентов в момент этого деплоя - шлём им свежую
+                    # карточку тем же путём, что и при потере состояния
+                    # (без начисления за этот тап), а не молчим.
                     elif cq_data.startswith("muf:"):
-                        parts = cq_data.split(":", 2)
-                        if len(parts) == 3 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
+                        parts = cq_data.split(":", 3)
+                        if len(parts) == 4 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
                             from core.mufradat_bot import handle_answer_tap
-                            asyncio.create_task(handle_answer_tap(cq_uid, cq_chat_id, cq_message_id, int(parts[2])))
+                            asyncio.create_task(handle_answer_tap(cq_uid, cq_chat_id, cq_message_id, int(parts[2]), int(parts[3])))
+                        elif len(parts) == 3 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
+                            from core.mufradat_bot import handle_stale_answer_tap
+                            asyncio.create_task(handle_stale_answer_tap(cq_uid, cq_chat_id))
                     # "mufinc:<uid>"/"mufdec:<uid>" - кнопки ➕/➖ в тренажёре
                     # муфрадата, двигают закладку студента на 1 страницу
                     elif cq_data.startswith("mufinc:") or cq_data.startswith("mufdec:"):
