@@ -363,15 +363,67 @@ def _leaderboard_for_this_bot():
     см. config.DB) - явного поля "пол" в mufradat_* таблицах нет и не
     нужно, разделение уже есть на уровне БД пользователей.
 
-    С 19.08.2026 - единый общий список (не полки по страницам), см.
-    core/mufradat.py:get_leaderboard."""
+    Плоский, отсортированный, БЕЗ разбивки на дивизионы (см. _split_by_division
+    ниже) - движок (core/mufradat.py) остаётся дивизион-слепым, разбивка
+    только в этой Telegram-обвязке. Порядок важен: гендерный фильтр здесь
+    выполняется ДО разбивки на дивизионы - если бы разбивали раньше,
+    фильтр пришлось бы дублировать в обоих дивизионах (advisor 19.08.2026,
+    четвёртый заход).
+
+    ВКЛЮЧАЕТ студентов без группы (find_user_by_phone требует только
+    запись в users, не членство в группе) - это НЕ то же самое, что
+    ПУБЛИЧНЫЙ групповой рейтинг (см. _group_leaderboard_for_this_bot) -
+    /muf вообще не проверяет группу (start_trainer работает по голому
+    user_id), кто-то тренируется, ни разу не вступив в группу. Список
+    нужен как есть (гендер-фильтр, группа не важна) для личной статистики
+    таких студентов (_render_personal_stats_text) - решение пользователя
+    19.08.2026, пятый заход: "пусть тренируется, нет ничего плохого... в
+    рейтинг не включать, но ему лично рейтинг отправлять... и показывать
+    его место" - место среди ВСЕХ тренирующихся этого бота, не только
+    группы."""
     return [(uid, score) for uid, score in get_leaderboard() if find_user_by_phone(uid)]
 
 
-def _find_rank(leaderboard, user_id):
-    for i, (uid, score) in enumerate(leaderboard, start=1):
-        if uid == user_id:
-            return i, len(leaderboard), score
+def _group_leaderboard_for_this_bot():
+    """ПУБЛИЧНЫЙ групповой рейтинг (то, что видят все в /muftop) - сужает
+    _leaderboard_for_this_bot до студентов, состоящих хоть в какой-то
+    группе (get_learning_group). Студент без группы тренируется наравне
+    со всеми (см. _leaderboard_for_this_bot), но сравнивать его с группой
+    в общем топе не имеет смысла - решение пользователя 19.08.2026."""
+    return [(uid, score) for uid, score in _leaderboard_for_this_bot() if get_learning_group(uid)]
+
+
+# Порог дивизиона - решение пользователя 19.08.2026, четвёртый заход про
+# рейтинг за один день: "они на той странице где учат Коран, кто-то раньше
+# начал, поэтому больше страниц" - группировка по РЕАЛЬНОМУ прогрессу
+# заучивания, не про честность вычислений (та уже решена depth-множителем
+# в самой формуле сортировки, см. core/mufradat.py:get_leaderboard).
+# Порог 10 - предложение пользователя, проверено на живых данных: 8
+# студентов на <=10, 7 на >10 - почти ровный сплит (не пирамида "3-10
+# большинство", как предполагал пользователь, но для двух дивизионов
+# ровный сплит даже лучше).
+_DIVISION_THRESHOLD = 10
+_DIVISION_LABELS = ("🥇 Дивизион 1 (стр. 11+)", "🥈 Дивизион 2 (стр. 2-10)")
+
+
+def _split_by_division(leaderboard):
+    """leaderboard - уже отсортированный ПЛОСКИЙ список (_leaderboard_for_this_bot).
+    Разбивка чисто на уровне отображения - каждый дивизион сохраняет
+    относительный порядок (уже отсортирован по единой формуле, глубина
+    внутри дивизиона ПРОДОЛЖАЕТ работать - Дивизион 1 охватывает стр.11-221,
+    это 20-кратный разброс размера пула, без depth-множителя внутри самого
+    дивизиона повторилась бы та же проблема Муслим/Сатар, только на его
+    масштабе, advisor 19.08.2026). Возвращает [(label, entries), ...]."""
+    div1 = [(uid, score) for uid, score in leaderboard if score["page"] > _DIVISION_THRESHOLD]
+    div2 = [(uid, score) for uid, score in leaderboard if score["page"] <= _DIVISION_THRESHOLD]
+    return list(zip(_DIVISION_LABELS, (div1, div2)))
+
+
+def _find_rank(divisions, user_id):
+    for label, entries in divisions:
+        for i, (uid, score) in enumerate(entries, start=1):
+            if uid == user_id:
+                return label, i, len(entries), score
     return None
 
 
@@ -397,10 +449,14 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
             else:
                 lines.append("Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲")
 
-        rank_info = _find_rank(_leaderboard_for_this_bot(), user_id)
+        # _group_leaderboard_for_this_bot (не _leaderboard_for_this_bot) -
+        # студент без группы тут просто не найдётся (rank_info=None, строка
+        # молча не показывается) - его личное место показывает /muftop
+        # (_render_personal_stats_text), не это сообщение о конце сеанса.
+        rank_info = _find_rank(_split_by_division(_group_leaderboard_for_this_bot()), user_id)
         if rank_info:
-            rank, total, _score = rank_info
-            lines.append(f"🏆 Место в общем рейтинге: {rank} из {total}")
+            label, rank, total, _score = rank_info
+            lines.append(f"🏆 Место в {label}: {rank} из {total}")
 
     # "Закончить" - кнопка только на фото-карточке (_render_card), картинка
     # (последнее слово) остаётся видна - меняем только подпись.
@@ -417,62 +473,93 @@ def _group_name(user_id):
     return group["title"] if group and group["title"] else "—"
 
 
-_LEADERBOARD_TOP_N = 15
+_DIVISION_TOP_N = 7  # решение пользователя 19.08.2026, пятый заход - запас
+# на рост группы (сейчас 7-8 студентов на дивизион, при большем числе топ-7
+# не растянет сообщение до бесконечности).
 
 
 def _render_leaderboard_text(user_id, leaderboard):
     """leaderboard - результат _leaderboard_for_this_bot(): [(uid,
-    score_dict), ...], один общий список (не полки по страницам, было так
-    до 19.08.2026), отсортирован по wilson*log10(1+attempted)*log10(1+page) -
-    точность, объём и глубина закладки вместе, см. модульный docstring
-    core/mufradat.py:get_leaderboard.
+    score_dict), ...], плоский отсортированный список по
+    wilson*log10(1+attempted)*log10(1+page) - см. модульный docstring
+    core/mufradat.py:get_leaderboard. Разбивается на два дивизиона по
+    РЕАЛЬНОМУ прогрессу заучивания Корана (_split_by_division) - решение
+    пользователя 19.08.2026, четвёртый заход: "они на той странице где
+    учат Коран, кто-то раньше начал, поэтому больше страниц" - сравнивать
+    напрямую тех, кто в разных точках пути, не совсем справедливо, даже
+    при depth-множителе в самой формуле (тот уже не даёт мелким страницам
+    ПРОБИТЬСЯ наверх - проверено математически, идеальный студент стр.3
+    упирается в потолок ниже скромного студента стр.20 - но не решает
+    вопрос мотивации/сравнимости для тех, кто просто позже начал).
 
-    Показываем топ-15 целиком; если сам студент в него не попал - отдельной
-    строкой ниже его место (решение пользователя 19.08.2026). Короткое
-    пояснение формулы внизу - решение пользователя 19.08.2026, чтобы
-    студенты понимали, почему три фактора вместе, а не голый %."""
+    Топ-7 внутри каждого дивизиона; если сам студент не попал - отдельной
+    строкой под дивизионом (тот же паттерн, что был в плоской версии до
+    дивизионов, решение пользователя 19.08.2026, пятый заход)."""
     if not leaderboard:
         return "Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲 Начни первым: /muf"
 
-    lines = ["🏆 Топ по муфрадату — точность и объём\n"]
-    my_rank = my_score = None
+    lines = ["🏆 Топ по муфрадату — точность, объём и глубина закладки\n"]
 
-    for i, (uid, score) in enumerate(leaderboard, start=1):
-        if uid == user_id:
-            my_rank, my_score = i, score
-        if i <= _LEADERBOARD_TOP_N:
-            marker = "👉 " if uid == user_id else ""
-            # accuracy - % верных из открытых карточек (score['n'] - сумма
-            # верных+неверных за всю историю, не только текущая закладка);
-            # сортировка при этом идёт по wilson (не по accuracy напрямую) -
-            # см. core/mufradat.py:_wilson_lower_bound, почему только accuracy
-            # без объёма легко обмануть (1/1 = 100%).
-            page = get_current_page(uid)
-            page_part = f", стр. {page}" if page else ""
+    for label, entries in _split_by_division(leaderboard):
+        if not entries:
+            continue
+        lines.append(f"{label}:")
+        my_rank = my_score = None
+        for i, (uid, score) in enumerate(entries, start=1):
+            if uid == user_id:
+                my_rank, my_score = i, score
+            if i <= _DIVISION_TOP_N:
+                marker = "👉 " if uid == user_id else ""
+                lines.append(
+                    f"{marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — "
+                    f"{score['accuracy']:.0f}% ({score['correct']}/{score['n']} карточек), стр. {score['page']}"
+                )
+        if my_rank is not None and my_rank > _DIVISION_TOP_N:
             lines.append(
-                f"{marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — "
-                f"{score['accuracy']:.0f}% ({score['correct']}/{score['n']} карточек){page_part}"
+                f"👉 Ты: место {my_rank} из {len(entries)}, "
+                f"{my_score['accuracy']:.0f}% ({my_score['correct']}/{my_score['n']} карточек)."
             )
-
-    if my_rank is None:
         lines.append("")
-        lines.append("Ты ещё не тренировал муфрадат — набери /muf 🤲")
-    elif my_rank > _LEADERBOARD_TOP_N:
-        lines.append("")
-        lines.append(
-            f"Ты: место {my_rank} из {len(leaderboard)}, "
-            f"{my_score['accuracy']:.0f}% ({my_score['correct']}/{my_score['n']} карточек)."
-        )
 
-    lines.append("")
     lines.append(
-        "ℹ️ Место в рейтинге зависит от точности, объёма карточек и того, "
-        "как далеко продвинулась твоя закладка — все три вместе."
+        "ℹ️ Место — внутри своего дивизиона (по глубине закладки), "
+        "зависит от точности и объёма карточек."
     )
 
     return "\n".join(lines).rstrip()
 
 
+def _render_personal_stats_text(user_id):
+    """Для студента БЕЗ группы (get_learning_group(user_id) пусто) -
+    решение пользователя 19.08.2026, пятый заход: "пусть тренируется, нет
+    ничего плохого... в рейтинг не включать, но ему лично рейтинг
+    отправлять... и показывать его место". Место - среди ВСЕХ
+    тренирующихся этого бота (_leaderboard_for_this_bot, БЕЗ фильтра по
+    группе - в отличие от публичного _group_leaderboard_for_this_bot),
+    личный ориентир, не появляется в /muftop у других."""
+    full = _leaderboard_for_this_bot()
+    own = next(
+        ((i, score) for i, (uid, score) in enumerate(full, start=1) if uid == user_id),
+        None
+    )
+    if not own:
+        return (
+            "Ты пока не в учебной группе, поэтому общий рейтинг тебе не "
+            "показываем — но тренироваться можно свободно 🤲 Набери /muf"
+        )
+    rank, score = own
+    return (
+        f"📊 Твой результат: {score['accuracy']:.0f}% ({score['correct']}/{score['n']} карточек), "
+        f"стр. {score['page']}\n"
+        f"Место среди всех тренирующихся: {rank} из {len(full)}\n\n"
+        "Ты пока не в учебной группе, поэтому не участвуешь в общем групповом "
+        "рейтинге — но тренироваться можно свободно, продолжай в том же духе 🤲"
+    )
+
+
 async def show_leaderboard(user_id, chat_id):
-    leaderboard = _leaderboard_for_this_bot()
+    if not get_learning_group(user_id):
+        await send_message(chat_id, _render_personal_stats_text(user_id))
+        return
+    leaderboard = _group_leaderboard_for_this_bot()
     await send_message(chat_id, _render_leaderboard_text(user_id, leaderboard))
