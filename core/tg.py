@@ -127,6 +127,89 @@ async def send_photo_with_buttons(chat_id, photo_path, buttons, caption=None):
     return await _raw_send_photo(cid, photo_path, caption, reply_markup=keyboard)
 
 
+async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_markup=None):
+    """Как _raw_send_photo, но принимает BytesIO вместо пути на диске -
+    для сгенерированных на лету картинок (core/mufradat_render.py),
+    не плодит временные файлы на сервере."""
+    data = aiohttp.FormData()
+    data.add_field("chat_id", str(cid))
+    if caption:
+        data.add_field("caption", caption)
+        data.add_field("parse_mode", "HTML")
+    if reply_markup:
+        data.add_field("reply_markup", json.dumps(reply_markup))
+    data.add_field("photo", photo_bytes, filename=filename, content_type="image/png")
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                TG_API + "/sendPhoto", data=data,
+                timeout=aiohttp.ClientTimeout(total=35)
+            ) as r:
+                result = await r.json()
+                if result and not result.get("ok"):
+                    log.error("sendPhoto(bytes) failed: %s", result.get("description", result))
+                return result
+    except Exception as e:
+        log.error("sendPhoto(bytes) error: %s: %s", type(e).__name__, e)
+        return None
+
+
+async def send_photo_bytes_with_button_rows(chat_id, photo_bytes, filename, caption, rows):
+    """rows: список рядов кнопок, каждый ряд - список (label, callback_data)."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    return await _raw_send_photo_bytes(cid, photo_bytes, filename, caption, _build_keyboard(rows))
+
+
+async def edit_message_media_with_button_rows(chat_id, message_id, photo_bytes, filename, caption, rows):
+    """Меняет саму картинку карточки (новое слово) - в отличие от
+    edit_message_caption_with_button_rows, которая трогает только текст.
+    Первая карточка ОБЯЗАНА быть фото-сообщением (send_photo_bytes_with_button_rows) -
+    editMessageMedia падает на текстовом сообщении ("there is no media
+    in the message to edit"), и наоборот (advisor 18.08.2026)."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    data = aiohttp.FormData()
+    data.add_field("chat_id", str(cid))
+    data.add_field("message_id", str(message_id))
+    data.add_field("media", json.dumps({
+        "type": "photo", "media": "attach://photo", "caption": caption, "parse_mode": "HTML"
+    }))
+    data.add_field("reply_markup", json.dumps(_build_keyboard(rows)))
+    data.add_field("photo", photo_bytes, filename=filename, content_type="image/png")
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                TG_API + "/editMessageMedia", data=data,
+                timeout=aiohttp.ClientTimeout(total=35)
+            ) as r:
+                result = await r.json()
+                if result and not result.get("ok"):
+                    log.error("editMessageMedia failed: %s", result.get("description", result))
+                return result
+    except Exception as e:
+        log.error("editMessageMedia error: %s: %s", type(e).__name__, e)
+        return None
+
+
+async def edit_message_caption_with_button_rows(chat_id, message_id, caption, rows):
+    """Меняет только подпись/клавиатуру фото-карточки, картинка (слово)
+    остаётся прежней - дешевле editMessageMedia, для веток где слово не
+    меняется (конец сессии, пустой пул на закладке)."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    return await tg_call("editMessageCaption", {
+        "chat_id": cid, "message_id": message_id, "caption": caption, "parse_mode": "HTML",
+        "reply_markup": _build_keyboard(rows)
+    })
+
+
 async def send_message_with_buttons(chat_id, text, buttons):
     """buttons: список (label, callback_data) - одна кнопка на строку."""
     try:

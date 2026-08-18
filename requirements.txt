@@ -2,3 +2,6 @@ aiohttp
 pytz
 requests
 quran-transcript
+Pillow
+uharfbuzz
+freetype-py

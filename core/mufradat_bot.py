@@ -1,7 +1,14 @@
 """Telegram-обвязка тренажёра муфрадата (движок - core/mufradat.py).
 
-Одна самообновляющаяся карточка на студента (editMessageText), не поток
-сообщений - согласовано с пользователем 17.08.2026. Активный вопрос
+Одна самообновляющаяся карточка на студента, не поток сообщений -
+согласовано с пользователем 17.08.2026. С 18.08.2026 карточка - ФОТО
+(editMessageMedia/editMessageCaption), не текст: арабское слово рендерится
+крупным шрифтом в PNG через core/mufradat_render.py (Telegram Bot API HTML
+не умеет font-size - жирного было мало, пользователь пожаловался "мелко
+читать"). Первая карточка ОБЯЗАНА быть фото-сообщением - editMessageMedia
+падает на текстовом сообщении и наоборот, поэтому переход от единственного
+текстового состояния ("слов мало на старте") к фото-карточке всегда идёт
+через НОВОЕ сообщение, не правку (см. handle_page_step_tap). Активный вопрос
 студента живёт в памяти процесса (_active_question), не в БД - бот
 деплоится сам на каждый push ([[feedback_auto_deploy]]), поэтому тап по
 кнопке после рестарта не должен молчать: обработчик просто присылает
@@ -29,7 +36,12 @@ from core.mufradat import (
     record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT, compute_overall_score,
 )
 from core.quran_pages import resolve_page, page_for_ayah, BAQARA_FIRST_PAGE, BAQARA_LAST_PAGE
-from core.tg import send_message, send_message_with_button_rows, edit_message_with_button_rows
+from core.tg import (
+    send_message, send_message_with_button_rows, edit_message_with_button_rows,
+    send_photo_bytes_with_button_rows, edit_message_media_with_button_rows,
+    edit_message_caption_with_button_rows,
+)
+from core.mufradat_render import render_word_png_bytes
 
 log = logging.getLogger(__name__)
 
@@ -111,7 +123,9 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
         lines.append(feedback)
         lines.append("")
     lines.append(f"📖 Твоя страница: {bookmark_page}  (слово со стр. {word_page})")
-    lines.append(f"Слово: <b>{q['word']['arabic_text']}</b>")
+    # Само арабское слово - в картинке (core/mufradat_render.py), не в тексте:
+    # Telegram HTML не умеет font-size, крупный текст можно получить только
+    # рендером в PNG (решение пользователя 18.08.2026 - "мелко читать").
     lines.append(f"\n✅ Верно за сеанс: {session_correct}")
     if overall_score:
         lines.append(_format_overall_score(overall_score))
@@ -144,7 +158,8 @@ async def _send_new_card(user_id, chat_id, words_pool):
 
     overall_score = compute_overall_score(user_id)
     text, rows = _render_card(user_id, q, 0, overall_score)
-    resp = await send_message_with_button_rows(chat_id, text, rows)
+    photo = render_word_png_bytes(q["word"]["arabic_text"])
+    resp = await send_photo_bytes_with_button_rows(chat_id, photo, "word.png", text, rows)
     msg_id = ((resp or {}).get("result") or {}).get("message_id")
     if not msg_id:
         return
@@ -248,7 +263,9 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
         # прошёл всю закладку - тупик без объяснения и кнопок был багом
         # (advisor 17.08.2026, пятый заход).
         text = feedback + "\n\nСлова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше."
-        await edit_message_with_button_rows(
+        # Картинка (последнее показанное слово) остаётся - меняем только
+        # подпись/клавиатуру, editMessageMedia тут не нужен.
+        await edit_message_caption_with_button_rows(
             chat_id, message_id, text, [[("➕", f"mufinc:{user_id}")]]
         )
         return
@@ -263,7 +280,8 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
         "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
         "start_score10": state.get("start_score10"),
     }
-    await edit_message_with_button_rows(chat_id, message_id, text, rows)
+    photo = render_word_png_bytes(q["word"]["arabic_text"])
+    await edit_message_media_with_button_rows(chat_id, message_id, photo, "word.png", text, rows)
 
 
 async def handle_page_step_tap(user_id, chat_id, message_id, delta):
@@ -289,18 +307,28 @@ async def handle_page_step_tap(user_id, chat_id, message_id, delta):
     progress = get_progress_map(user_id, [w["id"] for w in pool])
     q = generate_question(pool, progress)
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
+
+    # Карточка - ФОТО только если для message_id есть активное состояние
+    # (создаётся _send_new_card/предыдущим тапом). Самое первое сообщение
+    # при нехватке слов на старте - ТЕКСТОВОЕ (слова для картинки ещё нет,
+    # см. _send_new_card) - если теперь слов хватило, editMessageMedia
+    # упадёт на текстовом сообщении ("there is no media to edit"), нужна
+    # НОВАЯ фото-карточка, а не правка (advisor 18.08.2026).
+    state = _active_question.get(user_id)
+    is_photo_card = bool(state and state.get("message_id") == message_id)
+
     if q is None:
         _active_question.pop(user_id, None)
-        await edit_message_with_button_rows(
-            chat_id, message_id, "Пока маловато слов для тренажёра 🤲",
-            [[("➖", f"mufdec:{user_id}"), ("➕", f"mufinc:{user_id}")]]
-        )
+        rows = [[("➖", f"mufdec:{user_id}"), ("➕", f"mufinc:{user_id}")]]
+        if is_photo_card:
+            await edit_message_caption_with_button_rows(chat_id, message_id, "Пока маловато слов для тренажёра 🤲", rows)
+        else:
+            await edit_message_with_button_rows(chat_id, message_id, "Пока маловато слов для тренажёра 🤲", rows)
         return
 
     # Тап по устаревшей карточке (другой message_id) не наследует её
     # session_correct - та же защита, что в handle_answer_tap.
-    state = _active_question.get(user_id)
-    session_correct = state.get("session_correct", 0) if state and state.get("message_id") == message_id else 0
+    session_correct = state.get("session_correct", 0) if is_photo_card else 0
 
     # start_score10 ВСЕГДА пересчитывается заново, не наследуется - шаг
     # закладки меняет знаменатель (total слов), сравнение со старым
@@ -308,13 +336,21 @@ async def handle_page_step_tap(user_id, chat_id, message_id, delta):
     # ложное падение веса на "Закончить" без единой ошибки студента
     # (advisor 17.08.2026, восьмой заход).
     text, rows = _render_card(user_id, q, session_correct, overall_score)
+    photo = render_word_png_bytes(q["word"]["arabic_text"])
+    if is_photo_card:
+        await edit_message_media_with_button_rows(chat_id, message_id, photo, "word.png", text, rows)
+    else:
+        # Старое текстовое сообщение остаётся как есть (мёртвые кнопки) -
+        # шлём новую фото-карточку, редактировать текст->фото нельзя.
+        resp = await send_photo_bytes_with_button_rows(chat_id, photo, "word.png", text, rows)
+        message_id = ((resp or {}).get("result") or {}).get("message_id") or message_id
+
     _active_question[user_id] = {
         "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
         "word_page": page_for_ayah(q["word"]["ayah_number"]),
         "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
         "start_score10": overall_score["score10"] if overall_score else None,
     }
-    await edit_message_with_button_rows(chat_id, message_id, text, rows)
 
 
 def _leaderboard_for_this_bot():
@@ -369,7 +405,9 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
             label, rank, total_in_bracket, _score = rank_info
             lines.append(f"🏆 Место среди изучающих стр. {label}: {rank} из {total_in_bracket}")
 
-    await edit_message_with_button_rows(chat_id, message_id, "\n".join(lines), [])
+    # "Закончить" - кнопка только на фото-карточке (_render_card), картинка
+    # (последнее слово) остаётся видна - меняем только подпись.
+    await edit_message_caption_with_button_rows(chat_id, message_id, "\n".join(lines), [])
 
 
 def _display_name(user_id):
