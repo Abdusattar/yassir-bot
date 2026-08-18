@@ -197,14 +197,21 @@ async def _credit_task_if_applicable(user_id, chat_id):
     if already.get("t"):
         return
     save_report(user["id"], group["id"], get_date(), {"t": True})
-    await send_message(chat_id, "🎉 Задание «Слова» на сегодня засчитано — 20 разных слов проработано!")
+    await send_message(
+        chat_id,
+        f"🎉 Задание «Слова» на сегодня засчитано — {DAILY_WORDS_FOR_TASK_CREDIT} разных слов проработано!"
+    )
 
     if group["chat_id"]:
         score = compute_overall_score(user_id)
         score_part = f" (вес {score['score10']:.2f}/10)" if score else ""
+        # Короткая расшифровка "что такое муфрадат" - в группе это видят
+        # ВСЕ, не только сам студент, а тренажёр живёт в личке с ботом
+        # (пользователь 18.08.2026: непонятно со стороны, что за муфрадат).
         await send_message(
             group["chat_id"],
-            f"📖 {user['name']} отработал(а) дневной сет 20 слов на тренажёре муфрадат{score_part}."
+            f"📖 {user['name']} отработал(а) дневной сет {DAILY_WORDS_FOR_TASK_CREDIT} слов на тренажёре "
+            f"муфрадат (карточки арабских слов Корана с переводом){score_part}."
         )
 
 
