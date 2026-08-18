@@ -435,7 +435,7 @@ def _render_leaderboard_text(user_id, leaderboard):
     if not any(entries for _, entries in leaderboard):
         return "Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲 Начни первым: /muf"
 
-    lines = ["🏆 Топ по муфрадату (Бакара) — по глубине прохождения\n"]
+    lines = ["🏆 Топ по муфрадату — по глубине прохождения\n"]
     my_bracket = my_rank = my_score = None
 
     for label, entries in leaderboard:
