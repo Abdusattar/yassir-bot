@@ -32,7 +32,7 @@ import re
 from core.db import find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date, get_today_report
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
-    set_current_page, get_current_page, get_words_for_bookmark, mark_page_trained, get_leaderboard,
+    set_current_page, get_current_page, get_words_for_bookmark, get_leaderboard,
     record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT, compute_overall_score,
 )
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
@@ -234,15 +234,6 @@ async def handle_answer_tap(user_id, chat_id, message_id, slot):
     chosen = opts[slot]
     correct = (chosen == state["target"])
     record_answer(user_id, state["word_id"], correct)
-    # Отмечаем ЗАКЛАДКУ, не страницу слова (state["word_page"]) - вопрос
-    # взят из пула 2..закладка равномерно, страница СЛУЧАЙНОГО слова почти
-    # всегда НИЖЕ закладки (1 из N шанс совпасть с ней) - если отмечать её,
-    # MAX(page_number) в mufradat_trained_pages (глубина для /muftop) годами
-    # отставал бы от реальной закладки студента (advisor 17.08.2026, восьмой
-    # заход). Закладка - и есть честное свидетельство "дошёл досюда и хотя
-    # бы раз ответил", подделать её нельзя не отвечая (mark_page_trained
-    # вызывается только здесь, после реального ответа).
-    mark_page_trained(user_id, get_current_page(user_id))
 
     session_correct = state.get("session_correct", 0) + (1 if correct else 0)
 
@@ -370,19 +361,17 @@ def _leaderboard_for_this_bot():
     (—)" из другого бота). Фильтруем по тому, существует ли студент в БД
     ИМЕННО ЭТОГО бота (users - per-profile, quran_male.db/quran_female.db,
     см. config.DB) - явного поля "пол" в mufradat_* таблицах нет и не
-    нужно, разделение уже есть на уровне БД пользователей."""
-    filtered = []
-    for label, entries in get_leaderboard():
-        own = [(uid, score) for uid, score in entries if find_user_by_phone(uid)]
-        filtered.append((label, own))
-    return filtered
+    нужно, разделение уже есть на уровне БД пользователей.
+
+    С 19.08.2026 - единый общий список (не полки по страницам), см.
+    core/mufradat.py:get_leaderboard."""
+    return [(uid, score) for uid, score in get_leaderboard() if find_user_by_phone(uid)]
 
 
 def _find_rank(leaderboard, user_id):
-    for label, entries in leaderboard:
-        for i, (uid, score) in enumerate(entries, start=1):
-            if uid == user_id:
-                return label, i, len(entries), score
+    for i, (uid, score) in enumerate(leaderboard, start=1):
+        if uid == user_id:
+            return i, len(leaderboard), score
     return None
 
 
@@ -410,8 +399,8 @@ async def handle_end_session_tap(user_id, chat_id, message_id):
 
         rank_info = _find_rank(_leaderboard_for_this_bot(), user_id)
         if rank_info:
-            label, rank, total_in_bracket, _score = rank_info
-            lines.append(f"🏆 Место среди изучающих стр. {label}: {rank} из {total_in_bracket}")
+            rank, total, _score = rank_info
+            lines.append(f"🏆 Место в общем рейтинге: {rank} из {total}")
 
     # "Закончить" - кнопка только на фото-карточке (_render_card), картинка
     # (последнее слово) остаётся видна - меняем только подпись.
@@ -428,50 +417,57 @@ def _group_name(user_id):
     return group["title"] if group and group["title"] else "—"
 
 
+_LEADERBOARD_TOP_N = 15
+
+
 def _render_leaderboard_text(user_id, leaderboard):
-    """leaderboard - результат get_leaderboard():
-    [(bracket_label, [(uid, score_dict), ...]), ...], уже отсортировано
-    внутри каждой полки по числу выученных слов (см. модульный docstring
-    core/mufradat.py:get_leaderboard)."""
-    if not any(entries for _, entries in leaderboard):
+    """leaderboard - результат _leaderboard_for_this_bot(): [(uid,
+    score_dict), ...], один общий список (не полки по страницам, было так
+    до 19.08.2026), отсортирован по wilson*log10(1+attempted) - точность
+    и объём вместе, см. модульный docstring core/mufradat.py:get_leaderboard.
+
+    Показываем топ-15 целиком; если сам студент в него не попал - отдельной
+    строкой ниже его место (решение пользователя 19.08.2026). Короткое
+    пояснение формулы внизу - решение пользователя 19.08.2026, чтобы
+    студенты понимали, почему объём и точность вместе, а не голый %."""
+    if not leaderboard:
         return "Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲 Начни первым: /muf"
 
-    lines = ["🏆 Топ по муфрадату — по глубине прохождения\n"]
-    my_bracket = my_rank = my_score = None
+    lines = ["🏆 Топ по муфрадату — точность и объём\n"]
+    my_rank = my_score = None
 
-    for label, entries in leaderboard:
-        if not entries:
-            continue
-        lines.append(f"📄 Стр. {label}:")
-        for i, (uid, score) in enumerate(entries, start=1):
-            if uid == user_id:
-                my_bracket, my_rank, my_score = label, i, score
-            if i <= 3:
-                marker = "👉 " if uid == user_id else ""
-                # Раньше показывали mastered (выученные) - при MASTERY_STREAK=4
-                # это почти у всех 0 первые дни, рейтинг выглядел "сломанным"
-                # (пользователь 18.08.2026: "рейтинг не информативен - 0 слов").
-                # Вес - плавный, двигается с первого правильного ответа;
-                # "карточек" - attempted (разных слов, отвеченных хоть раз
-                # за всё время); "из N" - total, весь пул текущей закладки
-                # ("слова для заучивания" - пользователь 18.08.2026, привёл
-                # пример "я на 14 странице, у меня для заучивания более
-                # 1000 слов"). Плюс текущая страница закладки.
-                page = get_current_page(uid)
-                page_part = f", стр. {page}" if page else ""
-                lines.append(
-                    f"  {marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — "
-                    f"вес {score['score10']:.2f}/10 ({score['attempted']} карточек из {score['total']}{page_part})"
-                )
+    for i, (uid, score) in enumerate(leaderboard, start=1):
+        if uid == user_id:
+            my_rank, my_score = i, score
+        if i <= _LEADERBOARD_TOP_N:
+            marker = "👉 " if uid == user_id else ""
+            # accuracy - % верных из открытых карточек (score['n'] - сумма
+            # верных+неверных за всю историю, не только текущая закладка);
+            # сортировка при этом идёт по wilson (не по accuracy напрямую) -
+            # см. core/mufradat.py:_wilson_lower_bound, почему только accuracy
+            # без объёма легко обмануть (1/1 = 100%).
+            page = get_current_page(uid)
+            page_part = f", стр. {page}" if page else ""
+            lines.append(
+                f"{marker}{i}. {_display_name(uid)} ({_group_name(uid)}) — "
+                f"{score['accuracy']:.0f}% ({score['correct']}/{score['n']} карточек){page_part}"
+            )
+
+    if my_rank is None:
         lines.append("")
-
-    if my_bracket and my_rank > 3:
+        lines.append("Ты ещё не тренировал муфрадат — набери /muf 🤲")
+    elif my_rank > _LEADERBOARD_TOP_N:
+        lines.append("")
         lines.append(
-            f"Ты среди изучающих стр. {my_bracket}: место {my_rank}, "
-            f"вес {my_score['score10']:.2f}/10 ({my_score['attempted']} карточек из {my_score['total']})."
+            f"Ты: место {my_rank} из {len(leaderboard)}, "
+            f"{my_score['accuracy']:.0f}% ({my_score['correct']}/{my_score['n']} карточек)."
         )
-    elif my_bracket is None:
-        lines.append("Ты ещё не тренировал ни одной страницы — набери /muf 🤲")
+
+    lines.append("")
+    lines.append(
+        "ℹ️ Место в рейтинге зависит и от точности, и от объёма — большой "
+        "объём с высокой точностью выше, чем мало карточек с почти идеальным %."
+    )
 
     return "\n".join(lines).rstrip()
 

@@ -19,6 +19,7 @@
     "мастерство" по каждой строке отдельно никогда не сходится в одно
     целое. Дистрактором остаются (разбор advisor 17.08.2026, третий заход).
 """
+import math
 import random
 import re
 import sqlite3
@@ -45,27 +46,38 @@ _PROGRESS_SCHEMA = """
     )
 """
 
+
+def _ensure_progress_schema(conn):
+    """CREATE TABLE + миграция ADD COLUMN correct_count (19.08.2026, для
+    Wilson-рейтинга по точности - см. get_leaderboard). correct_count -
+    НАКОПИТЕЛЬНЫЙ счётчик верных ответов, никогда не уменьшается и не
+    ограничен потолком, в отличие от correct_streak (тот падает при ошибке,
+    см. record_answer) - без него точность (correct/(correct+wrong)) по
+    всей истории студента посчитать было нечем, только wrong_count был
+    накопительным.
+
+    Проверяем PRAGMA table_info ДО попытки ALTER (не try/except на каждый
+    вызов) - эта функция дёргается на каждый тап карточки (get_progress_map,
+    record_answer), try/except ловил бы исключение и писал попытку схемы в
+    WAL при каждом тапе (поймал advisor 19.08.2026). Тот же трёхместный
+    паттерн, что и у wrong_count (SELECT/increment/INSERT) - days_correct в
+    этой же таблице молча обнуляется на каждый ответ уже давно именно
+    потому, что не входит в список полей INSERT OR REPLACE в record_answer
+    (найдено advisor как предупреждение о такой же ловушке для
+    correct_count) - оставлено как есть, отдельное решение, не часть этой
+    правки."""
+    conn.execute(_PROGRESS_SCHEMA)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(mufradat_progress)")}
+    if "correct_count" not in cols:
+        conn.execute("ALTER TABLE mufradat_progress ADD COLUMN correct_count INTEGER NOT NULL DEFAULT 0")
+
+
 _PAGE_SCHEMA = """
     CREATE TABLE IF NOT EXISTS mufradat_page(
         user_id TEXT PRIMARY KEY,
         page_number INTEGER NOT NULL,
         start_ayah INTEGER NOT NULL,
         end_ayah INTEGER NOT NULL
-    )
-"""
-
-# Страницы, которые студент РЕАЛЬНО тренировал (хотя бы раз ответил) -
-# отдельно от mufradat_page (там только ТЕКУЩАЯ страница, одна строка,
-# перезаписывается). Общий вес считается по объединению этих страниц, а
-# не по "текущей" или "до текущей" - иначе рейтинг ломается в обе стороны:
-# студент, который прыгнул сразу на стр.30, получил бы в знаменатель ~4000
-# слов, которые никогда не видел, а переписав номер на маленький - искусственно
-# поднял бы вес. Так вес растёт только от реальной работы (advisor 17.08.2026).
-_TRAINED_PAGES_SCHEMA = """
-    CREATE TABLE IF NOT EXISTS mufradat_trained_pages(
-        user_id TEXT NOT NULL,
-        page_number INTEGER NOT NULL,
-        PRIMARY KEY (user_id, page_number)
     )
 """
 
@@ -265,7 +277,7 @@ def get_progress_map(user_id, word_ids):
         return {}
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.row_factory = sqlite3.Row
-        conn.execute(_PROGRESS_SCHEMA)
+        _ensure_progress_schema(conn)
         placeholders = ",".join("?" * len(word_ids))
         rows = conn.execute(
             f"SELECT * FROM mufradat_progress WHERE user_id=? AND word_id IN ({placeholders})",
@@ -293,28 +305,34 @@ def record_answer(user_id, word_id, correct):
     остаётся прежним, поэтому просроченное "выученное" слово (see
     RECHECK_AFTER_DAYS) сохраняет вес 1.0 в word_weight (ветка _is_stale)
     до первого же верного ответа после провала, даже если провалило
-    несколько перепроверок подряд."""
+    несколько перепроверок подряд.
+
+    correct_count (19.08.2026) растёт вместе с correct_streak на верный
+    ответ, но НИКОГДА не падает на ошибке (в отличие от correct_streak) -
+    это единственный настоящий накопительный счётчик "сколько раз вообще
+    ответил верно" по слову, нужен для Wilson-точности в get_leaderboard."""
     today = _today()
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.row_factory = sqlite3.Row
-        conn.execute(_PROGRESS_SCHEMA)
+        _ensure_progress_schema(conn)
         row = conn.execute(
-            "SELECT correct_streak, wrong_count, last_correct_date "
+            "SELECT correct_streak, wrong_count, correct_count, last_correct_date "
             "FROM mufradat_progress WHERE user_id=? AND word_id=?",
             (user_id, word_id)
         ).fetchone()
-        streak, wrong, last_date = tuple(row) if row else (0, 0, None)
+        streak, wrong, right, last_date = tuple(row) if row else (0, 0, 0, None)
         if correct:
             streak = min(MASTERY_STREAK, streak + 1)
+            right += 1
             last_date = today
         else:
             wrong += 1
             streak = max(0, streak - 1)
         conn.execute(
             "INSERT OR REPLACE INTO mufradat_progress "
-            "(user_id, word_id, correct_streak, wrong_count, last_correct_date) "
-            "VALUES (?,?,?,?,?)",
-            (user_id, word_id, streak, wrong, last_date)
+            "(user_id, word_id, correct_streak, wrong_count, correct_count, last_correct_date) "
+            "VALUES (?,?,?,?,?,?)",
+            (user_id, word_id, streak, wrong, right, last_date)
         )
 
 
@@ -340,11 +358,6 @@ def set_current_page(user_id, page_number):
     сур, с 18.08.2026 - расширение за пределы Бакары) от начала до этой
     закладки разом (решение пользователя 17.08.2026, пятый заход:
     "рандомно должно идти... без ручного добавления каждой страницы").
-    Раньше эта таблица была почти мёртвой (пул строился по
-    mufradat_trained_pages) - теперь наоборот, mufradat_trained_pages
-    осталась только как ДОКАЗАТЕЛЬСТВО глубины для рейтинга (см.
-    get_leaderboard), а не источник пула.
-
     start_ayah/end_ayah в схеме таблицы - МЁРТВЫЕ колонки (пишутся, но
     нигде не читаются обратно - было так и до этой правки, просто раньше
     вызывающий код честно передавал их, создавая иллюзию, что они нужны).
@@ -405,43 +418,20 @@ def get_words_for_bookmark(user_id):
     return get_words_up_to_page(page_number)
 
 
-def mark_page_trained(user_id, page_number):
-    """Вызывается при КАЖДОМ ответе (не при открытии карточки). Вызывающий
-    код (core/mufradat_bot.py) обязан передавать ЗАКЛАДКУ студента
-    (get_current_page), НЕ страницу конкретного заданного слова - вопросы
-    берутся равномерно из всего диапазона 2..закладка, поэтому страница
-    случайного слова почти всегда НИЖЕ закладки (шанс совпасть ~1/N) -
-    если бы отмечали её, MAX(page_number) в mufradat_trained_pages (полка
-    рейтинга, см. get_leaderboard) годами отставал бы от реальной глубины
-    студента (баг найден advisor 17.08.2026, восьмой заход, до деплоя).
-
-    НЕ источник пула тренажёра (см. get_words_for_bookmark) - только
-    доказательство глубины для полок рейтинга: "дошёл до этой страницы
-    И хотя бы раз ответил" - подделать нельзя не отвечая (защита от
-    "вписал 49 и сразу попал в верхнюю полку", advisor, седьмой заход)."""
-    with sqlite3.connect(HADITHS_DB) as conn:
-        conn.execute(_TRAINED_PAGES_SCHEMA)
-        conn.execute(
-            "INSERT OR IGNORE INTO mufradat_trained_pages (user_id, page_number) VALUES (?,?)",
-            (user_id, page_number)
-        )
-
-
 def compute_overall_score(user_id, words=None, progress=None):
     """Общий вес студента среди ВСЕХ слов на закладке (get_words_for_bookmark,
     2..N, ТОТ ЖЕ пул, что и у тренажёра, не только реально тронутые
-    страницы). Возвращает None, если закладка ещё не установлена.
+    страницы). Возвращает None, если закладка ещё не установлена. Личное
+    отображаемое число на карточке/в статистике - НЕ критерий ранжирования
+    в /muftop (там с 19.08.2026 Wilson-точность по всей истории, см.
+    get_leaderboard), поэтому знаменатель "закладка" тут не проблема.
 
-    Деноминатор - именно закладка, не mufradat_trained_pages (было так в
-    первой версии этой правки) - иначе знаменатель рос НЕПРЕДСКАЗУЕМО
-    посреди сеанса (каждый тап на новую страницу пула резко увеличивал
-    total), из-за чего score10 мог УПАСТЬ после верного ответа - тот же
-    "вес не растёт" эффект, который вся эта правка должна была устранить
-    (баг найден advisor 17.08.2026, седьмой заход, до деплоя). Защита от
-    "вписал 49 и получил дутый вес" здесь не нужна - score10 личное
-    отображаемое число, не критерий ранжирования в /muftop (там сортировка
-    по mastered ВНУТРИ полки, а полка - по mufradat_trained_pages, которая
-    осталась честной).
+    Деноминатор - именно закладка (не число реально тронутых страниц) -
+    иначе знаменатель рос НЕПРЕДСКАЗУЕМО посреди сеанса (каждый тап на
+    новую страницу пула резко увеличивал total), из-за чего score10 мог
+    УПАСТЬ после верного ответа - тот же "вес не растёт" эффект, который
+    вся эта правка должна была устранить (баг найден advisor 17.08.2026,
+    седьмой заход, до деплоя).
 
     "mastered"/"total" и "score10" - одна и та же метрика (correct_streak),
     просто по-разному агрегированная: "mastered" - целое число слов,
@@ -492,85 +482,108 @@ def compute_page_score(user_id, page_number):
     return {"total": total, "mastered": mastered, "score10": round(10 * mastered / total, 2)}
 
 
-# Полки рейтинга по ГЛУБИНЕ прохождения (max тренированная страница),
-# границы включительно, без пересечений. Первые 5 полок - старые (Бакара,
-# стр. 2-49, не менялись с 17.08.2026, чтобы не переставлять студентов
-# между полками задним числом), дальше - по одной полке на суру
-# (расширение на 7 длинных сур до Юнуса, 18.08.2026, границы страниц из
-# core/quran_pages.py:PAGES).
-PAGE_BRACKETS = [
-    ("2-5", 2, 5),
-    ("6-10", 6, 10),
-    ("11-15", 11, 15),
-    ("16-25", 16, 25),
-    ("26-49", 26, 49),      # конец Аль-Бакара
-    ("50-76", 50, 76),      # Али Имран
-    ("77-106", 77, 106),    # Ан-Ниса
-    ("107-127", 107, 127),  # Аль-Маида
-    ("128-150", 128, 150),  # Аль-Анам
-    ("151-176", 151, 176),  # Аль-Араф
-    ("177-207", 177, 207),  # Аль-Анфаль + Ат-Тауба
-    ("208-221", 208, 221),  # Юнус
-]
+# Wilson-рейтинг (19.08.2026) - заменил полки по глубине страниц. Прошлая
+# метрика (mastered/score10 внутри полки по max тренированной странице)
+# сломалась после расширения пула на 7 сур: знаменатель (весь пул закладки)
+# вырос до ~28000 слов, доля стала неинформативной у всех ("вес слишком
+# малые, есть у которых 0", пользователь 19.08.2026). Пользователь прямо
+# попросил формулу из двух факторов - точность (верно/открыто) и стимул
+# открывать больше карточек, не наказывая за возросший шанс ошибиться на
+# объёме - консультация advisor 19.08.2026 указала на Wilson lower bound
+# (тот же алгоритм, что использует Reddit для ранжирования комментариев по
+# рейтингу) - см. _wilson_lower_bound.
+_WILSON_Z = 1.96  # 95%-доверительный интервал, стандартный выбор для этого
+# алгоритма - не тюнинг-константа, трогать не нужно.
 
 
-def _bracket_for_page(max_page):
-    for label, lo, hi in PAGE_BRACKETS:
-        if lo <= max_page <= hi:
-            return label
-    return None
+def _wilson_lower_bound(correct, n):
+    """Нижняя граница 95%-доверительного интервала для доли верных ответов
+    (p = correct/n) - отвечает на вопрос "какая точность НАИХУДШАЯ, ещё
+    согласующаяся с этим объёмом данных". Поэтому 190 верных из 200 обгоняет
+    1 верный из 1: у первого высокая УВЕРЕННОСТЬ в оценке точности, у
+    второго - почти никакой, хотя p=1.0 у обоих быть не может (сравнили на
+    реальных данных студентов, SSH-превью на проде 19.08.2026 - Нурсултан,
+    271 карточка / 39 ошибок, wilson~0.833, держится выше Ильяса, 15
+    карточек / 1 ошибка, wilson~0.717, несмотря на более высокий % у
+    второго - ровно то, что просил пользователь).
+
+    Стимул от объёма ПЛАВНО ВЫДЫХАЕТСЯ после нескольких сотен карточек
+    (предупредил advisor заранее) - при p=0.9 разница между n=200 и n=2000
+    почти не заметна, чистый Wilson не даёт бесконечного стимула качать
+    объём. Первая попытка (тай-брейк по attempted при точном совпадении
+    Wilson) не сработала на реальных данных - Wilson-значения у разных
+    студентов почти никогда не совпадают до 4 знака, тай-брейк не включался
+    ни разу, кроме пары студентов с абсолютно одинаковыми correct/wrong
+    (проверено на живых данных 19.08.2026, после прямого вопроса
+    пользователя "у них то меньше слов для заучивания" - Бехзод с 46
+    карточками (93.9%) обгонял Нурсултана с 271 карточкой (87.4%), хотя оба
+    примерно на одной глубине страниц - не проблема глубины, проблема веса
+    объёма в самой формуле). См. get_leaderboard для итоговой формулы
+    сортировки (wilson * log10(1+attempted))."""
+    if n == 0:
+        return 0.0
+    p = correct / n
+    denom = 1 + _WILSON_Z ** 2 / n
+    center = p + _WILSON_Z ** 2 / (2 * n)
+    margin = _WILSON_Z * math.sqrt((p * (1 - p) + _WILSON_Z ** 2 / (4 * n)) / n)
+    return (center - margin) / denom
 
 
-def _attempted_counts():
-    """user_id -> число РАЗНЫХ слов, на которые студент хоть раз ответил
-    за всё время (не только на текущей закладке - строка в
-    mufradat_progress появляется один раз на слово и остаётся навсегда,
-    даже если закладка потом сдвинулась дальше). Один запрос на всех
-    сразу для лидерборда, не считаем в compute_overall_score - там это
-    лишний SQL на КАЖДЫЙ тап карточки, тут нужен только для /muftop."""
+def _accuracy_totals():
+    """user_id -> {correct, wrong, n, attempted} - суммарно по ВСЕМ словам,
+    что студент когда-либо открывал за всю историю (не только текущая
+    закладка - строка в mufradat_progress появляется один раз на слово и
+    остаётся навсегда, даже если закладка потом сдвинулась дальше).
+    correct/wrong - SUM(correct_count)/SUM(wrong_count), оба честно
+    накопительные (в отличие от correct_streak, который падает при ошибке).
+    attempted - число РАЗНЫХ слов (не сумма попыток), нужен как тай-брейк
+    при равном Wilson-счёте (решение пользователя 19.08.2026)."""
     with sqlite3.connect(HADITHS_DB) as conn:
-        conn.execute(_PROGRESS_SCHEMA)
-        rows = conn.execute("SELECT user_id, COUNT(*) FROM mufradat_progress GROUP BY user_id").fetchall()
-    return dict(rows)
+        _ensure_progress_schema(conn)
+        rows = conn.execute(
+            "SELECT user_id, SUM(correct_count), SUM(wrong_count), COUNT(*) "
+            "FROM mufradat_progress GROUP BY user_id"
+        ).fetchall()
+    return {
+        uid: {"correct": c or 0, "wrong": w or 0, "n": (c or 0) + (w or 0), "attempted": n}
+        for uid, c, w, n in rows
+    }
 
 
 def get_leaderboard():
-    """Список (bracket_label, [(user_id, score_dict), ...]) - полки по
-    глубине прохождения (max пройденная страница), не единый общий
-    список: студент, прошедший 20 страниц, и студент, допрыгнувший сразу
-    на 30-ю и тренировавший только её, иначе оказались бы в одном ряду.
+    """Единый общий список (user_id, score_dict), НЕ полки по глубине
+    страниц (было так до 19.08.2026) - Wilson-точность сравнима на любой
+    глубине пула напрямую (в отличие от score10/mastered, которые зависели
+    от размера знаменателя закладки), деление на полки только прятало бы
+    студентов на ранних страницах от тех, кто прошёл дальше.
 
-    Внутри полки сортировка по ЧИСЛУ выученных слов (mastered), НЕ по
-    доле (score10) - доля не защищена от того же самого трюка (у
-    "прыгнувшего" знаменатель маленький, доля может быть выше при
-    меньшей реальной работе). score10 остаётся личным числом на
-    карточке/в статистике, не рейтинговым критерием (разбор advisor
-    17.08.2026, четвёртый заход) - НО с 18.08.2026 (MASTERY_STREAK
-    7->4, порог мастерства ещё не пройден почти никем) именно score10
-    показываем в тексте лидерборда вместо mastered (пользователь:
-    "рейтинг не информативен - 0 слов"), сортировка при этом осталась
-    прежней (по mastered), просто напоказ идёт другое число."""
-    with sqlite3.connect(HADITHS_DB) as conn:
-        conn.execute(_TRAINED_PAGES_SCHEMA)
-        rows = conn.execute(
-            "SELECT user_id, MAX(page_number) FROM mufradat_trained_pages GROUP BY user_id"
-        ).fetchall()
+    Сортировочный ключ - wilson * log10(1+attempted), НЕ чистый wilson
+    (была первая версия 19.08.2026, тай-брейк по attempted при точном
+    совпадении Wilson - см. docstring _wilson_lower_bound, почему не
+    сработало на практике). log10(1+attempted) даёт объёму ПОСТОЯННЫЙ, но
+    сублинейный вес - не позволяет маленькому объёму с чуть более высокой
+    точностью обгонять большой объём (Нурсултан 271/87.4% поднимается
+    выше Бехзода 46/93.9%, проверено на живых данных 19.08.2026), но и не
+    даёт бесконечно растущему объёму задавить точность (log, не линейно).
+    Итоговое число - НЕ вероятность, только внутренний ключ сортировки, не
+    показывается студенту (на экране - accuracy% и n, см.
+    core/mufradat_bot.py:_render_leaderboard_text).
 
-    attempted = _attempted_counts()
-    buckets = {label: [] for label, _, _ in PAGE_BRACKETS}
-    for uid, max_page in rows:
-        label = _bracket_for_page(max_page)
-        if label is None:
-            continue
-        score = compute_overall_score(uid)
-        if score:
-            score["attempted"] = attempted.get(uid, 0)
-            buckets[label].append((uid, score))
-
-    for label in buckets:
-        buckets[label].sort(key=lambda item: (-item[1]["mastered"], -item[1]["score10"]))
-
-    return [(label, buckets[label]) for label, _, _ in PAGE_BRACKETS]
+    score_dict: wilson (промежуточный, для sort_key), accuracy (%, для
+    показа), correct/wrong/n (сырые числа), attempted."""
+    totals = _accuracy_totals()
+    entries = []
+    for uid, t in totals.items():
+        wilson = _wilson_lower_bound(t["correct"], t["n"])
+        accuracy = round(100 * t["correct"] / t["n"], 1) if t["n"] else 0.0
+        sort_key = wilson * math.log10(1 + t["attempted"])
+        entries.append((uid, {
+            "wilson": wilson, "accuracy": accuracy,
+            "correct": t["correct"], "wrong": t["wrong"], "n": t["n"],
+            "attempted": t["attempted"], "_sort_key": sort_key,
+        }))
+    entries.sort(key=lambda item: -item[1]["_sort_key"])
+    return entries
 
 
 _DAILY_ANSWERED_SCHEMA = """
