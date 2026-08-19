@@ -118,10 +118,50 @@ def _is_scaffold(translation):
 
 
 def _is_junk(translation):
-    """Перевод без единой буквы (напр. "*" - метка сноски в исходнике,
-    17.08.2026, 116 из 6103 строк) - не перевод вообще, ни целью вопроса,
-    ни дистрактором быть не может."""
+    """Перевод без единой буквы - не перевод вообще, ни целью вопроса, ни
+    дистрактором быть не может. Раньше "*" считался меткой сноски в
+    исходнике (17.08.2026) - неверно (19.08.2026, разбор по жалобе
+    студента на вопрос без верного варианта): у API Quran Academy "*" -
+    это признак слова, чей перевод целиком склеен с ПРЕДЫДУЩИМ словом
+    (устойчивые сочетания вроде "مِن بَعْدِ" = "после", "عَلَى عَبْدِنَا" =
+    "Нашему рабу,"), проверено на всех 114 строках с "*" в момент правки -
+    паттерн стабильный. Такие строки поглощаются в get_words_in_range
+    (арабский текст головного слова дополняется ими) и сюда никогда не
+    доходят - если "*" всё же попал в _is_junk, это баг склейки, не
+    ожидаемый путь. Оставшиеся "" и ":" (по 1 строке) - не склейка, у них
+    перевод предыдущего слова реально не покрывает соседа - фильтруются
+    здесь как раньше."""
     return not _HAS_LETTER_RE.search(translation)
+
+
+def _merge_glued_translations(rows):
+    """API Quran Academy для устойчивых сочетаний (предлог+сущ.,
+    предлог+предлог, числительное+числительное) не даёт отдельный перевод
+    каждому слову - весь перевод связки приклеен к ПЕРВОМУ слову, а
+    следующие помечены переводом "*" (см. _is_junk). Без этой склейки
+    первое слово остаётся в пуле вопросов с переводом фразы из 2-3 слов,
+    у которого нет честного соответствия в вариантах ответа (баг, из-за
+    которого студент получил вопрос без верного варианта - 19.08.2026).
+    Склеиваем арабский текст головного слова с текстом всех идущих подряд
+    "*"-хвостов (цепочки бывают длиннее одного слова, напр. "أَلَمْ تَرَ
+    إِلَىٰ" - 2 хвоста), перевод и id оставляем от головного слова - хвосты
+    в пул не попадают вообще (как и раньше)."""
+    by_position = {}
+    for r in rows:
+        by_position.setdefault(r["ayah_number"], {})[r["position"]] = r
+
+    merged = []
+    for r in rows:
+        if r["translation"].strip() == "*":
+            continue
+        ayah_words = by_position[r["ayah_number"]]
+        arabic_parts = [r["arabic_text"]]
+        pos = r["position"] + 1
+        while ayah_words.get(pos) and ayah_words[pos]["translation"].strip() == "*":
+            arabic_parts.append(ayah_words[pos]["arabic_text"])
+            pos += 1
+        merged.append({**r, "arabic_text": " ".join(arabic_parts)})
+    return merged
 
 
 def get_words_in_range(surah_number, start_ayah, end_ayah):
@@ -133,7 +173,8 @@ def get_words_in_range(surah_number, start_ayah, end_ayah):
             "ORDER BY ayah_number, position",
             (surah_number, start_ayah, end_ayah)
         ).fetchall()
-    return [dict(r) for r in rows if not _is_junk(r["translation"])]
+    words = _merge_glued_translations([dict(r) for r in rows])
+    return [w for w in words if not _is_junk(w["translation"])]
 
 
 def word_weight(progress_row):
