@@ -963,9 +963,17 @@ async def invite_missing_ustaz_to_scaling():
 # ── Бонус +5 за 7 дней стрика (07:00) ────────────────────────────────────────
 
 async def streak_bonuses():
+    """Только мгновенная AI-похвала на живых рубежах серии (7/14/30 дней
+    подряд, get_streak_days - скользящий счётчик, может начаться в любой
+    день недели). Баллы сюда больше не входят (23.08.2026) - решение
+    пользователя: бонус +5 должен даваться один раз за ЗАВЕРШЁННУЮ
+    календарную неделю пн-вс без единого пропуска, это теперь считает
+    weekly_report(). Старая механика "каждые живые 7 дней" использовала
+    метку week_N как разовую на всю жизнь студента - после сброса серии
+    новая честная серия той же длины находила уже использованную метку и
+    бонус молча не начислялся (живой случай - Арген, G-2b, 21.08.2026)."""
     hadith = sampler.sample_hadith()
     ayah   = sampler.sample_ayah()
-    today = get_date()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
         if gtype == "tadabbur":
@@ -973,32 +981,13 @@ async def streak_bonuses():
         glang = get_group_lang(group)
         group_tasks = get_group_tasks(group)
         try:
-            bonus_names = []
             for s in get_students(group["id"]):
                 streak = get_streak_days(s["id"], group["id"], group_tasks)
-                if streak > 0 and streak % 7 == 0:
-                    subcat = "week_" + str(streak // 7)
-                    with db() as c:
-                        exists = c.execute(
-                            "SELECT 1 FROM score_events"
-                            " WHERE student_id=? AND category='streak' AND subcategory=?",
-                            (s["id"], subcat)
-                        ).fetchone()
-                    if not exists:
-                        add_bonus(s["id"], group["id"], today, 5, "streak", subcat)
-                        bonus_names.append((s["name"], streak))
-                    # AI-похвала на ключевых рубежах
-                    if streak in (7, 14, 30):
-                        praise = await ai.personal_streak_praise(s["name"], streak, glang, hadith=hadith, ayah=ayah)
-                        if praise:
-                            await send_message(group["chat_id"], "🌟 " + praise)
-                        await asyncio.sleep(1)
-            if bonus_names:
-                lines = ["🌟 Бонус +5 очков за серию без пропусков:"]
-                for name, days in bonus_names:
-                    lines.append("• " + name + " — " + str(days) + " дней подряд!")
-                await send_message(group["chat_id"], "\n".join(lines))
-            await asyncio.sleep(1)
+                if streak in (7, 14, 30):
+                    praise = await ai.personal_streak_praise(s["name"], streak, glang, hadith=hadith, ayah=ayah)
+                    if praise:
+                        await send_message(group["chat_id"], "🌟 " + praise)
+                    await asyncio.sleep(1)
         except Exception as e:
             log.error("streak_bonuses error in %s: %s", group["chat_id"], e)
 
@@ -1439,110 +1428,125 @@ async def transfer_check():
 # ── Еженедельный отчёт (воскресенье 19:00) ────────────────────────────────────
 
 async def weekly_report():
-    hadith = sampler.sample_hadith()
-    ayah   = sampler.sample_ayah()
-    for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
-            continue
-        chat_id = group["chat_id"]
-        group_tasks = get_group_tasks(group)
-        glang = get_group_lang(group)
-        try:
-            report = format_period_report(group["id"], group["title"] or chat_id, group_tasks, 7)
-            await send_message(chat_id, report)
+    """Единый недельный отчёт группе - объединяет бывшие weekly_report
+    (рейтинг+похвала лидеру, раньше скользящее окно вс 19:00) и
+    weekly_partial_report (список частичных сдач, пн 07:00) в один,
+    на ЗАВЕРШЁННУЮ календарную неделю пн-вс (23.08.2026, решение
+    пользователя - в воскресенье вечером неделя ещё не закончилась,
+    сегодняшний день мог быть не досдан; тот же довод, что раньше сдвинул
+    weekly_partial_report на понедельник).
 
-            winner = get_period_winner(group["id"], 7)
-            if winner and winner["points"] > 0:
-                praise = await ai.winner_praise(winner["name"], "неделю", winner["points"], glang, hadith=hadith, ayah=ayah)
-                if praise:
-                    await send_message(chat_id, praise)
-            await asyncio.sleep(1)
-        except Exception as e:
-            log.error("weekly_report error in %s: %s", chat_id, e)
+    Бонус +5 "неделя без пропусков" тоже здесь, не в streak_bonuses():
+    начисляется ОДИН раз за календарную неделю тому, кто сдал ВСЕ задания
+    группы ВСЕ 7 дней пн-вс без единого пропуска (дедуп по (student_id,
+    subcategory=последний понедельник недели) - в отличие от старой метки
+    week_N, привязанной к длине "живой" серии, эта не может столкнуться с
+    прошлой историей после сброса серии).
 
-
-# ── Еженедельный список неполных сдач (понедельник 07:00, вторник - подстраховка) ──
-
-async def weekly_partial_report():
-    """Список студентов, кто хотя бы раз за неделю сдал НЕ ВСЕ задания дня
-    (1 или несколько из N, но не 0 - полный пропуск, тот уже виден в
-    weekly_report - и не все N). Решение пользователя 12.08.2026, повод -
-    Umar (G-11, 18 таких дней за месяц) и Юсуф (G-9, 14) систематически
-    сдают по одному заданию месяцами - точечные напоминания дали бы мало
-    эффекта, нужен системный еженедельный список прямо в группу, с
-    предупреждением наверху.
-    Календарная неделя пн-вс, ПРОШЕДШАЯ целиком (не скользящее окно, как у
-    weekly_report/Sunday 19:00) - пользователь указал, что в воскресенье
-    вечером неделя ещё не закончилась (сегодняшний день мог быть не досдан).
-    Тот же паттерн дедупа по неделе, что у weekly_ops_report (bot_settings,
-    ключ хранит понедельник прошедшей недели) - запуск на пн и вт безопасен,
-    вторник просто подстраховка, если понедельничный прогон не сработал.
-    Ростер и исключение устаза - как в _full_period_students (только
-    активные студенты группы через get_students, SUPER_ADMIN_IDS[0] по
-    личной просьбе не попадает в списки). Подкатегория задания жёстко
-    отфильтрована под group_tasks - без этого студент, сдавший 1 нужное +
-    доп. предмет вне списка группы (реальный кейс - Изат, G-2c, 'n' в
-    m,r,t-группе), либо выпал бы из списка вовсе, либо посчитался бы как
-    "2 из 3" вместо честного "1 из 3"."""
+    Дедуп недели - тот же паттерн, что был у weekly_partial_report. Без
+    исключения SUPER_ADMIN_IDS[0] из учебных групп (23.08.2026: устаз
+    подтвердил, что в G-2b он реальный участвующий студент, не формальность -
+    исключать его из рейтинга/бонуса там было бы неверно; его случайная
+    страй-запись в тадаббуре, где это было бы неверно, деактивирована
+    отдельно через deactivate_student, не фильтром здесь)."""
     now = _now()
     week_monday = (now - timedelta(days=now.weekday())).date()
     last_monday = week_monday - timedelta(days=7)
     last_sunday = week_monday - timedelta(days=1)
     week_key = last_monday.isoformat()
-    if get_setting("partial_report_week") == week_key:
+    if get_setting("weekly_report_week") == week_key:
         return
-    my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
+    start = last_monday.isoformat()
+    end = last_sunday.isoformat()
+    week_dates = {(last_monday + timedelta(days=i)).isoformat() for i in range(7)}
+    hadith = sampler.sample_hadith()
+    ayah   = sampler.sample_ayah()
+
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        # prep не участвует (решение пользователя 12.08.2026): там свой
-        # отдельный механизм - не наберёт 5 дней из 14, не переведётся
-        # дальше вообще, публичное предупреждение о частичной сдаче поверх
-        # этого не нужно для совсем новых людей на пробном периоде.
-        if gtype in ("tadabbur", "prep"):
+        if gtype == "tadabbur":
             continue
         chat_id = group["chat_id"]
         group_id = group["id"]
         group_tasks = get_group_tasks(group)
         n_tasks = len(group_tasks)
-        if n_tasks < 2:
-            continue
-        start = last_monday.isoformat()
-        end = last_sunday.isoformat()
+        glang = get_group_lang(group)
         try:
-            placeholders = ",".join("?" * len(group_tasks))
-            with db() as c:
-                rows = c.execute(
-                    "SELECT student_id, date, COUNT(DISTINCT subcategory) as n"
-                    " FROM score_events"
-                    " WHERE group_id=? AND category='task' AND subcategory IN (%s)"
-                    " AND date>=? AND date<=?"
-                    " GROUP BY student_id, date" % placeholders,
-                    (group_id, *group_tasks, start, end)
-                ).fetchall()
-            roster = {s["id"]: s for s in get_students(group_id)}
-            counts = {}
-            for r in rows:
-                s = roster.get(r["student_id"])
-                if not s or (my_id and s["phone"] == my_id):
-                    continue
-                if 0 < r["n"] < n_tasks:
-                    counts[r["student_id"]] = counts.get(r["student_id"], 0) + 1
-            if not counts:
-                continue
-            lines = [
-                "⚠️ Частичная сдача заданий за неделю (" + last_monday.strftime("%d.%m") +
-                "–" + last_sunday.strftime("%d.%m") + ")\n"
-                "Ниже — кто хотя бы раз за неделю сдал не все задания дня (не 0, но и не все). "
-                "Эффект от частичной сдачи намного меньше полной — старайтесь сдавать все задания целиком.\n"
-            ]
-            for sid, cnt in sorted(counts.items(), key=lambda x: -x[1]):
-                lines.append("• " + roster[sid]["name"] + " — " + str(cnt) + " дн. частично")
-            await send_message(chat_id, "\n".join(lines))
+            # ── Кто сдал всю неделю без пропусков → +5 (один раз за неделю) ──
+            full_week_names = []
+            if group_tasks:
+                placeholders = ",".join("?" * len(group_tasks))
+                with db() as c:
+                    rows = c.execute(
+                        "SELECT student_id, date, COUNT(DISTINCT subcategory) as n"
+                        " FROM score_events"
+                        " WHERE group_id=? AND category='task' AND subcategory IN (%s)"
+                        " AND date>=? AND date<=?"
+                        " GROUP BY student_id, date" % placeholders,
+                        (group_id, *group_tasks, start, end)
+                    ).fetchall()
+                roster = {s["id"]: s for s in get_students(group_id)}
+                full_dates_by_student = {}
+                partial_counts = {}
+                for r in rows:
+                    s = roster.get(r["student_id"])
+                    if not s:
+                        continue
+                    if r["n"] == n_tasks:
+                        full_dates_by_student.setdefault(r["student_id"], set()).add(r["date"])
+                    elif 0 < r["n"] < n_tasks:
+                        partial_counts[r["student_id"]] = partial_counts.get(r["student_id"], 0) + 1
+                subcat = "cal_" + week_key
+                for sid, dates in full_dates_by_student.items():
+                    if week_dates <= dates:
+                        with db() as c:
+                            exists = c.execute(
+                                "SELECT 1 FROM score_events"
+                                " WHERE student_id=? AND category='streak' AND subcategory=?",
+                                (sid, subcat)
+                            ).fetchone()
+                        if not exists:
+                            add_bonus(sid, group_id, end, 5, "streak", subcat)
+                            full_week_names.append(roster[sid]["name"])
+
+            # ── Рейтинг за неделю + похвала лидеру ──────────────────────────
+            report = format_period_report(group_id, group["title"] or chat_id, group_tasks,
+                                           start=start, end=end, label="неделю")
+            await send_message(chat_id, report)
+
+            if full_week_names:
+                lines = ["🌟 Получили +5 за постоянство:"]
+                for name in full_week_names:
+                    lines.append("• " + name)
+                await send_message(chat_id, "\n".join(lines))
+
+            winner = get_period_winner_range(group_id, start, end)
+            if winner and winner["points"] > 0:
+                praise = await ai.winner_praise(winner["name"], "неделю", winner["points"], glang, hadith=hadith, ayah=ayah)
+                if praise:
+                    await send_message(chat_id, praise)
+
+            # ── Частичная сдача (не 0, но и не всё) - только pro/relaxed ────
+            # prep не участвует (решение пользователя 12.08.2026): там свой
+            # отдельный механизм - не наберёт 5 дней из 14, не переведётся
+            # дальше вообще, предупреждение поверх этого не нужно для совсем
+            # новых людей на пробном периоде.
+            if gtype != "prep" and n_tasks >= 2 and partial_counts:
+                lines = [
+                    "⚠️ Частичная сдача заданий за неделю (" + last_monday.strftime("%d.%m") +
+                    "–" + last_sunday.strftime("%d.%m") + ")\n"
+                    "Ниже — кто хотя бы раз за неделю сдал не все задания дня (не 0, но и не все). "
+                    "Эффект от частичной сдачи намного меньше полной — старайтесь сдавать все задания целиком.\n"
+                ]
+                for sid, cnt in sorted(partial_counts.items(), key=lambda x: -x[1]):
+                    lines.append("• " + roster[sid]["name"] + " — " + str(cnt) + " дн. частично")
+                await send_message(chat_id, "\n".join(lines))
+
             await asyncio.sleep(1)
         except Exception as e:
-            log.error("weekly_partial_report error in %s: %s", chat_id, e)
+            log.error("weekly_report error in %s: %s", chat_id, e)
 
-    set_setting("partial_report_week", week_key)
+    set_setting("weekly_report_week", week_key)
 
 
 # ── Ежемесячный отчёт (1-е число 19:00) ──────────────────────────────────────
@@ -1703,7 +1707,7 @@ async def scheduler():
                 await maybe_run("profile_survey_nudge", profile_survey_nudge)
                 if wd in (0, 1):
                     await maybe_run("weekly_ops_report", weekly_ops_report)
-                    await maybe_run("weekly_partial_report", weekly_partial_report)
+                    await maybe_run("weekly_report", weekly_report)
                 if d in (1, 2):
                     await maybe_run("monthly_ops_report", monthly_ops_report)
                     await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
@@ -1727,8 +1731,6 @@ async def scheduler():
                 await maybe_run("transfer_check", transfer_check)
                 await maybe_run("prep_check", check_prep_students)
                 await maybe_run("invite_missing_ustaz_to_scaling", invite_missing_ustaz_to_scaling)
-            elif wd == 6 and h == 19 and m == 0:
-                await maybe_run("weekly_report", weekly_report)
             elif wd == 6 and h == 20 and m == 30:
                 await maybe_run("yassir_asks_admin", yassir_asks_admin)
             elif wd == 3 and h == 10 and m == 0 and now.isocalendar()[1] % 2 == 1:

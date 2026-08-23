@@ -64,8 +64,6 @@ async def _check_group_for_transfers(group, gtype):
     lang = get_group_lang(group)
 
     for student in get_students(group["id"]):
-        if not student["phone"]:
-            continue
         try:
             days_absent = get_days_since_last_report(student["id"], group["id"])
             detail = get_skip_count_month_detail(student["id"], group["id"])
@@ -107,11 +105,16 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     # и следующим же сообщением там может случайно снова стать активным студентом
     # (дыра авторегистрации в handlers.py). Мягкий кик (ban+unban) — не блокирует
     # навсегда, при желании сможет вернуться по инвайт-ссылке.
-    try:
-        await ban_member(chat_id, student["phone"])
-        await unban_member(chat_id, student["phone"])
-    except Exception as e:
-        log.error("Kick after transfer failed for student %s in %s: %s", sid, chat_id, e)
+    # Без Telegram ID (23.08.2026: живой случай - N-2a, добавлены /add Имя без
+    # номера, ни разу не написали в чат) физически кикнуть нечем - у бота нет
+    # его user_id ни в users.phone, ни в пассивном кэше имён (cache_member_name).
+    # Внутренний перевод (деактивация + тадаббур) всё равно происходит.
+    if student["phone"]:
+        try:
+            await ban_member(chat_id, student["phone"])
+            await unban_member(chat_id, student["phone"])
+        except Exception as e:
+            log.error("Kick after transfer failed for student %s in %s: %s", sid, chat_id, e)
 
     # Целевая группа: явный fallback → иначе единственная tadabbur-группа профиля
     target_group = None
@@ -134,15 +137,20 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
     # (29.07.2026: реальный случай, DM не отправлялся вообще).
     dm_ok = True
     if reason == "inactive":
-        prep_group = get_prep_group()
-        prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
-        if detail:
-            dm_text = T("transfer_to_tadabbur_dm", lang, name=name,
-                        group_title=group["title"] or chat_id, prep_link=prep_link)
+        if not student["phone"]:
+            # Без Telegram ID личку послать некому - сразу считаем недоставленной,
+            # ниже уйдёт стандартное уведомление админам.
+            dm_ok = False
         else:
-            dm_text = T("return_needs_prep_dm", lang, name=name, prep_link=prep_link)
-        dm_resp = await send_message(student["phone"], dm_text)
-        dm_ok = bool(dm_resp and dm_resp.get("ok"))
+            prep_group = get_prep_group()
+            prep_link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
+            if detail:
+                dm_text = T("transfer_to_tadabbur_dm", lang, name=name,
+                            group_title=group["title"] or chat_id, prep_link=prep_link)
+            else:
+                dm_text = T("return_needs_prep_dm", lang, name=name, prep_link=prep_link)
+            dm_resp = await send_message(student["phone"], dm_text)
+            dm_ok = bool(dm_resp and dm_resp.get("ok"))
 
     # Уведомляем группу - коротко и нейтрально, без деталей условий возврата
     # и без слов "переведён в Тадаббур" (кикнутый студент это сообщение всё
