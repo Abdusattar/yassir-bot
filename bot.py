@@ -13,7 +13,7 @@ import logging
 
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
@@ -206,9 +206,10 @@ async def main():
                         is_super = uid in SUPER_ADMIN_IDS
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
                         is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
-                        log.info("chat_member join: uid=%s group=%s super=%s grp_admin=%s tadabbur=%s",
-                                 uid, group_info and group_info["id"], is_super, is_grp_admin, is_tadabbur)
-                        if group_info and not is_super and not is_grp_admin and not is_tadabbur:
+                        is_obs = is_observer(uid)
+                        log.info("chat_member join: uid=%s group=%s super=%s grp_admin=%s tadabbur=%s observer=%s",
+                                 uid, group_info and group_info["id"], is_super, is_grp_admin, is_tadabbur, is_obs)
+                        if group_info and not is_super and not is_grp_admin and not is_tadabbur and not is_obs:
                             tg_name = (user.get("first_name") or "").strip()
                             if user.get("last_name"):
                                 tg_name = (tg_name + " " + user["last_name"]).strip()
@@ -294,11 +295,11 @@ async def main():
                         uid = str(nm.get("id", ""))
                         log.info("new_chat_members: uid=%s name=%s in chat=%s", uid, nm.get("first_name"), chat_id)
                         group_info = get_group(chat_id)
-                        # Суперадмины и устазы группы — не регистрируем как студентов
+                        # Суперадмины, устазы группы и наблюдатели — не регистрируем как студентов
                         is_super = uid in SUPER_ADMIN_IDS
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
                         is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
-                        if is_super or is_grp_admin or is_tadabbur:
+                        if is_super or is_grp_admin or is_tadabbur or is_observer(uid):
                             continue
                         tg_name = (nm.get("first_name") or "").strip()
                         if nm.get("last_name"):

@@ -297,6 +297,13 @@ def _run_migrations(c):
         # возраст, чтобы не устаревал (17.08.2026). survey_age хранит сырой
         # ответ как есть, для сверки.
         c.execute("ALTER TABLE users ADD COLUMN survey_birth_year INTEGER")
+    if "is_observer" not in ucols:
+        # Устаз-наблюдатель "со стороны" (23.08.2026) - глобальный флаг, не
+        # привязан к group_id. Даёт только "бот его игнорирует" во всех
+        # группах (сейчас и будущих), НЕ даёт прав группового устаза
+        # (/bonus, отметка голосовой, "у" и т.д.) - те по-прежнему только
+        # через /admin реплаем в конкретной группе.
+        c.execute("ALTER TABLE users ADD COLUMN is_observer INTEGER DEFAULT 0")
 
     uocols = [r["name"] for r in c.execute("PRAGMA table_info(upgrade_offers)").fetchall()]
     if "channel" not in uocols:
@@ -932,6 +939,26 @@ def get_group_admins(group_id):
             WHERE ug.group_id=? AND ug.role='admin' AND ug.active=1
         """, (group_id,)).fetchall()
     return [r["phone"] for r in rows if r["phone"]]
+
+
+def set_observer(phone):
+    with db() as c:
+        user = c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
+        if user:
+            c.execute("UPDATE users SET is_observer=1 WHERE id=?", (user["id"],))
+        else:
+            c.execute("INSERT INTO users(name, phone, is_observer) VALUES('', ?, 1)", (phone,))
+
+
+def unset_observer(phone):
+    with db() as c:
+        c.execute("UPDATE users SET is_observer=0 WHERE phone=?", (phone,))
+
+
+def is_observer(phone):
+    with db() as c:
+        row = c.execute("SELECT 1 FROM users WHERE phone=? AND is_observer=1", (phone,)).fetchone()
+    return row is not None
 
 
 def is_any_group_admin(phone):

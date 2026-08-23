@@ -17,6 +17,7 @@ from core.db import (
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
     register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
     add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
+    set_observer, unset_observer, is_observer,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month,
@@ -62,7 +63,6 @@ _SECTION_GRP_ADMIN = (
     "/month — за 30 дней\n"
     "/year — за год\n"
     "/rating — рейтинг\n\n"
-    "/bonus Имя 5 причина — начислить баллы\n"
     "/groupinfo — настройки группы\n"
     "/settasks m,r,t,j,n,h — задания\n"
     "  m-заучивание r-повторение t-слова\n"
@@ -885,6 +885,27 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     # ── Личные команды Устаза (личка) ─────────────────────────────────────────
     if is_admin(phone):
+        if text.startswith("/approve_observer"):
+            parts = text.split(None, 1)
+            target = parts[1].strip() if len(parts) > 1 else ""
+            if not target.isdigit():
+                await send_message(chat_id, "Формат: /approve_observer <id>")
+                return
+            set_observer(target)
+            await send_message(chat_id, "✅ " + target + " теперь наблюдатель во всех группах")
+            await send_message(target, "✅ Подтверждено! Заходи в любую группу — бот тебя не потревожит 🤲")
+            return
+
+        if text.startswith("/revoke_observer"):
+            parts = text.split(None, 1)
+            target = parts[1].strip() if len(parts) > 1 else ""
+            if not target.isdigit():
+                await send_message(chat_id, "Формат: /revoke_observer <id>")
+                return
+            unset_observer(target)
+            await send_message(chat_id, "✅ " + target + " больше не наблюдатель")
+            return
+
         if text.startswith("/отчёт ") or text.startswith("/отчет "):
             name_part = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
             if not name_part:
@@ -1019,6 +1040,26 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     # ── Личка ────────────────────────────────────────────────────────────────
     if not is_group:
+        # ── Заявка "стать устазом-наблюдателем" (23.08.2026) ────────────────
+        # Доступна кому угодно, даже незнакомому боту человеку - только
+        # ставит is_observer (бот его игнорирует во всех группах, сейчас и
+        # будущих). Права группового устаза (/bonus, отметка голосовой, "у")
+        # это отдельная, привязанная к group_id роль - её даёт только /admin
+        # реплаем внутри конкретной группы, эта заявка её не заменяет.
+        if text == "/ustaz":
+            if is_admin(phone) or is_any_group_admin(phone):
+                return
+            if is_observer(phone):
+                await send_message(chat_id, "Ты уже наблюдатель — заходи в любую группу 🤲")
+                return
+            who = (sender_name or "").strip() or ("id " + phone)
+            for ap in SUPER_ADMIN_IDS:
+                await send_message(ap,
+                    "🙋 " + who + " (id " + phone + ") хочет стать устазом-наблюдателем.\n"
+                    "Подтвердить: /approve_observer " + phone)
+            await send_message(chat_id, "Заявка отправлена, жди подтверждения 🤲")
+            return
+
         if is_admin(phone):
             if text and not text.startswith("/"):
                 answer = await ai.answer_question(
@@ -1167,7 +1208,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Регистрация в группе ──────────────────────────────────────────────────
-    if not is_group_admin(phone, group_id):
+    # Наблюдатель (is_observer) сюда не заходит - как и групповой админ,
+    # он не должен триггерить авторегистрацию/подготовительную своими
+    # сообщениями (23.08.2026).
+    if not is_group_admin(phone, group_id) and not is_observer(phone):
         s_reg = find_by_phone(phone, group_id)
         if not s_reg:
             # Уже известен боту (зарегистрирован где-то ещё) — не спрашиваем имя заново
@@ -1608,24 +1652,6 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, T("dm_answered", glang))
         return
 
-    if text.startswith("/bonus ") and is_group_admin(phone, group_id):
-        parts = text[7:].strip().split(" ", 2)
-        if len(parts) >= 2 and parts[1].lstrip("-").isdigit():
-            b_name = parts[0]
-            b_points = int(parts[1])
-            b_reason = parts[2] if len(parts) > 2 else "ручной бонус"
-            b_student = find_by_name(b_name, group_id)
-            if b_student:
-                add_bonus(b_student["id"], group_id, get_date(), b_points, "bonus", subcategory=b_reason[:50], note=b_reason)
-                sign = "+" if b_points >= 0 else ""
-                await send_message(chat_id,
-                    "✅ " + b_name + ": " + sign + str(b_points) + " баллов\nПричина: " + b_reason)
-            else:
-                await send_message(chat_id, "Студент «" + b_name + "» не найден")
-        else:
-            await send_message(chat_id, "Формат: /bonus Имя 10 причина\nПример: /bonus Бакыт 5 победил в конкурсе")
-        return
-
     # ── Отметка присутствия на уроке (u / у) ─────────────────────────────────
     # Баллы начисляются сразу, без подтверждения устаза - решение пользователя
     # 18.08.2026: часть уроков проходит офлайн, устаз не всегда в курсе и не
@@ -1653,7 +1679,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     s = find_by_phone(phone, group_id)
 
-    # Устаз не проходит через студенческий флоу — если он также студент, пропускаем
+    # Устаз не проходит через студенческий флоу — если он также студент, пропускаем.
+    # Исключение: устаз ДЕЙСТВИТЕЛЬНО активный студент в этой конкретной
+    # группе (s не None) - тогда пропускаем эту защиту и даём пройти
+    # студенческому флоу (23.08.2026: суперадмин подтвердил, что он реальный
+    # студент именно в G-2b, не только формально устаз - в отличие от
+    # тадаббура, где его студенческая запись была случайной страй-записью с
+    # тестов и деактивирована отдельно через deactivate_student).
     if is_group_admin(phone, group_id) and not s:
         return
 
