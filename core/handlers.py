@@ -1142,11 +1142,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 await send_message(chat_id, T("dm_reg_send_prep_link", "ru", name=reg_user["name"], link=link))
                 return
 
-        await send_message(chat_id,
-            "Ассаляму алейкум! 🕌\n"
-            "Чтобы зарегистрироваться — напиши любое сообщение в своей учебной группе, "
-            "и бот попросит твоё имя 📝"
-        )
+        # Совсем незнакомый человек - никогда не был студентом, не в группе.
+        # Раньше отправляли в группу "напиши там" без ссылки - если группу
+        # никто не подсказал, человек терялся. Ссылка та же, что везде
+        # (invite_friend/DM-регистрация) - единая точка входа (25.08.2026).
+        prep = get_prep_group()
+        link = prep["invite_link"] if prep and prep["invite_link"] else ""
+        await send_message(chat_id, T("dm_cold_message_explain", "ru", link=link))
         return
 
     group = get_group(chat_id)

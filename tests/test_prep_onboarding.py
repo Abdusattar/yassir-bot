@@ -2,6 +2,7 @@ import asyncio
 
 import core.db as db
 import core.prep as prep
+import core.transfers as transfers
 
 
 def _setup_prep_group():
@@ -149,3 +150,27 @@ def test_onboarding_if_pending_noop_for_non_prep_student(test_db, monkeypatch):
     asyncio.run(prep.send_prep_onboarding_if_pending("p3"))
 
     assert sent == []
+
+
+def test_join_onboarding_not_double_sent_on_chat_member_and_new_chat_members(test_db, monkeypatch):
+    """Telegram шлёт и chat_member, и new_chat_members на один и тот же
+    вход - bot.py вызывает handle_known_user_group_join дважды подряд для
+    одного человека. Онбординг новичка должен уйти один раз, не два
+    (25.08.2026, риск пойман advisor'ом: is_true_newcomer читает историю
+    ДО add_student, но на втором вызове add_student первого вызова уже
+    сделал его "не новичком")."""
+    g = _setup_prep_group()
+    db.mark_dm_ok_by_phone("p1")
+    db.save_dm_registration_name("p1", "Азим")
+    existing_user = db.find_user_by_phone("p1")
+
+    group_sent = []
+
+    async def fake_group_msg(chat_id, name, glang, dm_ok):
+        group_sent.append(name)
+    monkeypatch.setattr(transfers, "send_prep_onboarding_group_message", fake_group_msg)
+
+    asyncio.run(transfers.handle_known_user_group_join("-100777", g, "p1", existing_user))
+    asyncio.run(transfers.handle_known_user_group_join("-100777", g, "p1", existing_user))
+
+    assert group_sent == ["Азим"]
