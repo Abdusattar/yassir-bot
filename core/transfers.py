@@ -28,7 +28,7 @@ from core.db import (
     delete_upgrade_offer, get_last_upgrade_offer_at, get_upgrade_offer_by_id,
     set_upgrade_decision, get_pending_upgrade_target, resolve_upgrade_offer,
     get_pending_group_nudge, get_return_nudge_candidates, get_last_return_nudge_at,
-    mark_return_nudge_sent, get_last_known_lang,
+    mark_return_nudge_sent, get_last_known_lang, has_learning_group_history,
 )
 from core.prep import (
     PREP_MIN_DAYS, announce_prep_graduate_arrival,
@@ -451,9 +451,18 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
     if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], uid, chat_id, group_info):
         return
 
+    # existing_group смотрит только на АКТИВНЫЕ pro/relaxed - у штрафника,
+    # уже неактивного там (кикнут за пропуски, но без pending_prep_return),
+    # existing_group тоже пусто, хотя это не новичок и онбординг ему не
+    # нужен. Проверяем учебную историю (has_learning_group_history, не
+    # считает Тадаббур) ДО add_student, иначе только что добавленная запись
+    # сама себя испортит (найдено 25.08.2026 на Арзу - штрафник получил
+    # онбординг как новичок).
+    is_true_newcomer = not has_learning_group_history(uid)
+
     add_student(existing_user["name"], group_info["id"], uid)
     log.info("join: added existing user %s to group %s", existing_user["name"], group_info["id"])
-    if not existing_group and gtype == "prep":
+    if is_true_newcomer and gtype == "prep":
         # Настоящий новичок, впервые вступивший в подготовительную (в т.ч.
         # через DM-воронку, где имя уже известно и групповой вопрос про имя
         # не задаётся) - без этого онбординг (6 экранов) никогда не уходит,

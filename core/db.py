@@ -2250,6 +2250,25 @@ def has_any_group_history(phone):
     return row is not None
 
 
+def has_learning_group_history(phone):
+    """Хоть раз состоял в pro/relaxed/prep (учебная история) - в отличие от
+    has_any_group_history() НЕ считает Тадаббур (она открыта для всех, не
+    признак "уже проходил обучение"). Нужна чтобы отличить штрафника,
+    кикнутого из pro/relaxed и вернувшегося через подготовительную, от
+    настоящего новичка, которому ещё не отправляли онбординг prep (найдено
+    25.08.2026 на Арзу - штрафник получил онбординг как новичок, потому что
+    у него нет АКТИВНОЙ pro/relaxed группы, только неактивная в прошлом)."""
+    with db() as c:
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN users u ON u.id=ug.user_id
+            JOIN groups g ON g.id=ug.group_id
+            WHERE u.phone=? AND (g.group_type IS NULL OR g.group_type IN ('pro','relaxed','prep'))
+            LIMIT 1
+        """, (phone,)).fetchone()
+    return row is not None
+
+
 def save_dm_registration_name(phone, name):
     """Сохраняет имя, полученное через DM-регистрацию. Если устаз уже
     предварительно добавил такого же по имени через /add Имя (запись с
