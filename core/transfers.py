@@ -30,7 +30,10 @@ from core.db import (
     get_pending_group_nudge, get_return_nudge_candidates, get_last_return_nudge_at,
     mark_return_nudge_sent, get_last_known_lang,
 )
-from core.prep import PREP_MIN_DAYS, announce_prep_graduate_arrival
+from core.prep import (
+    PREP_MIN_DAYS, announce_prep_graduate_arrival,
+    send_prep_onboarding_group_message, send_prep_onboarding_dm,
+)
 from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.i18n import T, get_group_lang
 from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link
@@ -450,6 +453,17 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
 
     add_student(existing_user["name"], group_info["id"], uid)
     log.info("join: added existing user %s to group %s", existing_user["name"], group_info["id"])
+    if not existing_group and gtype == "prep":
+        # Настоящий новичок, впервые вступивший в подготовительную (в т.ч.
+        # через DM-воронку, где имя уже известно и групповой вопрос про имя
+        # не задаётся) - без этого онбординг (6 экранов) никогда не уходит,
+        # см. handlers.py:1301-1310, тот же вызов для старой групповой
+        # регистрации (найдено 25.08.2026 на живом студенте).
+        dm_ok_now = get_dm_ok_by_phone(uid)
+        glang = get_group_lang(group_info)
+        await send_prep_onboarding_group_message(chat_id, existing_user["name"], glang, dm_ok_now)
+        if dm_ok_now:
+            asyncio.create_task(send_prep_onboarding_dm(uid, glang))
     await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
 
 
