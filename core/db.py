@@ -1794,6 +1794,21 @@ def add_bonus(uid, group_id, date, points, category, subcategory="", note=None):
         )
 
 
+def resolve_pending_juz_answer(uid, group_id, date, subcategory, note):
+    """Дописывает финальный subcategory/note поверх 'pending_confirm' после
+    решения Умар устаза (25.08.2026, core/prep.py handle_juz_confirm) - не
+    новый add_bonus, т.к. UNIQUE(student_id,group_id,date,category,
+    subcategory) сделал бы это отдельной строкой вместо замены, и
+    _get_juz_answer() стал бы видеть две противоречащие записи."""
+    with db() as c:
+        c.execute(
+            "UPDATE score_events SET subcategory=?, note=? "
+            "WHERE student_id=? AND group_id=? AND date=? "
+            "AND category='prep_juz_answer' AND subcategory='pending_confirm'",
+            (subcategory, note, uid, group_id, date)
+        )
+
+
 def get_missing_students(group_id, group_tasks, date=None):
     students = get_students(group_id)
     check_date = date or get_date()

@@ -45,7 +45,7 @@ from core.db import (
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
     clear_pending_prep_return, prep_days_done, get_regular_group_sizes,
     get_best_group_for_transfer, get_group_by_title, get_dm_ok_by_phone,
-    get_group_by_id, get_event_time, get_date,
+    get_group_by_id, get_event_time, get_date, resolve_pending_juz_answer,
 )
 from core.i18n import T, get_group_lang
 from core.tg import (
@@ -147,6 +147,10 @@ async def check_prep_students():
                         log.info("prep check: student=%s days_done=%d → dm-start nudge (dm_ok=0)", s["name"], days_done)
                 await _alert_if_stuck(s["id"], group_id, joined, s["name"], "не отвечает на вопрос про джуз",
                                        get_event_time(s["id"], group_id, "prep_offer"))
+            elif answer[0] == "pending_confirm":
+                # Ждём решения Умар устаза (см. handle_juz_confirm) -
+                # ссылки ещё нет, слать/алертить нечего (25.08.2026).
+                pass
             else:
                 # Ответил, но всё ещё в подготовительной - значит по ссылке ещё
                 # не перешёл. Шлём ту же ссылку повторно каждую проверку, пока
@@ -450,16 +454,9 @@ async def _send_dm_or_group(phone, group_chat_id, text):
     await send_message(target_chat, text)
 
 
-async def handle_juz_answer(phone, knows_juz):
-    """Студент нажал кнопку (знает ли хотя бы 1 джуз наизусть) - решение
-    Умар устаза 24.07.2026: знает → конкретная группа N-1, не знает →
-    наименее заполненная relaxed того же языка, что подготовительная
-    (кыргызская исключается сама собой, если студент не из кыргызской
-    подготовительной). Бот сам шлёт ссылку в личку - дальше как при обычном
-    вступлении по ссылке (announce_prep_graduate_arrival сработает при
-    заходе в чат)."""
+def _get_prep_row(phone):
     with db() as c:
-        row = c.execute("""
+        return c.execute("""
             SELECT u.id as uid, u.name, ug.group_id as gid, ug.joined_date, g.lang, g.chat_id
             FROM user_groups ug
             JOIN groups g ON ug.group_id=g.id
@@ -467,18 +464,39 @@ async def handle_juz_answer(phone, knows_juz):
             WHERE u.phone=? AND ug.role='student' AND ug.active=1 AND g.group_type='prep'
             LIMIT 1
         """, (phone,)).fetchone()
+
+
+async def handle_juz_answer(phone, knows_juz):
+    """Студент нажал кнопку (знает ли наизусть 1-22 страницу Корана).
+    "Не знаю" - бот сам переводит, как раньше: наименее заполненная relaxed
+    того же языка (кыргызская исключается сама собой). "Знаю" - самооценка
+    ненадёжна (найдено 25.08.2026: несколько студентов ошибочно попали в
+    Н-1 по своему "да"), поэтому вместо немедленного перевода запрашиваем
+    подтверждение у Умар устаза (см. handle_juz_confirm) - только он решает,
+    брать ли реально в Н-1."""
+    row = _get_prep_row(phone)
     if not row:
         return  # уже не в подготовительной (например, повторный тап после перевода)
     if _has_juz_answer(row["uid"], row["gid"]):
         return  # уже отвечал - не обрабатываем повторно (защита от двойного тапа)
 
-    glang = row["lang"] or "ru"
     if knows_juz:
-        target_type = "N-1"
-        target = get_group_by_title(_PREP_JUZ_KNOWN_TARGET_TITLE)
-    else:
-        target_type = "relaxed"
-        target = get_best_group_for_transfer("relaxed", glang)
+        # pending_confirm одновременно и маркер "уже ответил" (не спросит
+        # повторно), и защита от повторного тапа на этой же кнопке.
+        add_bonus(row["uid"], row["gid"], row["joined_date"], 0, "prep_juz_answer",
+                  subcategory="pending_confirm", note="0")
+        await send_message_with_buttons(
+            _PREP_GRADUATE_ADMIN_ID,
+            "🎓 " + row["name"] + " прошёл подготовительную и говорит, что знает "
+            "наизусть 1–22 страницы Корана.\nВзять в Н-1?",
+            [("Да, забираю", "pjzc:yes:" + phone), ("Нет", "pjzc:no:" + phone)]
+        )
+        log.info("prep juz answer: %s says knows 1-22 pages, awaiting ustaz confirm", row["name"])
+        return
+
+    glang = row["lang"] or "ru"
+    target_type = "relaxed"
+    target = get_best_group_for_transfer("relaxed", glang)
     if not target or not target["invite_link"]:
         # Нет подходящей группы со ссылкой - редкий случай, зовём устаза вручную
         await send_message(_PREP_GRADUATE_ADMIN_ID,
@@ -492,6 +510,38 @@ async def handle_juz_answer(phone, knows_juz):
               subcategory=target_type, note=str(target["id"]))
     await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
     log.info("prep juz answer: %s → %s (group=%s)", row["name"], target_type, target["title"])
+
+
+async def handle_juz_confirm(phone, confirmed):
+    """Умар устаз подтверждает/отклоняет самооценку "знаю 1-22 страницы"
+    (25.08.2026). Да → Н-1, как раньше при "знаю"; Нет → та же ветка
+    relaxed, что при студенческом "не знаю"."""
+    row = _get_prep_row(phone)
+    if not row:
+        return  # успел выйти из подготовительной иначе, пока Умар решал
+    answer = _get_juz_answer(row["uid"], row["gid"])
+    if not answer or answer[0] != "pending_confirm":
+        return  # уже решено (повторный тап Умара) или маркера нет вовсе
+
+    glang = row["lang"] or "ru"
+    if confirmed:
+        target_type = "N-1"
+        target = get_group_by_title(_PREP_JUZ_KNOWN_TARGET_TITLE)
+    else:
+        target_type = "relaxed"
+        target = get_best_group_for_transfer("relaxed", glang)
+    if not target or not target["invite_link"]:
+        await send_message(_PREP_GRADUATE_ADMIN_ID,
+            "⚠️ " + row["name"] + ": не нашлось группы (" + target_type +
+            ") со ссылкой-приглашением - определите вручную." +
+            _group_sizes_text())
+        log.warning("prep juz confirm: no eligible '%s' group for %s", target_type, row["name"])
+        return
+
+    resolve_pending_juz_answer(row["uid"], row["gid"], row["joined_date"], target_type, str(target["id"]))
+    await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+    log.info("prep juz confirm: %s → %s (group=%s, confirmed=%s)",
+             row["name"], target_type, target["title"], confirmed)
 
 
 def _has_prep_offer(user_id, group_id):

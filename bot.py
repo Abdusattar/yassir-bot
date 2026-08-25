@@ -18,7 +18,7 @@ from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
-from core.prep import handle_juz_answer, handle_prep_onboarding_next
+from core.prep import handle_juz_answer, handle_juz_confirm, handle_prep_onboarding_next
 from core.transfers import (
     handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
     send_new_student_prep_redirect,
@@ -114,6 +114,17 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_juz_answer(cq_uid, parts[1] == "yes"))
+                    # "pjzc:yes:<phone>" / "pjzc:no:<phone>" - подтверждение
+                    # Умар устаза по самооценке "знаю 1-22 страницы"
+                    # (25.08.2026). Кнопки шлются только в личку самого
+                    # Умара - адресата дополнительно не сверяем, phone тут
+                    # это студент, не тапнувший (Умар).
+                    elif cq_data.startswith("pjzc:"):
+                        parts = cq_data.split(":", 2)
+                        if len(parts) == 3:
+                            if cq_chat_id and cq_message_id:
+                                await remove_message_keyboard(cq_chat_id, cq_message_id)
+                            asyncio.create_task(handle_juz_confirm(parts[2], parts[1] == "yes"))
                     # "upg:stay:<uid>:<offer_id>" / "upg:pro:<uid>:<offer_id>" -
                     # предложение перейти из relaxed в pro-группу (25.07.2026).
                     # offer_id в data - чтобы тап по устаревшему сообщению не
