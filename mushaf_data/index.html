@@ -310,11 +310,63 @@
     line-height: 1.55;
     color: var(--ink);
   }
+
+  /* Дашборд YassirApp (28.08.2026) - первый экран при открытии, ДО
+     мусхафа/тренажёра. Мусхаф - переключение вида внутри той же
+     страницы (см. openMushaf в скрипте ниже), Тренажёр - у него нет
+     веб-версии вообще (обычный чат-флоу бота, core/mufradat_bot.py) -
+     карточка уводит обратно в чат через tg.openTelegramLink с deep-link
+     "/start muf" (перехватывается в core/handlers.py) и закрывает Mini App. */
+  #dashboard {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: center;
+    align-items: center;
+    gap: 18px;
+    padding: 24px;
+    background: var(--bg);
+  }
+  #dashboard h1 {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 20px;
+    color: var(--ink);
+    margin: 0 0 8px;
+  }
+  .dash-card {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+    background: var(--chrome-bg);
+    border: 1px solid var(--chrome-border);
+    border-radius: 14px;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+    text-align: left;
+  }
+  .dash-card .emoji { font-size: 28px; }
+  .dash-card .label { font-size: 17px; font-weight: 600; color: var(--ink); }
+  .dash-card .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
 </style>
 </head>
 <body>
+<div id="dashboard">
+  <h1>YassirApp</h1>
+  <div class="dash-card" id="dash-mushaf">
+    <span class="emoji">📖</span>
+    <div><div class="label">Мусхаф</div><div class="sub">Чтение с таджвидом и переводом</div></div>
+  </div>
+  <div class="dash-card" id="dash-trainer">
+    <span class="emoji">🔤</span>
+    <div><div class="label">Тренажёр</div><div class="sub">Муфрадат — учи слова Корана</div></div>
+  </div>
+</div>
 <div id="word-popup"></div>
-<div id="app">
+<div id="app" style="display:none">
   <div id="topbar">
     <span class="surah-name" id="surah-name">—</span>
     <span id="ayah-range"></span>
@@ -360,11 +412,34 @@
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
 
+  // Дашборд YassirApp (28.08.2026) - первый экран. "Мусхаф" просто
+  // переключает вид на уже готовое приложение ниже. "Тренажёр" у веб-
+  // версии не существует вообще (обычный чат-флоу бота) - openTelegramLink
+  // с "/start muf" уводит обратно в чат с ботом и открывает тренажёр там
+  // (перехват на "/start muf" - core/handlers.py), затем закрываем Mini
+  // App. BOT_USERNAME - мужской бот (мусхаф пока разворачивался в рамках
+  // мужского бота в этой сессии) - если и женский получит свой Мусхаф,
+  // тут нужно будет разводить по профилю.
+  var BOT_USERNAME = 'yassirquranbot';
+  document.getElementById('dash-mushaf').addEventListener('click', function () {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+  });
+  document.getElementById('dash-trainer').addEventListener('click', function () {
+    var link = 'https://t.me/' + BOT_USERNAME + '?start=muf';
+    if (tg && tg.openTelegramLink) {
+      tg.openTelegramLink(link);
+      tg.close();
+    } else {
+      window.open(link, '_blank');
+    }
+  });
+
   function escapeAttr(s) {
     return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
 
-  var FIRST_PAGE = 2, LAST_PAGE = 221;
+  var FIRST_PAGE = 1, LAST_PAGE = 604;
   var cache = {};
 
   // Фиксированный комфортный размер (не автоподбор под "без прокрутки") -

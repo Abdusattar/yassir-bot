@@ -790,6 +790,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if not text and not is_media:
         return
 
+    # ── Deep-link из дашборда YassirApp (28.08.2026) - "Тренажёр" на
+    # дашборде мусхафа (tg.openTelegramLink("https://t.me/<bot>?start=muf"))
+    # шлёт боту ровно "/start muf". Перехватываем ДО остальной логики
+    # /start (та завязана на роль отправителя - устаз/студент/адмnin) -
+    # тренажёр одинаков для всех, роль тут неважна.
+    if text == "/start muf":
+        from core.mufradat_bot import start_trainer
+        await start_trainer(phone, chat_id)
+        return
+
     # /id — узнать свой id
     if text == "/id":
         await send_message(chat_id,
