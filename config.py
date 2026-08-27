@@ -35,6 +35,13 @@ QURAN_ACADEMY_ACCESS_TOKEN = os.getenv("QURAN_ACADEMY_ACCESS_TOKEN", "")
 # Мусхаф Mini App (28.08.2026) - свой GCP-сервер, nginx, домен No-IP
 MUSHAF_URL = os.getenv("MUSHAF_URL", "https://yassir.ddns.net/")
 
+# Тренажёр муфрадата в вебе (29.08.2026) - HTTP API живёт в ТОМ ЖЕ процессе,
+# что и getUpdates-цикл (asyncio-задача, см. bot.py). Мужской и женский бот -
+# два процесса на одном сервере (см. память "Два бота"), поэтому у каждого
+# СВОЙ порт (иначе второй процесс не забиндится) - nginx разводит по
+# префиксу пути (/api/muf/male/, /api/muf/female/), см. wiki/infrastructure.md.
+MUFRADAT_API_PORT = int(os.getenv("MUFRADAT_API_PORT", "8081" if PROFILE == "male" else "8082"))
+
 # OpenRouter API (совместим со старым CLAUDE_API_KEY)
 OR_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("CLAUDE_API_KEY", "")
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
