@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="google" content="notranslate">
+<title>Мусхаф — Яссир</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @font-face {
+    font-family: 'Scheherazade New';
+    src: url('ScheherazadeNew-Regular.ttf') format('truetype');
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #faf6ef;
+    --ink: #1a1a1a;
+    --chrome-bg: #ffffff;
+    --chrome-border: #e5ddc8;
+    --muted: #8a8370;
+    --popup-bg: #2b2b2b;
+    --popup-ink: #ffffff;
+    --marker-color: #b08d2e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16140f;
+      --ink: #f0ead8;
+      --chrome-bg: #201d16;
+      --chrome-border: #3a3527;
+      --muted: #a39a7d;
+      --popup-bg: #f0ead8;
+      --popup-ink: #16140f;
+      --marker-color: #d4af37;
+    }
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100dvh; height: 100vh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Scheherazade New', serif;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+  }
+
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--chrome-bg);
+    border-bottom: 1px solid var(--chrome-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    direction: ltr;
+    flex: 0 0 auto;
+  }
+  #topbar .surah-name { font-weight: 600; color: var(--ink); }
+  #topbar .nav-btn {
+    background: none; border: none; color: var(--ink);
+    font-size: 20px; padding: 4px 10px; cursor: pointer; line-height: 1;
+  }
+  #topbar .nav-btn:disabled { color: var(--chrome-border); }
+
+  .view {
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .view.active { display: flex; }
+
+  #page-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 6px 14px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #ayah-text {
+    direction: rtl;
+    line-height: 2.0;
+    width: 100%;
+    /* Колонка чтения книжной ширины - без этого на широком экране (десктоп,
+     * планшет, Telegram Desktop) justify растягивает 7-8 книжных слов на
+     * всю ширину монитора с уродливыми огромными пробелами (поймано
+     * пользователем 27.08.2026, смотрел с компьютера - подтвердил, что это
+     * не артефакт моего теста). На настоящем узком телефоне (< 520px)
+     * max-width вообще не срабатывает - там и так уже уже. */
+    max-width: 520px;
+    margin: 0 auto;
+  }
+  .mushaf-line {
+    /* Каждая строка мусхафа - СВОЙ <div> (настоящая построчная вёрстка
+     * QUL/King Fahd Complex, 27.08.2026), не единый абзац с переносом по
+     * ширине браузера. justify + text-align-last: justify растягивает
+     * КАЖДУЮ строку до полной ширины (у неё всегда ровно одна визуальная
+     * строка внутри - без last-line-override justify не сработал бы,
+     * браузер считает единственную строку одновременно первой и
+     * последней и last-line обычно НЕ растягивает). */
+    text-align: justify;
+    text-align-last: justify;
+    word-spacing: 0.1em;
+  }
+  .surah-banner {
+    display: block;
+    text-align: center;
+    font-size: 0.7em;
+    color: var(--marker-color);
+    margin: 0.3em 0 0.5em;
+    padding-bottom: 0.15em;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .bismillah {
+    display: block;
+    text-align: center;
+    margin: 0 0 0.4em;
+  }
+
+  /* Цвета таджвида - официальная легенда alquran.cloud/tajweed-guide
+     (27.08.2026). Классы idgham_wo_ghunnah/laam_shamsiyah/slnt - реальные
+     имена, которые отдаёт api.quran.com (не совпадают буква в букву с
+     легендой - "wo" вместо "no", "shamsiyah" вместо "shamsiyyah", "slnt"
+     вместо "silent" - смысл и цвет те же, сверено вручную). */
+  tajweed[class=ham_wasl],
+  tajweed[class=slnt],
+  tajweed[class=laam_shamsiyah],
+  tajweed[class=idgham_mutajanisayn],
+  tajweed[class=idgham_mutaqaribayn] { color: #AAAAAA; }
+  tajweed[class=madda_normal] { color: #537FFF; }
+  tajweed[class=madda_permissible] { color: #4050FF; }
+  tajweed[class=madda_necessary] { color: #000EBC; }
+  tajweed[class=qalaqah] { color: #DD0008; }
+  tajweed[class=madda_obligatory] { color: #2144C1; }
+  tajweed[class=ikhafa_shafawi] { color: #D500B7; }
+  tajweed[class=ikhafa] { color: #9400A8; }
+  tajweed[class=idgham_shafawi] { color: #58B800; }
+  tajweed[class=iqlab] { color: #26BFFD; }
+  tajweed[class=idgham_ghunnah] { color: #169777; }
+  tajweed[class=idgham_wo_ghunnah] { color: #169200; }
+  tajweed[class=ghunnah] { color: #FF7E1E; }
+  .marker { color: var(--marker-color); padding: 0 2px; }
+  .ayah-end {
+    font-size: 0.55em;
+    vertical-align: 0.15em;
+    color: var(--marker-color);
+    margin: 0 2px;
+    display: inline-block;
+  }
+
+  #page-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    padding: 4px 16px;
+    background: var(--chrome-bg);
+    border-bottom: 1px solid var(--chrome-border);
+    flex: 0 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #page-nav button {
+    background: none; border: none; color: var(--ink);
+    font-size: 22px; padding: 4px 14px; cursor: pointer; line-height: 1;
+  }
+  #page-nav button:disabled { color: var(--chrome-border); }
+  #page-indicator {
+    font-size: 13px; color: var(--muted);
+    cursor: pointer; padding: 4px 10px; border-radius: 8px;
+  }
+  #page-indicator:active { background: var(--chrome-border); }
+  #page-jump-input {
+    font-size: 13px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--chrome-border); border-radius: 8px;
+    width: 70px; text-align: center; padding: 4px 6px;
+    font-family: inherit; display: none;
+  }
+
+  #tabbar {
+    display: flex;
+    flex: 0 0 auto;
+    background: var(--chrome-bg);
+    border-top: 1px solid var(--chrome-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .tab-btn {
+    flex: 1 1 0;
+    background: none; border: none;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 10px 4px;
+    cursor: pointer;
+  }
+  .tab-btn.active { color: var(--ink); font-weight: 600; }
+
+  #words-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .word-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .word-row .arabic {
+    font-family: 'Scheherazade New', serif;
+    font-size: 26px;
+    direction: rtl;
+  }
+  .word-row .translation {
+    font-size: 14px;
+    color: var(--muted);
+    text-align: left;
+    flex: 0 0 auto;
+    max-width: 55%;
+  }
+  .words-ayah-sep {
+    text-align: center;
+    color: var(--marker-color);
+    font-size: 12px;
+    padding: 10px 0 2px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="surah-name" id="surah-name">—</span>
+    <span id="ayah-range"></span>
+  </div>
+  <div id="page-nav">
+    <button id="btn-next">‹</button>
+    <span id="page-indicator">—</span>
+    <input id="page-jump-input" type="number" inputmode="numeric">
+    <button id="btn-prev">›</button>
+  </div>
+
+  <div id="view-page" class="view">
+    <div id="page-wrap">
+      <div id="ayah-text"></div>
+    </div>
+  </div>
+
+  <div id="view-words" class="view">
+    <div id="words-list"></div>
+  </div>
+
+  <div id="tabbar">
+    <button id="tab-page" class="tab-btn">📖 Страница</button>
+    <button id="tab-words" class="tab-btn">🔤 Слова</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  var FIRST_PAGE = 2, LAST_PAGE = 221;
+  var cache = {};
+
+  // Фиксированный комфортный размер (не автоподбор под "без прокрутки") -
+  // решение пользователя 27.08.2026, после двух реальных багов у прежнего
+  // бинарного поиска (гонка с загрузкой шрифта - подбор считал по чужим
+  // метрикам временного системного шрифта, потом Scheherazade New
+  // догружалась и текст вылезал за рамки; плюс на плотных страницах
+  // (15-16 строк настоящей вёрстки QUL) подбор загонял шрифт в нечитаемо
+  // мелкий размер, лишь бы влезло). Короткая страница - просто пустое
+  // место снизу, длинная - обычный внутристраничный скролл (как на
+  // референсе пользователя, quran-stroka.vercel.app) - надёжнее и не
+  // ломается от таймингов браузера.
+  var MUSHAF_FONT_SIZE = 26;
+
+  function clampFontToFit() {
+    document.getElementById('ayah-text').style.fontSize = MUSHAF_FONT_SIZE + 'px';
+  }
+
+  function renderPage(data) {
+    document.getElementById('surah-name').textContent = data.surah_names.join(', ');
+    var firstAyah = data.ayahs[0], lastAyah = data.ayahs[data.ayahs.length - 1];
+    document.getElementById('ayah-range').textContent =
+      'аят ' + firstAyah.ayah + (lastAyah.ayah !== firstAyah.ayah ? '–' + lastAyah.ayah : '');
+    document.getElementById('page-indicator').textContent = 'стр. ' + data.page;
+
+    // Настоящая построчная вёрстка (QUL/King Fahd Complex, 27.08.2026) -
+    // каждая строка мусхафа - свой <div>, а не единый абзац с переносом
+    // по ширине браузера. surah_name_ar - реальное арабское имя суры
+    // (quran_transcript), не наша русская транслитерация из SURAH_NAMES.
+    var html = '';
+    (data.lines || []).forEach(function (line) {
+      if (line.type === 'header') {
+        html += '<div class="surah-banner">سُورَةُ ' + line.surah_name_ar + '</div>';
+      } else if (line.type === 'bismillah') {
+        if (line.html) html += '<div class="bismillah">' + line.html + '</div>';
+      } else if (line.type === 'text') {
+        html += '<div class="mushaf-line">';
+        line.tokens.forEach(function (t) {
+          if (t.type === 'word') {
+            html += '<span>' + t.html + '</span> ';
+          } else if (t.type === 'marker') {
+            html += '<span class="marker">' + t.html + '</span> ';
+          } else if (t.type === 'ayah_end') {
+            html += '<span class="ayah-end">﴾' + t.html + '﴿</span> ';
+          }
+        });
+        html += '</div>';
+      }
+    });
+    document.getElementById('ayah-text').innerHTML = html;
+    clampFontToFit();
+
+    document.getElementById('btn-prev').disabled = data.page >= LAST_PAGE;
+    document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
+
+    renderWordsList(data);
+  }
+
+  function renderWordsList(data) {
+    // "Слова" - отдельный чистый список слово+перевод для этой же
+    // страницы (решение пользователя 27.08.2026, "нравится их вариант" -
+    // ссылаясь на quran-stroka.vercel.app, где чтение и разбор по словам -
+    // РАЗНЫЕ экраны, не смешаны попапом поверх текста).
+    var html = '';
+    data.ayahs.forEach(function (a) {
+      html += '<div class="words-ayah-sep">аят ' + a.ayah + '</div>';
+      a.tokens.forEach(function (t) {
+        if (t.type !== 'word') return;
+        html += '<div class="word-row">' +
+          '<span class="arabic">' + t.html + '</span>' +
+          '<span class="translation">' + (t.translation || '') + '</span>' +
+          '</div>';
+      });
+    });
+    document.getElementById('words-list').innerHTML = html;
+  }
+
+  function switchTab(name) {
+    document.getElementById('view-page').classList.toggle('active', name === 'page');
+    document.getElementById('view-words').classList.toggle('active', name === 'words');
+    document.getElementById('tab-page').classList.toggle('active', name === 'page');
+    document.getElementById('tab-words').classList.toggle('active', name === 'words');
+    if (name === 'page') clampFontToFit();
+  }
+  document.getElementById('tab-page').addEventListener('click', function () { switchTab('page'); });
+  document.getElementById('tab-words').addEventListener('click', function () { switchTab('words'); });
+  switchTab('page');
+
+  var currentPage = FIRST_PAGE;
+
+  function loadPage(n) {
+    if (n < FIRST_PAGE || n > LAST_PAGE) return;
+    currentPage = n;
+    if (cache[n]) {
+      renderPage(cache[n]);
+      try { localStorage.setItem('yassir_mushaf_page', String(n)); } catch (e) {}
+      return;
+    }
+    fetch('page' + n + '.json')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        cache[n] = data;
+        renderPage(data);
+        try { localStorage.setItem('yassir_mushaf_page', String(n)); } catch (e) {}
+      });
+  }
+
+  document.getElementById('btn-prev').addEventListener('click', function () {
+    loadPage(currentPage + 1);
+  });
+  document.getElementById('btn-next').addEventListener('click', function () {
+    loadPage(currentPage - 1);
+  });
+
+  // Тап по номеру страницы - прямой переход (220 страниц, недостаточно
+  // одних ◀▶ - решение пользователя 27.08.2026, после расширения с 9 до
+  // всего диапазона сур 2-10).
+  var pageIndicator = document.getElementById('page-indicator');
+  var pageJumpInput = document.getElementById('page-jump-input');
+  pageIndicator.addEventListener('click', function () {
+    pageJumpInput.value = currentPage;
+    pageIndicator.style.display = 'none';
+    pageJumpInput.style.display = 'inline-block';
+    pageJumpInput.focus();
+    pageJumpInput.select();
+  });
+  function commitJump() {
+    var n = parseInt(pageJumpInput.value, 10);
+    pageJumpInput.style.display = 'none';
+    pageIndicator.style.display = 'inline-block';
+    if (n >= FIRST_PAGE && n <= LAST_PAGE) loadPage(n);
+  }
+  pageJumpInput.addEventListener('blur', commitJump);
+  pageJumpInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') pageJumpInput.blur();
+  });
+
+  window.addEventListener('resize', function () {
+    var keys = Object.keys(cache);
+    if (keys.length) clampFontToFit();
+  });
+
+  var startPage = FIRST_PAGE;
+  try {
+    var saved = parseInt(localStorage.getItem('yassir_mushaf_page'), 10);
+    if (saved >= FIRST_PAGE && saved <= LAST_PAGE) startPage = saved;
+  } catch (e) {}
+  loadPage(startPage);
+})();
+</script>
+</body>
+</html>
