@@ -61,20 +61,23 @@ async def main():
         # в меню на русском, чтобы находили не зная английского (17.08.2026).
         await tg_call("setMyCommands", {
             "commands": [
+                {"command": "mushaf", "description": "Мусхаф"},
                 {"command": "invite", "description": "Ссылка для друга — позвать к Корану"},
                 {"command": "muf", "description": "Муфрадат"},
             ],
             "scope": {"type": "all_private_chats"},
             "language_code": "ru",
         })
-        # Menu Button (кнопка слева от поля ввода) - работает ТОЛЬКО в
-        # личке, Telegram не показывает её в группах (28.08.2026, поэтому
-        # в группе доступ через /mushaf-кнопку web_app, см. core/handlers.py).
-        # Вызов идемпотентный и хранится на стороне Telegram постоянно, а
-        # не "включается" на время работы процесса - здесь просто самое
-        # удобное место дёрнуть его, как и setMyCommands выше.
+        # Menu Button - кнопка слева от поля ввода в личке. Telegram даёт
+        # выбор: ЛИБО список команд (то, что открывает setMyCommands выше),
+        # ЛИБО одна кастомная web_app-кнопка - не оба сразу. Пробовали
+        # отдать её под Мусхаф напрямую (28.08.2026), но тогда пропадал
+        # быстрый доступ к /invite и /muf через ту же кнопку - решение
+        # пользователя: вернуть список команд, Мусхаф в нём первым пунктом
+        # (см. setMyCommands выше и /mushaf в core/handlers.py). type:
+        # "commands" - явный откат от web_app, а не просто "не трогать".
         await tg_call("setChatMenuButton", {
-            "menu_button": {"type": "web_app", "text": "Мусхаф", "web_app": {"url": MUSHAF_URL}}
+            "menu_button": {"type": "commands"}
         })
     else:
         log.error("Не удалось подключиться к Telegram. Проверь токен.")

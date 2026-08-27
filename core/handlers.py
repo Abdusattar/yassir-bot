@@ -817,6 +817,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # отправляется только первый экран, а не весь поток - 13.08.2026).
             asyncio.create_task(send_prep_onboarding_if_pending(phone))
 
+        # ── Мусхаф Mini App, личка (28.08.2026) - первый пункт в /-меню
+        # (см. setMyCommands в bot.py). В группе - НЕ эта команда (решение
+        # пользователя - "будет много мусора" на каждый тап), там только
+        # /mushafpin (одно закреплённое сообщение, ниже по файлу).
+        if text == "/mushaf" and not is_group:
+            from core.tg import send_message_with_webapp_button
+            from config import MUSHAF_URL
+            await send_message_with_webapp_button(
+                chat_id, "📖 Мусхаф — чтение с таджвидом и переводом", "Открыть Мусхаф", MUSHAF_URL
+            )
+            return
+
         # ── Ссылка для друга (17.08.2026) - для ВСЕХ в личке, не только
         # студентов: устаз тоже может захотеть переслать другу, а он же и
         # сам студент. Даёт ссылку на подготовительную (единая точка входа
