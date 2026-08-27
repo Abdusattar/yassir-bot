@@ -38,6 +38,7 @@ sys.path.insert(0, ".")
 from core.sampler import HADITHS_DB
 from core.quran_pages import resolve_page
 import sqlite3
+import quran_transcript as qt
 
 SURAH_NAMES = {
     2: "Аль-Бакара", 3: "Аль-Имран", 4: "Ан-Ниса", 5: "Аль-Маида",
@@ -174,7 +175,16 @@ def export_page(conn, page_number):
                 continue
             raw = fetch_tajweed_ayah(surah, ayah)
             tokens = parse_ayah_tokens(raw, words)
-            ayahs_out.append({"surah": surah, "ayah": ayah, "tokens": tokens})
+            entry = {"surah": surah, "ayah": ayah, "tokens": tokens}
+            if ayah == 1:
+                # Бисмилля - реальный текст из quran_transcript (тот же
+                # источник, что и арабский текст слов, core/quran_ref.py),
+                # не сочиняем сами. У суры 9 (Ат-Тауба) её традиционно нет -
+                # quran_transcript честно отдаёт None, ничего не добавляем.
+                bismillah = qt.Aya(surah, 1).get().bismillah_uthmani
+                if bismillah:
+                    entry["bismillah"] = bismillah
+            ayahs_out.append(entry)
             time.sleep(0.1)
 
     surah_numbers = sorted({e[0] for e in entries})
