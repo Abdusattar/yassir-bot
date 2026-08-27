@@ -40,6 +40,23 @@
     --popup-bg: #2b2b2b;
     --popup-ink: #ffffff;
     --marker-color: #b08d2e;
+    --dash-bg-start: #eaf4ec;
+    --dash-bg-end: #f8f6ef;
+    /* Акцент - приглушённый изумрудный (цвет обложки мусхафа), НЕ ярко-
+       зелёный "успех" из обычных UI-китов - решение 29.08.2026, "высший
+       класс дизайнера": один тон на всё приложение (кнопки, прогресс,
+       бейдж иконки), не мешанина из синего/зелёного/жёлтого. */
+    --accent: #1f7a52;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3f2e8;
+    --card-bg: #ffffff;
+    --card-border: #e6e1d2;
+    --shadow-sm: 0 1px 2px rgba(30, 25, 10, 0.05), 0 1px 6px rgba(30, 25, 10, 0.04);
+    --shadow-md: 0 6px 20px rgba(30, 25, 10, 0.08), 0 2px 6px rgba(30, 25, 10, 0.05);
+    --ok: #1f7a52;
+    --ok-soft: #e3f2e8;
+    --no: #b3403a;
+    --no-soft: #fbe9e7;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -51,6 +68,19 @@
       --popup-bg: #f0ead8;
       --popup-ink: #16140f;
       --marker-color: #d4af37;
+      --dash-bg-start: #182019;
+      --dash-bg-end: #14120d;
+      --accent: #4cae83;
+      --accent-ink: #0d1a12;
+      --accent-soft: #1e3126;
+      --card-bg: #201d16;
+      --card-border: #3a3527;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 6px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+      --ok: #4cae83;
+      --ok-soft: #1e3126;
+      --no: #e0776f;
+      --no-soft: #33201e;
     }
   }
 
@@ -311,72 +341,87 @@
     color: var(--ink);
   }
 
-  /* Дашборд YassirApp (28.08.2026) - первый экран при открытии, ДО
-     мусхафа/тренажёра. Мусхаф - переключение вида внутри той же
-     страницы (см. openMushaf в скрипте ниже), Тренажёр - у него нет
-     веб-версии вообще (обычный чат-флоу бота, core/mufradat_bot.py) -
-     карточка уводит обратно в чат через tg.openTelegramLink с deep-link
-     "/start muf" (перехватывается в core/handlers.py) и закрывает Mini App. */
+  /* Дашборд YassirApp (28.08.2026, редизайн 29.08.2026) - первый экран
+     при открытии. Мусхаф и Тренажёр оба переключают вид внутри этой же
+     страницы (см. openTrainer/dash-mushaf в скрипте ниже) - карточки
+     визуально равноправны, никакая не "главнее" другой. */
   #dashboard {
     display: flex;
     flex-direction: column;
     height: 100%;
     justify-content: center;
     align-items: center;
-    gap: 18px;
+    gap: 16px;
     padding: 24px;
-    background: var(--bg);
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
   #dashboard h1 {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 20px;
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: var(--ink);
-    margin: 0 0 8px;
+    margin: 0 0 10px;
   }
   .dash-card {
     width: 100%;
     max-width: 320px;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     padding: 18px 20px;
-    background: var(--chrome-bg);
-    border: 1px solid var(--chrome-border);
-    border-radius: 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: var(--shadow-sm);
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     direction: ltr;
     text-align: left;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
-  .dash-card .emoji { font-size: 28px; }
+  .dash-card:active { transform: scale(0.97); box-shadow: var(--shadow-sm); }
+  .dash-card .icon-badge {
+    flex: 0 0 auto;
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 14px;
+    background: var(--accent-soft);
+    font-size: 24px;
+  }
   .dash-card .label { font-size: 17px; font-weight: 600; color: var(--ink); }
   .dash-card .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
-  /* Тренажёр муфрадата в вебе (29.08.2026) - тот же движок, что и
-     Telegram-версия (core/mufradat_api.py оборачивает core/mufradat.py),
-     свой экран верхнего уровня, как #dashboard/#app. */
+  /* Тренажёр муфрадата в вебе (29.08.2026, редизайн 29.08.2026) - тот же
+     движок, что и Telegram-версия (core/mufradat_api.py оборачивает
+     core/mufradat.py), свой экран верхнего уровня, как #dashboard/#app.
+     Та же приглушённо-изумрудная палитра, что и у дашборда - единый
+     фирменный акцент на всё приложение, не отдельный стиль под каждый
+     экран. */
   #trainer {
     display: none;
     flex-direction: column;
     height: 100%;
     width: 100%;
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
   #trainer-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 10px;
-    background: var(--chrome-bg);
-    border-bottom: 1px solid var(--chrome-border);
+    padding: 8px 14px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 13px;
-    color: var(--muted);
+    font-weight: 600;
+    color: var(--ink);
     direction: ltr;
     flex: 0 0 auto;
   }
   #trainer-topbar button {
-    background: none; border: none; color: var(--ink);
-    font-size: 14px; padding: 6px 4px; cursor: pointer;
+    background: none; border: none; color: var(--accent);
+    font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
     font-family: inherit;
   }
   #trainer-body {
@@ -384,11 +429,11 @@
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 18px 20px 28px;
+    padding: 22px 20px 32px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     direction: ltr;
     text-align: center;
@@ -396,50 +441,109 @@
   .trainer-msg { font-size: 15px; color: var(--ink); line-height: 1.5; }
   .trainer-info, .trainer-session { font-size: 13px; color: var(--muted); }
   .trainer-score { font-size: 13px; color: var(--muted); }
-  .trainer-feedback { font-size: 15px; font-weight: 600; }
-  .trainer-feedback.ok { color: #2a9d4a; }
-  .trainer-feedback.no { color: #d24444; }
+
+  /* Бейдж фидбека - закрашенная пилюля, не просто цветной текст (25.08 ->
+     29.08.2026, "высший класс дизайнера": верный/неверный ответ должен
+     считываться цветовым пятном, а не вчитыванием). */
+  .trainer-feedback {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 999px;
+  }
+  .trainer-feedback.ok { color: var(--ok); background: var(--ok-soft); }
+  .trainer-feedback.no { color: var(--no); background: var(--no-soft); }
   .trainer-hint { font-size: 12px; color: var(--muted); }
+
+  /* Карточка со словом - приподнята над фоном тенью, крупный шрифт для
+     чтения на расстоянии вытянутой руки. */
+  .trainer-word-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-md);
+    padding: 22px 24px;
+    width: 100%;
+    max-width: 420px;
+    margin: 4px 0;
+  }
   .trainer-word {
     font-family: 'Scheherazade New', serif;
     direction: rtl;
     font-size: 52px;
     line-height: 1.3;
-    margin: 6px 0;
     color: var(--ink);
   }
+
+  /* Полоса прогресса "Общий вес" - визуальный эквивалент score10/10,
+     не только цифра в тексте. */
+  .trainer-score-bar {
+    width: 100%;
+    max-width: 300px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--card-border);
+    overflow: hidden;
+    margin: 2px 0 4px;
+  }
+  .trainer-score-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+
   .trainer-options {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
     max-width: 420px;
   }
   .trainer-opt {
-    background: var(--chrome-bg);
-    border: 1px solid var(--chrome-border);
-    border-radius: 10px;
-    padding: 10px 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 10px;
     font-size: 14px;
+    font-weight: 500;
     color: var(--ink);
     cursor: pointer;
     font-family: inherit;
+    transition: transform 0.1s ease, border-color 0.1s ease;
   }
-  .trainer-opt:active { background: var(--chrome-border); }
+  .trainer-opt:active { transform: scale(0.96); border-color: var(--accent); }
+
   .trainer-pagebar, .trainer-actions {
     display: flex;
     gap: 10px;
-    margin-top: 4px;
+    margin-top: 6px;
   }
-  .trainer-pagebar button, .trainer-actions button {
-    background: var(--chrome-bg);
-    border: 1px solid var(--chrome-border);
-    border-radius: 10px;
-    padding: 8px 16px;
+  .trainer-pagebar button, .trainer-actions button, .trainer-page-input button {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    padding: 9px 18px;
     font-size: 14px;
+    font-weight: 500;
     color: var(--ink);
     cursor: pointer;
     font-family: inherit;
+    transition: transform 0.1s ease;
+  }
+  .trainer-pagebar button:active, .trainer-actions button:active, .trainer-page-input button:active {
+    transform: scale(0.96);
+  }
+  /* "Закончить" - единственное закрашенное акцентом действие на экране
+     (primary), всё остальное - вторично (outline-карточки) - иерархия
+     действий, а не десяток одинаково громких кнопок. */
+  #tr-end, #tp-submit {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
   }
   .trainer-page-input {
     display: flex;
@@ -450,47 +554,44 @@
     width: 80px;
     font-size: 15px;
     text-align: center;
-    padding: 8px 6px;
-    border: 1px solid var(--chrome-border);
-    border-radius: 8px;
-    background: var(--bg);
+    padding: 9px 6px;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--card-bg);
     color: var(--ink);
-    font-family: inherit;
-  }
-  .trainer-page-input button {
-    background: var(--chrome-bg);
-    border: 1px solid var(--chrome-border);
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-size: 14px;
-    color: var(--ink);
-    cursor: pointer;
     font-family: inherit;
   }
   .trainer-division {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--marker-color);
-    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent);
+    margin-top: 10px;
     align-self: flex-start;
   }
   .trainer-lb-row {
+    width: 100%;
     font-size: 13px;
     color: var(--ink);
     align-self: flex-start;
+    padding: 8px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
   }
-  .trainer-lb-row.you { font-weight: 700; }
+  .trainer-lb-row.you { font-weight: 700; border-color: var(--accent); background: var(--accent-soft); }
 </style>
 </head>
 <body>
 <div id="dashboard">
   <h1>YassirApp</h1>
   <div class="dash-card" id="dash-mushaf">
-    <span class="emoji">📗</span>
+    <span class="icon-badge">📗</span>
     <div><div class="label">Мусхаф</div><div class="sub">Чтение с таджвидом и переводом</div></div>
   </div>
   <div class="dash-card" id="dash-trainer">
-    <span class="emoji">🧠</span>
+    <span class="icon-badge">🧠</span>
     <div><div class="label">Тренажёр</div><div class="sub">Муфрадат — учи слова Корана</div></div>
   </div>
 </div>
@@ -867,8 +968,10 @@
 
   function renderOverallScore(s) {
     if (!s) return '';
+    var pct = Math.max(0, Math.min(100, s.score10 * 10));
     return '<div class="trainer-score">📊 Общий вес: ' + s.score10.toFixed(2) + '/10 (закреплено ' +
-      s.mastered + ' из ' + s.total + ' слов)</div>';
+      s.mastered + ' из ' + s.total + ' слов)</div>' +
+      '<div class="trainer-score-bar"><div class="trainer-score-bar-fill" style="width:' + pct + '%"></div></div>';
   }
 
   function renderTrainer() {
@@ -904,7 +1007,7 @@
     var html = renderFeedbackBanner(d.feedback);
     html += '<div class="trainer-info">📖 Твоя страница: ' + d.bookmark_page +
       ' (слово со стр. ' + d.word_page + ')</div>';
-    html += '<div class="trainer-word">' + d.arabic + '</div>';
+    html += '<div class="trainer-word-card"><div class="trainer-word">' + d.arabic + '</div></div>';
     html += '<div class="trainer-session">✅ Верно за сеанс: ' + d.session_correct + '</div>';
     html += renderOverallScore(d.overall_score);
     html += '<div class="trainer-options">';
