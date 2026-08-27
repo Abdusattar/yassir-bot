@@ -263,9 +263,35 @@
     font-size: 12px;
     padding: 10px 0 2px;
   }
+
+  /* Тап по слову на странице чтения - всплывающий перевод (28.08.2026),
+     --popup-bg/--popup-ink были заведены заранее для этого же, до этого не
+     использовались нигде. color-mix даёт полупрозрачность независимо от
+     конкретного hex переменной (светлая/тёмная тема - разные значения). */
+  #word-popup {
+    position: fixed;
+    left: 0; top: 0;
+    background: color-mix(in srgb, var(--popup-bg) 88%, transparent);
+    color: var(--popup-ink);
+    padding: 7px 14px;
+    border-radius: 10px;
+    font-size: 15px;
+    max-width: 70vw;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -100%);
+    transition: opacity 0.25s ease;
+    z-index: 50;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    white-space: nowrap;
+  }
+  #word-popup.visible { opacity: 1; }
 </style>
 </head>
 <body>
+<div id="word-popup"></div>
 <div id="app">
   <div id="topbar">
     <span class="surah-name" id="surah-name">—</span>
@@ -298,6 +324,10 @@
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
+
+  function escapeAttr(s) {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
 
   var FIRST_PAGE = 2, LAST_PAGE = 221;
   var cache = {};
@@ -359,10 +389,11 @@
         html += '<div class="mushaf-line">';
         line.tokens.forEach(function (t) {
           if (t.type === 'word') {
+            var tr = t.translation ? ' data-tr="' + escapeAttr(t.translation) + '"' : '';
             if (t.code_v4) {
-              html += '<span class="v4-word">' + t.code_v4 + '</span>';
+              html += '<span class="v4-word"' + tr + '>' + t.code_v4 + '</span>';
             } else {
-              html += '<span>' + t.html + '</span>';
+              html += '<span' + tr + '>' + t.html + '</span>';
             }
           } else if (t.type === 'marker') {
             html += '<span class="marker">' + t.html + '</span>';
@@ -393,11 +424,39 @@
     renderWordsList(data);
   }
 
+  // Тап по слову на странице чтения - быстрый перевод во всплывающей
+  // подсказке (28.08.2026, добавлено ПОВЕРХ вкладки "Слова" ниже, не
+  // вместо неё - вкладка остаётся для вдумчивого разбора, подсказка - для
+  // мгновенного взгляда без переключения экрана). Один слушатель на
+  // контейнер (делегирование) - работает и после innerHTML-замены при
+  // смене страницы, не нужно перевешивать на каждое слово заново.
+  var wordPopup = document.getElementById('word-popup');
+  var popupHideTimer = null;
+  function showWordPopup(el) {
+    var text = el.getAttribute('data-tr');
+    if (!text) return;
+    wordPopup.textContent = text;
+    var rect = el.getBoundingClientRect();
+    wordPopup.style.left = (rect.left + rect.width / 2) + 'px';
+    wordPopup.style.top = (rect.top - 8) + 'px';
+    wordPopup.classList.add('visible');
+    clearTimeout(popupHideTimer);
+    popupHideTimer = setTimeout(function () {
+      wordPopup.classList.remove('visible');
+    }, 1800);
+  }
+  document.getElementById('ayah-text').addEventListener('click', function (e) {
+    var el = e.target.closest('[data-tr]');
+    if (el) showWordPopup(el);
+  });
+
   function renderWordsList(data) {
     // "Слова" - отдельный чистый список слово+перевод для этой же
     // страницы (решение пользователя 27.08.2026, "нравится их вариант" -
-    // ссылаясь на quran-stroka.vercel.app, где чтение и разбор по словам -
-    // РАЗНЫЕ экраны, не смешаны попапом поверх текста).
+    // ссылаясь на quran-stroka.vercel.app) - остаётся для вдумчивого
+    // разбора аята целиком, подсказка по тапу выше - для быстрого взгляда
+    // прямо на странице чтения (добавлена 28.08.2026, обе формы теперь
+    // сосуществуют, не заменяют друг друга).
     var html = '';
     data.ayahs.forEach(function (a) {
       html += '<div class="words-ayah-sep">аят ' + a.ayah + '</div>';
