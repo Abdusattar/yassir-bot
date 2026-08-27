@@ -1199,13 +1199,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # сообщение с кнопкой, не команда с ответом на каждый тап (решение
     # пользователя - "будет много мусора"). Устаз запускает вручную один
     # раз на группу, дальше кнопка просто висит закреплённой наверху.
-    if text == "/mushafpin":
+    # Название "YassirApp" - не "Мусхаф" (решение пользователя 28.08.2026,
+    # бренд платформы, не конкретного инструмента - под этой же кнопкой
+    # в будущем может открываться не только чтение).
+    if text == "/yassirapp":
         if not group or not is_group_admin(phone, group["id"]):
             return
         from core.tg import send_message_with_url_button, pin_message
         from config import MUSHAF_URL
         resp = await send_message_with_url_button(
-            chat_id, "📖 Мусхаф — чтение с таджвидом и переводом", "Открыть Мусхаф", MUSHAF_URL
+            chat_id, "📖 YassirApp — Мусхаф с таджвидом и переводом", "YassirApp", MUSHAF_URL
         )
         msg_id = (resp or {}).get("result", {}).get("message_id")
         if msg_id:
