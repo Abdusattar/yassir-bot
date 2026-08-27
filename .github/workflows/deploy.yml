@@ -40,5 +40,6 @@ jobs:
           script: |
             cd ~/yassir-bot && git pull origin master
             source ~/yassir-bot/venv/bin/activate && pip install -r requirements.txt -q
+            cp ~/yassir-bot/mushaf_data/index.html /var/www/yassir-app/index.html
             sudo systemctl restart yassir-bot
             echo "Deploy done"
