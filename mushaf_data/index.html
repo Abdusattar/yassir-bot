@@ -264,7 +264,6 @@
     padding: 10px 0 2px;
   }
 </style>
-<style id="v4-font-face"></style>
 </head>
 <body>
 <div id="app">
@@ -319,21 +318,32 @@
     document.getElementById('ayah-text').style.fontSize = MUSHAF_FONT_SIZE + 'px';
   }
 
+  // Шрифт QPC V4 Tajweed - свой файл НА КАЖДУЮ страницу (604 разных
+  // файла), значит на каждой навигации грузится заново. Раньше src
+  // переписывался прямо в <style> - HTML с class="v4-word" уходил в DOM
+  // СИНХРОННО, до того как шрифт реально скачался, браузер красил первый
+  // кадр текста запасным шрифтом (тот не понимает PUA-глифы шрифта v4) -
+  // видимый "голый текст, потом сворачивается" (реальный баг, пользователь
+  // поймал на живой странице 28.08.2026). Фикс - FontFace API: явно ждём
+  // .load() ПЕРЕД тем, как вставлять текст в DOM, никакого кадра с неверным
+  // шрифтом просто не возникает физически. currentV4Face - чтобы не
+  // копить в document.fonts все посещённые страницы разом (604 файла).
+  var currentV4Face = null;
+  function loadV4Font(url) {
+    var face = new FontFace('mushaf-v4', "url('" + url + "')");
+    return face.load().then(function (loaded) {
+      if (currentV4Face) { try { document.fonts.delete(currentV4Face); } catch (e) {} }
+      document.fonts.add(loaded);
+      currentV4Face = loaded;
+    });
+  }
+
   function renderPage(data) {
     document.getElementById('surah-name').textContent = data.surah_names.join(', ');
     var firstAyah = data.ayahs[0], lastAyah = data.ayahs[data.ayahs.length - 1];
     document.getElementById('ayah-range').textContent =
       'аят ' + firstAyah.ayah + (lastAyah.ayah !== firstAyah.ayah ? '–' + lastAyah.ayah : '');
     document.getElementById('page-indicator').textContent = 'стр. ' + data.page;
-
-    // Настоящий шрифт QPC V4 Tajweed на страницу чтения (28.08.2026) -
-    // src переписывается на каждую загрузку страницы (свой файл шрифта на
-    // каждую из 604 страниц мусхафа, см. get_code_v4/font_url_for_page).
-    // Токен без code_v4 (маркер ۞/۩ - у него нет позиции слова в аяте) -
-    // откатывается на прежний путь: обычный юникод-текст + CSS-раскраска
-    // таджвида по классам (см. правила tajweed[class=...] выше).
-    document.getElementById('v4-font-face').textContent =
-      "@font-face { font-family: 'mushaf-v4'; src: url('" + data.font_url + "') format('woff2'); }";
 
     // Настоящая построчная вёрстка (QUL/King Fahd Complex, 27.08.2026) -
     // каждая строка мусхафа - свой <div>, а не единый абзац с переносом
@@ -367,8 +377,15 @@
         html += '</div>';
       }
     });
-    document.getElementById('ayah-text').innerHTML = html;
-    clampFontToFit();
+    var reveal = function () {
+      document.getElementById('ayah-text').innerHTML = html;
+      clampFontToFit();
+    };
+    // Если шрифт не загрузился (сеть) - всё равно показываем текст, а не
+    // висим бесконечно; PUA-глифы без своего шрифта покажутся "тофу"-
+    // прямоугольниками в запасном шрифте - хуже, чем пустая страница, но
+    // студент хотя бы поймёт, что что-то не так, а не решит, что бот завис.
+    loadV4Font(data.font_url).then(reveal, reveal);
 
     document.getElementById('btn-prev').disabled = data.page >= LAST_PAGE;
     document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
