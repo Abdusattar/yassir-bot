@@ -47,6 +47,13 @@ SURAH_NAMES = {
 START_PAGE = 2
 END_PAGE = 221  # весь диапазон сур 2-10, что уже переведён на русский (27.08.2026)
 SOURCE_LANGUAGE = "ru"
+
+# Типографские маркеры мусхафа, не являющиеся словами - при разбивке на
+# чанки идут как отдельные токены, не сопоставляются со строками
+# mufradat_words. ۞ (رub el-hizb, начало четверти) ловили сразу, ۩ (место
+# обязательного суджуда) поймали на первом полном прогоне 220 страниц
+# (сура 7, аят 206 - единственный сбой из 1464 аятов).
+_MARKER_CHARS = {"۞", "۩"}
 OUT_DIR = "mushaf_data"
 
 _END_SPAN_RE = re.compile(r"<span class=end>([^<]*)</span>")
@@ -134,7 +141,7 @@ def parse_ayah_tokens(raw_html, words):
     tokens = []
     word_iter = iter(words)
     for chunk in chunks:
-        if chunk == "۞":
+        if chunk in _MARKER_CHARS:
             tokens.append({"type": "marker", "html": chunk})
             continue
         w = next(word_iter, None)
