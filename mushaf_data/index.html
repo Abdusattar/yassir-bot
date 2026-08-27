@@ -124,15 +124,20 @@
   }
   .mushaf-line {
     /* Каждая строка мусхафа - СВОЙ <div> (настоящая построчная вёрстка
-     * QUL/King Fahd Complex, 27.08.2026), не единый абзац с переносом по
-     * ширине браузера. justify + text-align-last: justify растягивает
-     * КАЖДУЮ строку до полной ширины (у неё всегда ровно одна визуальная
-     * строка внутри - без last-line-override justify не сработал бы,
-     * браузер считает единственную строку одновременно первой и
-     * последней и last-line обычно НЕ растягивает). */
-    text-align: justify;
-    text-align-last: justify;
-    word-spacing: 0.1em;
+     * QUL/King Fahd Complex, 27.08.2026). Flex + justify-content:
+     * space-between, НЕ text-align: justify (28.08.2026, реальный баг -
+     * левый край "гулял", разной длины на разных строках). Причина: у
+     * V4-глифов (см. .v4-word) между словами нет обычного пробельного
+     * символа - это отдельные PUA-глифы, конкатенированные впритык
+     * (собственные интервалы уже зашиты в сам глиф) - тексту-выравниванию
+     * банально нечего растягивать. Flex распределяет свободное
+     * пространство между словами-элементами напрямую, не полагаясь на
+     * пробелы в тексте - работает одинаково что для v4-слов, что для
+     * отката на обычный юникод-текст (см. renderPage). */
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: baseline;
   }
   .surah-banner {
     display: block;
@@ -347,15 +352,15 @@
             if (t.code_v4) {
               html += '<span class="v4-word">' + t.code_v4 + '</span>';
             } else {
-              html += '<span>' + t.html + '</span> ';
+              html += '<span>' + t.html + '</span>';
             }
           } else if (t.type === 'marker') {
-            html += '<span class="marker">' + t.html + '</span> ';
+            html += '<span class="marker">' + t.html + '</span>';
           } else if (t.type === 'ayah_end') {
             if (t.code_v4) {
               html += '<span class="v4-word">' + t.code_v4 + '</span>';
             } else {
-              html += '<span class="ayah-end">﴾' + t.html + '﴿</span> ';
+              html += '<span class="ayah-end">﴾' + t.html + '﴿</span>';
             }
           }
         });
