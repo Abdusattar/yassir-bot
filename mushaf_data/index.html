@@ -288,6 +288,28 @@
     white-space: nowrap;
   }
   #word-popup.visible { opacity: 1; }
+
+  #meaning-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 18px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  .meaning-row { padding: 10px 0 16px; }
+  .meaning-row .ayah-num {
+    display: inline-block;
+    color: var(--marker-color);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .meaning-row .meaning-text {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
 </style>
 </head>
 <body>
@@ -314,9 +336,22 @@
     <div id="words-list"></div>
   </div>
 
+  <!-- Ссылка на "Слова" убрана из низа мусхафа (28.08.2026) - пословный
+       перевод теперь через тап по слову прямо на странице чтения (см.
+       #word-popup). #view-words и renderWordsList() ниже НЕ удалены -
+       вьюха просто больше не достижима из UI, код на будущее. Вместо неё -
+       "Смысл": целостный перевод аятов страницы (Кулиев, api.quran.com,
+       разрешение правообладателя на постоянное размещение подтверждено
+       пользователем лично 28.08.2026). Переход на след./пред. страницу
+       перевода и назад на мусхаф - через #page-nav и #tab-page, они уже
+       общие для всех вьюх, отдельной навигации внутри "Смысла" не нужно. -->
+  <div id="view-meaning" class="view">
+    <div id="meaning-list"></div>
+  </div>
+
   <div id="tabbar">
     <button id="tab-page" class="tab-btn">📖 Страница</button>
-    <button id="tab-words" class="tab-btn">🔤 Слова</button>
+    <button id="tab-meaning" class="tab-btn">📜 Смысл</button>
   </div>
 </div>
 
@@ -422,6 +457,7 @@
     document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
 
     renderWordsList(data);
+    renderMeaning(data);
   }
 
   // Тап по слову на странице чтения - быстрый перевод во всплывающей
@@ -471,15 +507,36 @@
     document.getElementById('words-list').innerHTML = html;
   }
 
+  function renderMeaning(data) {
+    // "Смысл" - целостный перевод аятов страницы (Кулиев, 28.08.2026),
+    // не пословный список (тот - #word-popup на самой странице чтения).
+    // meaning может отсутствовать (страница ещё не догнана скриптом
+    // scripts/add_ayah_meaning.py) - тогда просто не показываем блок для
+    // этого аята, не выдумываем текст.
+    var html = '';
+    data.ayahs.forEach(function (a) {
+      if (!a.meaning) return;
+      html += '<div class="meaning-row">' +
+        '<span class="ayah-num">аят ' + a.ayah + '</span>' +
+        '<div class="meaning-text">' + a.meaning + '</div>' +
+        '</div>';
+    });
+    document.getElementById('meaning-list').innerHTML = html ||
+      '<div class="meaning-row"><span class="ayah-num">перевод смысла для этой страницы ещё не загружен</span></div>';
+  }
+
   function switchTab(name) {
+    // tab-words/#view-words больше не в UI (см. комментарий у #tabbar
+    // выше), но код оставлен на будущее.
     document.getElementById('view-page').classList.toggle('active', name === 'page');
     document.getElementById('view-words').classList.toggle('active', name === 'words');
+    document.getElementById('view-meaning').classList.toggle('active', name === 'meaning');
     document.getElementById('tab-page').classList.toggle('active', name === 'page');
-    document.getElementById('tab-words').classList.toggle('active', name === 'words');
+    document.getElementById('tab-meaning').classList.toggle('active', name === 'meaning');
     if (name === 'page') clampFontToFit();
   }
   document.getElementById('tab-page').addEventListener('click', function () { switchTab('page'); });
-  document.getElementById('tab-words').addEventListener('click', function () { switchTab('words'); });
+  document.getElementById('tab-meaning').addEventListener('click', function () { switchTab('meaning'); });
   switchTab('page');
 
   var currentPage = FIRST_PAGE;
