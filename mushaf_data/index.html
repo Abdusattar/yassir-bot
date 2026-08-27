@@ -13,6 +13,24 @@
     font-display: swap;
   }
 
+  /* Настоящий шрифт QPC V4 Tajweed (King Fahd Complex) - цвета таджвида
+     зашиты В САМ ШРИФТ через COLR/CPAL-таблицы, не через CSS-классы ниже
+     (28.08.2026, см. scripts/export_mushaf_page.py: get_code_v4). Шрифт
+     свой на КАЖДУЮ страницу (as static-cdn.tarteel.ai/.../p{N}.woff2) -
+     src переписывается в JS на каждую загрузку страницы (см.
+     #v4-font-face), сам @font-palette-values - фиксированная декларация,
+     держит одно и то же имя семейства 'mushaf-v4' между страницами.
+     Хотлинк на CDN QUL, не самохостинг - см. font_url_for_page. */
+  @font-palette-values --V4Light { font-family: 'mushaf-v4'; base-palette: 0; }
+  @font-palette-values --V4Dark { font-family: 'mushaf-v4'; base-palette: 1; }
+  .v4-word {
+    font-family: 'mushaf-v4', 'Scheherazade New', serif;
+    font-palette: --V4Light;
+  }
+  @media (prefers-color-scheme: dark) {
+    .v4-word { font-palette: --V4Dark; }
+  }
+
   :root {
     --bg: #ffffff;
     --ink: #1a1a1a;
@@ -241,6 +259,7 @@
     padding: 10px 0 2px;
   }
 </style>
+<style id="v4-font-face"></style>
 </head>
 <body>
 <div id="app">
@@ -302,6 +321,15 @@
       'аят ' + firstAyah.ayah + (lastAyah.ayah !== firstAyah.ayah ? '–' + lastAyah.ayah : '');
     document.getElementById('page-indicator').textContent = 'стр. ' + data.page;
 
+    // Настоящий шрифт QPC V4 Tajweed на страницу чтения (28.08.2026) -
+    // src переписывается на каждую загрузку страницы (свой файл шрифта на
+    // каждую из 604 страниц мусхафа, см. get_code_v4/font_url_for_page).
+    // Токен без code_v4 (маркер ۞/۩ - у него нет позиции слова в аяте) -
+    // откатывается на прежний путь: обычный юникод-текст + CSS-раскраска
+    // таджвида по классам (см. правила tajweed[class=...] выше).
+    document.getElementById('v4-font-face').textContent =
+      "@font-face { font-family: 'mushaf-v4'; src: url('" + data.font_url + "') format('woff2'); }";
+
     // Настоящая построчная вёрстка (QUL/King Fahd Complex, 27.08.2026) -
     // каждая строка мусхафа - свой <div>, а не единый абзац с переносом
     // по ширине браузера. surah_name_ar - реальное арабское имя суры
@@ -316,11 +344,19 @@
         html += '<div class="mushaf-line">';
         line.tokens.forEach(function (t) {
           if (t.type === 'word') {
-            html += '<span>' + t.html + '</span> ';
+            if (t.code_v4) {
+              html += '<span class="v4-word">' + t.code_v4 + '</span>';
+            } else {
+              html += '<span>' + t.html + '</span> ';
+            }
           } else if (t.type === 'marker') {
             html += '<span class="marker">' + t.html + '</span> ';
           } else if (t.type === 'ayah_end') {
-            html += '<span class="ayah-end">﴾' + t.html + '﴿</span> ';
+            if (t.code_v4) {
+              html += '<span class="v4-word">' + t.code_v4 + '</span>';
+            } else {
+              html += '<span class="ayah-end">﴾' + t.html + '﴿</span> ';
+            }
           }
         });
         html += '</div>';

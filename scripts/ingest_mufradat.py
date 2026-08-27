@@ -42,8 +42,13 @@ sys.path.insert(0, ".")
 from config import QURAN_ACADEMY_ACCESS_TOKEN
 from core.sampler import save_mufradat_word
 
-SURAHS = list(range(2, 11))  # Аль-Бакара по Юнус
-LANGUAGES = ["ru", "uz"]
+SURAHS = list(range(1, 115))  # весь Коран (28.08.2026, расширение с 2-10 -
+# страница чтения мусхафа больше не завязана на переводы (см.
+# scripts/export_mushaf_page.py), но вкладка "Слова" и тренажёр муфрадата
+# должны покрывать всё, что реально читается)
+LANGUAGES = ["ru"]  # uz снят - на нём есть аяты, падающие с HTTP 500 целиком
+# (см. модульный docstring), при полном Коране это будет дороже разбираться,
+# чем даёт пользы; ky - отдельный ИИ-перевод, намеренно не трогаем здесь
 BATCH_SIZE = 20
 API_URL = "https://digital-quran.quranacademy.org/words"
 

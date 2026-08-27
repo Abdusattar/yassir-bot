@@ -34,19 +34,53 @@ import time
 
 import requests
 
+# Консоль Windows по умолчанию cp1251 - print() с арабским/кириллицей в
+# одной строке (например текст ошибки с непопавшим словом) валит скрипт
+# UnicodeEncodeError-ом ДО того, как per-page try/except в main() успевает
+# сработать (28.08.2026, поймано на первом полном прогоне 1-604 - страница
+# упала не из-за самой ошибки данных, а из-за краша при её печати).
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, ".")
 from core.sampler import HADITHS_DB
-from core.quran_pages import resolve_page
 import sqlite3
 import quran_transcript as qt
 
-SURAH_NAMES = {
-    2: "Аль-Бакара", 3: "Аль-Имран", 4: "Ан-Ниса", 5: "Аль-Маида",
-    6: "Аль-Анам", 7: "Аль-Араф", 8: "Аль-Анфаль", 9: "Ат-Тауба", 10: "Юнус",
-}
-START_PAGE = 2
-END_PAGE = 221  # весь диапазон сур 2-10, что уже переведён на русский (27.08.2026)
+START_PAGE = 1
+END_PAGE = 604  # весь мусхаф (28.08.2026) - см. модульный docstring про
+# развязку от core.quran_pages.PAGES (тот остаётся 2-221, только для
+# тренажёра муфрадата - см. build_lines/export_page ниже)
 SOURCE_LANGUAGE = "ru"
+
+# Пословные глиф-коды шрифта QPC V4 Tajweed (King Fahd Complex, цвета
+# таджвида зашиты В САМ ШРИФТ через COLR/CPAL, не через CSS) - датасет QUL
+# "V4 Glyphs(With Tajweed) - Word by word", получен пользователем через его
+# аккаунт QUL 27.08.2026 (лицензионное разрешение подтверждено пользователем
+# лично - "я проверил, они дают зелёный цвет"). Ключ - "сура:аят:позиция",
+# позиция включает служебный номер аята (N+1-й "word" после N реальных слов
+# - проверено эмпирически на 7:206, сура с меткой суджуда: 11 слов + 1
+# номер аята = 12 записей, ни ۞, ни ۩ отдельного слота не занимают).
+QPC_V4_GLYPHS_PATH = "sources/qpc_v4_extract/qpc-v4.json"
+_glyphs = None
+
+
+def _load_glyphs():
+    global _glyphs
+    if _glyphs is None:
+        with open(QPC_V4_GLYPHS_PATH, encoding="utf-8") as f:
+            _glyphs = json.load(f)
+    return _glyphs
+
+
+def get_code_v4(surah, ayah, position):
+    return _load_glyphs().get(f"{surah}:{ayah}:{position}", {}).get("text")
+
+
+def font_url_for_page(page_number, fmt="woff2"):
+    """Хотлинк на CDN QUL (static-cdn.tarteel.ai), НЕ самохостинг - так и
+    задокументировано в их же примере @font-face на странице ресурса.
+    Убирает вопрос переразмещения 604 файлов и синхронизации с CI."""
+    return f"https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/{fmt}/p{page_number}.{fmt}"
 
 # Типографские маркеры мусхафа, не являющиеся словами - при разбивке на
 # чанки идут как отдельные токены, не сопоставляются со строками
@@ -129,10 +163,13 @@ def fetch_tajweed_ayah(surah, ayah, retries=3):
             raise
 
 
-def parse_ayah_tokens(raw_html, words):
-    """raw_html - text_uthmani_tajweed сырой из API. words - наши строки
-    mufradat_words для этого аята (position, arabic_text, translation),
-    по порядку. Возвращает список токенов для рендера."""
+def parse_ayah_tokens(raw_html, words, surah, ayah, missing_glyphs):
+    """raw_html - text_uthmani_tajweed сырой из API. words - позиции этого
+    аята (position, arabic_text, translation), по порядку. surah/ayah -
+    для поиска глиф-кодов v4 (get_code_v4); missing_glyphs - список,
+    в который дописываются пропуски (для отчёта, не бросаем исключение -
+    страница чтения деградирует до обычного текста на конкретном слове,
+    не роняет весь экспорт). Возвращает список токенов для рендера."""
     end_match = _END_SPAN_RE.search(raw_html)
     ayah_end_glyph = end_match.group(1) if end_match else ""
     body = _END_SPAN_RE.sub("", raw_html).strip()
@@ -146,27 +183,49 @@ def parse_ayah_tokens(raw_html, words):
             continue
         w = next(word_iter, None)
         if w is None:
-            raise ValueError("больше токенов-слов, чем строк в mufradat_words")
+            raise ValueError("больше токенов-слов, чем позиций в аяте")
+        code_v4 = get_code_v4(surah, ayah, w["position"])
+        if code_v4 is None:
+            missing_glyphs.append((surah, ayah, w["position"]))
         tokens.append({
             "type": "word", "html": chunk,
             "position": w["position"], "translation": w["translation"],
+            "code_v4": code_v4,
         })
     leftover = list(word_iter)
     if leftover:
         raise ValueError(f"остались несопоставленные слова: {leftover}")
 
     if ayah_end_glyph:
-        tokens.append({"type": "ayah_end", "html": ayah_end_glyph})
+        end_position = len(words) + 1
+        code_v4 = get_code_v4(surah, ayah, end_position)
+        if code_v4 is None:
+            missing_glyphs.append((surah, ayah, end_position))
+        tokens.append({"type": "ayah_end", "html": ayah_end_glyph, "code_v4": code_v4})
     return tokens
 
 
 def get_ayah_words(conn, surah, ayah):
-    rows = conn.execute(
-        "SELECT position, arabic_text, translation FROM mufradat_words "
-        "WHERE surah_number=? AND ayah_number=? AND language=? ORDER BY position",
-        (surah, ayah, SOURCE_LANGUAGE)
-    ).fetchall()
-    return [dict(r) for r in rows]
+    """Позиции слов аята - из quran_transcript (весь Коран, надёжно), НЕ из
+    mufradat_words (та покрывает только суры 2-10, язык SOURCE_LANGUAGE, и
+    раньше была единственным источником, из-за чего страница чтения не
+    могла выйти за эти суры - см. модульный docstring, решение 28.08.2026).
+    Перевод подмешивается из mufradat_words, если есть - иначе пустая
+    строка, вкладка "Слова" на непереведённых страницах просто не покажет
+    перевод, само чтение не блокируется."""
+    arabic_words = qt.Aya(surah, ayah).get().uthmani_words
+    translations = {
+        row["position"]: row["translation"]
+        for row in conn.execute(
+            "SELECT position, translation FROM mufradat_words "
+            "WHERE surah_number=? AND ayah_number=? AND language=?",
+            (surah, ayah, SOURCE_LANGUAGE)
+        )
+    }
+    return [
+        {"position": i, "arabic_text": w, "translation": translations.get(i, "")}
+        for i, w in enumerate(arabic_words, 1)
+    ]
 
 
 QUL_LAYOUT_URL = "https://raw.githubusercontent.com/zonetecde/mushaf-layout/refs/heads/main/mushaf/page-{:03d}.json"
@@ -175,14 +234,13 @@ QUL_LAYOUT_URL = "https://raw.githubusercontent.com/zonetecde/mushaf-layout/refs
 def fetch_qul_layout(page_number, retries=3):
     """QUL (Quranic Universal Library, TarteelAI) - разбивка настоящего
     печатного мусхафа (King Fahd Complex, 15 строк/страница) на строки.
-    Используем ТОЛЬКО группировку слов по строкам (location "сура:аят:
-    позиция" - совпадает 1-в-1 с нашей нумерацией mufradat_words, проверено
-    эмпирически 27.08.2026 на 76 аятах, 0 расхождений) - сам арабский текст,
-    таджвид, перевод остаются НАШИМИ уже проверенными источниками (см.
-    модульный docstring). Их QPC-шрифт/глифы не используем вообще - решение
-    пользователя 27.08.2026, т.к. их цветной таджвид-шрифт (V4) ещё не
-    опубликован ("we're proofreading them" - qul.tarteel.ai), а наш таджвид
-    работает на обычном Uthmani-тексте, не глифах."""
+    Группировка слов по строкам (location "сура:аят:позиция" - совпадает
+    1-в-1 с нашей нумерацией, проверено эмпирически 27.08.2026 на 76 аятах,
+    0 расхождений), а с 28.08.2026 ЭТИ ЖЕ данные (words[].location) - ещё и
+    источник границ аятов на странице (см. ayah_ranges_from_qul), вместо
+    ручной core.quran_pages.PAGES (та осталась только для тренажёра
+    муфрадата, 2-221 - см. модульный docstring). Шрифт V4 (глиф-коды) -
+    отдельный датасет QUL "V4 Glyphs (With Tajweed)", см. get_code_v4."""
     url = QUL_LAYOUT_URL.format(page_number)
     for attempt in range(retries):
         try:
@@ -194,6 +252,29 @@ def fetch_qul_layout(page_number, retries=3):
                 time.sleep(2)
                 continue
             raise
+
+
+def ayah_ranges_from_qul(qul):
+    """[(surah, start_ayah, end_ayah), ...] для страницы - выведено из тех
+    же QUL-строк, что и построчная разметка (words[].location), вместо
+    core.quran_pages.resolve_page (та ограничена сурами 2-10 - см.
+    fetch_qul_layout). Один аят на печатной странице мусхафа никогда не
+    разрывается между сурами не по границе - берём просто min/max аята на
+    суру в порядке появления строк."""
+    order = []
+    bounds = {}
+    for qline in qul["lines"]:
+        if qline["type"] != "text":
+            continue
+        for w in qline.get("words", []):
+            s, a, _ = (int(x) for x in w["location"].split(":"))
+            if s not in bounds:
+                order.append(s)
+                bounds[s] = [a, a]
+            else:
+                bounds[s][0] = min(bounds[s][0], a)
+                bounds[s][1] = max(bounds[s][1], a)
+    return [(s, bounds[s][0], bounds[s][1]) for s in order]
 
 
 def build_lines(ayahs_out, qul):
@@ -255,18 +336,30 @@ def build_lines(ayahs_out, qul):
 
 
 def export_page(conn, page_number):
-    entries = resolve_page(page_number)
-    if entries is None:
+    qul = fetch_qul_layout(page_number)
+    entries = ayah_ranges_from_qul(qul)
+    if not entries:
         return None
 
     ayahs_out = []
+    missing_glyphs = []
+    skipped_ayat = []
     for surah, start_ayah, end_ayah in entries:
         for ayah in range(start_ayah, end_ayah + 1):
             words = get_ayah_words(conn, surah, ayah)
-            if not words:
-                continue
             raw = fetch_tajweed_ayah(surah, ayah)
-            tokens = parse_ayah_tokens(raw, words)
+            try:
+                tokens = parse_ayah_tokens(raw, words, surah, ayah, missing_glyphs)
+            except ValueError as e:
+                # Расхождение в счёте слов между quran_transcript (words) и
+                # токенизацией tajweed-HTML от api.quran.com (та же природа
+                # проблемы, что и в scripts/ingest_mufradat.py - два
+                # независимых источника иногда расходятся на конкретном
+                # аяте). Не гадаем - пропускаем аят целиком (страница
+                # чтения покажет дыру ровно в этом месте, не выдуманный
+                # текст), логируем для отдельного разбора.
+                skipped_ayat.append((surah, ayah, str(e)))
+                continue
             entry = {"surah": surah, "ayah": ayah, "tokens": tokens}
             if ayah == 1:
                 # Бисмилля - реальный текст из quran_transcript (тот же
@@ -281,13 +374,20 @@ def export_page(conn, page_number):
             ayahs_out.append(entry)
             time.sleep(0.1)
 
-    qul = fetch_qul_layout(page_number)
     lines = build_lines(ayahs_out, qul)
 
     surah_numbers = sorted({e[0] for e in entries})
+    if missing_glyphs:
+        print(f"  страница {page_number}: нет глиф-кода v4 для {len(missing_glyphs)} "
+              f"позиций: {missing_glyphs[:5]}{'...' if len(missing_glyphs) > 5 else ''}")
+    if skipped_ayat:
+        print(f"  страница {page_number}: пропущено аятов (расхождение слов) - "
+              f"{[(s, a) for s, a, _ in skipped_ayat]}")
+
     return {
         "page": page_number,
-        "surah_names": [SURAH_NAMES.get(s, f"Сура {s}") for s in surah_numbers],
+        "font_url": font_url_for_page(page_number),
+        "surah_names": [qt.Aya(s, 1).get().sura_name for s in surah_numbers],
         "ayahs": ayahs_out,
         "lines": lines,
     }
