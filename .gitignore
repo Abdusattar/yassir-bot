@@ -26,3 +26,7 @@ audio/
 # Личные локальные настройки Claude Code
 .claude/settings.local.json
 .aider*
+
+# Сгенерированные данные мусхаф-страниц (scripts/export_mushaf_page.py) -
+# регенерируются из mufradat_words, не нужны в истории git
+mushaf_data/*.json
