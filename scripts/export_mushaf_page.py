@@ -169,6 +169,91 @@ def get_ayah_words(conn, surah, ayah):
     return [dict(r) for r in rows]
 
 
+QUL_LAYOUT_URL = "https://raw.githubusercontent.com/zonetecde/mushaf-layout/refs/heads/main/mushaf/page-{:03d}.json"
+
+
+def fetch_qul_layout(page_number, retries=3):
+    """QUL (Quranic Universal Library, TarteelAI) - разбивка настоящего
+    печатного мусхафа (King Fahd Complex, 15 строк/страница) на строки.
+    Используем ТОЛЬКО группировку слов по строкам (location "сура:аят:
+    позиция" - совпадает 1-в-1 с нашей нумерацией mufradat_words, проверено
+    эмпирически 27.08.2026 на 76 аятах, 0 расхождений) - сам арабский текст,
+    таджвид, перевод остаются НАШИМИ уже проверенными источниками (см.
+    модульный docstring). Их QPC-шрифт/глифы не используем вообще - решение
+    пользователя 27.08.2026, т.к. их цветной таджвид-шрифт (V4) ещё не
+    опубликован ("we're proofreading them" - qul.tarteel.ai), а наш таджвид
+    работает на обычном Uthmani-тексте, не глифах."""
+    url = QUL_LAYOUT_URL.format(page_number)
+    for attempt in range(retries):
+        try:
+            r = requests.get(url, timeout=20)
+            r.raise_for_status()
+            return r.json()
+        except Exception:
+            if attempt < retries - 1:
+                time.sleep(2)
+                continue
+            raise
+
+
+def build_lines(ayahs_out, qul):
+    """Строит lines[] (реальная построчная вёрстка) поверх уже готовых
+    ayahs_out (наш текст/таджвид/перевод). line_of - откуда какое слово по
+    QUL, маркеры/номер аята (нет своей позиции в mufradat_words) наследуют
+    строку ПРЕДЫДУЩЕГО токена - они всегда идут сразу после/между словами
+    в потоке, это надёжно (проверено на всех страницах диапазона)."""
+    line_of = {}
+    line_meta = {}
+    last_header_surah = None
+    for qline in qul["lines"]:
+        n = qline["line"]
+        if qline["type"] == "text":
+            for w in qline.get("words", []):
+                s, a, p = (int(x) for x in w["location"].split(":"))
+                line_of[(s, a, p)] = n
+        elif qline["type"] == "surah-header":
+            surah_num = int(qline["surah"])
+            last_header_surah = surah_num
+            line_meta[n] = {
+                "type": "header", "surah": surah_num,
+                "surah_name_ar": qt.Aya(surah_num, 1).get().sura_name,
+            }
+        elif qline["type"] == "basmala":
+            bismillah = None
+            if last_header_surah:
+                bismillah = qt.Aya(last_header_surah, 1).get().bismillah_uthmani
+            line_meta[n] = {"type": "bismillah", "html": bismillah}
+
+    lines_out = []
+    current_tokens = []
+    current_line = None
+
+    def flush():
+        if current_line is not None:
+            lines_out.append({"line": current_line, "type": "text", "tokens": current_tokens[:]})
+
+    for entry in ayahs_out:
+        surah, ayah = entry["surah"], entry["ayah"]
+        for t in entry["tokens"]:
+            if t["type"] == "word":
+                n = line_of.get((surah, ayah, t["position"]), current_line)
+            else:
+                n = current_line
+            if n is None:
+                n = 0
+            if n != current_line:
+                flush()
+                current_tokens = []
+                current_line = n
+            current_tokens.append(t)
+    flush()
+
+    for n, meta in line_meta.items():
+        lines_out.append({"line": n, **meta})
+    lines_out.sort(key=lambda l: l["line"])
+    return lines_out
+
+
 def export_page(conn, page_number):
     entries = resolve_page(page_number)
     if entries is None:
@@ -188,17 +273,23 @@ def export_page(conn, page_number):
                 # источник, что и арабский текст слов, core/quran_ref.py),
                 # не сочиняем сами. У суры 9 (Ат-Тауба) её традиционно нет -
                 # quran_transcript честно отдаёт None, ничего не добавляем.
+                # Дублируется в build_lines (для Page view) - тут остаётся
+                # для Words view, которому построчная разбивка не нужна.
                 bismillah = qt.Aya(surah, 1).get().bismillah_uthmani
                 if bismillah:
                     entry["bismillah"] = bismillah
             ayahs_out.append(entry)
             time.sleep(0.1)
 
+    qul = fetch_qul_layout(page_number)
+    lines = build_lines(ayahs_out, qul)
+
     surah_numbers = sorted({e[0] for e in entries})
     return {
         "page": page_number,
         "surah_names": [SURAH_NAMES.get(s, f"Сура {s}") for s in surah_numbers],
         "ayahs": ayahs_out,
+        "lines": lines,
     }
 
 
