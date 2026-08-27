@@ -57,27 +57,21 @@ async def main():
     if me and me.get("ok"):
         username = me["result"].get("username", "?")
         log.info("Бот запущен: @%s  [profile=%s]", username, PROFILE)
-        # Меню команд Telegram (кнопка "/" рядом с полем ввода) - имя
-        # команды технически латиницей (ограничение Telegram), но описание
-        # в меню на русском, чтобы находили не зная английского (17.08.2026).
-        await tg_call("setMyCommands", {
-            "commands": [
-                {"command": "mushaf", "description": "Мусхаф"},
-                {"command": "invite", "description": "Ссылка для друга — позвать к Корану"},
-                {"command": "muf", "description": "Муфрадат"},
-            ],
+        # Единственная точка входа в личке - кнопка "YassirApp" ниже
+        # (Menu Button). /mushaf, /invite, /muf раньше жили и в setMyCommands
+        # (список по "/"), и как отдельные текстовые команды - решение
+        # пользователя 30.08.2026 убрать полностью, включая /invite (даёт
+        # ссылку на подготовительную - функция самой ссылки-для-друга ушла
+        # вместе с командой, независимая рассылка invite_friend_broadcast в
+        # scheduler.py не трогалась). deleteMyCommands обязателен - старый
+        # список из прежнего setMyCommands иначе останется висеть на
+        # серверах Telegram, простого удаления кода тут недостаточно.
+        await tg_call("deleteMyCommands", {
             "scope": {"type": "all_private_chats"},
             "language_code": "ru",
         })
-        # Menu Button - кнопка слева от поля ввода в личке. Telegram даёт
-        # выбор: ЛИБО список команд (то, что открывает setMyCommands выше),
-        # ЛИБО одна кастомная web_app-кнопка - не оба сразу. До 29.08.2026
-        # здесь был откат на "commands" (Мусхаф первым пунктом) - Тренажёр
-        # тогда открывался только через отдельный /muf в чате бота. Теперь,
-        # когда Тренажёр переехал ВНУТРЬ самого YassirApp (dash-trainer,
-        # mushaf_data/index.html), единственная кнопка снова оправдана -
-        # решение пользователя 29.08.2026. /mushaf, /invite, /muf остаются
-        # рабочими командами по набору "/", просто не в быстром меню.
+        # Menu Button - кнопка слева от поля ввода в личке (единственная,
+        # web_app-типа - см. выше).
         await tg_call("setChatMenuButton", {
             "menu_button": {
                 "type": "web_app", "text": "YassirApp",

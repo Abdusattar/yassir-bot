@@ -790,16 +790,6 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if not text and not is_media:
         return
 
-    # ── Deep-link из дашборда YassirApp (28.08.2026) - "Тренажёр" на
-    # дашборде мусхафа (tg.openTelegramLink("https://t.me/<bot>?start=muf"))
-    # шлёт боту ровно "/start muf". Перехватываем ДО остальной логики
-    # /start (та завязана на роль отправителя - устаз/студент/адмnin) -
-    # тренажёр одинаков для всех, роль тут неважна.
-    if text == "/start muf":
-        from core.mufradat_bot import start_trainer
-        await start_trainer(phone, chat_id)
-        return
-
     # /id — узнать свой id
     if text == "/id":
         await send_message(chat_id,
@@ -827,37 +817,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # отправляется только первый экран, а не весь поток - 13.08.2026).
             asyncio.create_task(send_prep_onboarding_if_pending(phone))
 
-        # ── Мусхаф Mini App, личка (28.08.2026) - первый пункт в /-меню
-        # (см. setMyCommands в bot.py). В группе - НЕ эта команда (решение
-        # пользователя - "будет много мусора" на каждый тап), там только
-        # /mushafpin (одно закреплённое сообщение, ниже по файлу).
-        if text == "/mushaf" and not is_group:
-            from core.tg import send_message_with_webapp_button
-            from config import MUSHAF_URL, PROFILE
-            await send_message_with_webapp_button(
-                chat_id, "📖 Мусхаф — чтение с таджвидом и переводом", "Открыть Мусхаф",
-                f"{MUSHAF_URL}?bot={PROFILE}"
-            )
-            return
-
-        # ── Ссылка для друга (17.08.2026) - для ВСЕХ в личке, не только
-        # студентов: устаз тоже может захотеть переслать другу, а он же и
-        # сам студент. Даёт ссылку на подготовительную (единая точка входа
-        # новых людей) - та же, что в invite_friend_broadcast.
-        if text == "/invite":
-            prep = get_prep_group()
-            link = prep["invite_link"] if prep and prep["invite_link"] else ""
-            if link:
-                await send_message(chat_id, T("dm_get_invite_link", "ru", link=link))
-            else:
-                await send_message(chat_id, "Ссылка пока не настроена, спроси устаза 🤲")
-            return
-
-        # ── Тренажёр муфрадата (17.08.2026) - слова Бакары, личка ──────────
-        if text == "/muf":
-            from core.mufradat_bot import start_trainer
-            await start_trainer(phone, chat_id)
-            return
+        # ── Мусхаф Mini App, личка - единственный вход в YassirApp теперь
+        # только через Menu Button (кнопка рядом с полем ввода, bot.py) -
+        # /mushaf, /invite, /muf убраны полностью 30.08.2026 (решение
+        # пользователя). Ссылка-для-друга (бывший /invite) как отдельная
+        # ручная команда ушла вместе с ним - независимая рассылка
+        # invite_friend_broadcast в scheduler.py не тронута.
 
         if text == "/muftop":
             from core.mufradat_bot import show_leaderboard

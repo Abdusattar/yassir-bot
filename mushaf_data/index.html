@@ -85,6 +85,13 @@
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button:focus-visible, .dash-card:focus-visible, .trainer-opt:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  }
   html, body {
     margin: 0; padding: 0;
     height: 100dvh; height: 100vh;
@@ -592,11 +599,11 @@
 <body>
 <div id="dashboard">
   <h1>YassirApp</h1>
-  <div class="dash-card" id="dash-mushaf">
+  <div class="dash-card" id="dash-mushaf" tabindex="0" role="button">
     <span class="icon-badge">📗</span>
     <div><div class="label">Мусхаф</div><div class="sub">Чтение с таджвидом и переводом</div></div>
   </div>
-  <div class="dash-card" id="dash-trainer">
+  <div class="dash-card" id="dash-trainer" tabindex="0" role="button">
     <span class="icon-badge">🌱</span>
     <div><div class="label">Тренажёр</div><div class="sub">Муфрадат — учи слова Корана</div></div>
   </div>
@@ -671,6 +678,13 @@
     document.getElementById('app').style.display = 'flex';
   });
   document.getElementById('dash-trainer').addEventListener('click', openTrainer);
+  // role="button" на <div> не даёт Enter/Space нативно, в отличие от <button> -
+  // нужен явный keydown (30.08.2026, клавиатурная навигация Telegram Desktop).
+  Array.prototype.forEach.call(document.querySelectorAll('.dash-card'), function (card) {
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); }
+    });
+  });
   document.getElementById('mushaf-back').addEventListener('click', function () {
     document.getElementById('app').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';

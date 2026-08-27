@@ -220,19 +220,6 @@ async def send_message_with_buttons(chat_id, text, buttons):
     return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": keyboard})
 
 
-async def send_message_with_webapp_button(chat_id, text, label, url):
-    """Кнопка типа web_app - работает ТОЛЬКО в личных чатах (ограничение
-    самого Telegram, не наше решение - поймано 28.08.2026 в группе:
-    Bad Request: BUTTON_TYPE_INVALID). Для группы см.
-    send_message_with_url_button ниже."""
-    try:
-        cid = int(str(chat_id))
-    except (ValueError, TypeError):
-        cid = chat_id
-    keyboard = {"inline_keyboard": [[{"text": label, "web_app": {"url": url}}]]}
-    return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": keyboard})
-
-
 async def send_message_with_url_button(chat_id, text, label, url):
     """Обычная url-кнопка - единственный вариант, разрешённый Telegram в
     ГРУППАХ для открытия Mini App (web_app-кнопка там запрещена
