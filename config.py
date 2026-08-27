@@ -32,6 +32,9 @@ REQUIRE_PREP_FOR_NEW_STUDENTS = os.getenv("REQUIRE_PREP_FOR_NEW_STUDENTS", "true
 # Quran Academy Digital Quran API (пословный перевод для тренажёра муфрадата)
 QURAN_ACADEMY_ACCESS_TOKEN = os.getenv("QURAN_ACADEMY_ACCESS_TOKEN", "")
 
+# Мусхаф Mini App (28.08.2026) - свой GCP-сервер, nginx, домен No-IP
+MUSHAF_URL = os.getenv("MUSHAF_URL", "https://yassir.ddns.net/")
+
 # OpenRouter API (совместим со старым CLAUDE_API_KEY)
 OR_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("CLAUDE_API_KEY", "")
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"

@@ -11,7 +11,7 @@
 import asyncio
 import logging
 
-from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS
+from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer
 from config import SUPER_ADMIN_IDS
@@ -66,6 +66,15 @@ async def main():
             ],
             "scope": {"type": "all_private_chats"},
             "language_code": "ru",
+        })
+        # Menu Button (кнопка слева от поля ввода) - работает ТОЛЬКО в
+        # личке, Telegram не показывает её в группах (28.08.2026, поэтому
+        # в группе доступ через /mushaf-кнопку web_app, см. core/handlers.py).
+        # Вызов идемпотентный и хранится на стороне Telegram постоянно, а
+        # не "включается" на время работы процесса - здесь просто самое
+        # удобное место дёрнуть его, как и setMyCommands выше.
+        await tg_call("setChatMenuButton", {
+            "menu_button": {"type": "web_app", "text": "Мусхаф", "web_app": {"url": MUSHAF_URL}}
         })
     else:
         log.error("Не удалось подключиться к Telegram. Проверь токен.")

@@ -1183,6 +1183,23 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, msg)
         return
 
+    # ── Мусхаф Mini App в группе (28.08.2026) - ОДНО закреплённое
+    # сообщение с кнопкой, не команда с ответом на каждый тап (решение
+    # пользователя - "будет много мусора"). Устаз запускает вручную один
+    # раз на группу, дальше кнопка просто висит закреплённой наверху.
+    if text == "/mushafpin":
+        if not group or not is_group_admin(phone, group["id"]):
+            return
+        from core.tg import send_message_with_webapp_button, pin_message
+        from config import MUSHAF_URL
+        resp = await send_message_with_webapp_button(
+            chat_id, "📖 Мусхаф — чтение с таджвидом и переводом", "Открыть Мусхаф", MUSHAF_URL
+        )
+        msg_id = (resp or {}).get("result", {}).get("message_id")
+        if msg_id:
+            await pin_message(chat_id, msg_id)
+        return
+
     if not group:
         return
 

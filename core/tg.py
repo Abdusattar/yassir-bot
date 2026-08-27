@@ -220,6 +220,19 @@ async def send_message_with_buttons(chat_id, text, buttons):
     return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": keyboard})
 
 
+async def send_message_with_webapp_button(chat_id, text, label, url):
+    """Кнопка типа web_app (Mini App), не callback_data - единственный
+    способ открыть Mini App из ГРУППЫ в Telegram (28.08.2026, Мусхаф).
+    В личке того же эффекта можно добиться и постоянной Menu Button
+    (setChatMenuButton), но в группе только так."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    keyboard = {"inline_keyboard": [[{"text": label, "web_app": {"url": url}}]]}
+    return await tg_call("sendMessage", {"chat_id": cid, "text": text, "reply_markup": keyboard})
+
+
 def _build_keyboard(rows):
     """rows - список рядов кнопок, каждый ряд - список (label, callback_data)."""
     return {"inline_keyboard": [[{"text": l, "callback_data": d} for l, d in row] for row in rows]}
@@ -251,6 +264,18 @@ async def answer_callback_query(callback_query_id, text=None):
     if text:
         payload["text"] = text
     await tg_call("answerCallbackQuery", payload)
+
+
+async def pin_message(chat_id, message_id, disable_notification=True):
+    """Закрепить сообщение (28.08.2026, кнопка Мусхафа в группе - один раз
+    вручную устазом, не спамим новым сообщением на каждый тап студента)."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    return await tg_call("pinChatMessage", {
+        "chat_id": cid, "message_id": message_id, "disable_notification": disable_notification
+    })
 
 
 async def remove_message_keyboard(chat_id, message_id):
