@@ -1202,9 +1202,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     if text == "/mushafpin":
         if not group or not is_group_admin(phone, group["id"]):
             return
-        from core.tg import send_message_with_webapp_button, pin_message
+        from core.tg import send_message_with_url_button, pin_message
         from config import MUSHAF_URL
-        resp = await send_message_with_webapp_button(
+        resp = await send_message_with_url_button(
             chat_id, "📖 Мусхаф — чтение с таджвидом и переводом", "Открыть Мусхаф", MUSHAF_URL
         )
         msg_id = (resp or {}).get("result", {}).get("message_id")
