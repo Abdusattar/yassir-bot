@@ -34,6 +34,7 @@ from core.mufradat import (
     generate_question, get_progress_map, record_answer,
     set_current_page, get_current_page, get_words_for_bookmark, get_leaderboard,
     record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT, compute_overall_score,
+    get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
 )
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.tg import (
@@ -131,7 +132,12 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
     text = "\n".join(lines)
 
     opts = q["options"]
-    word_id = q["word"]["id"]
+    # word_id здесь и во всех callback_data/_active_question ниже - на самом
+    # деле progress_key (core/sampler.py, 26.08.2026): id "представителя"
+    # пары арабский-перевод, общий для всех страниц, где она встречается -
+    # не id конкретной строки q["word"]["id"] (та тоже существует, но здесь
+    # не нужна).
+    word_id = q["word"]["progress_key"]
     rows = []
     for i in range(0, len(opts), 2):
         # word_id в callback_data (18.08.2026) - защита от гонки при
@@ -146,6 +152,12 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
         # 18.08.2026).
         row = [(opts[j], f"muf:{user_id}:{word_id}:{j}") for j in (i, i + 1) if j < len(opts)]
         rows.append(row)
+    # Переключатель языка перевода (26.08.2026) - отдельной строкой над
+    # ➖/➕ (место выбрано пользователем по мокапу), открывает список языков
+    # (show_language_menu). Подпись показывает ТЕКУЩИЙ язык этой карточки.
+    current_lang = get_current_lang(user_id)
+    lang_label = SUPPORTED_LANGUAGES.get(current_lang, current_lang)
+    rows.append([(f"🌐 {lang_label} ▾", f"muflang:{user_id}")])
     # ➕/➖ двигают ЗАКЛАДКУ на 1 страницу (не текстовый ввод - решение
     # пользователя 17.08.2026, пятый заход) - "-" неактивна на FIRST_PAGE,
     # "+" на LAST_PAGE, но Telegram не умеет отключать кнопки без
@@ -157,7 +169,7 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
 
 
 async def _send_new_card(user_id, chat_id, words_pool):
-    progress = get_progress_map(user_id, [w["id"] for w in words_pool])
+    progress = get_progress_map(user_id, [w["progress_key"] for w in words_pool])
     q = generate_question(words_pool, progress)
     if q is None:
         await send_message_with_button_rows(
@@ -174,7 +186,7 @@ async def _send_new_card(user_id, chat_id, words_pool):
     if not msg_id:
         return
     _active_question[user_id] = {
-        "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
+        "word_id": q["word"]["progress_key"], "target": q["word"]["translation"], "options": q["options"],
         "word_page": page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"]),
         "chat_id": chat_id, "message_id": msg_id, "session_correct": 0,
         "start_score10": overall_score["score10"] if overall_score else None,
@@ -290,7 +302,7 @@ async def handle_answer_tap(user_id, chat_id, message_id, word_id, slot):
         await _credit_task_if_applicable(user_id, chat_id)
 
     pool = get_words_for_bookmark(user_id)
-    progress = get_progress_map(user_id, [w["id"] for w in pool])
+    progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
     q = generate_question(pool, progress)
     feedback = "✅ Верно!" if correct else f"❌ Не то, правильно: {state['target']}"
     # Короткая подсказка до порога зачёта задания "Слова" - решение
@@ -322,7 +334,7 @@ async def handle_answer_tap(user_id, chat_id, message_id, word_id, slot):
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
     text, rows = _render_card(user_id, q, session_correct, overall_score, feedback)
     _active_question[user_id] = {
-        "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
+        "word_id": q["word"]["progress_key"], "target": q["word"]["translation"], "options": q["options"],
         "word_page": page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"]),
         "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
         "start_score10": state.get("start_score10"),
@@ -351,7 +363,7 @@ async def handle_page_step_tap(user_id, chat_id, message_id, delta):
     set_current_page(user_id, new_page)
 
     pool = get_words_for_bookmark(user_id)
-    progress = get_progress_map(user_id, [w["id"] for w in pool])
+    progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
     q = generate_question(pool, progress)
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
 
@@ -393,11 +405,82 @@ async def handle_page_step_tap(user_id, chat_id, message_id, delta):
         message_id = ((resp or {}).get("result") or {}).get("message_id") or message_id
 
     _active_question[user_id] = {
-        "word_id": q["word"]["id"], "target": q["word"]["translation"], "options": q["options"],
+        "word_id": q["word"]["progress_key"], "target": q["word"]["translation"], "options": q["options"],
         "word_page": page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"]),
         "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
         "start_score10": overall_score["score10"] if overall_score else None,
     }
+
+
+def _lang_menu_rows(user_id):
+    rows = [[(label, f"muflangset:{user_id}:{code}")] for code, label in SUPPORTED_LANGUAGES.items()]
+    rows.append([("⬅️ Назад", f"muflangback:{user_id}")])
+    return rows
+
+
+async def show_language_menu(user_id, chat_id, message_id):
+    """Тап по кнопке "🌐 <Язык> ▾" на карточке (26.08.2026) - правит ТУ ЖЕ
+    карточку (фото не трогаем, editMessageCaption), заменяя подпись/клавиатуру
+    списком языков. "⬅️ Назад" без изменений возвращает карточку с вопросом
+    (handle_language_back_tap), тап по языку - переключает и тоже возвращает
+    карточку, уже на новом языке (handle_language_set_tap)."""
+    current = get_current_lang(user_id)
+    text = f"🌐 Выбери язык перевода (сейчас: {SUPPORTED_LANGUAGES.get(current, current)})"
+    await edit_message_caption_with_button_rows(chat_id, message_id, text, _lang_menu_rows(user_id))
+
+
+async def _refresh_card(user_id, chat_id, message_id, session_correct, start_score10):
+    """Перегенерирует карточку (новый вопрос из ТЕКУЩЕГО пула/языка
+    студента) и правит уже существующее фото-сообщение на месте - общий путь
+    для "⬅️ Назад" из меню языка и для применения нового языка (26.08.2026).
+    session_correct/start_score10 - что показывать на новой карточке (см.
+    вызывающий код: "Назад" сохраняет то, что было в сеансе, смена языка
+    начинает сеанс заново - другой пул слов, другой прогресс)."""
+    pool = get_words_for_bookmark(user_id)
+    progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
+    q = generate_question(pool, progress)
+    overall_score = compute_overall_score(user_id, words=pool, progress=progress)
+
+    if q is None:
+        _active_question.pop(user_id, None)
+        await edit_message_caption_with_button_rows(
+            chat_id, message_id,
+            "Слова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше.",
+            [[("➕", f"mufinc:{user_id}")]]
+        )
+        return
+
+    text, rows = _render_card(user_id, q, session_correct, overall_score)
+    photo = render_word_png_bytes(q["word"]["arabic_text"])
+    await edit_message_media_with_button_rows(chat_id, message_id, photo, "word.png", text, rows)
+    _active_question[user_id] = {
+        "word_id": q["word"]["progress_key"], "target": q["word"]["translation"], "options": q["options"],
+        "word_page": page_for_ayah(q["word"]["surah_number"], q["word"]["ayah_number"]),
+        "chat_id": chat_id, "message_id": message_id, "session_correct": session_correct,
+        "start_score10": start_score10 if start_score10 is not None else (
+            overall_score["score10"] if overall_score else None
+        ),
+    }
+
+
+async def handle_language_back_tap(user_id, chat_id, message_id):
+    state = _active_question.get(user_id)
+    same_card = bool(state and state.get("message_id") == message_id)
+    session_correct = state.get("session_correct", 0) if same_card else 0
+    start_score10 = state.get("start_score10") if same_card else None
+    await _refresh_card(user_id, chat_id, message_id, session_correct, start_score10)
+
+
+async def handle_language_set_tap(user_id, chat_id, message_id, language):
+    """language уже проверен вызывающим кодом (bot.py) на принадлежность
+    SUPPORTED_LANGUAGES перед вызовом - set_current_lang сам по себе тоже
+    молча игнорирует неизвестный код (core/mufradat.py), двойная защита.
+    Сеанс визуально начинается заново (session_correct=0, start_score10
+    пересчитывается) - другой язык означает другой пул progress_key, старые
+    числа сеанса были бы не про то же самое (тот же паттерн, что при
+    смене страницы, см. handle_page_step_tap)."""
+    set_current_lang(user_id, language)
+    await _refresh_card(user_id, chat_id, message_id, 0, None)
 
 
 def _leaderboard_for_this_bot():

@@ -11,24 +11,47 @@
   - дубли перевода (два разных арабских слова с одинаковым русским
     переводом, напр. "Путём" у ٱلصِّرَٰطَ И صِرَٰطَ) - дистрактор не должен
     совпадать с правильным ответом по нормализованному переводу.
-  - слова, чей перевод повторяется в диапазоне 3+ раза (частицы вроде
-    "не"/"в"/"из", но и контекстно устойчивые слова вроде "Аллах") - не
-    годятся ЦЕЛЬЮ вопроса: прогресс привязан к конкретной строке
-    (mufradat_words.id), а не к арабскому слову (см. ниже, почему), и у
-    таких слов десятки независимых строк с одним и тем же переводом -
-    "мастерство" по каждой строке отдельно никогда не сходится в одно
-    целое. Дистрактором остаются (разбор advisor 17.08.2026, третий заход).
+  - слова, за которыми стоит 3+ РАЗНЫХ арабских слова с одним и тем же
+    переводом (частицы вроде "не"/"в"/"из", но и контекстно устойчивые
+    слова вроде "Аллах") - не годятся ЦЕЛЬЮ вопроса: перевод не отличает их
+    друг от друга, вопрос угадывается по виду перевода, а не по знанию
+    конкретного слова (разбор advisor 17.08.2026, третий заход). Дистрактором
+    остаются. ДО 26.08.2026 порог считался по числу СТРОК (позиций), а не
+    разных арабских слов - причиной была фрагментация прогресса по позициям
+    (mufradat_words.id); с переходом прогресса на progress_key
+    (core/sampler.py, одно и то же слово с одним и тем же переводом на
+    разных страницах теперь делит один прогресс) эта причина отпала, и
+    порог считается по сути вопроса - неоднозначности перевода, см.
+    _repeated_glosses.
 """
 import math
 import random
 import re
 import sqlite3
-from collections import Counter
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from core.sampler import HADITHS_DB
+from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss, ensure_mufradat_schema
 from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
+
+# Языки перевода, доступные в тренажёре (26.08.2026) - код -> подпись кнопки.
+# API Quran Academy реально поддерживает ru/en/uz/tr (проверено эмпирически
+# по живому /languages, 53 языка всего) - НО узбекский там реально заполнен
+# только на первых ~9 аятах всего Корана (проверено эмпирически по HTTP 500
+# на подавляющем большинстве аятов сур 1-10) - непригоден как источник,
+# отложен. Кыргызского в этом API вообще нет (UNKNOWN_LANGUAGE), как и
+# готового пословного перевода на кыргызский в принципе нигде не нашлось
+# (проверены QuranWBW, api.quran.com, fawazahmed0/quran-api, QuranEnc -
+# ни у кого нет ни кыргызского, ни пословной гранулярности одновременно).
+# Кыргызский поэтому генерируется через Gemini (google/gemini-3.1-pro-preview
+# via OpenRouter, scripts/generate_kyrgyz_translation.py) - осознанное
+# исключение из общего правила "никогда не выдумывать переводы Корана"
+# (решение пользователя 26.08.2026, при отсутствии готового источника),
+# со сверкой пользователем (носитель кыргызского + пословный русский)
+# первой и второй страниц перед массовой генерацией. uz/kk НЕ в этом
+# словаре - не путать со списком языков UI бота (groups.lang, wiki/i18n.md).
+SUPPORTED_LANGUAGES = {"ru": "Русский", "ky": "Кыргызча"}
+DEFAULT_LANGUAGE = "ru"
 
 _TZ = ZoneInfo("Asia/Bishkek")  # created_at в score_events хранится в UTC,
 # а date - в этом поясе; здесь той же путаницы не будет, т.к. столбца даты
@@ -106,11 +129,13 @@ MASTERY_STREAK = 4
 RECHECK_AFTER_DAYS = 60
 
 _SCAFFOLD_RE = re.compile(r"[()]")
-_HAS_LETTER_RE = re.compile(r"[a-zа-яё]", re.IGNORECASE)
-
-
-def _normalize_gloss(text):
-    return re.sub(r"[,.!;:\s]+$", "", text.strip().lower())
+# a-zа-яё - обычный рус./лат. алфавит. + ў/қ/ғ/ҳ (26.08.2026) - специфичные
+# буквы узбекской кириллицы, отсутствующие в русском алфавите (например
+# "ҳам" = "также") - без них короткое валидное узбекское слово могло ложно
+# попасть под _is_junk, если все его "настоящие" буквы - именно из этого
+# набора. re.IGNORECASE распространяется на них так же, как и на а-яё
+# (Python 3 str-паттерны Unicode-aware по умолчанию).
+_HAS_LETTER_RE = re.compile(r"[a-zа-яёқғўҳ]", re.IGNORECASE)
 
 
 def _is_scaffold(translation):
@@ -164,14 +189,15 @@ def _merge_glued_translations(rows):
     return merged
 
 
-def get_words_in_range(surah_number, start_ayah, end_ayah):
+def get_words_in_range(surah_number, start_ayah, end_ayah, language=DEFAULT_LANGUAGE):
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.row_factory = sqlite3.Row
+        ensure_mufradat_schema(conn)
         rows = conn.execute(
-            "SELECT id, surah_number, ayah_number, position, arabic_text, translation "
-            "FROM mufradat_words WHERE surah_number=? AND ayah_number BETWEEN ? AND ? "
+            "SELECT id, surah_number, ayah_number, position, arabic_text, translation, progress_key "
+            "FROM mufradat_words WHERE surah_number=? AND ayah_number BETWEEN ? AND ? AND language=? "
             "ORDER BY ayah_number, position",
-            (surah_number, start_ayah, end_ayah)
+            (surah_number, start_ayah, end_ayah, language)
         ).fetchall()
     words = _merge_glued_translations([dict(r) for r in rows])
     return [w for w in words if not _is_junk(w["translation"])]
@@ -205,12 +231,23 @@ def word_weight(progress_row):
 
 
 def _repeated_glosses(words, min_count=3):
-    """Переводы, встречающиеся в диапазоне min_count+ раз - частицы и
-    контекстно устойчивые слова, см. модульный docstring."""
-    counts = Counter(
-        _normalize_gloss(w["translation"]) for w in words if not _is_scaffold(w["translation"])
-    )
-    return {norm for norm, cnt in counts.items() if cnt >= min_count}
+    """Переводы, за которыми стоит min_count+ РАЗНЫХ арабских слов - см.
+    модульный docstring. Считаем по числу уникальных arabic_text, а не по
+    числу строк (было так до 26.08.2026) - с введением progress_key
+    (core/sampler.py) прогресс одного и того же арабского слова, повторённого
+    на нескольких страницах, сходится в одну запись сам по себе, и первая
+    причина этого фильтра ("мастерство по каждой строке отдельно не
+    сходится") больше не действует. Вторая причина остаётся в силе - если
+    ОДИН И ТОТ ЖЕ перевод стоит за несколькими РАЗНЫМИ арабскими словами,
+    вопрос по любому из них угадывается по переводу, а не по знанию слова -
+    именно эту неоднозначность фильтр и ловит теперь."""
+    counts = {}
+    for w in words:
+        if _is_scaffold(w["translation"]):
+            continue
+        norm = _normalize_gloss(w["translation"])
+        counts.setdefault(norm, set()).add(w["arabic_text"])
+    return {norm for norm, arabic_texts in counts.items() if len(arabic_texts) >= min_count}
 
 
 def _scaled_repeat_threshold(words):
@@ -238,7 +275,18 @@ def _scaled_repeat_threshold(words):
     большом пуле - меньше исходных 85-91%, но реальный сдвиг небольшой
     и предпочтительнее сломанного фильтра). max(3, ...) сохраняет
     поведение на маленьких пулах (1 страница, ~35 слов) - 0.6% от 35
-    округляется в 0, порог остаётся 3, как и было изначально."""
+    округляется в 0, порог остаётся 3, как и было изначально.
+
+    НЕ ПЕРЕКАЛИБРОВАНО заново после перехода _repeated_glosses на подсчёт
+    РАЗНЫХ арабских слов вместо строк (26.08.2026, см. её docstring) - число
+    "n" здесь по-прежнему размер ПУЛА (строк), а порог теперь сравнивается со
+    счётом уникальных arabic_text на перевод, который систематически МЕНЬШЕ
+    (или равен) числу строк. Значит фильтр стал ЭФФЕКТИВНО МЯГЧЕ, чем
+    предполагали замеры 18.08.2026 (тот же порог реже достигается) - это и
+    есть желаемый эффект (больше содержательных слов разблокируется как цель
+    вопроса), но долю "годных целей" по прежней методике никто заново не
+    мерил - если после деплоя она заметно съедет, порог нужно перемерить
+    заново по той же методике (см. выше), а не подгонять на глаз."""
     n = max(1, len(words))
     return max(3, round(n * 0.006))
 
@@ -250,7 +298,12 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
     docstring и _scaled_repeat_threshold), а также "выученное" слово,
     которое ещё не отдохнуло положенные RECHECK_AFTER_DAYS дней - убрано
     из пула совсем, не просто с низким весом (решение пользователя
-    17.08.2026, четвёртый заход)."""
+    17.08.2026, четвёртый заход).
+
+    progress_by_id - словарь по progress_key (core/sampler.py), НЕ по id
+    конкретной строки (26.08.2026) - если то же арабское слово с тем же
+    переводом встречается на нескольких страницах, все его строки делят
+    ОДИН прогресс, "выученность" на одной странице сразу видна и на другой."""
     if min_repeat_exclude is None:
         min_repeat_exclude = _scaled_repeat_threshold(words)
     repeated = _repeated_glosses(words, min_repeat_exclude)
@@ -258,13 +311,13 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
     for w in words:
         if _is_scaffold(w["translation"]) or _normalize_gloss(w["translation"]) in repeated:
             continue
-        progress = progress_by_id.get(w["id"])
+        progress = progress_by_id.get(w["progress_key"])
         if is_mastered(progress) and not _is_stale(progress):
             continue
         candidates.append(w)
     if not candidates:
         return None
-    weights = [word_weight(progress_by_id.get(w["id"])) for w in candidates]
+    weights = [word_weight(progress_by_id.get(w["progress_key"])) for w in candidates]
     return random.choices(candidates, weights=weights, k=1)[0]
 
 
@@ -314,6 +367,11 @@ def _is_stale(progress_row):
 
 
 def get_progress_map(user_id, word_ids):
+    """word_ids - progress_key'и (core/sampler.py), не id конкретных строк
+    (26.08.2026) - дедуп через set() чисто для размера IN(...) (пул может
+    содержать десятки тысяч строк с сильно меньшим числом уникальных
+    progress_key), на корректность не влияет."""
+    word_ids = list({*word_ids})
     if not word_ids:
         return {}
     with sqlite3.connect(HADITHS_DB) as conn:
@@ -328,7 +386,15 @@ def get_progress_map(user_id, word_ids):
 
 
 def record_answer(user_id, word_id, correct):
-    """Обновляет прогресс по одной строке mufradat_words. Симметрично:
+    """word_id - здесь и во всех вызывающих местах (core/mufradat_bot.py) на
+    самом деле progress_key (core/sampler.py), не id конкретной строки
+    mufradat_words (26.08.2026) - имя колонки в схеме mufradat_progress
+    осталось word_id по историческим причинам, менять не стали (лишняя
+    миграция без функциональной пользы), но значения в ней теперь означают
+    id "представителя" пары (arabic_text, перевод, язык), общий для всех
+    страниц, где эта пара встречается.
+
+    Обновляет прогресс по ОДНОЙ такой паре. Симметрично:
     верный ответ двигает correct_streak на +1 (потолок MASTERY_STREAK),
     неверный - на -1 (пол 0), для ЛЮБОГО слова без исключений (решение
     пользователя 18.08.2026 - иначе балл только рос и не отражал реально
@@ -423,7 +489,41 @@ def get_current_page(user_id):
     return row[0] if row else None
 
 
-def get_words_up_to_page(page_number):
+_LANG_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mufradat_lang(
+        user_id TEXT PRIMARY KEY,
+        language TEXT NOT NULL DEFAULT 'ru'
+    )
+"""
+
+
+def get_current_lang(user_id):
+    """Язык перевода в тренажёре у студента (переключатель на карточке,
+    core/mufradat_bot.py, 26.08.2026) - по умолчанию ru, пока студент ни разу
+    не переключал (та же схема, что у закладки страницы, но раздельная
+    таблица - страница НЕ завязана на язык, один и тот же прогресс по
+    странице виден в любом языке)."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_LANG_SCHEMA)
+        row = conn.execute(
+            "SELECT language FROM mufradat_lang WHERE user_id=?", (user_id,)
+        ).fetchone()
+    return row[0] if row else DEFAULT_LANGUAGE
+
+
+def set_current_lang(user_id, language):
+    if language not in SUPPORTED_LANGUAGES:
+        return
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_LANG_SCHEMA)
+        conn.execute(
+            "INSERT INTO mufradat_lang (user_id, language) VALUES (?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET language=excluded.language",
+            (user_id, language)
+        )
+
+
+def get_words_up_to_page(page_number, language=DEFAULT_LANGUAGE):
     """Пул слов от начала диапазона (FIRST_PAGE, сура 2) до заданной
     страницы РАЗОМ, вперемешку - решение пользователя 17.08.2026, пятый
     заход. С 18.08.2026 диапазон охватывает несколько сур (2-10, Бакара
@@ -440,9 +540,9 @@ def get_words_up_to_page(page_number):
     words = []
     for surah in SURAHS:
         if surah < bookmark_surah:
-            words.extend(get_words_in_range(surah, 1, 9999))
+            words.extend(get_words_in_range(surah, 1, 9999, language))
         elif surah == bookmark_surah:
-            words.extend(get_words_in_range(surah, 1, bookmark_ayah))
+            words.extend(get_words_in_range(surah, 1, bookmark_ayah, language))
             break
         else:
             break
@@ -452,11 +552,13 @@ def get_words_up_to_page(page_number):
 def get_words_for_bookmark(user_id):
     """Пул слов тренажёра для ТЕКУЩЕЙ закладки студента (get_words_up_to_page,
     см. там) - не только последняя введённая страница, а всё от начала
-    диапазона (решение пользователя 17.08.2026, пятый заход)."""
+    диапазона (решение пользователя 17.08.2026, пятый заход). Язык - текущий
+    выбор студента (get_current_lang, 26.08.2026), закладка (страница) от
+    языка не зависит - переключение языка не сбрасывает прогресс по глубине."""
     page_number = get_current_page(user_id)
     if not page_number:
         return []
-    return get_words_up_to_page(page_number)
+    return get_words_up_to_page(page_number, get_current_lang(user_id))
 
 
 def compute_overall_score(user_id, words=None, progress=None):
@@ -481,18 +583,26 @@ def compute_overall_score(user_id, words=None, progress=None):
     верным ответом, даже в первый день (решение пользователя 17.08.2026).
 
     words/progress - опционально, если вызывающий код уже их получил -
-    не дублируем те же 2 запроса к БД (advisor, пятый заход)."""
+    не дублируем те же 2 запроса к БД (advisor, пятый заход).
+
+    Считаем по УНИКАЛЬНЫМ progress_key, не по строкам пула (26.08.2026,
+    вместе с переходом прогресса на progress_key - core/sampler.py) - иначе
+    числитель (мастерство, привязанное к progress_key) и знаменатель (число
+    строк) считались бы в разных единицах. Знаменатель поэтому меньше, чем
+    раньше (число строк > число уникальных пар) - "Общий вес" на карточке
+    заметно ПОДРОС у всех студентов сразу после этой правки (не баг, честный
+    побочный эффект дедупа - обсуждено и принято пользователем 26.08.2026)."""
     if words is None:
         words = get_words_for_bookmark(user_id)
     if not words:
         return None
     if progress is None:
-        progress = get_progress_map(user_id, [w["id"] for w in words])
+        progress = get_progress_map(user_id, [w["progress_key"] for w in words])
 
-    word_ids = [w["id"] for w in words]
-    mastered = sum(1 for wid in word_ids if is_mastered(progress.get(wid)))
-    stimulus_sum = sum(word_stimulus_credit(progress.get(wid)) for wid in word_ids)
-    total = len(word_ids)
+    pair_keys = {w["progress_key"] for w in words}
+    mastered = sum(1 for pk in pair_keys if is_mastered(progress.get(pk)))
+    stimulus_sum = sum(word_stimulus_credit(progress.get(pk)) for pk in pair_keys)
+    total = len(pair_keys)
     return {
         "total": total, "mastered": mastered, "remaining": total - mastered,
         "score10": round(10 * stimulus_sum / total, 2),
@@ -508,18 +618,23 @@ def compute_page_score(user_id, page_number):
 
     entries - список (surah, start_ayah, end_ayah) от resolve_page, обычно
     один элемент, два - на единственной переходной странице (см.
-    core/quran_pages.py) - суммируем слова по всем сурам страницы."""
+    core/quran_pages.py) - суммируем слова по всем сурам страницы. Язык -
+    текущий выбор студента (get_current_lang, 26.08.2026), как и в
+    get_words_for_bookmark. Считаем по progress_key, не по строкам - см.
+    docstring compute_overall_score."""
     entries = resolve_page(page_number)
     if entries is None:
         return None
+    language = get_current_lang(user_id)
     words = []
     for surah, start_ayah, end_ayah in entries:
-        words.extend(get_words_in_range(surah, start_ayah, end_ayah))
+        words.extend(get_words_in_range(surah, start_ayah, end_ayah, language))
     if not words:
         return None
-    progress = get_progress_map(user_id, [w["id"] for w in words])
-    mastered = sum(1 for w in words if is_mastered(progress.get(w["id"])))
-    total = len(words)
+    progress = get_progress_map(user_id, [w["progress_key"] for w in words])
+    pair_keys = {w["progress_key"] for w in words}
+    mastered = sum(1 for pk in pair_keys if is_mastered(progress.get(pk)))
+    total = len(pair_keys)
     return {"total": total, "mastered": mastered, "score10": round(10 * mastered / total, 2)}
 
 
@@ -571,27 +686,41 @@ def _wilson_lower_bound(correct, n):
 
 
 def _accuracy_totals():
-    """user_id -> {correct, wrong, n, attempted} - суммарно по ВСЕМ словам,
-    что студент когда-либо открывал за всю историю (не только текущая
-    закладка - строка в mufradat_progress появляется один раз на слово и
-    остаётся навсегда, даже если закладка потом сдвинулась дальше).
+    """user_id -> {language: {correct, wrong, n, attempted, page}} - суммарно
+    по ВСЕМ словам, что студент когда-либо открывал за всю историю (не только
+    текущая закладка - строка в mufradat_progress появляется один раз на
+    слово и остаётся навсегда, даже если закладка потом сдвинулась дальше),
+    РАЗБИТО ПО ЯЗЫКУ (26.08.2026) - смешивать точность по ru и uz в одну
+    сумму нечестно (студент, ответивший на одно и то же слово на обоих
+    языках, получил бы вдвое больше "attempted" просто за переключение языка,
+    без реального нового знания - поймано до деплоя, см. project-заметку).
+    Язык каждой progress-строки берём через JOIN на mufradat_words.language
+    ПО progress_key (= mufradat_words.id представителя пары, core/sampler.py)
+    - mufradat_progress.word_id хранит именно его.
+
     correct/wrong - SUM(correct_count)/SUM(wrong_count), оба честно
     накопительные (в отличие от correct_streak, который падает при ошибке).
     attempted - число РАЗНЫХ слов (не сумма попыток), нужен как тай-брейк
-    при равном Wilson-счёте (решение пользователя 18.08.2026)."""
+    при равном Wilson-счёте (решение пользователя 18.08.2026). page - НЕ
+    завязана на язык (закладка одна на студента, get_current_page), берётся
+    из отдельного запроса и подставляется в обе языковые ветки одинаково."""
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_progress_schema(conn)
         rows = conn.execute(
-            "SELECT user_id, SUM(correct_count), SUM(wrong_count), COUNT(*) "
-            "FROM mufradat_progress GROUP BY user_id"
+            "SELECT p.user_id, w.language, SUM(p.correct_count), SUM(p.wrong_count), COUNT(*) "
+            "FROM mufradat_progress p JOIN mufradat_words w ON w.id = p.word_id "
+            "GROUP BY p.user_id, w.language"
         ).fetchall()
         conn.execute(_PAGE_SCHEMA)
         pages = dict(conn.execute("SELECT user_id, page_number FROM mufradat_page").fetchall())
-    return {
-        uid: {"correct": c or 0, "wrong": w or 0, "n": (c or 0) + (w or 0), "attempted": n,
-              "page": pages.get(uid, 0)}
-        for uid, c, w, n in rows
-    }
+
+    totals = {}
+    for uid, lang, c, w, n in rows:
+        totals.setdefault(uid, {})[lang] = {
+            "correct": c or 0, "wrong": w or 0, "n": (c or 0) + (w or 0), "attempted": n,
+            "page": pages.get(uid, 0),
+        }
+    return totals
 
 
 def get_leaderboard():
@@ -635,18 +764,35 @@ def get_leaderboard():
     core/mufradat_bot.py:_render_leaderboard_text).
 
     score_dict: wilson (промежуточный, для sort_key), accuracy (%, для
-    показа), correct/wrong/n (сырые числа), attempted, page."""
+    показа), correct/wrong/n (сырые числа), attempted, page, language (какой
+    из языковых треков студента дал этот результат).
+
+    С 26.08.2026 (много языков) - у студента может быть прогресс на
+    НЕСКОЛЬКИХ языках (_accuracy_totals разбивает по языку отдельно, именно
+    чтобы их не смешивать). Здесь считаем sort_key ОТДЕЛЬНО по каждому языку
+    студента и берём ЛУЧШИЙ (максимальный sort_key) как его запись в общем
+    рейтинге - решение пользователя 26.08.2026 ("берём его рейтинг выше
+    который по конкретному языку"): переключение языка само по себе не может
+    поднять место (объём/точность одного языка никогда не приплюсовывается к
+    другому), а слабая проба на новом языке никогда не может ПОНИЗИТЬ
+    результат (просто не выигрывает max())."""
     totals = _accuracy_totals()
     entries = []
-    for uid, t in totals.items():
-        wilson = _wilson_lower_bound(t["correct"], t["n"])
-        accuracy = round(100 * t["correct"] / t["n"], 1) if t["n"] else 0.0
-        sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + t["page"])
-        entries.append((uid, {
-            "wilson": wilson, "accuracy": accuracy,
-            "correct": t["correct"], "wrong": t["wrong"], "n": t["n"],
-            "attempted": t["attempted"], "page": t["page"], "_sort_key": sort_key,
-        }))
+    for uid, by_lang in totals.items():
+        best = None
+        for lang, t in by_lang.items():
+            wilson = _wilson_lower_bound(t["correct"], t["n"])
+            accuracy = round(100 * t["correct"] / t["n"], 1) if t["n"] else 0.0
+            sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + t["page"])
+            candidate = {
+                "wilson": wilson, "accuracy": accuracy,
+                "correct": t["correct"], "wrong": t["wrong"], "n": t["n"],
+                "attempted": t["attempted"], "page": t["page"], "_sort_key": sort_key,
+                "language": lang,
+            }
+            if best is None or candidate["_sort_key"] > best["_sort_key"]:
+                best = candidate
+        entries.append((uid, best))
     entries.sort(key=lambda item: -item[1]["_sort_key"])
     return entries
 
@@ -672,7 +818,12 @@ DAILY_WORDS_FOR_TASK_CREDIT = 20
 def record_daily_answered_word(user_id, word_id):
     """Отмечает, что студент СЕГОДНЯ отвечал на это слово (не важно,
     верно или нет - "поработал", не "выучил"). Возвращает число РАЗНЫХ
-    слов за сегодня после этой записи."""
+    слов за сегодня после этой записи.
+
+    word_id - progress_key (см. record_answer) - если студент сегодня уже
+    отвечал на ту же пару (arabic_text, перевод) на ДРУГОЙ странице, это тот
+    же "разный" счётчик не увеличивает (PRIMARY KEY не пускает дубль) - и это
+    ожидаемо: технически другая позиция, но по факту то же самое слово."""
     today = _today()
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(_DAILY_ANSWERED_SCHEMA)

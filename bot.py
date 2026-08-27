@@ -184,6 +184,32 @@ async def main():
                         if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id:
                             from core.mufradat_bot import show_leaderboard
                             asyncio.create_task(show_leaderboard(cq_uid, cq_chat_id))
+                    # "muflang:<uid>" - кнопка "🌐 <Язык> ▾" на карточке тренажёра
+                    # муфрадата (26.08.2026) - открывает список языков перевода
+                    # той же карточкой (без нового сообщения).
+                    elif cq_data.startswith("muflang:"):
+                        parts = cq_data.split(":", 1)
+                        if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
+                            from core.mufradat_bot import show_language_menu
+                            asyncio.create_task(show_language_menu(cq_uid, cq_chat_id, cq_message_id))
+                    # "muflangback:<uid>" - "⬅️ Назад" в меню языка, без изменений
+                    elif cq_data.startswith("muflangback:"):
+                        parts = cq_data.split(":", 1)
+                        if len(parts) == 2 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
+                            from core.mufradat_bot import handle_language_back_tap
+                            asyncio.create_task(handle_language_back_tap(cq_uid, cq_chat_id, cq_message_id))
+                    # "muflangset:<uid>:<lang>" - выбор языка в меню - код языка
+                    # сверяем со SUPPORTED_LANGUAGES здесь же, до создания таска
+                    # (не доверяем callback_data произвольному значению).
+                    elif cq_data.startswith("muflangset:"):
+                        parts = cq_data.split(":", 2)
+                        if len(parts) == 3 and parts[1] == cq_uid and cq_chat_id and cq_message_id:
+                            from core.mufradat import SUPPORTED_LANGUAGES
+                            if parts[2] in SUPPORTED_LANGUAGES:
+                                from core.mufradat_bot import handle_language_set_tap
+                                asyncio.create_task(
+                                    handle_language_set_tap(cq_uid, cq_chat_id, cq_message_id, parts[2])
+                                )
                     continue
 
                 # Вступление по ссылке-приглашению (chat_member update)
