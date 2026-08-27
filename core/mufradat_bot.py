@@ -152,12 +152,14 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
         # 18.08.2026).
         row = [(opts[j], f"muf:{user_id}:{word_id}:{j}") for j in (i, i + 1) if j < len(opts)]
         rows.append(row)
-    # Переключатель языка перевода (26.08.2026) - отдельной строкой над
-    # ➖/➕ (место выбрано пользователем по мокапу), открывает список языков
-    # (show_language_menu). Подпись показывает ТЕКУЩИЙ язык этой карточки.
-    current_lang = get_current_lang(user_id)
-    lang_label = SUPPORTED_LANGUAGES.get(current_lang, current_lang)
-    rows.append([(f"🌐 {lang_label} ▾", f"muflang:{user_id}")])
+    # Переключатель языка перевода (26.08.2026) - кнопка ВРЕМЕННО СКРЫТА
+    # решением пользователя 27.08.2026 ("пусть остаётся на русском по
+    # умолчанию у всех как было") - возвращаемся к ней после мусхаф-фичи.
+    # Инфраструктура (get_current_lang/set_current_lang, обработчики
+    # muflang:/muflangback:/muflangset: в bot.py, SUPPORTED_LANGUAGES,
+    # кыргызские данные) НЕ удалена - просто не показываем точку входа,
+    # все студенты без явного выбора уже получают DEFAULT_LANGUAGE='ru'
+    # (core/mufradat.py:get_current_lang) - поведение как до этой фичи.
     # ➕/➖ двигают ЗАКЛАДКУ на 1 страницу (не текстовый ввод - решение
     # пользователя 17.08.2026, пятый заход) - "-" неактивна на FIRST_PAGE,
     # "+" на LAST_PAGE, но Telegram не умеет отключать кнопки без
