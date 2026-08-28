@@ -676,6 +676,14 @@
   document.getElementById('dash-mushaf').addEventListener('click', function () {
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
+    // clampFontToFit() при самом рендере страницы (reveal(), см. выше)
+    // считает по нулевой ширине - #app в этот момент ещё display:none
+    // (дашборд - первый экран, см. комментарий выше), контейнер без
+    // ширины, подгонка молча не срабатывает. Пересчёт здесь - сразу как
+    // #app стал видимым (28.08.2026, тот самый баг с обрезкой текста на
+    // телефоне: у уже открывавших мусхаф раньше страница подгружается
+    // ИЗ localStorage ещё до клика по карточке).
+    document.fonts.ready.then(clampFontToFit);
   });
   document.getElementById('dash-trainer').addEventListener('click', openTrainer);
   // role="button" на <div> не даёт Enter/Space нативно, в отличие от <button> -
@@ -697,20 +705,52 @@
   var FIRST_PAGE = 1, LAST_PAGE = 604;
   var cache = {};
 
-  // Фиксированный комфортный размер (не автоподбор под "без прокрутки") -
-  // решение пользователя 27.08.2026, после двух реальных багов у прежнего
-  // бинарного поиска (гонка с загрузкой шрифта - подбор считал по чужим
-  // метрикам временного системного шрифта, потом Scheherazade New
-  // догружалась и текст вылезал за рамки; плюс на плотных страницах
-  // (15-16 строк настоящей вёрстки QUL) подбор загонял шрифт в нечитаемо
-  // мелкий размер, лишь бы влезло). Короткая страница - просто пустое
-  // место снизу, длинная - обычный внутристраничный скролл (как на
-  // референсе пользователя, quran-stroka.vercel.app) - надёжнее и не
-  // ломается от таймингов браузера.
+  // Комфортный размер 26px - решение пользователя 27.08.2026, тогда же
+  // отказались от ИТЕРАТИВНОГО (бинарный поиск) автоподбора ПОД ВЫСОТУ
+  // ("без прокрутки") - у него было два реальных бага: гонка с загрузкой
+  // шрифта (подбор считал по чужим метрикам временного системного шрифта,
+  // потом Scheherazade New/V4 догружалась и текст вылезал) и нечитаемо
+  // мелкий шрифт на плотных страницах (15-16 строк), лишь бы влезла вся
+  // страница без скролла. #page-wrap как был со скроллом, так и остался -
+  // высоту не трогаем.
+  //
+  // Здесь другая ось - ШИРИНА (баг найден 28.08.2026, живьём на телефоне):
+  // строки мусхафа (QUL/King Fahd Complex) визуально выровнены по правому
+  // и левому краю печатной страницы через кашиду, зашитую в сам глиф V4 -
+  // на узких экранах (iPhone SE и подобные, ~360px) при 26px самая длинная
+  // строка страницы шире контейнера на 80-90px, несколько букв справа
+  // срезаются. На экранах шире ~480px (обычные телефоны, планшеты,
+  // десктоп) запаса уже хватает - оверфлоу нет.
+  //
+  // Фикс - ОДНОРАЗОВОЕ измерение (не цикл/бинарный поиск): сброс на базовый
+  // размер, реальный scrollWidth/clientWidth уже отрисованных строк, один
+  // прямой пересчёт font-size по худшей строке. Вызывается из reveal() -
+  // ПОСЛЕ document.fonts.ready (шрифт гарантированно применён к тексту,
+  // гонки нет, см. комментарий у reveal ниже); из клика по карточке
+  // "Мусхаф" на дашборде (см. dash-mushaf выше - у вернувшегося студента
+  // страница уже отрендерена ИЗ localStorage, пока #app был display:none
+  // и .clientWidth врал нулём, здесь первый реальный шанс измерить); и на
+  // resize/поворот экрана (см. addEventListener('resize') ниже) - нигде
+  // не в цикле кадров.
   var MUSHAF_FONT_SIZE = 26;
+  var MUSHAF_MIN_FONT_SIZE = 14;
 
   function clampFontToFit() {
-    document.getElementById('ayah-text').style.fontSize = MUSHAF_FONT_SIZE + 'px';
+    var el = document.getElementById('ayah-text');
+    el.style.fontSize = MUSHAF_FONT_SIZE + 'px';
+    var lines = el.querySelectorAll('.mushaf-line');
+    if (!lines.length) return;
+    var maxRatio = 1;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      if (l.clientWidth > 0) {
+        maxRatio = Math.max(maxRatio, l.scrollWidth / l.clientWidth);
+      }
+    }
+    if (maxRatio > 1) {
+      var fitted = Math.max(MUSHAF_MIN_FONT_SIZE, Math.floor(MUSHAF_FONT_SIZE / maxRatio));
+      el.style.fontSize = fitted + 'px';
+    }
   }
 
   // Шрифт QPC V4 Tajweed - свой файл НА КАЖДУЮ страницу (604 разных
@@ -775,7 +815,16 @@
     });
     var reveal = function () {
       document.getElementById('ayah-text').innerHTML = html;
-      clampFontToFit();
+      // document.fonts.ready, не сразу clampFontToFit() - у loadV4Font()
+      // .load() резолвится, как только байты шрифта скачаны и распаршены,
+      // но браузеру ещё нужно применить его к УЖЕ ВСТАВЛЕННОМУ тексту
+      // (шейпинг/layout) - если мерить scrollWidth/clientWidth синхронно
+      // сразу после innerHTML, в редких случаях попадаешь в кадр с ещё не
+      // до конца применённым шрифтом и подгонка считает по чужим метрикам
+      // (тот самый класс бага 27.08, только с других обеих сторон гонки -
+      // теперь про сам подбор, а не про домешивание текста). fonts.ready
+      // ждёт именно готовности к раскладке, а не просто загрузки байтов.
+      document.fonts.ready.then(clampFontToFit);
     };
     // Если шрифт не загрузился (сеть) - всё равно показываем текст, а не
     // висим бесконечно; PUA-глифы без своего шрифта покажутся "тофу"-
@@ -812,6 +861,7 @@
     }, 1800);
   }
   document.getElementById('ayah-text').addEventListener('click', function (e) {
+    if (justSwiped) { justSwiped = false; return; }
     var el = e.target.closest('[data-tr]');
     if (el) showWordPopup(el);
   });
@@ -894,6 +944,33 @@
   document.getElementById('btn-next').addEventListener('click', function () {
     loadPage(currentPage - 1);
   });
+
+  // Свайп по странице (28.08.2026) - как переворот бумажной книги: палец
+  // влево (dx < 0) - вперёд по мусхафу, тот же переход, что у кнопки
+  // btn-prev справа ('‹', currentPage + 1); палец вправо - назад, как
+  // btn-next ('›', currentPage - 1). #page-wrap уже скроллится вертикально
+  // (плотные страницы, 15-16 строк) - жест засчитывается только когда
+  // горизонтальная составляющая явно больше вертикальной, иначе обычный
+  // вертикальный скролл принимался бы за свайп. justSwiped - клик на
+  // ayah-text (попап перевода слова, см. выше) на тачскрине приходит ПОСЛЕ
+  // touchend от того же жеста - без флага смахивание страницы попутно
+  // открывало бы всплывающую подсказку слова, на котором палец оторвался.
+  var pageWrap = document.getElementById('page-wrap');
+  var touchStartX = 0, touchStartY = 0, justSwiped = false;
+  pageWrap.addEventListener('touchstart', function (e) {
+    var t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+  }, { passive: true });
+  pageWrap.addEventListener('touchend', function (e) {
+    var t = e.changedTouches[0];
+    var dx = t.clientX - touchStartX;
+    var dy = t.clientY - touchStartY;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      justSwiped = true;
+      loadPage(dx < 0 ? currentPage + 1 : currentPage - 1);
+    }
+  }, { passive: true });
 
   // Тап по номеру страницы - прямой переход (220 страниц, недостаточно
   // одних ◀▶ - решение пользователя 27.08.2026, после расширения с 9 до
