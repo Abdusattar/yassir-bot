@@ -42,7 +42,10 @@ from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank,
 )
-from core.mushaf_words import add_starred_word, remove_starred_word, list_starred_words
+from core.mushaf_words import (
+    add_starred_word, remove_starred_word, list_starred_words,
+    get_reading_bookmark, set_reading_bookmark,
+)
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 
 log = logging.getLogger(__name__)
@@ -393,6 +396,36 @@ async def handle_words_remove(request, user_id):
     return web.json_response({"words": list_starred_words(user_id)})
 
 
+# Полный диапазон страниц чтения (mushaf_data/page1.json..page604.json) -
+# НЕ core.quran_pages.FIRST_PAGE/LAST_PAGE (те 2-221, только диапазон
+# тренажёра муфрадата, см. модульный docstring quran_pages.py). Закладка
+# страницы чтения (core/mushaf_words.py) - отдельная от тренажёрной,
+# охватывает весь мусхаф.
+_READING_FIRST_PAGE, _READING_LAST_PAGE = 1, 604
+
+
+@with_auth
+async def handle_bookmark_get(request, user_id):
+    """GET - текущая закладка страницы чтения (кнопка "«" в #page-nav,
+    30.08.2026). null, если студент ещё ни разу не сохранял."""
+    return web.json_response({"page": get_reading_bookmark(user_id)})
+
+
+@with_auth
+async def handle_bookmark_set(request, user_id):
+    """POST {page} - тап на 🔖 в #page-nav сохраняет текущую страницу как
+    закладку (перезаписывает предыдущую, если была)."""
+    try:
+        body = await request.json()
+        page = int(body["page"])
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+        return web.json_response({"error": "bad_page"}, status=400)
+    if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
+        return web.json_response({"error": "bad_page"}, status=400)
+    set_reading_bookmark(user_id, page)
+    return web.json_response({"page": page})
+
+
 def build_app():
     app = web.Application()
     app.router.add_get("/api/muf/state", handle_state)
@@ -404,6 +437,8 @@ def build_app():
     app.router.add_get("/api/muf/words", handle_words_list)
     app.router.add_post("/api/muf/words/add", handle_words_add)
     app.router.add_post("/api/muf/words/remove", handle_words_remove)
+    app.router.add_get("/api/muf/bookmark", handle_bookmark_get)
+    app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
     return app
 
 

@@ -232,8 +232,8 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 14px;
-    padding: 4px 16px;
+    gap: 6px;
+    padding: 4px 10px;
     background: var(--chrome-bg);
     border-bottom: 1px solid var(--chrome-border);
     flex: 0 0 auto;
@@ -241,9 +241,16 @@
   }
   #page-nav button {
     background: none; border: none; color: var(--ink);
-    font-size: 22px; padding: 4px 14px; cursor: pointer; line-height: 1;
+    font-size: 22px; padding: 4px 10px; cursor: pointer; line-height: 1;
   }
   #page-nav button:disabled { color: var(--chrome-border); }
+  /* Закладка страницы чтения + переход к Аль-Бакаре (30.08.2026) -
+     дополнительные кнопки в и так тесном #page-nav (узкие экраны телефонов,
+     см. clampFontToFit) - меньше padding/font-size, чем у основных
+     ‹/›, чтобы 4 новых элемента не столкнули номер страницы за край. */
+  #page-nav button.page-nav-util {
+    font-size: 16px; padding: 4px 7px;
+  }
   #page-indicator {
     font-size: 13px; color: var(--muted);
     cursor: pointer; padding: 4px 10px; border-radius: 8px;
@@ -652,10 +659,13 @@
     <span id="ayah-range"></span>
   </div>
   <div id="page-nav">
+    <button id="btn-bookmark-save" class="page-nav-util" title="Сохранить закладку">🔖</button>
+    <button id="btn-bookmark-go" class="page-nav-util" title="К закладке">«</button>
     <button id="btn-next">‹</button>
     <span id="page-indicator">—</span>
     <input id="page-jump-input" type="number" inputmode="numeric">
     <button id="btn-prev">›</button>
+    <button id="btn-go-baqara" class="page-nav-util" title="Начало Аль-Бакара">»</button>
   </div>
 
   <div id="view-page" class="view">
@@ -722,6 +732,13 @@
   document.getElementById('dash-mushaf').addEventListener('click', function () {
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
+    // Вход с дашборда - всегда вкладка "Страница" (30.08.2026, решение
+    // пользователя), даже если в прошлый раз ушли со "Смысла"/"Мои слова" -
+    // switchTab('page') при первой загрузке скрипта (см. её вызов ниже)
+    // это уже давал, но только один раз за холодную загрузку; без вызова
+    // здесь повторный заход Мусхаф->Дашборд->Мусхаф В ТОЙ ЖЕ сессии (без
+    // перезагрузки страницы) оставлял бы прошлую вкладку.
+    switchTab('page');
     // clampFontToFit() при самом рендере страницы (reveal(), см. выше)
     // считает по нулевой ширине - #app в этот момент ещё display:none
     // (дашборд - первый экран, см. комментарий выше), контейнер без
@@ -1107,6 +1124,35 @@
   });
   document.getElementById('btn-next').addEventListener('click', function () {
     loadPage(currentPage - 1);
+  });
+
+  // Начало суры Аль-Бакара - стр. 2 (проверено 17.08.2026, см. модульный
+  // docstring core/quran_pages.py: "стр. 2 начинает Аль-Бакара с аята 1").
+  var BAQARA_START_PAGE = 2;
+  document.getElementById('btn-go-baqara').addEventListener('click', function () {
+    loadPage(BAQARA_START_PAGE);
+  });
+
+  // Закладка страницы чтения (30.08.2026) - 🔖 сохраняет ТЕКУЩУЮ страницу
+  // на сервере (по Telegram ID, core/mushaf_words.py), "«" переносит на
+  // сохранённую. Не то же самое, что закладка тренажёра (mufradat_page) -
+  // отдельная точка возврата, которую студент выставляет сам.
+  document.getElementById('btn-bookmark-save').addEventListener('click', function (e) {
+    var btn = e.currentTarget;
+    apiCall('/bookmark', { method: 'POST', body: { page: currentPage } }).then(function (res) {
+      if (res.status !== 401) showPopupMessage(btn, '🔖 Закладка: стр. ' + currentPage);
+    });
+  });
+  document.getElementById('btn-bookmark-go').addEventListener('click', function (e) {
+    var btn = e.currentTarget;
+    apiCall('/bookmark').then(function (res) {
+      if (res.status === 401) return;
+      if (res.data && res.data.page) {
+        loadPage(res.data.page);
+      } else {
+        showPopupMessage(btn, 'Закладка ещё не сохранена');
+      }
+    });
   });
 
   // Свайп по странице (28.08.2026) - как переворот бумажной книги: палец

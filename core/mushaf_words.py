@@ -221,3 +221,40 @@ def list_starred_words(user_id):
         {"surah": r[0], "ayah": r[1], "position": r[2], "arabic": r[3], "translation": r[4]}
         for r in rows
     ]
+
+
+# Закладка страницы чтения (30.08.2026, кнопка 🔖 в #page-nav) - НЕ то же
+# самое, что закладка тренажёра (mufradat_page/set_current_page, "дошёл до
+# страницы N", пул вопросов). Эта - произвольная точка возврата, которую
+# студент сам выставляет тапом на любой странице ("сохранить") и подтягивает
+# обратно тапом на "«" (решение пользователя 30.08.2026: тап на иконку -
+# сохранить, отдельная кнопка "«" в навигаторе - перейти). На сервере по
+# Telegram ID (решение пользователя - переживает смену устройства/браузера),
+# отдельная маленькая таблица, одна строка на студента.
+_BOOKMARK_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mushaf_reading_bookmark(
+        user_id TEXT PRIMARY KEY,
+        page_number INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+"""
+
+
+def set_reading_bookmark(user_id, page_number):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_BOOKMARK_SCHEMA)
+        conn.execute(
+            "INSERT OR REPLACE INTO mushaf_reading_bookmark (user_id, page_number, updated_at) "
+            "VALUES (?,?,?)",
+            (user_id, page_number, datetime.now(timezone.utc).isoformat())
+        )
+
+
+def get_reading_bookmark(user_id):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_BOOKMARK_SCHEMA)
+        row = conn.execute(
+            "SELECT page_number FROM mushaf_reading_bookmark WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+    return row[0] if row else None
