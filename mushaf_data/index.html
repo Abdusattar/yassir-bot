@@ -834,12 +834,16 @@
   // той строчки - setInterval-колбэки и так асинхронны, а вот этот, самый
   // первый, синхронно выполнился бы слишком рано без отложенного старта.
   var HEARTBEAT_INTERVAL_MS = 20000;
+  var ONLINE_BADGE_MIN = 3; // меньше - не показываем совсем (решение
+  // пользователя 30.08.2026 - 1-2 "онлайн" выглядит бедно, не украшает)
   function sendHeartbeat() {
     apiCall('/heartbeat', { method: 'POST' }).then(function (res) {
       if (res.status === 401) return;
       var el = document.getElementById('dash-online');
-      if (res.data && typeof res.data.online === 'number') {
+      if (res.data && typeof res.data.online === 'number' && res.data.online >= ONLINE_BADGE_MIN) {
         el.innerHTML = '<span class="dot"></span>сейчас в онлайне учатся ' + res.data.online;
+      } else {
+        el.innerHTML = '';
       }
     });
   }
