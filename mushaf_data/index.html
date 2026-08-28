@@ -253,8 +253,18 @@
      30.08.2026, по прямому вопросу пользователя про удобство тапа -
      оказалось нет, поправлено). Переполнения на 360px экране всё равно
      нет (перепроверено headless Chrome). */
+  /* direction: ltr (30.08.2026) - #page-nav наследует dir="rtl" от <html>
+     (нужен для арабского текста мусхафа). «/» - "зеркалящиеся" юникод-символы
+     (Bidi_Mirrored=Yes) - в RTL-контексте физически перерисовываются в
+     обратную форму (написано «, отрисовывается »). У ‹/› (соседние кнопки
+     перелистывания) это случайно компенсируется их же собственной
+     позиционной перестановкой RTL-flex - трогать их не нужно, там всё и так
+     выглядит верно. Для НОВЫХ кнопок (30.08.2026, реальная путаница
+     пользователя - "то, что выглядит как >>, ведёт к закладке") мирроринг
+     не отменяется сам собой - явный direction: ltr останавливает
+     перерисовку глифа, оставляя код и картинку в соответствии. */
   #page-nav button.page-nav-util {
-    font-size: 16px; padding: 8px 9px;
+    font-size: 16px; padding: 8px 9px; direction: ltr;
   }
   #page-indicator {
     font-size: 13px; color: var(--muted);
@@ -664,13 +674,20 @@
     <span id="ayah-range"></span>
   </div>
   <div id="page-nav">
-    <button id="btn-bookmark-save" class="page-nav-util" title="Сохранить закладку">🔖</button>
-    <button id="btn-bookmark-go" class="page-nav-util" title="К закладке">«</button>
+    <!-- Порядок в DOM - "наоборот" от желаемой картинки (30.08.2026):
+         #page-nav наследует dir="rtl", flex-контейнер визуально переставляет
+         детей в обратном порядке относительно DOM. Middle-тройка (btn-next/
+         page-indicator/btn-prev) НЕ трогается - её собственный визуальный
+         результат уже верный (см. CSS-комментарий у .page-nav-util). Итог на
+         экране слева направо: 🔖 « ‹ стр. N › » - подтверждено пользователем
+         и headless-скриншотом. -->
+    <button id="btn-go-baqara" class="page-nav-util" title="Начало Аль-Бакара">»</button>
     <button id="btn-next">‹</button>
     <span id="page-indicator">—</span>
     <input id="page-jump-input" type="number" inputmode="numeric">
     <button id="btn-prev">›</button>
-    <button id="btn-go-baqara" class="page-nav-util" title="Начало Аль-Бакара">»</button>
+    <button id="btn-bookmark-go" class="page-nav-util" title="К закладке">«</button>
+    <button id="btn-bookmark-save" class="page-nav-util" title="Сохранить закладку">🔖</button>
   </div>
 
   <div id="view-page" class="view">
