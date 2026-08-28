@@ -50,22 +50,24 @@
   :root {
     --bg: #ffffff;
     --ink: #1a1a1a;
-    /* Было #ffffff - резко контрастировало с фоном #app/#trainer/#dashboard
-       (градиент --dash-bg-start/--dash-bg-end, 30.08.2026, по просьбе
-       пользователя, прогнано через скилл frontend-design). #page-wrap/
-       #ayah-text не имеют своего непрозрачного фона - текст Корана и так
-       лежит прямо на градиенте, без отдельной "бумажной" плашки, поэтому
-       chrome (topbar/page-nav/tabbar) осмысленно сделать частью ТОЙ ЖЕ
-       поверхности, не отдельной белой полосой поверх неё. color-mix, не
-       голый пятый hex-код - осознанная "доля" мятного тона в белом (45%,
-       чуть светлее самого градиента - chrome должен читаться тише
-       контента), а не число с потолка. Граница получает 12% акцента
-       (--accent, изумруд обложки мусхафа) - тонкая связь с фирменным
-       цветом вместо нейтрального серого, который раньше ни с чем не
-       перекликался. Контраст текста не пострадал (--ink #1a1a1a на
-       результирующем ~#f2f8f3 - проверено, светлее любого из компонентов
-       градиента). */
-    --chrome-bg: color-mix(in srgb, var(--dash-bg-start) 45%, #ffffff);
+    /* Фон мусхаф-ридера (30.08.2026, прогнано через frontend-design,
+       второй заход) - ОТДЕЛЬНЫЕ токены от --dash-bg-*, те остаются только
+       у #trainer/#dashboard (решение пользователя - не трогать их). Тёплый
+       "бумажный" тон (как страница настоящего печатного мусхафа), не
+       холодный мятный - специально светлый и нейтральный, чтобы не
+       спорить с таджвидной раскраской (зашита в сам шрифт, несколько
+       ярких цветов на буквах). --mushaf-bg-end чуть глубже старта -
+       лёгкий намёк на состаренную бумагу, не плоский цвет. */
+    --mushaf-bg-start: #fbf8f0;
+    --mushaf-bg-end: #f4ecd8;
+    /* chrome (topbar/page-nav/tabbar) - часть той же "бумажной"
+       поверхности, не отдельная белая полоса поверх нее (#page-wrap/
+       #ayah-text не имеют своего непрозрачного фона). color-mix - доля
+       --mushaf-bg-start в белом (45%, чуть светлее самого градиента -
+       chrome читается тише контента), а не число с потолка. Граница -
+       12% акцента (--accent, изумруд обложки мусхафа) - тонкая связь с
+       фирменным цветом вместо нейтрального серого. */
+    --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 45%, #ffffff);
     --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
     --muted: #8a8370;
     --popup-bg: #2b2b2b;
@@ -100,8 +102,13 @@
     :root:not([data-theme="light"]) {
       --bg: #16140f;
       --ink: #f0ead8;
-      --chrome-bg: #201d16;
-      --chrome-border: #3a3527;
+      /* Тёплый тёмно-коричневый ("переплёт книги"), НЕ тот же зеленоватый
+         тёмный, что у #trainer/#dashboard (--dash-bg-* ниже) - своя
+         идентичность мусхафа и в тёмной теме тоже (30.08.2026). */
+      --mushaf-bg-start: #201a12;
+      --mushaf-bg-end: #17130d;
+      --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
+      --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
       --muted: #a39a7d;
       --popup-bg: #f0ead8;
       --popup-ink: #16140f;
@@ -124,8 +131,10 @@
   :root[data-theme="dark"] {
     --bg: #16140f;
     --ink: #f0ead8;
-    --chrome-bg: #201d16;
-    --chrome-border: #3a3527;
+    --mushaf-bg-start: #201a12;
+    --mushaf-bg-end: #17130d;
+    --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
+    --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
     --muted: #a39a7d;
     --popup-bg: #f0ead8;
     --popup-ink: #16140f;
@@ -167,11 +176,12 @@
     flex-direction: column;
     height: 100%;
     width: 100%;
-    /* Тот же фон, что у #trainer/#dashboard (30.08.2026, пользователь
-       попросил посмотреть, как будет выглядеть) - виден только там, где
-       нет своего непрозрачного фона у дочерних элементов (topbar/page-nav
-       уже opaque var(--chrome-bg)). */
-    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+    /* Свой тёплый "бумажный" фон (30.08.2026, второй заход, прогнано
+       через frontend-design) - НЕ --dash-bg-* (те только у #trainer/
+       #dashboard, решение пользователя их не трогать). Виден только там,
+       где нет своего непрозрачного фона у дочерних элементов (topbar/
+       page-nav уже opaque var(--chrome-bg), сам текст Корана - нет). */
+    background: linear-gradient(180deg, var(--mushaf-bg-start), var(--mushaf-bg-end));
   }
 
   #topbar {
@@ -365,6 +375,16 @@
     cursor: pointer;
   }
   .tab-btn.active { color: var(--ink); font-weight: 600; }
+  /* Тематическая подсветка "закладка/отметка" (30.08.2026, решение
+     пользователя "подбери тематически") - тёплое золото (--marker-color),
+     тот же цвет, что у номеров-маркеров аятов на странице чтения -
+     смысловая связь "это про отметки в тексте", не случайный акцент. */
+  .icon-gold {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.6em; height: 1.6em; border-radius: 50%;
+    background: color-mix(in srgb, var(--marker-color) 20%, transparent);
+    vertical-align: middle;
+  }
   /* #tabbar - только иконки (см. HTML), крупнее шрифт под чистый эмодзи;
      #trainer-tabbar остаётся с текстом (там места достаточно, 2 кнопки). */
   /* padding уменьшен против общего .tab-btn (10px 4px) - крупный эмодзи
@@ -862,7 +882,7 @@
     <input id="page-jump-input" type="number" inputmode="numeric">
     <button id="btn-prev">›</button>
     <button id="btn-bookmark-go" class="page-nav-util" title="К закладке">«</button>
-    <button id="btn-bookmark-save" class="page-nav-util" title="Сохранить закладку">🔖</button>
+    <button id="btn-bookmark-save" class="page-nav-util" title="Сохранить закладку"><span class="icon-gold">🔖</span></button>
   </div>
 
   <div id="view-page" class="view">
@@ -910,7 +930,7 @@
              слова" достижимы из обоих мест, см. openMushaf) -->
     <button id="tab-back" class="tab-btn" title="Назад">🔙</button>
     <button id="tab-meaning" class="tab-btn" title="Смысл">📜 Смысл</button>
-    <button id="tab-mywords" class="tab-btn" title="Мои слова">🔖 Мои слова</button>
+    <button id="tab-mywords" class="tab-btn" title="Мои слова"><span class="icon-gold">🔖</span> Мои слова</button>
     <!-- Прямой переход в Тренажёр без дашборда (30.08.2026, решение
          пользователя) - НЕ switchTab (уводит из #app целиком), поэтому
          .active никогда не проставляется - после клика вкладки всё равно
