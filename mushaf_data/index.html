@@ -437,6 +437,23 @@
     font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
     font-family: inherit;
   }
+  /* Дневной задел ("X/40 сегодня") - постоянно видимая пилюля в шапке
+     (28.08.2026, решение пользователя - раньше прогресс к заданию был
+     виден только строкой в фидбеке ПОСЛЕ ответа, при обычном открытии
+     тренажёра студент не видел, сколько уже сделано, и решал, что
+     утренний прогресс потерялся). Зелёная (--accent), когда задел ещё не
+     закрыт; --ok, когда 40/40 уже набрано - тот же сигнал "готово", что и
+     фидбек-пилюля верного ответа. */
+  #trainer-daily {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  #trainer-daily.done { background: var(--ok-soft); color: var(--ok); }
   #trainer-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -657,6 +674,7 @@
   <div id="trainer-topbar">
     <button id="trainer-back">← Дашборд</button>
     <span id="trainer-bookmark">Тренажёр</span>
+    <span id="trainer-daily"></span>
   </div>
   <div id="trainer-body"></div>
 </div>
@@ -1078,9 +1096,22 @@
       '<div class="trainer-score-bar"><div class="trainer-score-bar-fill" style="width:' + pct + '%"></div></div>';
   }
 
+  function renderDailyBadge(d) {
+    // Постоянный счётчик в шапке, не только в фидбеке после ответа - см.
+    // комментарий у #trainer-daily в CSS. daily_target с бэкенда
+    // (DAILY_WORDS_FOR_TASK_CREDIT), не захардкожен во фронтенде - единый
+    // источник истины, значение меняли уже дважды (20 → 15 → 20 → 40).
+    var el = document.getElementById('trainer-daily');
+    if (!d || d.daily_target == null) { el.textContent = ''; el.classList.remove('done'); return; }
+    var done = d.daily_count >= d.daily_target;
+    el.textContent = d.daily_count + '/' + d.daily_target + ' сегодня';
+    el.classList.toggle('done', done);
+  }
+
   function renderTrainer() {
     var d = trainerState;
     var body = document.getElementById('trainer-body');
+    renderDailyBadge(d);
     if (!d) { body.innerHTML = ''; return; }
 
     if (d.needs_page) {

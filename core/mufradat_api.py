@@ -35,7 +35,7 @@ from core.mufradat import (
     generate_question, get_progress_map, record_answer,
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
-    record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT,
+    record_daily_answered_word, get_daily_answered_count, DAILY_WORDS_FOR_TASK_CREDIT,
 )
 from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
@@ -92,12 +92,20 @@ def with_auth(handler):
     return wrapped
 
 
+def _daily_fields(user_id):
+    """X/40 сегодня для шапки тренажёра (28.08.2026) - нужно в КАЖДОМ ответе
+    API (не только после ответа на вопрос), иначе счётчик в шапке пропадает
+    на экранах needs_page/empty."""
+    return {"daily_count": get_daily_answered_count(user_id), "daily_target": DAILY_WORDS_FOR_TASK_CREDIT}
+
+
 def _question_payload(user_id, state, overall_score, feedback=None):
     payload = {
         "arabic": state["arabic"], "options": state["options"], "word_id": state["word_id"],
         "session_correct": state["session_correct"], "overall_score": overall_score,
         "bookmark_page": get_current_page(user_id),
         "word_page": page_for_ayah(state["surah"], state["ayah"]),
+        **_daily_fields(user_id),
     }
     if feedback is not None:
         payload["feedback"] = feedback
@@ -135,7 +143,9 @@ async def handle_state(request, user_id):
     needs_page (закладка ещё не установлена), либо empty (пул закончился)."""
     page = get_current_page(user_id)
     if page is None:
-        return web.json_response({"needs_page": True, "first_page": FIRST_PAGE, "last_page": LAST_PAGE})
+        return web.json_response({
+            "needs_page": True, "first_page": FIRST_PAGE, "last_page": LAST_PAGE, **_daily_fields(user_id)
+        })
 
     state = _active.get(user_id)
     if state:
@@ -146,7 +156,7 @@ async def handle_state(request, user_id):
         state, overall_score = _new_question(user_id, 0, None)
         if state is None:
             return web.json_response({
-                "empty": True, "bookmark_page": page, "overall_score": overall_score
+                "empty": True, "bookmark_page": page, "overall_score": overall_score, **_daily_fields(user_id)
             })
     else:
         pool = get_words_for_bookmark(user_id)
@@ -198,10 +208,14 @@ async def _state_body(user_id):
     из handle_page/handle_lang/handle_end после того, как user_id уже известен."""
     page = get_current_page(user_id)
     if page is None:
-        return web.json_response({"needs_page": True, "first_page": FIRST_PAGE, "last_page": LAST_PAGE})
+        return web.json_response({
+            "needs_page": True, "first_page": FIRST_PAGE, "last_page": LAST_PAGE, **_daily_fields(user_id)
+        })
     state, overall_score = _new_question(user_id, 0, None)
     if state is None:
-        return web.json_response({"empty": True, "bookmark_page": page, "overall_score": overall_score})
+        return web.json_response({
+            "empty": True, "bookmark_page": page, "overall_score": overall_score, **_daily_fields(user_id)
+        })
     return web.json_response(_question_payload(user_id, state, overall_score))
 
 
@@ -248,7 +262,7 @@ async def handle_answer(request, user_id):
     if new_state is None:
         return web.json_response({
             "empty": True, "feedback": feedback, "overall_score": overall_score,
-            "bookmark_page": get_current_page(user_id),
+            "bookmark_page": get_current_page(user_id), **_daily_fields(user_id),
         })
     return web.json_response(_question_payload(user_id, new_state, overall_score, feedback))
 

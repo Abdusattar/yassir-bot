@@ -811,8 +811,9 @@ _DAILY_ANSWERED_SCHEMA = """
 # 17.08.2026. Разных, не любых ответов - иначе можно закрыть задание,
 # тапая по одному и тому же лёгкому слову. Было 20, снижено до 15 в тот
 # же день, возвращено обратно к 20 решением пользователя 18.08.2026 -
-# 15 проходилось слишком быстро.
-DAILY_WORDS_FOR_TASK_CREDIT = 20
+# 15 проходилось слишком быстро. Поднято до 40 решением пользователя
+# 28.08.2026.
+DAILY_WORDS_FOR_TASK_CREDIT = 40
 
 
 def record_daily_answered_word(user_id, word_id):
@@ -831,6 +832,21 @@ def record_daily_answered_word(user_id, word_id):
             "INSERT OR IGNORE INTO mufradat_daily_answered_words (user_id, date, word_id) VALUES (?,?,?)",
             (user_id, today, word_id)
         )
+        count = conn.execute(
+            "SELECT COUNT(*) FROM mufradat_daily_answered_words WHERE user_id=? AND date=?",
+            (user_id, today)
+        ).fetchone()[0]
+    return count
+
+
+def get_daily_answered_count(user_id):
+    """Только чтение - сколько РАЗНЫХ слов сегодня уже отработано, без
+    записи нового ответа (в отличие от record_daily_answered_word). Нужно
+    для счётчика "X/40 сегодня" в шапке тренажёра (28.08.2026) - его нужно
+    показывать сразу при открытии, до первого ответа в этой сессии."""
+    today = _today()
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_DAILY_ANSWERED_SCHEMA)
         count = conn.execute(
             "SELECT COUNT(*) FROM mufradat_daily_answered_words WHERE user_id=? AND date=?",
             (user_id, today)
