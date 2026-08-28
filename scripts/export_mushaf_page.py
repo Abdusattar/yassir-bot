@@ -43,7 +43,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 sys.path.insert(0, ".")
 from core.sampler import HADITHS_DB
-from core.mufradat import _is_junk
+from core.mufradat import _is_junk, _clean_translation
 import sqlite3
 import quran_transcript as qt
 
@@ -230,7 +230,12 @@ def get_ayah_words(conn, surah, ayah):
     хвосте (студент тапом смотрит перевод, не отвечает на вопрос, поэтому
     хвост без перевода просто остаётся нетапабельным словом, как и слова
     без перевода вообще - баг найден 29.08.2026 по вопросу пользователя,
-    "*" утекал в попап и в «Мои слова» буквальной строкой)."""
+    "*" утекал в попап и в «Мои слова» буквальной строкой).
+
+    _clean_translation (30.08.2026) - убирает висящие связующие знаки
+    препинания в конце перевода (запятая/точка/двоеточие/точка с запятой/
+    тире с пробелом перед ним) - артефакт разбивки цельного предложения
+    на отдельные слова API, без смысла на изолированном слове в попапе."""
     arabic_words = qt.Aya(surah, ayah).get().uthmani_words
     translations = {
         row["position"]: row["translation"]
@@ -243,7 +248,7 @@ def get_ayah_words(conn, surah, ayah):
     return [
         {
             "position": i, "arabic_text": w,
-            "translation": "" if _is_junk(translations.get(i, "")) else translations[i],
+            "translation": "" if _is_junk(translations.get(i, "")) else _clean_translation(translations[i]),
         }
         for i, w in enumerate(arabic_words, 1)
     ]

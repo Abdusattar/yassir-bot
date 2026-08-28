@@ -165,6 +165,31 @@ def _is_junk(translation):
     return not _HAS_LETTER_RE.search(translation)
 
 
+# Перевод - вырезка из цельного предложения (Кулиев), API Quran Academy
+# режет его на слова, сохраняя знаки препинания оригинала как есть -
+# "говорят:" (двоеточие относится к прямой речи ПОСЛЕ этого слова в
+# предложении, не к самому слову). На изолированном слове (тренажёр,
+# "Мои слова") такой висящий знак не несёт смысла, только путает
+# (30.08.2026, разбор по прямому вопросу пользователя). Тире/en-dash/
+# em-dash ТОЛЬКО с пробелом перед ним - без пробела это часть слова,
+# разрубленного пополам ("из-" от "из-за", "Зу-ль-" от имени
+# "Зу-ль-Карнайн" - 6 таких случаев на всю базу, найдены и намеренно НЕ
+# трогаются, см. _TRAIL_DASH_RE). "?"/"!" не трогаем - несут смысл
+# (вопрос/восклицание) даже у отдельного слова. Сам DB.translation НЕ
+# меняется - чистим только при показе, тот же принцип, что "*"/_is_junk.
+_TRAIL_DASH_RE = re.compile(r"\s+[–—-]\s*$")
+_TRAIL_PUNCT_RE = re.compile(r"[,.;:]+\s*$")
+
+
+def _clean_translation(translation):
+    prev = None
+    while prev != translation:
+        prev = translation
+        translation = _TRAIL_DASH_RE.sub("", translation)
+        translation = _TRAIL_PUNCT_RE.sub("", translation)
+    return translation
+
+
 def _merge_glued_translations(rows):
     """API Quran Academy для устойчивых сочетаний (предлог+сущ.,
     предлог+предлог, числительное+числительное) не даёт отдельный перевод
@@ -206,7 +231,10 @@ def get_words_in_range(surah_number, start_ayah, end_ayah, language=DEFAULT_LANG
             (surah_number, start_ayah, end_ayah, language)
         ).fetchall()
     words = _merge_glued_translations([dict(r) for r in rows])
-    return [w for w in words if not _is_junk(w["translation"])]
+    return [
+        {**w, "translation": _clean_translation(w["translation"])}
+        for w in words if not _is_junk(w["translation"])
+    ]
 
 
 def get_words_by_progress_keys(progress_keys, language=DEFAULT_LANGUAGE):
@@ -234,7 +262,10 @@ def get_words_by_progress_keys(progress_keys, language=DEFAULT_LANGUAGE):
             (*progress_keys, language)
         ).fetchall()
     words = [dict(r) for r in rows]
-    return [w for w in words if not _is_junk(w["translation"])]
+    return [
+        {**w, "translation": _clean_translation(w["translation"])}
+        for w in words if not _is_junk(w["translation"])
+    ]
 
 
 # Каждый STARRED_QUESTION_QUOTA-й вопрос в тренажёре - гарантированно из

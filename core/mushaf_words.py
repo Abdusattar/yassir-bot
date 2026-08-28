@@ -123,6 +123,13 @@ def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE):
         if row is None:
             return
         surah, ayah, position, arabic_text, translation = row
+        # Импорт внутри функции - не наверху файла (30.08.2026): core.mufradat
+        # уже импортирует ИЗ core.mushaf_words на верхнем уровне (см. модульный
+        # docstring выше), обратный импорт там же создал бы цикл. К моменту
+        # реального вызова этой функции core.mufradat уже полностью
+        # загружен, поэтому отложенный импорт здесь безопасен.
+        from core.mufradat import _clean_translation
+        translation = _clean_translation(translation)
         conn.execute(
             "INSERT OR IGNORE INTO mushaf_starred_words "
             "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key) "
