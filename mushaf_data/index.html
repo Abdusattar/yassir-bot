@@ -456,6 +456,26 @@
     color: var(--ink);
     margin: 0 0 10px;
   }
+  /* "Сейчас онлайн" (30.08.2026) - ненавязчивая строка над карточками, не
+     бейдж на конкретной карточке (не должна выглядеть как реклама одного
+     раздела - решение пользователя). Пустая (не занимает места) до первого
+     ответа heartbeat, чтобы не мигать "0" на долю секунды при открытии. */
+  #dash-online {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin-top: -8px;
+    /* direction: ltr (30.08.2026) - #dashboard наследует dir="rtl" от
+       <html> (см. wiki/mushaf_yassirapp.md, "Ловушка: RTL-контейнер
+       зеркалит..."), без этого "точка-число-текст" в DOM переставлялись
+       бы визуально в "текст-число-точка". Проверено скриншотом. */
+    direction: ltr;
+  }
+  #dash-online:empty { display: none; }
+  #dash-online .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #2fbf6e; flex: 0 0 auto;
+  }
   .dash-card {
     width: 100%;
     max-width: 320px;
@@ -696,6 +716,7 @@
 <body>
 <div id="dashboard">
   <h1>YassirApp</h1>
+  <div id="dash-online"></div>
   <div class="dash-card" id="dash-mushaf" tabindex="0" role="button">
     <span class="icon-badge">📗</span>
     <div><div class="label">Мусхаф</div><div class="sub">Чтение с таджвидом и переводом</div></div>
@@ -803,6 +824,27 @@
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
+
+  // "Сейчас онлайн" (30.08.2026) - heartbeat каждые 20 сек, пока YassirApp
+  // открыт (независимо от того, какой экран сейчас - дашборд/мусхаф/
+  // тренажёр), бейдж обновляется только на дашборде. setTimeout(..., 0)
+  // вместо прямого вызова - apiCall/API_BASE объявлены НИЖЕ по файлу
+  // (var, hoisting не помогает с присваиванием), первый вызов должен
+  // случиться уже ПОСЛЕ того, как синхронное исполнение скрипта дойдёт до
+  // той строчки - setInterval-колбэки и так асинхронны, а вот этот, самый
+  // первый, синхронно выполнился бы слишком рано без отложенного старта.
+  var HEARTBEAT_INTERVAL_MS = 20000;
+  function sendHeartbeat() {
+    apiCall('/heartbeat', { method: 'POST' }).then(function (res) {
+      if (res.status === 401) return;
+      var el = document.getElementById('dash-online');
+      if (res.data && typeof res.data.online === 'number') {
+        el.innerHTML = '<span class="dot"></span>' + res.data.online + ' сейчас в приложении';
+      }
+    });
+  }
+  setTimeout(sendHeartbeat, 0);
+  setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 
   // Дашборд YassirApp (28.08.2026/29.08.2026) - первый экран. "Мусхаф" и
   // "Тренажёр" оба теперь переключают вид ВНУТРИ этого же приложения (до

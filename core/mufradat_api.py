@@ -437,6 +437,35 @@ async def handle_revision_credit(request, user_id):
     return web.json_response({"credited": credited})
 
 
+# "Сейчас онлайн" на дашборде (30.08.2026) - в Mini App нет постоянного
+# соединения (не WebSocket), поэтому "онлайн" приближённо = кто прислал
+# отметку присутствия за последние ONLINE_WINDOW_SECONDS. Фронтенд шлёт
+# heartbeat каждые ~20 сек, пока приложение открыто (см. mushaf_data/
+# index.html). В памяти процесса, НЕ в БД - раздельно по мужскому/женскому
+# боту само собой (свой процесс/порт на каждого, см. модульный docstring
+# в wiki/mushaf_yassirapp.md), потеря счётчика при рестарте бота не
+# страшна (не критичная метрика, просто набирается заново за минуту).
+ONLINE_WINDOW_SECONDS = 60
+_last_seen = {}  # user_id -> unix-время последнего heartbeat
+
+
+def _online_count():
+    cutoff = time.time() - ONLINE_WINDOW_SECONDS
+    stale = [uid for uid, ts in _last_seen.items() if ts < cutoff]
+    for uid in stale:
+        del _last_seen[uid]
+    return len(_last_seen)
+
+
+@with_auth
+async def handle_heartbeat(request, user_id):
+    """POST - "я сейчас держу YassirApp открытым", шлётся с фронтенда
+    периодически. Возвращает текущее число "онлайн" сразу же, отдельного
+    GET не нужно."""
+    _last_seen[user_id] = time.time()
+    return web.json_response({"online": _online_count()})
+
+
 def build_app():
     app = web.Application()
     app.router.add_get("/api/muf/state", handle_state)
@@ -451,6 +480,7 @@ def build_app():
     app.router.add_get("/api/muf/bookmark", handle_bookmark_get)
     app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
+    app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     return app
 
 
