@@ -283,7 +283,7 @@
     font-family: inherit; display: none;
   }
 
-  #tabbar {
+  #tabbar, #trainer-tabbar {
     display: flex;
     flex: 0 0 auto;
     background: var(--chrome-bg);
@@ -299,6 +299,16 @@
     cursor: pointer;
   }
   .tab-btn.active { color: var(--ink); font-weight: 600; }
+  /* #tabbar - только иконки (см. HTML), крупнее шрифт под чистый эмодзи;
+     #trainer-tabbar остаётся с текстом (там места достаточно, 2 кнопки). */
+  /* padding уменьшен против общего .tab-btn (10px 4px) - крупный эмодзи
+     (22px против 13px текста) сам по себе выше строкой, без компенсации
+     панель выросла бы с ~38px до ~50px высотой и забрала место у текста
+     Корана (#page-wrap, flex:1 - любой рост #tabbar сжимает именно его).
+     Проверено headless Chrome - с этим padding итоговая высота близка к
+     исходной (пользователь 30.08.2026, "не должны терять пространство
+     для текста Курана"). */
+  #tabbar .tab-btn { font-size: 22px; padding: 6px 4px; }
 
   #words-list {
     flex: 1 1 auto;
@@ -805,9 +815,19 @@
   </div>
 
   <div id="tabbar">
-    <button id="tab-page" class="tab-btn">📖 Страница</button>
-    <button id="tab-meaning" class="tab-btn">📜 Смысл</button>
-    <button id="tab-mywords" class="tab-btn">🔖 Мои слова</button>
+    <!-- Только иконки (30.08.2026, после добавления 4-й вкладки "Тренажёр" -
+         с текстом "Мои слова" переносилось на 2 строки на узких экранах,
+         решение пользователя "если плотно - можно просто иконки"). title -
+         подсказка при наведении/для скринридера, подпись остаётся понятной
+         без текста (те же эмодзи, что и на карточках дашборда/в шапках). -->
+    <button id="tab-page" class="tab-btn" title="Страница">📖</button>
+    <button id="tab-meaning" class="tab-btn" title="Смысл">📜</button>
+    <button id="tab-mywords" class="tab-btn" title="Мои слова">🔖</button>
+    <!-- Прямой переход в Тренажёр без дашборда (30.08.2026, решение
+         пользователя) - НЕ switchTab (уводит из #app целиком), поэтому
+         .active никогда не проставляется - после клика вкладки всё равно
+         не видны (см. openTrainer). -->
+    <button id="tab-trainer" class="tab-btn" title="Тренажёр">🌱</button>
   </div>
 </div>
 
@@ -818,6 +838,12 @@
     <span id="trainer-daily"></span>
   </div>
   <div id="trainer-body"></div>
+  <!-- Прямой переход в Мусхаф/Мои слова без дашборда (30.08.2026, решение
+       пользователя, симметрично 🌱 в #tabbar мусхафа). -->
+  <div id="trainer-tabbar">
+    <button id="trainer-tab-mywords" class="tab-btn">🔖 Мои слова</button>
+    <button id="trainer-tab-mushaf" class="tab-btn">📗 Мусхаф</button>
+  </div>
 </div>
 
 <script>
@@ -857,16 +883,17 @@
   // апп" - движок тренажёра (core/mufradat.py) был уже транспорт-независим,
   // core/mufradat_api.py просто открывает его по HTTP, core/mufradat_bot.py
   // (чат-версия) не тронут, оба используют один и тот же движок/БД).
-  document.getElementById('dash-mushaf').addEventListener('click', function () {
+  // openMushaf(tab) - общая точка входа в #app, вызывается и с дашборда
+  // (tab='page'), и напрямую из Тренажёра (30.08.2026, решение пользователя
+  // "удобный переход без дашборда") - оттуда может понадобиться сразу
+  // открыть "Мои слова", а не только "Страницу". Прячет #trainer тоже
+  // (не только #dashboard) - иначе повторный вызов из Тренажёра оставлял
+  // бы его видимым под #app.
+  function openMushaf(tab) {
     document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('trainer').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
-    // Вход с дашборда - всегда вкладка "Страница" (30.08.2026, решение
-    // пользователя), даже если в прошлый раз ушли со "Смысла"/"Мои слова" -
-    // switchTab('page') при первой загрузке скрипта (см. её вызов ниже)
-    // это уже давал, но только один раз за холодную загрузку; без вызова
-    // здесь повторный заход Мусхаф->Дашборд->Мусхаф В ТОЙ ЖЕ сессии (без
-    // перезагрузки страницы) оставлял бы прошлую вкладку.
-    switchTab('page');
+    switchTab(tab || 'page');
     // clampFontToFit() при самом рендере страницы (reveal(), см. выше)
     // считает по нулевой ширине - #app в этот момент ещё display:none
     // (дашборд - первый экран, см. комментарий выше), контейнер без
@@ -875,8 +902,21 @@
     // телефоне: у уже открывавших мусхаф раньше страница подгружается
     // ИЗ localStorage ещё до клика по карточке).
     document.fonts.ready.then(clampFontToFit);
-  });
+  }
+  // Дашборд YassirApp (28.08.2026/29.08.2026) - первый экран. "Мусхаф" и
+  // "Тренажёр" оба теперь переключают вид ВНУТРИ этого же приложения (до
+  // 29.08.2026 Тренажёр уводил обратно в чат с ботом deep-link'ом - решение
+  // пользователя "ты странный мы же ее ложим вместе с мусхафом в один
+  // апп" - движок тренажёра (core/mufradat.py) был уже транспорт-независим,
+  // core/mufradat_api.py просто открывает его по HTTP, core/mufradat_bot.py
+  // (чат-версия) не тронут, оба используют один и тот же движок/БД).
+  // Вход с дашборда - всегда вкладка "Страница" (30.08.2026, решение
+  // пользователя), даже если в прошлый раз ушли со "Смысла"/"Мои слова".
+  document.getElementById('dash-mushaf').addEventListener('click', function () { openMushaf('page'); });
   document.getElementById('dash-trainer').addEventListener('click', openTrainer);
+  document.getElementById('tab-trainer').addEventListener('click', openTrainer);
+  document.getElementById('trainer-tab-mywords').addEventListener('click', function () { openMushaf('mywords'); });
+  document.getElementById('trainer-tab-mushaf').addEventListener('click', function () { openMushaf('page'); });
   // role="button" на <div> не даёт Enter/Space нативно, в отличие от <button> -
   // нужен явный keydown (30.08.2026, клавиатурная навигация Telegram Desktop).
   Array.prototype.forEach.call(document.querySelectorAll('.dash-card'), function (card) {
