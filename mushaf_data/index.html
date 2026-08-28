@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="google" content="notranslate">
 <title>Мусхаф — Яссир</title>
+<script>
+  // Применяем сохранённую тему ДО рендера (30.08.2026) - отдельный
+  // маленький скрипт в <head>, а не внизу с основной логикой, чтобы не
+  // было вспышки "не той" темы на долю секунды при загрузке (основной
+  // <script> внизу body выполнился бы уже после первой отрисовки).
+  try {
+    var _t = localStorage.getItem('yassir_theme');
+    if (_t === 'light' || _t === 'dark') document.documentElement.setAttribute('data-theme', _t);
+  } catch (e) {}
+</script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   @font-face {
@@ -27,9 +37,15 @@
     font-family: 'mushaf-v4', 'Scheherazade New', serif;
     font-palette: --V4Light;
   }
+  /* Ручной переключатель темы (30.08.2026, кнопка на дашборде) - system-
+     тема остаётся дефолтом (":not([data-theme=light])" пропускает явный
+     светлый выбор мимо системной тёмной), а ":root[data-theme=dark]" даёт
+     тёмную ПРИНУДИТЕЛЬНО, даже если система светлая. См. тот же паттерн
+     ниже у переменных :root. */
   @media (prefers-color-scheme: dark) {
-    .v4-word { font-palette: --V4Dark; }
+    :root:not([data-theme="light"]) .v4-word { font-palette: --V4Dark; }
   }
+  :root[data-theme="dark"] .v4-word { font-palette: --V4Dark; }
 
   :root {
     --bg: #ffffff;
@@ -58,8 +74,15 @@
     --no: #b3403a;
     --no-soft: #fbe9e7;
   }
+  /* Ручной переключатель темы (30.08.2026) - system-тема (media query)
+     остаётся дефолтом, но уступает явному выбору студента:
+     ":not([data-theme=light])" не даёт системной тьме перебить явный
+     светлый выбор, а отдельный ":root[data-theme=dark]" ниже (без media
+     query) даёт тёмную ПРИНУДИТЕЛЬНО, даже если система/Telegram
+     светлые. Кнопка - #btn-theme-toggle на дашборде (см. JS), выбор
+     хранится в localStorage, переживает переоткрытие. */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #16140f;
       --ink: #f0ead8;
       --chrome-bg: #201d16;
@@ -82,6 +105,29 @@
       --no: #e0776f;
       --no-soft: #33201e;
     }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16140f;
+    --ink: #f0ead8;
+    --chrome-bg: #201d16;
+    --chrome-border: #3a3527;
+    --muted: #a39a7d;
+    --popup-bg: #f0ead8;
+    --popup-ink: #16140f;
+    --marker-color: #d4af37;
+    --dash-bg-start: #182019;
+    --dash-bg-end: #14120d;
+    --accent: #4cae83;
+    --accent-ink: #0d1a12;
+    --accent-soft: #1e3126;
+    --card-bg: #201d16;
+    --card-border: #3a3527;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 6px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+    --ok: #4cae83;
+    --ok-soft: #1e3126;
+    --no: #e0776f;
+    --no-soft: #33201e;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -106,6 +152,11 @@
     flex-direction: column;
     height: 100%;
     width: 100%;
+    /* Тот же фон, что у #trainer/#dashboard (30.08.2026, пользователь
+       попросил посмотреть, как будет выглядеть) - виден только там, где
+       нет своего непрозрачного фона у дочерних элементов (topbar/page-nav
+       уже opaque var(--chrome-bg)). */
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
 
   #topbar {
@@ -308,7 +359,10 @@
      Проверено headless Chrome - с этим padding итоговая высота близка к
      исходной (пользователь 30.08.2026, "не должны терять пространство
      для текста Курана"). */
-  #tabbar .tab-btn { font-size: 22px; padding: 6px 4px; }
+  /* Возврат с "Смысла"/"Мои слова" (30.08.2026) - просто стрелка, без
+     текста (решение пользователя "просто иконка возврата"), крупнее
+     обычных text+icon кнопок бара. */
+  #tab-back { font-size: 20px; }
 
   #words-list {
     flex: 1 1 auto;
@@ -449,6 +503,7 @@
      страницы (см. openTrainer/dash-mushaf в скрипте ниже) - карточки
      визуально равноправны, никакая не "главнее" другой. */
   #dashboard {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -457,6 +512,19 @@
     gap: 16px;
     padding: 24px;
     background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  /* Переключатель темы (30.08.2026) - абсолютное позиционирование, не
+     flex-элемент строки - физические left/right не зависят от dir="rtl"
+     (в отличие от порядка flex-детей, см. wiki/mushaf_yassirapp.md про
+     RTL-ловушку), поэтому здесь безопасно без дополнительных проверок. */
+  #btn-theme-toggle {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    box-shadow: var(--shadow-sm); border-radius: 50%;
+    width: 40px; height: 40px;
+    font-size: 18px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
   }
   #dashboard h1 {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -725,6 +793,7 @@
 </head>
 <body>
 <div id="dashboard">
+  <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
   <h1>YassirApp</h1>
   <div id="dash-online"></div>
   <div class="dash-card" id="dash-mushaf" tabindex="0" role="button">
@@ -798,7 +867,7 @@
        "Смысл": целостный перевод аятов страницы (Кулиев, api.quran.com,
        разрешение правообладателя на постоянное размещение подтверждено
        пользователем лично 28.08.2026). Переход на след./пред. страницу
-       перевода и назад на мусхаф - через #page-nav и #tab-page, они уже
+       перевода и назад на мусхаф - через #page-nav и #tab-back, они уже
        общие для всех вьюх, отдельной навигации внутри "Смысла" не нужно. -->
   <div id="view-meaning" class="view">
     <div id="meaning-list"></div>
@@ -815,19 +884,23 @@
   </div>
 
   <div id="tabbar">
-    <!-- Только иконки (30.08.2026, после добавления 4-й вкладки "Тренажёр" -
-         с текстом "Мои слова" переносилось на 2 строки на узких экранах,
-         решение пользователя "если плотно - можно просто иконки"). title -
-         подсказка при наведении/для скринридера, подпись остаётся понятной
-         без текста (те же эмодзи, что и на карточках дашборда/в шапках). -->
-    <button id="tab-page" class="tab-btn" title="Страница">📖</button>
-    <button id="tab-meaning" class="tab-btn" title="Смысл">📜</button>
-    <button id="tab-mywords" class="tab-btn" title="Мои слова">🔖</button>
+    <!-- Контекстная панель (30.08.2026, решение пользователя) - на любом
+         сабвью показываются только ПУТИ КУДА ИДТИ, не текущее место (см.
+         switchTab), текст+иконка как в #trainer-tabbar:
+           Страница: Смысл, Мои слова, Тренажёр (3 кнопки)
+           Смысл: только "🔙" (1) - в Смысл попадают ТОЛЬКО со Страницы,
+             другого входа нет, "назад" однозначно туда, состояние не нужно
+           Мои слова: Тренажёр, "🔙" (2) - "🔙" ведёт на Страницу ИЛИ в
+             Тренажёр, смотря откуда зашли (mywordsOrigin, т.к. "Мои
+             слова" достижимы из обоих мест, см. openMushaf) -->
+    <button id="tab-back" class="tab-btn" title="Назад">🔙</button>
+    <button id="tab-meaning" class="tab-btn" title="Смысл">📜 Смысл</button>
+    <button id="tab-mywords" class="tab-btn" title="Мои слова">🔖 Мои слова</button>
     <!-- Прямой переход в Тренажёр без дашборда (30.08.2026, решение
          пользователя) - НЕ switchTab (уводит из #app целиком), поэтому
          .active никогда не проставляется - после клика вкладки всё равно
          не видны (см. openTrainer). -->
-    <button id="tab-trainer" class="tab-btn" title="Тренажёр">🌱</button>
+    <button id="tab-trainer" class="tab-btn" title="Тренажёр">🌱 Тренажёр</button>
   </div>
 </div>
 
@@ -850,6 +923,31 @@
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
+
+  // Переключатель темы (30.08.2026, ответ на вопрос студента "можно
+  // выбрать тему?"). Сам выбор уже применён к <html> отдельным скриптом
+  // в <head> (до отрисовки) - здесь только: посчитать, что сейчас видно
+  // человеку (для иконки кнопки), и обработать клик.
+  var THEME_KEY = 'yassir_theme';
+  var savedTheme = null;
+  try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) {}
+  function currentEffectiveTheme() {
+    if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  var themeBtn = document.getElementById('btn-theme-toggle');
+  function updateThemeButtonIcon() {
+    // Показываем иконку ЦЕЛИ (на что переключит клик), не текущего
+    // состояния - привычнее для "☀️/🌙"-переключателей.
+    themeBtn.textContent = currentEffectiveTheme() === 'dark' ? '☀️' : '🌙';
+  }
+  updateThemeButtonIcon();
+  themeBtn.addEventListener('click', function () {
+    savedTheme = currentEffectiveTheme() === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, savedTheme); } catch (e) {}
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeButtonIcon();
+  });
 
   // "Сейчас онлайн" (30.08.2026) - heartbeat каждые 20 сек, пока YassirApp
   // открыт (независимо от того, какой экран сейчас - дашборд/мусхаф/
@@ -889,10 +987,14 @@
   // открыть "Мои слова", а не только "Страницу". Прячет #trainer тоже
   // (не только #dashboard) - иначе повторный вызов из Тренажёра оставлял
   // бы его видимым под #app.
-  function openMushaf(tab) {
+  function openMushaf(tab, mywordsFrom) {
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('trainer').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
+    // mywordsFrom - куда должна вести "стрелка назад" на "Мои словах"
+    // (см. mywordsOrigin у switchTab) - только когда открываем именно
+    // "Мои слова" этим вызовом (из Тренажёра, 30.08.2026).
+    if (tab === 'mywords') mywordsOrigin = mywordsFrom || 'page';
     switchTab(tab || 'page');
     // clampFontToFit() при самом рендере страницы (reveal(), см. выше)
     // считает по нулевой ширине - #app в этот момент ещё display:none
@@ -915,7 +1017,7 @@
   document.getElementById('dash-mushaf').addEventListener('click', function () { openMushaf('page'); });
   document.getElementById('dash-trainer').addEventListener('click', openTrainer);
   document.getElementById('tab-trainer').addEventListener('click', openTrainer);
-  document.getElementById('trainer-tab-mywords').addEventListener('click', function () { openMushaf('mywords'); });
+  document.getElementById('trainer-tab-mywords').addEventListener('click', function () { openMushaf('mywords', 'trainer'); });
   document.getElementById('trainer-tab-mushaf').addEventListener('click', function () { openMushaf('page'); });
   // role="button" на <div> не даёт Enter/Space нативно, в отличие от <button> -
   // нужен явный keydown (30.08.2026, клавиатурная навигация Telegram Desktop).
@@ -1207,6 +1309,11 @@
       '<div class="meaning-row"><span class="ayah-num">перевод смысла для этой страницы ещё не загружен</span></div>';
   }
 
+  // "Мои слова" достижимы и со Страницы, и из Тренажёра (см. openMushaf) -
+  // "стрелка назад" на "Мои словах" должна вести туда, откуда реально
+  // пришли, а не всегда на Страницу (решение пользователя 30.08.2026).
+  var mywordsOrigin = 'page'; // 'page' | 'trainer'
+
   function switchTab(name) {
     // tab-words/#view-words больше не в UI (см. комментарий у #tabbar
     // выше), но код оставлен на будущее.
@@ -1214,9 +1321,23 @@
     document.getElementById('view-words').classList.toggle('active', name === 'words');
     document.getElementById('view-meaning').classList.toggle('active', name === 'meaning');
     document.getElementById('view-mywords').classList.toggle('active', name === 'mywords');
-    document.getElementById('tab-page').classList.toggle('active', name === 'page');
     document.getElementById('tab-meaning').classList.toggle('active', name === 'meaning');
     document.getElementById('tab-mywords').classList.toggle('active', name === 'mywords');
+
+    // Контекстная нижняя панель (30.08.2026, решение пользователя) -
+    // всегда показывает "куда ещё пойти", никогда кнопку на текущее
+    // место:
+    //   Страница - Смысл, Мои слова, Тренажёр (3, текст+иконка)
+    //   Смысл - только "🔙" (в Смысл попадают ТОЛЬКО со Страницы, другого
+    //     входа нет - "назад" однозначно туда, состояние не нужно)
+    //   Мои слова - Тренажёр + "🔙" (назад - на Страницу или в Тренажёр,
+    //     смотря откуда зашли, см. mywordsOrigin/tab-back ниже)
+    var onPage = name === 'page', onMeaning = name === 'meaning', onMywords = name === 'mywords';
+    document.getElementById('tab-back').style.display = onPage ? 'none' : '';
+    document.getElementById('tab-meaning').style.display = onPage ? '' : 'none';
+    document.getElementById('tab-mywords').style.display = onPage ? '' : 'none';
+    document.getElementById('tab-trainer').style.display = (onPage || onMywords) ? '' : 'none';
+
     // "Мои слова" - список ПО ВСЕЙ книге, не привязан к текущей странице
     // (29.08.2026, поймано пользователем живьём - "стр. 4" в шапке над
     // списком выглядела так, будто список тоже про эту страницу). Номер
@@ -1235,9 +1356,19 @@
     if (name === 'page') clampFontToFit();
     if (name === 'mywords') loadMyWords();
   }
-  document.getElementById('tab-page').addEventListener('click', function () { switchTab('page'); });
   document.getElementById('tab-meaning').addEventListener('click', function () { switchTab('meaning'); });
-  document.getElementById('tab-mywords').addEventListener('click', function () { switchTab('mywords'); });
+  document.getElementById('tab-mywords').addEventListener('click', function () {
+    mywordsOrigin = 'page';
+    switchTab('mywords');
+  });
+  document.getElementById('tab-back').addEventListener('click', function () {
+    var onMywords = document.getElementById('view-mywords').classList.contains('active');
+    if (onMywords && mywordsOrigin === 'trainer') {
+      openTrainer();
+    } else {
+      switchTab('page');
+    }
+  });
   switchTab('page');
 
   // "Мои слова" - список (29.08.2026, см. модульный комментарий у
