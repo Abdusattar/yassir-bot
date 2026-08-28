@@ -241,15 +241,20 @@
   }
   #page-nav button {
     background: none; border: none; color: var(--ink);
-    font-size: 22px; padding: 4px 10px; cursor: pointer; line-height: 1;
+    font-size: 22px; padding: 8px 10px; cursor: pointer; line-height: 1;
   }
   #page-nav button:disabled { color: var(--chrome-border); }
   /* Закладка страницы чтения + переход к Аль-Бакаре (30.08.2026) -
      дополнительные кнопки в и так тесном #page-nav (узкие экраны телефонов,
-     см. clampFontToFit) - меньше padding/font-size, чем у основных
-     ‹/›, чтобы 4 новых элемента не столкнули номер страницы за край. */
+     см. clampFontToFit) - меньше font-size, чем у основных ‹/›, чтобы 4
+     новых элемента не столкнули номер страницы за край. Вертикальный
+     padding - как у основных кнопок (не меньше), а не урезанный отдельно -
+     иначе высота тап-зоны падала до ~24px (замерено headless Chrome,
+     30.08.2026, по прямому вопросу пользователя про удобство тапа -
+     оказалось нет, поправлено). Переполнения на 360px экране всё равно
+     нет (перепроверено headless Chrome). */
   #page-nav button.page-nav-util {
-    font-size: 16px; padding: 4px 7px;
+    font-size: 16px; padding: 8px 9px;
   }
   #page-indicator {
     font-size: 13px; color: var(--muted);
