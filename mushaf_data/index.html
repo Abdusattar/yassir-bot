@@ -122,6 +122,11 @@
     flex: 0 0 auto;
   }
   #topbar .topbar-left { display: flex; align-items: center; gap: 8px; }
+  #topbar .topbar-right { display: flex; align-items: center; gap: 8px; }
+  #btn-revision {
+    background: none; border: none; font-size: 18px; padding: 2px 4px;
+    cursor: pointer; line-height: 1;
+  }
   #topbar .topbar-back {
     background: none; border: none; color: var(--accent);
     font-size: 13px; font-weight: 600; padding: 4px 0; cursor: pointer;
@@ -370,6 +375,42 @@
     white-space: nowrap;
   }
   #word-popup.visible { opacity: 1; }
+
+  /* Подтверждение (30.08.2026) - общая модалка "да/отмена", сейчас только
+     для 🔁 "повторение", но написана обобщённо на случай будущих
+     похожих подтверждений. */
+  #confirm-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 60; padding: 20px;
+    direction: ltr;
+  }
+  #confirm-overlay.visible { display: flex; }
+  .confirm-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+    padding: 20px;
+    max-width: 320px; width: 100%;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .confirm-card p {
+    margin: 0 0 16px; font-size: 15px; color: var(--ink); line-height: 1.4;
+  }
+  .confirm-card .confirm-actions { display: flex; gap: 10px; justify-content: center; }
+  .confirm-card button {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; box-shadow: var(--shadow-sm);
+    padding: 9px 18px; font-size: 14px; font-weight: 500;
+    color: var(--ink); cursor: pointer; font-family: inherit;
+  }
+  #confirm-yes {
+    background: var(--accent); border-color: var(--accent);
+    color: var(--accent-ink); font-weight: 600;
+  }
 
   #meaning-list {
     flex: 1 1 auto;
@@ -665,13 +706,32 @@
   </div>
 </div>
 <div id="word-popup"></div>
+<div id="confirm-overlay">
+  <div class="confirm-card">
+    <p id="confirm-text"></p>
+    <div class="confirm-actions">
+      <button id="confirm-cancel">Отмена</button>
+      <button id="confirm-yes">Да</button>
+    </div>
+  </div>
+</div>
 <div id="app" style="display:none">
   <div id="topbar">
     <div class="topbar-left">
       <button id="mushaf-back" class="topbar-back">← Дашборд</button>
       <span class="surah-name" id="surah-name">—</span>
     </div>
-    <span id="ayah-range"></span>
+    <div class="topbar-right">
+      <!-- Отметка "повторение" (30.08.2026) - студент сам подтверждает, что
+           перечитал от начала Аль-Бакары до места, где остановился;
+           засчитывает дневное задание "r" (то же, что обычная текстовая
+           сдача "повторение" в группе, core/handlers.py) и шлёт короткое
+           сообщение в группу. Видна только на вкладке "Страница" (см.
+           switchTab) - #topbar уже direction:ltr (в отличие от #page-nav),
+           поэтому RTL-зеркалирование тут не грозит. -->
+      <button id="btn-revision" title="Отметить повторение">🔁</button>
+      <span id="ayah-range"></span>
+    </div>
   </div>
   <div id="page-nav">
     <!-- Порядок в DOM - "наоборот" от желаемой картинки (30.08.2026):
@@ -959,6 +1019,30 @@
     if (text) showPopupMessage(el, text);
   }
 
+  // Общая модалка "да/отмена" (30.08.2026, сейчас только для 🔁
+  // "повторение") - showConfirm(текст, колбэк) показывает вопрос, колбэк
+  // вызывается только по "Да", по "Отмена"/фону - ничего не происходит.
+  var confirmOverlay = document.getElementById('confirm-overlay');
+  var confirmOnYes = null;
+  function showConfirm(text, onYes) {
+    document.getElementById('confirm-text').textContent = text;
+    confirmOnYes = onYes;
+    confirmOverlay.classList.add('visible');
+  }
+  function hideConfirm() {
+    confirmOverlay.classList.remove('visible');
+    confirmOnYes = null;
+  }
+  document.getElementById('confirm-cancel').addEventListener('click', hideConfirm);
+  confirmOverlay.addEventListener('click', function (e) {
+    if (e.target === confirmOverlay) hideConfirm();
+  });
+  document.getElementById('confirm-yes').addEventListener('click', function () {
+    var cb = confirmOnYes;
+    hideConfirm();
+    if (cb) cb();
+  });
+
   // "Мои слова" (29.08.2026) - двойной тап/клик по слову на странице
   // чтения добавляет его в личный список (см. #tab-mywords ниже), не
   // открывает подсказку перевода. Один клик и так уже даёт перевод во
@@ -1059,6 +1143,9 @@
     document.getElementById('ayah-range').style.display = name === 'mywords' ? 'none' : '';
     document.getElementById('surah-name').textContent =
       name === 'mywords' ? '🔖 Мои слова' : currentSurahNameText;
+    // 🔁 "повторение" (30.08.2026) - только на "Странице" (решение
+    // пользователя), не на "Смысле"/"Мои слова".
+    document.getElementById('btn-revision').style.display = name === 'page' ? '' : 'none';
     if (name === 'page') clampFontToFit();
     if (name === 'mywords') loadMyWords();
   }
@@ -1174,6 +1261,21 @@
       } else {
         showPopupMessage(btn, 'Закладка ещё не сохранена');
       }
+    });
+  });
+
+  // Отметка "повторение" (30.08.2026) - решение пользователя: подтверждение
+  // ПЕРЕД зачётом (студент мог случайно задеть кнопку), засчитывает
+  // дневное задание "r" и шлёт сообщение в группу (core/mufradat_bot.py:
+  // credit_revision_task) только после явного "Да".
+  document.getElementById('btn-revision').addEventListener('click', function (e) {
+    var btn = e.currentTarget;
+    showConfirm('Вы сделали повторение с начала суры Аль-Бакара?', function () {
+      apiCall('/revision', { method: 'POST' }).then(function (res) {
+        if (res.status === 401) return;
+        showPopupMessage(btn, res.data && res.data.credited ?
+          '✅ Повторение засчитано' : 'Уже засчитано сегодня');
+      });
     });
   });
 

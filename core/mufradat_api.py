@@ -40,7 +40,7 @@ from core.mufradat import (
 )
 from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
-    _split_by_division, _display_name, _group_name, _find_rank,
+    _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
 )
 from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
@@ -426,6 +426,17 @@ async def handle_bookmark_set(request, user_id):
     return web.json_response({"page": page})
 
 
+@with_auth
+async def handle_revision_credit(request, user_id):
+    """POST - кнопка "🔁" в #topbar на странице чтения (30.08.2026).
+    Подтверждение ("вы сделали повторение...?") уже показано на фронтенде
+    ДО этого запроса - сюда приходит только финальное "да". Логика зачёта
+    и сообщения в группу - в credit_revision_task (core/mufradat_bot.py),
+    та же, что у обычной текстовой сдачи "повторение" в группе."""
+    credited = await credit_revision_task(user_id)
+    return web.json_response({"credited": credited})
+
+
 def build_app():
     app = web.Application()
     app.router.add_get("/api/muf/state", handle_state)
@@ -439,6 +450,7 @@ def build_app():
     app.router.add_post("/api/muf/words/remove", handle_words_remove)
     app.router.add_get("/api/muf/bookmark", handle_bookmark_get)
     app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
+    app.router.add_post("/api/muf/revision", handle_revision_credit)
     return app
 
 

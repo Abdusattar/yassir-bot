@@ -29,6 +29,7 @@ core/mufradat.py) - студенту не нужно вручную добавл
 import logging
 import re
 
+from core.content import SHORT_TASKS
 from core.db import find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date, get_today_report
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -241,6 +242,35 @@ async def _credit_task_if_applicable(user_id, chat_id):
             group["chat_id"],
             f"{user['name']}, Слова + (через тренажёр{score_part})."
         )
+
+
+async def credit_revision_task(user_id):
+    """Кнопка "🔁" на странице чтения мусхафа (30.08.2026, решение
+    пользователя) - студент сам отмечает, что перечитал (сделал повторение)
+    от начала суры Аль-Бакара до места, где остановился, подтвердив во
+    всплывающем окне на фронтенде ("Вы сделали повторение...?" -> "Да").
+    На доверии, без проверки самого факта прочтения - как и обычная
+    текстовая сдача "повторение" в группе (core/handlers.py), эта кнопка -
+    просто альтернативный способ сдать ТО ЖЕ САМОЕ задание "r", без набора
+    текста и ИИ-классификации.
+
+    Возвращает True, если засчитано сейчас; False - если сегодня уже было
+    (тихо, без сообщения в группу - тот же принцип, что у
+    _credit_task_if_applicable выше, не спамим группу на повторный тап) или
+    если "r" не входит в задания группы студента / студент не найден."""
+    group = get_learning_group(user_id)
+    if not group or "r" not in get_group_tasks(group):
+        return False
+    user = find_user_by_phone(user_id)
+    if not user:
+        return False
+    already = get_today_report(user["id"], group["id"]) or {}
+    if already.get("r"):
+        return False
+    save_report(user["id"], group["id"], get_date(), {"r": True})
+    if group["chat_id"]:
+        await send_message(group["chat_id"], f"{user['name']}, {SHORT_TASKS['r'].lower()} +.")
+    return True
 
 
 async def handle_stale_answer_tap(user_id, chat_id):
