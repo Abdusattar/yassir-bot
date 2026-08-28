@@ -33,7 +33,9 @@ from zoneinfo import ZoneInfo
 
 from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss, ensure_mufradat_schema
 from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
-from core.mushaf_words import get_starred_progress_keys, remove_starred_by_progress_key
+from core.mushaf_words import (
+    get_starred_progress_keys, remove_starred_by_progress_key, add_starred_word_by_progress_key,
+)
 
 # Языки перевода, доступные в тренажёре (26.08.2026) - код -> подпись кнопки.
 # API Quran Academy реально поддерживает ru/en/uz/tr (проверено эмпирически
@@ -538,8 +540,19 @@ def record_answer(user_id, word_id, correct):
         # той же мере, что и весь остальной тренажёр (is_mastered), не по
         # отдельному параллельному счётчику. word_id тут - progress_key
         # (см. докстрочку функции выше), remove_starred_by_progress_key
-        # сама решает, что делать, если он не в списке (ничего).
+        # сама решает, что делать, если он не в списке (ничего). Она же
+        # обнуляет correct_streak обратно в 0 (core/mushaf_words.py:
+        # _reset_progress_streak) - выход из "Мои слова" НЕ должен совпадать
+        # с уходом на 60-дневный отдых, слово должно заново пройти путь "как
+        # обычное" (решение пользователя 29.08.2026, третий заход).
         remove_starred_by_progress_key(user_id, word_id)
+    elif not correct:
+        # Симметрично: неверный ответ ЛЮБОГО слова (не только уже звёздного)
+        # закидывает его в "Мои слова" (решение пользователя 29.08.2026,
+        # третий заход - "должно уходить автоматом"). Без предела размера
+        # списка - два канала слива (ручное удаление + 5 верных подряд)
+        # признаны достаточными. Идемпотентно - уже там, ничего не меняется.
+        add_starred_word_by_progress_key(user_id, word_id)
 
 
 def is_mastered(progress_row):
