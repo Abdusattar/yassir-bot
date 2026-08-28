@@ -43,6 +43,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 sys.path.insert(0, ".")
 from core.sampler import HADITHS_DB
+from core.mufradat import _is_junk
 import sqlite3
 import quran_transcript as qt
 
@@ -218,7 +219,18 @@ def get_ayah_words(conn, surah, ayah):
     могла выйти за эти суры - см. модульный docstring, решение 28.08.2026).
     Перевод подмешивается из mufradat_words, если есть - иначе пустая
     строка, вкладка "Слова" на непереведённых страницах просто не покажет
-    перевод, само чтение не блокируется."""
+    перевод, само чтение не блокируется.
+
+    "*" (и другие переводы без единой буквы) отфильтрованы через тот же
+    _is_junk, что использует тренажёр (core/mufradat.py) - это метка
+    склейки устойчивых сочетаний API Quran Academy (см.
+    _merge_glued_translations), а не настоящий перевод. Страница чтения
+    (в отличие от тренажёра) не склеивает арабский текст головного слова
+    с хвостом - здесь достаточно просто не показывать попап-перевод на
+    хвосте (студент тапом смотрит перевод, не отвечает на вопрос, поэтому
+    хвост без перевода просто остаётся нетапабельным словом, как и слова
+    без перевода вообще - баг найден 29.08.2026 по вопросу пользователя,
+    "*" утекал в попап и в «Мои слова» буквальной строкой)."""
     arabic_words = qt.Aya(surah, ayah).get().uthmani_words
     translations = {
         row["position"]: row["translation"]
@@ -229,7 +241,10 @@ def get_ayah_words(conn, surah, ayah):
         )
     }
     return [
-        {"position": i, "arabic_text": w, "translation": translations.get(i, "")}
+        {
+            "position": i, "arabic_text": w,
+            "translation": "" if _is_junk(translations.get(i, "")) else translations[i],
+        }
         for i, w in enumerate(arabic_words, 1)
     ]
 

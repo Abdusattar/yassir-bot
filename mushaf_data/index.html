@@ -822,8 +822,10 @@
     });
   }
 
+  var currentSurahNameText = '';
   function renderPage(data) {
-    document.getElementById('surah-name').textContent = data.surah_names.join(', ');
+    currentSurahNameText = data.surah_names.join(', ');
+    document.getElementById('surah-name').textContent = currentSurahNameText;
     var firstAyah = data.ayahs[0], lastAyah = data.ayahs[data.ayahs.length - 1];
     document.getElementById('ayah-range').textContent =
       'аят ' + firstAyah.ayah + (lastAyah.ayah !== firstAyah.ayah ? '–' + lastAyah.ayah : '');
@@ -1010,10 +1012,14 @@
     // (29.08.2026, поймано пользователем живьём - "стр. 4" в шапке над
     // списком выглядела так, будто список тоже про эту страницу). Номер
     // страницы/навигация ‹›/аят-диапазон - убираем, они относятся только
-    // к "Странице"/"Смыслу". Имя суры в шапке слева не трогаем - просто
-    // ambient "ты читал здесь", ложного впечатления не создаёт.
+    // к "Странице"/"Смыслу". Имя суры в шапке слева раньше оставляли как
+    // ambient-контекст, но с телефона было неочевидно, что это за вкладка
+    // (пользователь, 29.08.2026) - теперь явный заголовок "Мои слова",
+    // имя суры возвращается при уходе с вкладки.
     document.getElementById('page-nav').style.display = name === 'mywords' ? 'none' : 'flex';
     document.getElementById('ayah-range').style.display = name === 'mywords' ? 'none' : '';
+    document.getElementById('surah-name').textContent =
+      name === 'mywords' ? '🔖 Мои слова' : currentSurahNameText;
     if (name === 'page') clampFontToFit();
     if (name === 'mywords') loadMyWords();
   }

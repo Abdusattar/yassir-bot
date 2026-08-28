@@ -36,7 +36,7 @@ from core.mufradat import (
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
     record_daily_answered_word, get_daily_answered_count, DAILY_WORDS_FOR_TASK_CREDIT,
-    get_starred_question_pool,
+    get_starred_question_pool, _is_junk,
 )
 from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
@@ -365,7 +365,12 @@ async def handle_words_add(request, user_id):
         return web.json_response({"error": "bad_word"}, status=400)
     arabic = (body.get("arabic") or "").strip()
     translation = (body.get("translation") or "").strip()
-    if not arabic or not translation:
+    if not arabic or not translation or _is_junk(translation):
+        # _is_junk ловит "*" (метка склейки API Quran Academy, см.
+        # core/mufradat.py:_is_junk) - у клиента со старым закэшированным
+        # page*.json тап по хвосту склейки ещё может слать "*" как
+        # translation до обновления кэша, серверная сторона не должна
+        # пускать её в mushaf_starred_words (29.08.2026).
         return web.json_response({"error": "missing_text"}, status=400)
     add_starred_word(user_id, *key, arabic, translation)
     return web.json_response({"words": list_starred_words(user_id)})
