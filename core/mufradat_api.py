@@ -354,8 +354,9 @@ async def handle_words_add(request, user_id):
     """POST {surah, ayah, position, arabic, translation} - двойной
     тап/клик по слову на странице чтения. arabic/translation приходят от
     клиента (уже отрисованы на странице, см. data-arabic/data-tr в
-    mushaf_data/index.html) - тут не пересчитываются и не проверяются
-    по mufradat_words (та покрывает только суры 2-10)."""
+    mushaf_data/index.html), не пересчитываются заново по mufradat_words -
+    только _is_junk-проверка (см. ниже, "*" от старого закэшированного
+    клиента)."""
     try:
         body = await request.json()
     except (json.JSONDecodeError, ValueError):

@@ -6,20 +6,18 @@
 
 Идентификатор слова - (surah, ayah, position) из данных страницы чтения
 (mushaf_data/page*.json, scripts/export_mushaf_page.py), НЕ progress_key
-mufradat_words - та база покрывает только суры 2-10, а читают по всей
-книге.
+mufradat_words напрямую - резолвится отдельным JOIN при добавлении (см.
+ниже), т.к. это разные системы идентификации одного и того же слова.
 
 Интеграция с тренажёром (29.08.2026, второй заход - решение пользователя
-"их надо обязательно прогонять в тренажёре") - ЧАСТИЧНАЯ, ограничена тем
-же покрытием сур 2-10: при добавлении слова пытаемся сразу разрешить его
-progress_key (совпадение по surah/ayah/position с mufradat_words, язык
-'ru' - тот же язык, каким страница чтения экспортирует переводы, см.
-scripts/export_mushaf_page.py:get_ayah_words). Не нашли - progress_key
-остаётся NULL, слово просто списком для чтения, как и было изначально
-(суры вне 2-10 тренажёр физически не может ни задать вопросом, ни
-засчитать серию верных ответов - см. память проекта
-project_mufradat_local_full_quran_data про будущую отдельную
-синхронизацию полной базы на прод)."""
+"их надо обязательно прогонять в тренажёре"): при добавлении слова сразу
+пытаемся разрешить его progress_key (совпадение по surah/ayah/position с
+mufradat_words, язык 'ru' - тот же язык, каким страница чтения
+экспортирует переводы, см. scripts/export_mushaf_page.py:get_ayah_words).
+mufradat_words покрывает весь Коран (1-114, синк на прод 29.08.2026 - см.
+память project_mufradat_local_full_quran_data), так что резолвится
+практически всегда; не нашли - progress_key остаётся NULL, слово просто
+списком для чтения, как и было изначально."""
 import sqlite3
 from datetime import datetime, timezone
 
@@ -110,8 +108,8 @@ def remove_starred_by_progress_key(user_id, progress_key):
 
 
 def get_starred_progress_keys(user_id):
-    """Только слова с уже разрешённым progress_key (суры 2-10) - это то,
-    что тренажёр вообще способен задать вопросом. Вызывается перед КАЖДЫМ
+    """Только слова с уже разрешённым progress_key - это то, что тренажёр
+    вообще способен задать вопросом. Вызывается перед КАЖДЫМ
     generate_question (core/mufradat.py) - см. get_starred_question_pool."""
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
