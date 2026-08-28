@@ -79,6 +79,30 @@ def _resolve_progress_key(conn, surah, ayah, position):
     return row[0] if row else None
 
 
+def _merge_tail_arabic(conn, surah, ayah, position, arabic_text, language=_LANGUAGE):
+    """Устойчивые сочетания (30.08.2026, тот же баг класс, что в
+    add_starred_word_by_progress_key, найден по вопросу пользователя "а мы
+    ничего не потеряли?") - следующие позиции того же аята с
+    translation="*" приклеиваются арабским текстом (см.
+    core/mufradat.py:_merge_glued_translations - тот же алгоритм, здесь
+    нет предзагруженного списка строк аята, поэтому запрашиваем по одной).
+    Перевод головы (translation, передан отдельно вызывающим кодом) уже
+    покрывает всю связку - его не трогаем."""
+    parts = [arabic_text]
+    pos = position + 1
+    while True:
+        tail = conn.execute(
+            "SELECT arabic_text, translation FROM mufradat_words "
+            "WHERE surah_number=? AND ayah_number=? AND position=? AND language=?",
+            (surah, ayah, pos, language)
+        ).fetchone()
+        if not tail or tail[1].strip() != "*":
+            break
+        parts.append(tail[0])
+        pos += 1
+    return " ".join(parts)
+
+
 def add_starred_word(user_id, surah, ayah, position, arabic_html, translation):
     """Идемпотентно (INSERT OR IGNORE) - двойной тап на уже добавленном
     слове на странице чтения молча ничего не меняет, не убирает его. На
@@ -90,6 +114,14 @@ def add_starred_word(user_id, surah, ayah, position, arabic_html, translation):
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
         progress_key = _resolve_progress_key(conn, surah, ayah, position)
+        # Голова устойчивого сочетания (30.08.2026) - страница чтения не
+        # склеивает арабский текст head+"*"-хвоста для показа (каждое
+        # слово - свой глиф в построчной вёрстке), но перевод головы уже
+        # покрывает ВСЮ связку - без склейки арабский в "Мои слова" не
+        # соответствовал бы переводу (тот же баг, что был в
+        # add_starred_word_by_progress_key, найден по вопросу пользователя
+        # "а мы точно ничего не потеряли?").
+        arabic_html = _merge_tail_arabic(conn, surah, ayah, position, arabic_html)
         conn.execute(
             "INSERT OR IGNORE INTO mushaf_starred_words "
             "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key) "
@@ -128,23 +160,8 @@ def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE):
         # только "مِّنۢ" без хвоста "بَعْدِ") - представительная строка тут
         # берётся напрямую по progress_key, БЕЗ прохода через
         # _merge_glued_translations (та работает на предзагруженном списке
-        # строк ayah'а, здесь его нет) - хвосты подмешиваем вручную тем же
-        # алгоритмом: следующие позиции того же аята с translation="*"
-        # приклеиваются арабским текстом, перевод головы не трогаем (уже
-        # покрывает всю связку).
-        arabic_parts = [arabic_text]
-        pos = position + 1
-        while True:
-            tail = conn.execute(
-                "SELECT arabic_text, translation FROM mufradat_words "
-                "WHERE surah_number=? AND ayah_number=? AND position=? AND language=?",
-                (surah, ayah, pos, language)
-            ).fetchone()
-            if not tail or tail[1].strip() != "*":
-                break
-            arabic_parts.append(tail[0])
-            pos += 1
-        arabic_text = " ".join(arabic_parts)
+        # строк ayah'а, здесь его нет) - см. _merge_tail_arabic.
+        arabic_text = _merge_tail_arabic(conn, surah, ayah, position, arabic_text, language)
         # Импорт внутри функции - не наверху файла (30.08.2026): core.mufradat
         # уже импортирует ИЗ core.mushaf_words на верхнем уровне (см. модульный
         # docstring выше), обратный импорт там же создал бы цикл. К моменту
