@@ -1006,6 +1006,14 @@
     document.getElementById('tab-page').classList.toggle('active', name === 'page');
     document.getElementById('tab-meaning').classList.toggle('active', name === 'meaning');
     document.getElementById('tab-mywords').classList.toggle('active', name === 'mywords');
+    // "Мои слова" - список ПО ВСЕЙ книге, не привязан к текущей странице
+    // (29.08.2026, поймано пользователем живьём - "стр. 4" в шапке над
+    // списком выглядела так, будто список тоже про эту страницу). Номер
+    // страницы/навигация ‹›/аят-диапазон - убираем, они относятся только
+    // к "Странице"/"Смыслу". Имя суры в шапке слева не трогаем - просто
+    // ambient "ты читал здесь", ложного впечатления не создаёт.
+    document.getElementById('page-nav').style.display = name === 'mywords' ? 'none' : 'flex';
+    document.getElementById('ayah-range').style.display = name === 'mywords' ? 'none' : '';
     if (name === 'page') clampFontToFit();
     if (name === 'mywords') loadMyWords();
   }
