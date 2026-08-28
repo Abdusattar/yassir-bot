@@ -1331,12 +1331,17 @@
     //   Смысл - только "🔙" (в Смысл попадают ТОЛЬКО со Страницы, другого
     //     входа нет - "назад" однозначно туда, состояние не нужно)
     //   Мои слова - Тренажёр + "🔙" (назад - на Страницу или в Тренажёр,
-    //     смотря откуда зашли, см. mywordsOrigin/tab-back ниже)
+    //     смотря откуда зашли, см. mywordsOrigin/tab-back ниже) - НО если
+    //     зашли ИЗ Тренажёра, "Тренажёр" не показываем вовсе (30.08.2026,
+    //     поймано пользователем: обе кнопки вели бы в одно и то же место -
+    //     дублирование, как и с "текущим местом" в остальных случаях).
     var onPage = name === 'page', onMeaning = name === 'meaning', onMywords = name === 'mywords';
+    var mywordsFromTrainer = onMywords && mywordsOrigin === 'trainer';
     document.getElementById('tab-back').style.display = onPage ? 'none' : '';
     document.getElementById('tab-meaning').style.display = onPage ? '' : 'none';
     document.getElementById('tab-mywords').style.display = onPage ? '' : 'none';
-    document.getElementById('tab-trainer').style.display = (onPage || onMywords) ? '' : 'none';
+    document.getElementById('tab-trainer').style.display =
+      (onPage || (onMywords && !mywordsFromTrainer)) ? '' : 'none';
 
     // "Мои слова" - список ПО ВСЕЙ книге, не привязан к текущей странице
     // (29.08.2026, поймано пользователем живьём - "стр. 4" в шапке над
