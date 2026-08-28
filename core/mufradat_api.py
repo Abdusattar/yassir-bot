@@ -36,6 +36,7 @@ from core.mufradat import (
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
     record_daily_answered_word, get_daily_answered_count, DAILY_WORDS_FOR_TASK_CREDIT,
+    get_starred_question_pool,
 )
 from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
@@ -121,7 +122,12 @@ def _new_question(user_id, session_correct, start_score10):
     pool = get_words_for_bookmark(user_id)
     progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
-    q = generate_question(pool, progress)
+    # "Мои слова" (29.08.2026) - каждый STARRED_QUESTION_QUOTA-й вопрос
+    # гарантированно из личного списка (core/mushaf_words.py), см. докстрочку
+    # get_starred_question_pool. Вызывается перед КАЖДЫМ generate_question -
+    # эта функция единственная точка генерации вопроса на веб-стороне.
+    starred_words = get_starred_question_pool(user_id, get_current_lang(user_id))
+    q = generate_question(pool, progress, starred_words=starred_words)
     if q is None:
         _active.pop(user_id, None)
         return None, overall_score

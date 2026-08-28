@@ -35,6 +35,7 @@ from core.mufradat import (
     set_current_page, get_current_page, get_words_for_bookmark, get_leaderboard,
     record_daily_answered_word, DAILY_WORDS_FOR_TASK_CREDIT, compute_overall_score,
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
+    get_starred_question_pool,
 )
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.tg import (
@@ -172,7 +173,8 @@ def _render_card(user_id, q, session_correct, overall_score=None, feedback=None)
 
 async def _send_new_card(user_id, chat_id, words_pool):
     progress = get_progress_map(user_id, [w["progress_key"] for w in words_pool])
-    q = generate_question(words_pool, progress)
+    starred_words = get_starred_question_pool(user_id, get_current_lang(user_id))
+    q = generate_question(words_pool, progress, starred_words=starred_words)
     if q is None:
         await send_message_with_button_rows(
             chat_id, "Пока маловато слов для тренажёра 🤲 Сдвинь страницу дальше.",
@@ -305,7 +307,8 @@ async def handle_answer_tap(user_id, chat_id, message_id, word_id, slot):
 
     pool = get_words_for_bookmark(user_id)
     progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
-    q = generate_question(pool, progress)
+    starred_words = get_starred_question_pool(user_id, get_current_lang(user_id))
+    q = generate_question(pool, progress, starred_words=starred_words)
     feedback = "✅ Верно!" if correct else f"❌ Не то, правильно: {state['target']}"
     # Короткая подсказка до порога зачёта задания "Слова" - решение
     # пользователя 17.08.2026 (тот же день, что и снижение порога 20->15).
@@ -366,7 +369,8 @@ async def handle_page_step_tap(user_id, chat_id, message_id, delta):
 
     pool = get_words_for_bookmark(user_id)
     progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
-    q = generate_question(pool, progress)
+    starred_words = get_starred_question_pool(user_id, get_current_lang(user_id))
+    q = generate_question(pool, progress, starred_words=starred_words)
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
 
     # Карточка - ФОТО только если для message_id есть активное состояние
@@ -440,7 +444,8 @@ async def _refresh_card(user_id, chat_id, message_id, session_correct, start_sco
     начинает сеанс заново - другой пул слов, другой прогресс)."""
     pool = get_words_for_bookmark(user_id)
     progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
-    q = generate_question(pool, progress)
+    starred_words = get_starred_question_pool(user_id, get_current_lang(user_id))
+    q = generate_question(pool, progress, starred_words=starred_words)
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
 
     if q is None:

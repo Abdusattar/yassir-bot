@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss, ensure_mufradat_schema
 from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
+from core.mushaf_words import get_starred_progress_keys, remove_starred_by_progress_key
 
 # Языки перевода, доступные в тренажёре (26.08.2026) - код -> подпись кнопки.
 # API Quran Academy реально поддерживает ru/en/uz/tr (проверено эмпирически
@@ -108,12 +109,15 @@ _PAGE_SCHEMA = """
 # record_answer, ошибка НЕ обнуляет счётчик, только верные ответы двигают
 # его вперёд, решение пользователя 17.08.2026, третий заход). Было 7,
 # снижено до 4 решением пользователя 18.08.2026 - "пока 7 пройдут, время
-# много понадобится". Естественный разброс по времени берётся не из
-# календарных дней, а из самой механики выбора вопроса - слово с большим
-# числом верных ответов получает меньший вес (word_weight) и реже
-# выпадает, а слов на странице много, так что "домотать" одно и то же
-# слово до MASTERY_STREAK за один присест почти невозможно.
-MASTERY_STREAK = 4
+# много понадобится", поднято обратно до 5 решением пользователя
+# 29.08.2026 (заодно с фичей "Мои слова" - см. mushaf_words.py, слово
+# уходит из личного списка по достижении именно этого порога). Естественный
+# разброс по времени берётся не из календарных дней, а из самой механики
+# выбора вопроса - слово с большим числом верных ответов получает меньший
+# вес (word_weight) и реже выпадает, а слов на странице много, так что
+# "домотать" одно и то же слово до MASTERY_STREAK за один присест почти
+# невозможно.
+MASTERY_STREAK = 5
 
 # Даже "выученное" (correct_streak >= MASTERY_STREAK) слово освобождает
 # место в пуле вопросов на RECHECK_AFTER_DAYS дней ("убирается" - не
@@ -201,6 +205,83 @@ def get_words_in_range(surah_number, start_ayah, end_ayah, language=DEFAULT_LANG
         ).fetchall()
     words = _merge_glued_translations([dict(r) for r in rows])
     return [w for w in words if not _is_junk(w["translation"])]
+
+
+def get_words_by_progress_keys(progress_keys, language=DEFAULT_LANGUAGE):
+    """Слова по прогресс-ключам напрямую (НЕ по диапазону страниц) - для
+    "Мои слова" (core/mushaf_words.py): звёздное слово может быть отмечено
+    на странице, до которой закладка студента в тренажёре ещё не дошла
+    (решение пользователя 29.08.2026, "подтягивать сразу, вне закладки").
+    Одна строка на progress_key (MIN(id) - представитель, arabic_text и
+    translation у всех вхождений одного progress_key совпадают по
+    построению, см. core/sampler.py) - _merge_glued_translations тут не
+    нужен, "*"-хвосты просто не имеют своего progress_key и не попадут в
+    выборку по WHERE IN (эти progress_keys уже разрешены на реальных
+    словах, см. core/mushaf_words.py:_resolve_progress_key)."""
+    progress_keys = list({*progress_keys})
+    if not progress_keys:
+        return []
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        ensure_mufradat_schema(conn)
+        placeholders = ",".join("?" * len(progress_keys))
+        rows = conn.execute(
+            f"SELECT id, surah_number, ayah_number, position, arabic_text, translation, progress_key "
+            f"FROM mufradat_words WHERE progress_key IN ({placeholders}) AND language=? "
+            f"GROUP BY progress_key",
+            (*progress_keys, language)
+        ).fetchall()
+    words = [dict(r) for r in rows]
+    return [w for w in words if not _is_junk(w["translation"])]
+
+
+# Каждый STARRED_QUESTION_QUOTA-й вопрос в тренажёре - гарантированно из
+# "Мои слова" (core/mushaf_words.py), если там есть хоть одно слово с
+# разрешённым progress_key (суры 2-10). Решение пользователя 29.08.2026 -
+# множитель к весу не работал бы на реальных объёмах пула (сотни-тысячи
+# слов делают буст в 2-3 раза незаметным на глаз, разбор advisor того же
+# дня) - только гарантированная квота даёт то самое "обязательно",
+# которое просил пользователь.
+STARRED_QUESTION_QUOTA = 3
+
+_QUESTION_COUNTER_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mufradat_question_counter(
+        user_id TEXT PRIMARY KEY,
+        count INTEGER NOT NULL DEFAULT 0
+    )
+"""
+
+
+def _bump_question_counter(user_id):
+    """Персистентный (в БД, не в _active/_active_question) счётчик вопросов
+    пользователя - у обоих транспортов (чат core/mufradat_bot.py, веб
+    core/mufradat_api.py) НЕСКОЛЬКО разных мест генерируют вопрос (новая
+    карточка, ответ, обновление после смены страницы...) - единая функция,
+    вызываемая перед КАЖДЫМ generate_question, надёжнее, чем тащить
+    счётчик через параметры/сессионные словари в каждое из этих мест."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_QUESTION_COUNTER_SCHEMA)
+        conn.execute(
+            "INSERT INTO mufradat_question_counter (user_id, count) VALUES (?, 1) "
+            "ON CONFLICT(user_id) DO UPDATE SET count = count + 1",
+            (user_id,)
+        )
+        return conn.execute(
+            "SELECT count FROM mufradat_question_counter WHERE user_id=?", (user_id,)
+        ).fetchone()[0]
+
+
+def get_starred_question_pool(user_id, language=DEFAULT_LANGUAGE):
+    """Вызывать ПЕРЕД КАЖДЫМ generate_question, и в чат-версии, и в веб -
+    результат передаётся как generate_question(..., starred_words=...).
+    None - обычный вопрос как раньше (не подошла очередь квоты, либо в
+    "Моих словах" нет ни одного слова с разрешённым progress_key)."""
+    if _bump_question_counter(user_id) % STARRED_QUESTION_QUOTA != 0:
+        return None
+    starred_keys = get_starred_progress_keys(user_id)
+    if not starred_keys:
+        return None
+    return get_words_by_progress_keys(starred_keys, language) or None
 
 
 def word_weight(progress_row):
@@ -321,11 +402,21 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
     return random.choices(candidates, weights=weights, k=1)[0]
 
 
-def generate_question(words, progress_by_id, n_options=8):
+def generate_question(words, progress_by_id, n_options=8, starred_words=None):
     """Возвращает {word, options} или None, если в диапазоне недостаточно
     слов для вопроса. options - список переводов (включая верный),
-    перемешанный."""
-    target = pick_question_word(words, progress_by_id)
+    перемешанный.
+
+    starred_words - результат get_starred_question_pool (29.08.2026),
+    когда передан и не пуст, ЦЕЛЬ вопроса берётся из него, а не из words -
+    "Мои слова" должны доставаться вопросом, даже если слово со страницы,
+    где его отметили, ещё вне текущей закладки студента в тренажёре
+    (решение пользователя, "подтягивать сразу, вне закладки"). Дистракторы
+    (неверные варианты) всё равно строятся из words - они не обязаны быть
+    с той же страницы, что и цель, это просто похожие по форме вопроса
+    вложения."""
+    target = pick_question_word(starred_words, progress_by_id) if starred_words \
+        else pick_question_word(words, progress_by_id)
     if target is None:
         return None
 
@@ -441,6 +532,14 @@ def record_answer(user_id, word_id, correct):
             "VALUES (?,?,?,?,?,?)",
             (user_id, word_id, streak, wrong, right, last_date)
         )
+    if correct and streak >= MASTERY_STREAK:
+        # "Мои слова" (core/mushaf_words.py, 29.08.2026) - слово выходит из
+        # личного списка ровно в момент, когда становится "выученным" по
+        # той же мере, что и весь остальной тренажёр (is_mastered), не по
+        # отдельному параллельному счётчику. word_id тут - progress_key
+        # (см. докстрочку функции выше), remove_starred_by_progress_key
+        # сама решает, что делать, если он не в списке (ничего).
+        remove_starred_by_progress_key(user_id, word_id)
 
 
 def is_mastered(progress_row):
