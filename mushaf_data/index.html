@@ -930,7 +930,11 @@
              слова" достижимы из обоих мест, см. openMushaf) -->
     <button id="tab-back" class="tab-btn" title="Назад">🔙</button>
     <button id="tab-meaning" class="tab-btn" title="Смысл">📜 Смысл</button>
-    <button id="tab-mywords" class="tab-btn" title="Мои слова"><span class="icon-gold">🔖</span> Мои слова</button>
+    <!-- ⭐, не 🔖 (30.08.2026, пользователь поймал путаницу с закладкой
+         страницы, у которой тот же 🔖) - совпадает с реальным именем
+         таблицы в БД (mushaf_starred_words, "starred" = отмечено
+         звёздочкой), две разные функции больше не выглядят одинаково. -->
+    <button id="tab-mywords" class="tab-btn" title="Мои слова"><span class="icon-gold">⭐</span> Мои слова</button>
     <!-- Прямой переход в Тренажёр без дашборда (30.08.2026, решение
          пользователя) - НЕ switchTab (уводит из #app целиком), поэтому
          .active никогда не проставляется - после клика вкладки всё равно
@@ -949,7 +953,7 @@
   <!-- Прямой переход в Мусхаф/Мои слова без дашборда (30.08.2026, решение
        пользователя, симметрично 🌱 в #tabbar мусхафа). -->
   <div id="trainer-tabbar">
-    <button id="trainer-tab-mywords" class="tab-btn">🔖 Мои слова</button>
+    <button id="trainer-tab-mywords" class="tab-btn">⭐ Мои слова</button>
     <button id="trainer-tab-mushaf" class="tab-btn">📗 Мусхаф</button>
   </div>
 </div>
@@ -1389,7 +1393,7 @@
     document.getElementById('page-nav').style.display = name === 'mywords' ? 'none' : 'flex';
     document.getElementById('ayah-range').style.display = name === 'mywords' ? 'none' : '';
     document.getElementById('surah-name').textContent =
-      name === 'mywords' ? '🔖 Мои слова' : currentSurahNameText;
+      name === 'mywords' ? '⭐ Мои слова' : currentSurahNameText;
     // 🔁 "повторение" (30.08.2026) - только на "Странице" (решение
     // пользователя), не на "Смысле"/"Мои слова".
     document.getElementById('btn-revision').style.display = name === 'page' ? '' : 'none';
