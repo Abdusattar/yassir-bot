@@ -123,6 +123,28 @@ def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE):
         if row is None:
             return
         surah, ayah, position, arabic_text, translation = row
+        # Склейка устойчивых сочетаний (30.08.2026, живой баг - пользователь
+        # увидел на карточке "مِّنۢ بَعْدِ" ("после"), а в "Мои слова" попало
+        # только "مِّنۢ" без хвоста "بَعْدِ") - представительная строка тут
+        # берётся напрямую по progress_key, БЕЗ прохода через
+        # _merge_glued_translations (та работает на предзагруженном списке
+        # строк ayah'а, здесь его нет) - хвосты подмешиваем вручную тем же
+        # алгоритмом: следующие позиции того же аята с translation="*"
+        # приклеиваются арабским текстом, перевод головы не трогаем (уже
+        # покрывает всю связку).
+        arabic_parts = [arabic_text]
+        pos = position + 1
+        while True:
+            tail = conn.execute(
+                "SELECT arabic_text, translation FROM mufradat_words "
+                "WHERE surah_number=? AND ayah_number=? AND position=? AND language=?",
+                (surah, ayah, pos, language)
+            ).fetchone()
+            if not tail or tail[1].strip() != "*":
+                break
+            arabic_parts.append(tail[0])
+            pos += 1
+        arabic_text = " ".join(arabic_parts)
         # Импорт внутри функции - не наверху файла (30.08.2026): core.mufradat
         # уже импортирует ИЗ core.mushaf_words на верхнем уровне (см. модульный
         # docstring выше), обратный импорт там же создал бы цикл. К моменту
