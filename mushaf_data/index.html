@@ -307,6 +307,23 @@
     padding: 10px 0 2px;
   }
 
+  /* "Мои слова" (29.08.2026) - тот же паттерн, что и #ayah-text: колонка
+     книжной ширины по центру экрана, не растянута во всю ширину широкого
+     монитора/планшета (иначе арабский слева и перевод справа разъедутся на
+     разные концы экрана - тот же баг, что чинили для #ayah-text 27.08). */
+  #mywords-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px 16px;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .mywords-row { cursor: pointer; }
+  .mywords-row:active { background: var(--accent-soft); }
+
   /* Тап по слову на странице чтения - всплывающий перевод (28.08.2026),
      --popup-bg/--popup-ink были заведены заранее для этого же, до этого не
      использовались нигде. color-mix даёт полупрозрачность независимо от
@@ -664,9 +681,20 @@
     <div id="meaning-list"></div>
   </div>
 
+  <!-- "Мои слова" (29.08.2026) - личный список слов, отмеченных двойным
+       тапом/кликом прямо на странице чтения ("встретил забытое слово по
+       ходу чтения"). Простой список для чтения (арабский+перевод), клик по
+       строке ничего не открывает - решение пользователя, не квиз, не связан
+       с движком тренажёра муфрадата. Убрать слово - тем же двойным
+       тапом/кликом, но уже здесь, по строке (см. #mywords-list ниже). -->
+  <div id="view-mywords" class="view">
+    <div id="mywords-list"></div>
+  </div>
+
   <div id="tabbar">
     <button id="tab-page" class="tab-btn">📖 Страница</button>
     <button id="tab-meaning" class="tab-btn">📜 Смысл</button>
+    <button id="tab-mywords" class="tab-btn">🔖 Мои слова</button>
   </div>
 </div>
 
@@ -815,7 +843,13 @@
         html += '<div class="mushaf-line">';
         line.tokens.forEach(function (t) {
           if (t.type === 'word') {
-            var tr = t.translation ? ' data-tr="' + escapeAttr(t.translation) + '"' : '';
+            // data-surah/data-ayah/data-pos/data-arabic - только вместе с
+            // data-tr (29.08.2026, для "Мои слова" - двойной тап нужно
+            // от чего-то отличать от одиночного, а слово без перевода и
+            // так не кликабельно, см. showWordPopup/addToMyWords ниже).
+            var tr = t.translation ? ' data-tr="' + escapeAttr(t.translation) + '"' +
+              ' data-surah="' + t.surah + '" data-ayah="' + t.ayah + '" data-pos="' + t.position + '"' +
+              ' data-arabic="' + escapeAttr(t.html) + '"' : '';
             if (t.code_v4) {
               html += '<span class="v4-word"' + tr + '>' + t.code_v4 + '</span>';
             } else {
@@ -868,9 +902,7 @@
   // смене страницы, не нужно перевешивать на каждое слово заново.
   var wordPopup = document.getElementById('word-popup');
   var popupHideTimer = null;
-  function showWordPopup(el) {
-    var text = el.getAttribute('data-tr');
-    if (!text) return;
+  function showPopupMessage(el, text) {
     wordPopup.textContent = text;
     var rect = el.getBoundingClientRect();
     wordPopup.style.left = (rect.left + rect.width / 2) + 'px';
@@ -881,10 +913,48 @@
       wordPopup.classList.remove('visible');
     }, 1800);
   }
+  function showWordPopup(el) {
+    var text = el.getAttribute('data-tr');
+    if (text) showPopupMessage(el, text);
+  }
+
+  // "Мои слова" (29.08.2026) - двойной тап/клик по слову на странице
+  // чтения добавляет его в личный список (см. #tab-mywords ниже), не
+  // открывает подсказку перевода. Один клик и так уже даёт перевод во
+  // всплывашке - нужно различать один тап от двух, поэтому одиночный клик
+  // задерживается на короткое окно: не пришёл второй клик по ТОМУ ЖЕ
+  // слову за это время - показываем подсказку как раньше; пришёл - это
+  // двойной тап, подсказку глушим и добавляем слово в список.
+  var DOUBLE_TAP_WINDOW_MS = 300;
+  var wordTapTimer = null, wordTapTarget = null;
+  function addToMyWords(el) {
+    var surah = el.getAttribute('data-surah');
+    if (!surah) return;
+    apiCall('/words/add', { method: 'POST', body: {
+      surah: parseInt(surah, 10),
+      ayah: parseInt(el.getAttribute('data-ayah'), 10),
+      position: parseInt(el.getAttribute('data-pos'), 10),
+      arabic: el.getAttribute('data-arabic') || '',
+      translation: el.getAttribute('data-tr') || '',
+    } }).then(function (res) {
+      if (res.status !== 401) showPopupMessage(el, '✅ В «Мои слова»');
+    });
+  }
   document.getElementById('ayah-text').addEventListener('click', function (e) {
     if (justSwiped) { justSwiped = false; return; }
     var el = e.target.closest('[data-tr]');
-    if (el) showWordPopup(el);
+    if (!el) return;
+    if (wordTapTimer && wordTapTarget === el) {
+      clearTimeout(wordTapTimer);
+      wordTapTimer = null; wordTapTarget = null;
+      addToMyWords(el);
+      return;
+    }
+    wordTapTarget = el;
+    wordTapTimer = setTimeout(function () {
+      showWordPopup(el);
+      wordTapTimer = null; wordTapTarget = null;
+    }, DOUBLE_TAP_WINDOW_MS);
   });
 
   function renderWordsList(data) {
@@ -932,13 +1002,72 @@
     document.getElementById('view-page').classList.toggle('active', name === 'page');
     document.getElementById('view-words').classList.toggle('active', name === 'words');
     document.getElementById('view-meaning').classList.toggle('active', name === 'meaning');
+    document.getElementById('view-mywords').classList.toggle('active', name === 'mywords');
     document.getElementById('tab-page').classList.toggle('active', name === 'page');
     document.getElementById('tab-meaning').classList.toggle('active', name === 'meaning');
+    document.getElementById('tab-mywords').classList.toggle('active', name === 'mywords');
     if (name === 'page') clampFontToFit();
+    if (name === 'mywords') loadMyWords();
   }
   document.getElementById('tab-page').addEventListener('click', function () { switchTab('page'); });
   document.getElementById('tab-meaning').addEventListener('click', function () { switchTab('meaning'); });
+  document.getElementById('tab-mywords').addEventListener('click', function () { switchTab('mywords'); });
   switchTab('page');
+
+  // "Мои слова" - список (29.08.2026, см. модульный комментарий у
+  // #view-mywords). Свой делегированный обработчик двойного тапа/клика -
+  // тот же таймер-паттерн, что у слова на странице чтения выше, но здесь
+  // одиночный клик НИЧЕГО не делает (простой список для чтения, решение
+  // пользователя - строка не открывает тренажёр), только двойной убирает
+  // слово из списка.
+  var mywordsTapTimer = null, mywordsTapTarget = null;
+  function renderMyWords(words) {
+    var html;
+    if (!words.length) {
+      html = '<div class="trainer-msg">Пока пусто. Дважды нажми на слово во время чтения — оно попадёт сюда.</div>';
+    } else {
+      html = words.map(function (w) {
+        return '<div class="word-row mywords-row" data-surah="' + w.surah + '" data-ayah="' + w.ayah +
+          '" data-pos="' + w.position + '"><span class="arabic">' + w.arabic +
+          '</span><span class="translation">' + w.translation + '</span></div>';
+      }).join('');
+    }
+    document.getElementById('mywords-list').innerHTML = html;
+  }
+  function loadMyWords() {
+    document.getElementById('mywords-list').innerHTML = '<div class="trainer-msg">Загрузка…</div>';
+    apiCall('/words').then(function (res) {
+      if (res.status === 401) {
+        document.getElementById('mywords-list').innerHTML =
+          '<div class="trainer-msg">Сессия Telegram истекла 🤲 Перезайди в приложение.</div>';
+        return;
+      }
+      renderMyWords(res.data.words);
+    });
+  }
+  function removeFromMyWords(row) {
+    apiCall('/words/remove', { method: 'POST', body: {
+      surah: parseInt(row.getAttribute('data-surah'), 10),
+      ayah: parseInt(row.getAttribute('data-ayah'), 10),
+      position: parseInt(row.getAttribute('data-pos'), 10),
+    } }).then(function (res) {
+      if (res.status !== 401) renderMyWords(res.data.words);
+    });
+  }
+  document.getElementById('mywords-list').addEventListener('click', function (e) {
+    var row = e.target.closest('.mywords-row');
+    if (!row) return;
+    if (mywordsTapTimer && mywordsTapTarget === row) {
+      clearTimeout(mywordsTapTimer);
+      mywordsTapTimer = null; mywordsTapTarget = null;
+      removeFromMyWords(row);
+      return;
+    }
+    mywordsTapTarget = row;
+    mywordsTapTimer = setTimeout(function () {
+      mywordsTapTimer = null; mywordsTapTarget = null;
+    }, DOUBLE_TAP_WINDOW_MS);
+  });
 
   var currentPage = FIRST_PAGE;
 

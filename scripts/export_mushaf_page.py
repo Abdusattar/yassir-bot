@@ -169,7 +169,13 @@ def parse_ayah_tokens(raw_html, words, surah, ayah, missing_glyphs):
     для поиска глиф-кодов v4 (get_code_v4); missing_glyphs - список,
     в который дописываются пропуски (для отчёта, не бросаем исключение -
     страница чтения деградирует до обычного текста на конкретном слове,
-    не роняет весь экспорт). Возвращает список токенов для рендера."""
+    не роняет весь экспорт). Возвращает список токенов для рендера.
+
+    surah/ayah также кладутся В КАЖДЫЙ word-токен (29.08.2026) - build_lines
+    ниже переносит эти же словари объектов (не копии) в lines[], а строке
+    чтения нужен устойчивый идентификатор слова (surah, ayah, position) для
+    фичи "Мои слова" (двойной тап по слову на странице чтения) - в lines[]
+    своего surah/ayah раньше не было вообще, только в ayahs[]."""
     end_match = _END_SPAN_RE.search(raw_html)
     ayah_end_glyph = end_match.group(1) if end_match else ""
     body = _END_SPAN_RE.sub("", raw_html).strip()
@@ -190,7 +196,7 @@ def parse_ayah_tokens(raw_html, words, surah, ayah, missing_glyphs):
         tokens.append({
             "type": "word", "html": chunk,
             "position": w["position"], "translation": w["translation"],
-            "code_v4": code_v4,
+            "code_v4": code_v4, "surah": surah, "ayah": ayah,
         })
     leftover = list(word_iter)
     if leftover:

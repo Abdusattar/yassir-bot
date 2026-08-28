@@ -41,6 +41,7 @@ from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank,
 )
+from core.mushaf_words import add_starred_word, remove_starred_word, list_starred_words
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 
 log = logging.getLogger(__name__)
@@ -326,6 +327,60 @@ async def handle_leaderboard(request, user_id):
     return web.json_response({"in_group": True, "divisions": divisions})
 
 
+@with_auth
+async def handle_words_list(request, user_id):
+    """GET - список "Мои слова" (core/mushaf_words.py - НЕ прогресс
+    тренажёра муфрадата, отдельная функция страницы чтения)."""
+    return web.json_response({"words": list_starred_words(user_id)})
+
+
+def _parse_word_key(body):
+    """(surah, ayah, position) или None при некорректном теле запроса -
+    общий разбор для handle_words_add/handle_words_remove."""
+    try:
+        return int(body["surah"]), int(body["ayah"]), int(body["position"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+@with_auth
+async def handle_words_add(request, user_id):
+    """POST {surah, ayah, position, arabic, translation} - двойной
+    тап/клик по слову на странице чтения. arabic/translation приходят от
+    клиента (уже отрисованы на странице, см. data-arabic/data-tr в
+    mushaf_data/index.html) - тут не пересчитываются и не проверяются
+    по mufradat_words (та покрывает только суры 2-10)."""
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "bad_json"}, status=400)
+    key = _parse_word_key(body)
+    if key is None:
+        return web.json_response({"error": "bad_word"}, status=400)
+    arabic = (body.get("arabic") or "").strip()
+    translation = (body.get("translation") or "").strip()
+    if not arabic or not translation:
+        return web.json_response({"error": "missing_text"}, status=400)
+    add_starred_word(user_id, *key, arabic, translation)
+    return web.json_response({"words": list_starred_words(user_id)})
+
+
+@with_auth
+async def handle_words_remove(request, user_id):
+    """POST {surah, ayah, position} - двойной тап/клик по строке уже
+    В САМОМ списке "Мои слова" (не на странице чтения - см. модульный
+    docstring core/mushaf_words.py, почему на странице чтения только add)."""
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "bad_json"}, status=400)
+    key = _parse_word_key(body)
+    if key is None:
+        return web.json_response({"error": "bad_word"}, status=400)
+    remove_starred_word(user_id, *key)
+    return web.json_response({"words": list_starred_words(user_id)})
+
+
 def build_app():
     app = web.Application()
     app.router.add_get("/api/muf/state", handle_state)
@@ -334,6 +389,9 @@ def build_app():
     app.router.add_post("/api/muf/lang", handle_lang)
     app.router.add_post("/api/muf/end", handle_end)
     app.router.add_get("/api/muf/leaderboard", handle_leaderboard)
+    app.router.add_get("/api/muf/words", handle_words_list)
+    app.router.add_post("/api/muf/words/add", handle_words_add)
+    app.router.add_post("/api/muf/words/remove", handle_words_remove)
     return app
 
 
