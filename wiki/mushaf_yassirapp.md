@@ -255,6 +255,27 @@ BOT_PROFILE`, nginx разводит по префиксу пути). Menu Butto
 yassir-bot-female.service`), чтобы применить новый вызов Telegram API, даже
 когда файл на диске уже общий и обновился сам.
 
+### Где реально лежат отдаваемые файлы (nginx root)
+
+`server_name yassir.ddns.net` в nginx смотрит на `/var/www/yassir-app`
+(`/etc/nginx/sites-enabled/yassir-app`), НЕ на `~/yassir-bot/mushaf_data`.
+`.github/workflows/deploy.yml` синкает туда ТОЛЬКО `index.html`
+(`cp ~/yassir-bot/mushaf_data/index.html /var/www/yassir-app/index.html`)
+при каждом push — про `page*.json` (604 файла, в `.gitignore`, GH Actions
+их не видит при checkout) там ни слова.
+
+**28.08.2026, дорогая находка**: фикс утечки "*" в переводах "проверялся"
+через SSH-чтение файла в `~/yassir-bot/mushaf_data/` и выглядел готовым -
+на деле реальный сайт ещё часы отдавал старые файлы из `/var/www/
+yassir-app`, куда scp никогда не доходил. Поймано только сверкой через
+настоящий `curl https://yassir.ddns.net/pageN.json`.
+
+**Исправлено**: все 604 `/var/www/yassir-app/page*.json` теперь symlink
+на `/home/stursunkul/yassir-bot/mushaf_data/page*.json` (`ln -s`) - scp/cp
+в исходную директорию сразу отражается на сайте. Проверять контент
+`page*.json` впредь ТОЛЬКО через публичный URL, не SSH-путь (см. память
+Claude Code `feedback_verify_via_public_url_not_ssh_path`).
+
 ## Дизайн-система
 
 Единый акцент (`--accent`), карточки с тенью двух уровней (`--shadow-sm`/
