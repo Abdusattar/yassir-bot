@@ -269,7 +269,13 @@ async def credit_revision_task(user_id):
         return False
     save_report(user["id"], group["id"], get_date(), {"r": True})
     if group["chat_id"]:
-        await send_message(group["chat_id"], f"{user['name']}, {SHORT_TASKS['r'].lower()} +.")
+        # "(через YassirApp, Мусхаф)" - решение пользователя 30.08.2026,
+        # тот же принцип, что у _credit_task_if_applicable выше ("через
+        # тренажёр") - явно поясняет источник сдачи, раз она не текстом.
+        await send_message(
+            group["chat_id"],
+            f"{user['name']}, {SHORT_TASKS['r'].lower()} + (через YassirApp, Мусхаф)."
+        )
     return True
 
 

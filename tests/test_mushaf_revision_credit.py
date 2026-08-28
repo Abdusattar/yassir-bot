@@ -30,7 +30,7 @@ def test_revision_credit_sends_group_message_and_saves_report(test_db, monkeypat
     assert credited is True
     assert len(sent) == 1
     assert sent[0][0] == group["chat_id"]
-    assert sent[0][1] == "Test Student, повторение +."
+    assert sent[0][1] == "Test Student, повторение + (через YassirApp, Мусхаф)."
 
     report = db.get_today_report(uid, group["id"])
     assert report["r"] is True
