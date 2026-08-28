@@ -839,7 +839,7 @@
       if (res.status === 401) return;
       var el = document.getElementById('dash-online');
       if (res.data && typeof res.data.online === 'number') {
-        el.innerHTML = '<span class="dot"></span>' + res.data.online + ' сейчас в приложении';
+        el.innerHTML = '<span class="dot"></span>сейчас в онлайне учатся ' + res.data.online;
       }
     });
   }
