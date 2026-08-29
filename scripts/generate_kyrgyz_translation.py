@@ -58,10 +58,35 @@ from core.sampler import HADITHS_DB, save_mufradat_word
 # безопасен, но по умолчанию их не гоняем - см. RANGES ниже.
 RANGES = [
     (1, 1, 7),      # Аль-Фатиха
-    (2, 70, 141),   # продолжение до конца джуза 1
+    (2, 1, 141),    # весь джуз 1
 ]
 SOURCE_LANGUAGE = "ru"
-TARGET_LANGUAGE = "ky"
+
+# Целевой язык - аргументом командной строки, чтобы одним скриптом гнать и
+# кыргызский, и узбекский (30.08.2026, в группах есть братья-узбеки):
+#     python scripts/generate_kyrgyz_translation.py uz
+# Узбекский - КИРИЛЛИЦЕЙ (решение пользователя): студенты выросли и учились
+# здесь, кириллица им привычнее официальной латиницы.
+LANG_PROFILES = {
+    "ky": {
+        "name": "Kyrgyz",
+        "name_upper": "KYRGYZ",
+        "script": "Cyrillic Kyrgyz letters (including ң, ө, ү)",
+        "proper_prefixes": ("Аллах", "Рабби", "Куран", "Мухаммад", "Ибрахим", "Муса", "Иса", "Адам"),
+    },
+    "uz": {
+        "name": "Uzbek",
+        "name_upper": "UZBEK",
+        # Явно проговариваем кириллицу И запрещаем латиницу - у узбекского
+        # две живые письменности, без этого модель уходит в latin по умолчанию.
+        "script": "CYRILLIC Uzbek letters (including ў, қ, ғ, ҳ) — NEVER Latin script",
+        "proper_prefixes": ("Аллоҳ", "Раббий", "Қуръон", "Муҳаммад", "Иброҳим", "Мусо", "Ийсо", "Одам"),
+    },
+}
+TARGET_LANGUAGE = sys.argv[1] if len(sys.argv) > 1 else "ky"
+if TARGET_LANGUAGE not in LANG_PROFILES:
+    raise SystemExit(f"неизвестный язык {TARGET_LANGUAGE}, доступны: {list(LANG_PROFILES)}")
+PROFILE = LANG_PROFILES[TARGET_LANGUAGE]
 MODEL = "google/gemini-3.1-pro-preview"
 MAX_TOKENS = 14000
 MAX_RETRIES = 3
@@ -78,6 +103,17 @@ def get_source_words(surah, ayah_number):
             (surah, ayah_number, SOURCE_LANGUAGE)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def already_done(surah, ayah_number, expected_count):
+    """Аят уже переведён на целевой язык целиком?"""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        n = conn.execute(
+            "SELECT COUNT(*) FROM mufradat_words "
+            "WHERE surah_number=? AND ayah_number=? AND language=?",
+            (surah, ayah_number, TARGET_LANGUAGE)
+        ).fetchone()[0]
+    return n >= expected_count
 
 
 def get_glossary(words):
@@ -117,12 +153,9 @@ def get_glossary(words):
 # в глоссарии приводится к строчной: глоссы показываются в тренажёре по
 # одному и вперемешку, "начало аята" там не значит ничего, а разнобой
 # "бул"/"Бул" плодил лишние progress_key (9 таких пар на 2:1-2:69).
-_PROPER_PREFIXES = ("Аллах", "Рабби", "Куран", "Мухаммад", "Ибрахим", "Муса", "Иса", "Адам")
-
-
 def _normalize_case(translation):
     text = translation.strip()
-    if not text or text.startswith(_PROPER_PREFIXES):
+    if not text or text.startswith(PROFILE["proper_prefixes"]):
         return text
     return text[0].lower() + text[1:]
 
@@ -144,25 +177,25 @@ def build_prompt(surah, ayah_number, words, glossary):
         pairs = "\n".join(f"- {a} → {t}" for a, t in glossary.items())
         gloss_note = (
             "\nALREADY-ESTABLISHED glossary (these exact Arabic words were glossed "
-            "earlier in this same corpus). Reuse the established Kyrgyz wording unless "
+            f"earlier in this same corpus). Reuse the established {PROFILE['name']} wording unless "
             "the context genuinely requires a different case/form — consistency across "
             "ayat matters here:\n" + pairs + "\n"
         )
-    return f'''You are a Quranic Arabic scholar producing a WORD-BY-WORD (interlinear) Kyrgyz gloss for Quran Surah {surah}, Ayah {ayah_number}.
+    return f'''You are a Quranic Arabic scholar producing a WORD-BY-WORD (interlinear) {PROFILE['name']} gloss for Quran Surah {surah}, Ayah {ayah_number}.
 
 Full ayah (Arabic): {full_arabic}
 
 Words in order:
 {word_list}
 
-TASK: for each numbered position above, give the most accurate literal Kyrgyz word-by-word equivalent of that specific Arabic word, using the classical Quranic meaning (per standard tafsir), considering the whole ayah's meaning for grammatical/semantic context. Pay attention to natural KYRGYZ word order/morphology for quantifiers, negation, and demonstratives — do not force Arabic or Russian word order onto Kyrgyz. Do not drop or merge any word's meaning into another position — every position must carry its own full meaning.
+TASK: for each numbered position above, give the most accurate literal {PROFILE['name']} word-by-word equivalent of that specific Arabic word, using the classical Quranic meaning (per standard tafsir), considering the whole ayah's meaning for grammatical/semantic context. Pay attention to natural {PROFILE['name_upper']} word order/morphology for quantifiers, negation, and demonstratives — do not force Arabic or Russian word order onto {PROFILE['name']}. Do not drop or merge any word's meaning into another position — every position must carry its own full meaning.
 
 {star_note}
 {gloss_note}
 RULES:
 - Output EXACTLY one entry per position listed above, same count, same order.
-- Kyrgyz text only (Cyrillic Kyrgyz letters and spaces only — no underscores, no hyphens joining words), no Russian, no explanations, no reasoning.
-- Use lowercase, EXCEPT for proper nouns and the names of Allah (Аллах, Рабби, ...). Do not capitalise a word merely because it starts the ayah — these are isolated glosses shown out of order in a trainer.
+- {PROFILE['name']} text only ({PROFILE['script']} and spaces only — no underscores, no hyphens joining words), no Russian, no explanations, no reasoning.
+- Use lowercase, EXCEPT for proper nouns and the names of Allah ({", ".join(PROFILE["proper_prefixes"][:3])}, ...). Do not capitalise a word merely because it starts the ayah — these are isolated glosses shown out of order in a trainer.
 - Output STRICT JSON ONLY: a list of objects {{"position": <int>, "translation": "<kyrgyz text>"}}. No markdown fences, no commentary, no reasoning text before or after.'''
 
 
@@ -235,6 +268,15 @@ def main():
             words = get_source_words(surah, ayah_number)
             if not words:
                 print(f"  {surah}:{ayah_number}: нет исходных ({SOURCE_LANGUAGE}) слов, пропуск")
+                continue
+
+            # Уже переведённые аяты не гоняем заново - RANGES теперь покрывает
+            # весь джуз, а часть его может быть сделана прошлым прогоном
+            # (кыргызский так и накапливался: сначала 2:1-69, потом остальное).
+            # Пропуск чисто денежный: save_mufradat_word идемпотентен, и
+            # повторный прогон был бы безопасен, просто оплачен второй раз.
+            if already_done(surah, ayah_number, len(words)):
+                print(f"  {surah}:{ayah_number}: уже переведён на {TARGET_LANGUAGE}, пропуск")
                 continue
 
             try:
