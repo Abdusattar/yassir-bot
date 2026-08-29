@@ -229,7 +229,9 @@
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 6px 14px;
+    /* Боковой padding 8px, не 14px (30.08.2026): на телефоне каждые 6px по
+       краям - это ~3% ширины колонки, а значит и ~3% размера шрифта. */
+    padding: 6px 8px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -263,6 +265,17 @@
     justify-content: space-between;
     align-items: baseline;
   }
+  /* Страховка от сжатия слов при переполнении строки (30.08.2026).
+     ВЫИГРЫША НЕ ДАЁТ - проверено прямым замером: scrollWidth одинаков и с
+     flex: 1 1 auto, и с flex: 0 0 auto, потому что у flex-элемента
+     min-width: auto, а для nowrap-текста это его полная ширина, сжаться он
+     физически не может. Оставлено явно, чтобы замер в clampFontToFit() не
+     зависел от этой неочевидной детали. */
+  .mushaf-line > span { flex: 0 0 auto; }
+  /* Только на время замера (см. clampFontToFit): снимает растягивание,
+     чтобы scrollWidth строки дал настоящую сумму ширин слов. Без этого у
+     влезающей страницы scrollWidth просто равен clientWidth. */
+  #ayah-text.measuring .mushaf-line { justify-content: flex-start; }
   .surah-banner {
     display: block;
     text-align: center;
@@ -1097,35 +1110,64 @@
   // срезаются. На экранах шире ~480px (обычные телефоны, планшеты,
   // десктоп) запаса уже хватает - оверфлоу нет.
   //
-  // Фикс - ОДНОРАЗОВОЕ измерение (не цикл/бинарный поиск): сброс на базовый
-  // размер, реальный scrollWidth/clientWidth уже отрисованных строк, один
-  // прямой пересчёт font-size по худшей строке. Вызывается из reveal() -
-  // ПОСЛЕ document.fonts.ready (шрифт гарантированно применён к тексту,
-  // гонки нет, см. комментарий у reveal ниже); из клика по карточке
-  // "Мусхаф" на дашборде (см. dash-mushaf выше - у вернувшегося студента
-  // страница уже отрендерена ИЗ localStorage, пока #app был display:none
-  // и .clientWidth врал нулём, здесь первый реальный шанс измерить); и на
-  // resize/поворот экрана (см. addEventListener('resize') ниже) - нигде
-  // не в цикле кадров.
-  var MUSHAF_FONT_SIZE = 28;
+  // Фикс - ОДНОРАЗОВОЕ измерение (не цикл/бинарный поиск): базовый размер,
+  // натуральная ширина самой длинной строки, один прямой пересчёт
+  // font-size. Вызывается из reveal() - ПОСЛЕ document.fonts.ready (шрифт
+  // гарантированно применён к тексту, гонки нет, см. комментарий у reveal
+  // ниже); из клика по карточке "Мусхаф" на дашборде (см. dash-mushaf выше -
+  // у вернувшегося студента страница уже отрендерена ИЗ localStorage, пока
+  // #app был display:none и .clientWidth врал нулём, здесь первый реальный
+  // шанс измерить); и на resize/поворот экрана (см. addEventListener('resize')
+  // ниже) - нигде не в цикле кадров.
+  //
+  // ПЕРЕПИСАНО 30.08.2026 - жалоба пользователя "слишком много пропуска
+  // между словами": текст не дотягивал до края строки, и justify раздувал
+  // промежутки. Причина - базовый размер работал ещё и ПОТОЛКОМ: при
+  // maxRatio <= 1 страница так и оставалась на 28px, хотя влезал бы шрифт
+  // крупнее (заметнее всего на рыхлых страницах и широком экране: Аль-Фатиха
+  // на десктопе была 28px при доступных 34px). Плюс Math.floor терял до 1px.
+  //
+  // Теперь база - чисто техническая точка отсчёта для замера (ширина текста
+  // линейна по font-size), верхний предел задан отдельно, размер дробный.
+  // Замер идёт при временно снятом justify (класс .measuring): без этого у
+  // ВЛЕЗАЮЩЕЙ страницы scrollWidth просто равен clientWidth, и натуральную
+  // ширину узнать нельзя вообще.
+  //
+  // Размер считается ПОД КАЖДУЮ СТРАНИЦУ отдельно, а не единый на весь
+  // мусхаф - обоснование и замеры всех 603 страниц см. wiki/mushaf_yassirapp.md
+  // ("Подбор размера шрифта"). Там же - проверенная и ОПРОВЕРГНУТАЯ гипотеза
+  // про flex-shrink, чтобы к ней не возвращаться.
+  //
+  // Методика проверена эмпирически: формула avail / natural * 100 в
+  // точности воспроизвела реальный размер шрифта на стороннем мусхафе
+  // (quran-stroka, 560px колонка -> 35.4px, у них ровно 35.43px).
+  var MUSHAF_MEASURE_BASE = 40;   // техническая база замера, не то, что видит студент
   var MUSHAF_MIN_FONT_SIZE = 14;
+  var MUSHAF_MAX_FONT_SIZE = 34;  // чтобы на рыхлых страницах (Аль-Фатиха) текст
+                                  // не раздувался на всю ширину десктопа
+  var MUSHAF_FIT_SAFETY = 0.985;  // чтобы строка не упиралась в край впритык
 
   function clampFontToFit() {
     var el = document.getElementById('ayah-text');
-    el.style.fontSize = MUSHAF_FONT_SIZE + 'px';
     var lines = el.querySelectorAll('.mushaf-line');
     if (!lines.length) return;
-    var maxRatio = 1;
+    var avail = el.clientWidth;
+    if (!avail) return;   // #app ещё display:none - меряем позже, см. dash-mushaf
+
+    // .measuring снимает space-between: строка перестаёт растягиваться,
+    // и scrollWidth становится настоящей суммой ширин слов.
+    el.classList.add('measuring');
+    el.style.fontSize = MUSHAF_MEASURE_BASE + 'px';
+    var maxW = 0;
     for (var i = 0; i < lines.length; i++) {
-      var l = lines[i];
-      if (l.clientWidth > 0) {
-        maxRatio = Math.max(maxRatio, l.scrollWidth / l.clientWidth);
-      }
+      if (lines[i].scrollWidth > maxW) maxW = lines[i].scrollWidth;
     }
-    if (maxRatio > 1) {
-      var fitted = Math.max(MUSHAF_MIN_FONT_SIZE, Math.floor(MUSHAF_FONT_SIZE / maxRatio));
-      el.style.fontSize = fitted + 'px';
-    }
+    el.classList.remove('measuring');
+    if (!maxW) return;
+
+    var fitted = MUSHAF_MEASURE_BASE * (avail / maxW) * MUSHAF_FIT_SAFETY;
+    fitted = Math.min(MUSHAF_MAX_FONT_SIZE, Math.max(MUSHAF_MIN_FONT_SIZE, fitted));
+    el.style.fontSize = fitted.toFixed(1) + 'px';
   }
 
   // Шрифт QPC V4 Tajweed - свой файл НА КАЖДУЮ страницу (604 разных
