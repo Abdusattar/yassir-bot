@@ -285,6 +285,18 @@ async def handle_answer(request, user_id):
 
 
 @with_auth
+async def handle_lang_get(request, user_id):
+    """GET - текущий язык студента (30.08.2026, для локализации ВСЕГО
+    интерфейса, не только слов). Отдельный от POST-обработчика: мусхаф и
+    дашборд стартуют раньше тренажёра и /state не дёргают, а язык нужен им
+    сразу - иначе интерфейс успевал моргнуть по-русски."""
+    return web.json_response({
+        "language": get_current_lang(user_id),
+        "supported": SUPPORTED_LANGUAGES,
+    })
+
+
+@with_auth
 async def handle_lang(request, user_id):
     """POST {language} - переключатель языка перевода (сеанс визуально
     начинается заново, как и в Telegram-версии - другой язык означает
@@ -478,6 +490,7 @@ def build_app():
     app.router.add_get("/api/muf/state", handle_state)
     app.router.add_post("/api/muf/page", handle_page)
     app.router.add_post("/api/muf/answer", handle_answer)
+    app.router.add_get("/api/muf/lang", handle_lang_get)
     app.router.add_post("/api/muf/lang", handle_lang)
     app.router.add_post("/api/muf/end", handle_end)
     app.router.add_get("/api/muf/leaderboard", handle_leaderboard)

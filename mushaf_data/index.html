@@ -594,14 +594,25 @@
      flex-элемент строки - физические left/right не зависят от dir="rtl"
      (в отличие от порядка flex-детей, см. wiki/mushaf_yassirapp.md про
      RTL-ловушку), поэтому здесь безопасно без дополнительных проверок. */
-  #btn-theme-toggle {
+  /* Настройки дашборда - язык и тема рядом, в одном углу (30.08.2026).
+     Язык меняют один раз, поэтому ему не место на рабочих экранах; здесь
+     же он находится там, где студент и так ищет настройки. */
+  #dash-settings {
     position: absolute; top: 16px; right: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #btn-theme-toggle, #btn-lang-toggle {
+    position: static;
     background: var(--card-bg); border: 1px solid var(--card-border);
     box-shadow: var(--shadow-sm); border-radius: 50%;
     width: 40px; height: 40px;
     font-size: 18px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #btn-lang-toggle {
+    font-size: 13px; font-weight: 700; color: var(--accent);
   }
   #dashboard h1 {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -883,16 +894,19 @@
 </head>
 <body>
 <div id="dashboard">
-  <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
+  <div id="dash-settings">
+    <button id="btn-lang-toggle" title="Тил / Язык">RU</button>
+    <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
+  </div>
   <h1>YassirApp</h1>
   <div id="dash-online"></div>
   <div class="dash-card" id="dash-mushaf" tabindex="0" role="button">
     <span class="icon-badge">📗</span>
-    <div><div class="label">Мусхаф</div><div class="sub">Чтение с таджвидом и переводом</div></div>
+    <div><div class="label" data-i18n="dash_mushaf">Мусхаф</div><div class="sub" data-i18n="dash_mushaf_sub">Чтение с таджвидом и переводом</div></div>
   </div>
   <div class="dash-card" id="dash-trainer" tabindex="0" role="button">
     <span class="icon-badge">🌱</span>
-    <div><div class="label">Тренажёр</div><div class="sub">Муфрадат — учи слова Корана</div></div>
+    <div><div class="label" data-i18n="dash_trainer">Тренажёр</div><div class="sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</div></div>
   </div>
 </div>
 <div id="word-popup"></div>
@@ -1018,6 +1032,110 @@
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
 
+  // Локализация интерфейса (30.08.2026). Кыргызский нужен студентам G-8,
+  // большинство остальных читает по-русски, поэтому ru - язык по умолчанию.
+  // Кыргызские формулировки выверены носителем (пользователь прогнал их
+  // через Gemini и вернул правки), важные решения оттуда:
+  //   - "Тренажёр" -> "Машыгуу": калька в кыргызском тянет за собой спортзал;
+  //   - "Общий вес" -> "Жалпы балл": "салмак" читается как вес в килограммах;
+  //   - "Закладка" -> "Кыстарма" - принятый термин и для книги, и в IT;
+  //   - обращение на "сен", не "сиз" - короче в строке и ближе по тону.
+  // Язык хранится на СЕРВЕРЕ (mufradat_lang, по Telegram ID), а не только в
+  // localStorage - переживает смену устройства, и слова в тренажёре всегда
+  // на том же языке, что и интерфейс.
+  var I18N = {
+    ru: {
+      dash_mushaf: 'Мусхаф',
+      dash_mushaf_sub: 'Чтение с таджвидом и переводом',
+      dash_trainer: 'Тренажёр',
+      dash_trainer_sub: 'Муфрадат — учи слова Корана',
+      back_dashboard: '← Дашборд',
+      tab_mywords: '⭐ Мои слова',
+      tab_mushaf: '📗 Мусхаф',
+      tab_trainer: 'Тренажёр',
+      tab_meaning: 'Смысл',
+      btn_finish: '✅ Закончить',
+      btn_rating: '🏆 Рейтинг',
+      btn_back: '⬅️ Назад',
+      btn_start: 'Начать',
+      btn_yes: 'Да',
+      btn_cancel: 'Отмена',
+      loading: 'Загрузка…',
+      page_short: 'стр.',
+      word_from_page: 'слово со стр.',
+      per_session: 'за сеанс',
+      today: 'сегодня',
+      overall_score: 'Общий вес',
+      mastered_of: 'закреплено %N% из %M% слов',
+      ayah: 'аят',
+      which_page: '📖 Какая страница мусхафа?',
+      daily_left: '📝 Ещё %N% разных слов сегодня — и дневное задание «Слова» будет засчитано',
+      mywords_empty: 'Пока пусто. Дважды нажми на слово во время чтения — оно попадёт сюда.',
+      rank_among: 'Место среди всех тренирующихся: ',
+      revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
+      revision_done: '✅ Повторение засчитано',
+      revision_already: 'Уже засчитано сегодня',
+      added_mywords: '✅ В «Мои слова»',
+      bookmark_none: 'Закладка ещё не сохранена',
+      meaning_missing: 'перевод смысла для этой страницы ещё не загружен',
+      trainer_empty: 'Слова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше.',
+      session_expired: 'Сессия Telegram истекла 🤲 Перезайди в приложение.',
+      mywords_title: '🔖 Мои слова',
+      online_now: 'сейчас в онлайне учатся ',
+    },
+    ky: {
+      dash_mushaf: 'Мусхаф',
+      dash_mushaf_sub: 'Тажвид жана котормо менен окуу',
+      dash_trainer: 'Машыгуу',
+      dash_trainer_sub: 'Муфрадат — Курандын сөздөрүн үйрөн',
+      back_dashboard: '← Башкы бет',
+      tab_mywords: '⭐ Менин сөздөрүм',
+      tab_mushaf: '📗 Мусхаф',
+      tab_trainer: 'Машыгуу',
+      tab_meaning: 'Мааниси',
+      btn_finish: '✅ Бүтүрүү',
+      btn_rating: '🏆 Рейтинг',
+      btn_back: '⬅️ Артка',
+      btn_start: 'Баштоо',
+      btn_yes: 'Ооба',
+      btn_cancel: 'Жокко чыгаруу',
+      loading: 'Жүктөлүүдө…',
+      page_short: 'бет',
+      word_from_page: '-беттеги сөз',
+      per_session: 'сеанста',
+      today: 'бүгүн',
+      overall_score: 'Жалпы балл',
+      mastered_of: '%M% сөздөн %N% сөз жатталды',
+      ayah: 'аят',
+      which_page: '📖 Мусхафтын кайсы бети?',
+      daily_left: '📝 Бүгүн дагы %N% ар башка сөз — ошондо «Сөздөр» күндүк тапшырмасы аткарылат',
+      mywords_empty: 'Азырынча бош. Окуп жатканда сөздү эки жолу бассаң, ал бул жерге кошулат.',
+      rank_among: 'Бардык катышуучулардын арасындагы орун: ',
+      revision_ask: 'Бакара сүрөсүн башынан кайталадыңбы?',
+      revision_done: '✅ Кайталоо эсептелди',
+      revision_already: 'Бүгүн эсептелген',
+      added_mywords: '✅ «Менин сөздөрүмө» кошулду',
+      bookmark_none: 'Кыстарма азырынча сактала элек',
+      meaning_missing: 'бул беттин маанилик котормосу азырынча жүктөлө элек',
+      trainer_empty: 'Кыстармаңдагы сөздөр азырынча түгөндү 🤲 Бетти алдыга жылдыр.',
+      session_expired: 'Telegram сессиясы бүттү 🤲 Колдонмого кайра кир.',
+      mywords_title: '🔖 Менин сөздөрүм',
+      online_now: 'азыр онлайн окуп жатышат ',
+    },
+  };
+
+  var UI_LANG = 'ru';
+  function T(key, vars) {
+    var dict = I18N[UI_LANG] || I18N.ru;
+    var s = (dict[key] != null ? dict[key] : I18N.ru[key]) || '';
+    if (vars) {
+      Object.keys(vars).forEach(function (k) {
+        s = s.split('%' + k + '%').join(vars[k]);
+      });
+    }
+    return s;
+  }
+
   // Переключатель темы (30.08.2026, ответ на вопрос студента "можно
   // выбрать тему?"). Сам выбор уже применён к <html> отдельным скриптом
   // в <head> (до отрисовки) - здесь только: посчитать, что сейчас видно
@@ -1042,6 +1160,55 @@
     document.documentElement.setAttribute('data-theme', savedTheme);
     updateThemeButtonIcon();
   });
+
+  // Переключатель языка (30.08.2026). Хранится на сервере по Telegram ID
+  // (mufradat_lang) - тот же источник, что и язык слов в тренажёре, поэтому
+  // интерфейс и переводы никогда не разъезжаются. localStorage тут только
+  // как мгновенный кэш, чтобы интерфейс не моргал по-русски, пока идёт
+  // запрос к API (у мусхафа старт заметно раньше ответа сервера).
+  var LANG_KEY = 'yassir_ui_lang';
+  var langBtn = document.getElementById('btn-lang-toggle');
+  try {
+    var cached = localStorage.getItem(LANG_KEY);
+    if (cached && I18N[cached]) UI_LANG = cached;
+  } catch (e) {}
+
+  function applyLang() {
+    langBtn.textContent = UI_LANG === 'ky' ? 'KY' : 'RU';
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      el.textContent = T(el.getAttribute('data-i18n'));
+    });
+    // Экраны, собранные в JS, перерисовываем - иначе язык применится
+    // только после следующего действия студента.
+    if (document.getElementById('trainer').style.display !== 'none' && trainerState) renderTrainer();
+    if (typeof renderMyWords === 'function' &&
+        document.getElementById('view-mywords') &&
+        document.getElementById('view-mywords').classList.contains('active')) renderMyWords();
+  }
+
+  langBtn.addEventListener('click', function () {
+    UI_LANG = UI_LANG === 'ky' ? 'ru' : 'ky';
+    try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e) {}
+    applyLang();
+    // Серверу сообщаем тем же эндпоинтом, что и раньше менял язык СЛОВ -
+    // язык один на интерфейс и на переводы, разводить их незачем.
+    apiCall('/lang', { method: 'POST', body: { language: UI_LANG } })
+      .then(function () { if (typeof loadPage === 'function' && currentPage) loadPage(currentPage); })
+      .catch(function () {});
+  });
+
+  // Узнаём язык с сервера при старте - он главнее локального кэша
+  // (студент мог переключиться с другого устройства).
+  apiCall('/lang').then(function (d) {
+    if (d && d.language && I18N[d.language] && d.language !== UI_LANG) {
+      UI_LANG = d.language;
+      try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e) {}
+      applyLang();
+      if (typeof loadPage === 'function' && currentPage) loadPage(currentPage);
+    }
+  }).catch(function () {});
+
+  applyLang();
 
   // "Сейчас онлайн" (30.08.2026) - heartbeat каждые 20 сек, пока YassirApp
   // открыт (независимо от того, какой экран сейчас - дашборд/мусхаф/
@@ -1694,6 +1861,7 @@
   // подставляется ботом - core/handlers.py:/mushaf,/yassirapp).
   var BOT_PROFILE = (new URLSearchParams(window.location.search)).get('bot') || 'male';
   var API_BASE = '/api/muf/' + BOT_PROFILE;
+
 
   function apiCall(path, opts) {
     opts = opts || {};
