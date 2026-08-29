@@ -1726,15 +1726,30 @@
   function loadPage(n) {
     if (n < FIRST_PAGE || n > LAST_PAGE) return;
     currentPage = n;
-    if (cache[n]) {
-      renderPage(cache[n]);
+    // Кэш - по паре "страница + язык" (30.08.2026): при переключении языка
+    // та же страница должна перечитаться с другими переводами, а не отдаться
+    // из памяти по-старому.
+    var cacheKey = n + ':' + UI_LANG;
+    if (cache[cacheKey]) {
+      renderPage(cache[cacheKey]);
       try { localStorage.setItem('yassir_mushaf_page', String(n)); } catch (e) {}
       return;
     }
-    fetch('page' + n + '.json')
-      .then(function (r) { return r.json(); })
+    // Нерусский язык живёт в отдельном файле page{N}_{lang}.json и есть не
+    // на всех страницах (кыргызский и узбекский пока покрывают джуз 1) -
+    // если файла нет, тихо откатываемся на русский. Интерфейс при этом
+    // остаётся на выбранном языке, меняются только переводы слов: занятие
+    // не должно прерываться там, где перевод ещё не готов.
+    var url = UI_LANG === 'ru' ? 'page' + n + '.json'
+                               : 'page' + n + '_' + UI_LANG + '.json';
+    fetch(url)
+      .then(function (r) {
+        if (r.ok) return r.json();
+        if (UI_LANG === 'ru') throw new Error('page ' + n);
+        return fetch('page' + n + '.json').then(function (r2) { return r2.json(); });
+      })
       .then(function (data) {
-        cache[n] = data;
+        cache[cacheKey] = data;
         renderPage(data);
         try { localStorage.setItem('yassir_mushaf_page', String(n)); } catch (e) {}
       });
