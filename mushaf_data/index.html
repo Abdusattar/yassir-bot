@@ -233,6 +233,23 @@
        краям - это ~3% ширины колонки, а значит и ~3% размера шрифта. */
     padding: 6px 8px;
     overflow-y: auto;
+    /* Вбок страница не ездит НИКОГДА (30.08.2026, баг с iPhone: при быстром
+       свайпе страница "уходила" вправо/влево целиком и застревала; на
+       Android не воспроизводился).
+       Причина: строки мусхафа идут nowrap, и в момент замера clampFontToFit
+       временно ставит 40px - строки заведомо шире экрана, появляется
+       горизонтальный скролл. На iOS он ещё и резиновый (rubber-band), плюс
+       свайп от края перехватывает нативная навигация "назад".
+       overflow-x: hidden убирает сам скролл, overscroll-behavior-x гасит
+       резину и увод в историю, touch-action: pan-y отдаёт браузеру только
+       вертикальный жест - горизонтальный остаётся целиком нашему
+       обработчику свайпа страниц (он читает координаты в touchstart/
+       touchend и в preventDefault не нуждается, слушатели passive).
+       На scrollWidth в clampFontToFit это не влияет - он меряется у самой
+       .mushaf-line и от overflow родителя не зависит. */
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
   }
   #ayah-text {
