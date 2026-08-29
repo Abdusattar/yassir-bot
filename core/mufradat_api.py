@@ -266,7 +266,14 @@ async def handle_answer(request, user_id):
     if count_today >= DAILY_WORDS_FOR_TASK_CREDIT:
         await _credit_task_if_applicable(user_id, user_id)  # chat_id личного чата == user_id
 
-    feedback = {"correct": correct, "target": target, "remaining_for_task": max(0, DAILY_WORDS_FOR_TASK_CREDIT - count_today)}
+    # "arabic" - слово, на которое студент ТОЛЬКО ЧТО отвечал (30.08.2026).
+    # Без него плашка фидбека говорила "правильно: <перевод>", а самого слова
+    # на экране уже не было - там отрисован следующий вопрос, и к чему
+    # относится верный перевод, понять было нельзя (поймал пользователь).
+    feedback = {
+        "correct": correct, "target": target, "arabic": state["arabic"],
+        "remaining_for_task": max(0, DAILY_WORDS_FOR_TASK_CREDIT - count_today),
+    }
 
     new_state, overall_score = _new_question(user_id, session_correct, start_score10)
     if new_state is None:

@@ -738,6 +738,19 @@
   }
   .trainer-feedback.ok { color: var(--ok); background: var(--ok-soft); }
   .trainer-feedback.no { color: var(--no); background: var(--no-soft); }
+  /* Арабское слово внутри плашки - тем же шрифтом, что и карточка вопроса,
+     иначе оно рисуется системным и выглядит чужеродно. Крупнее окружающего
+     текста, но заметно мельче карточки (52px): плашка говорит о ПРОШЛОМ
+     слове, карточка - о текущем, их нельзя путать. unicode-bidi isolate -
+     чтобы RTL-слово не растаскивало пунктуацию строки вокруг себя. */
+  .trainer-feedback-ar {
+    font-family: 'Scheherazade New', serif;
+    font-size: 22px;
+    line-height: 1;
+    vertical-align: -2px;
+    direction: rtl;
+    unicode-bidi: isolate;
+  }
   .trainer-hint { font-size: 12px; color: var(--muted); }
 
   /* Карточка со словом - приподнята над фоном тенью, крупный шрифт для
@@ -1726,9 +1739,20 @@
 
   function renderFeedbackBanner(feedback) {
     if (!feedback) return '';
+    // Одна и та же структура на оба исхода - "значок · арабское слово ·
+    // перевод" (30.08.2026), меняются только иконка и цвет. Раньше при
+    // верном ответе было сухое "✅ Верно!" без слова, а при неверном -
+    // "правильно: <перевод>" тоже без слова, хотя на экране уже отрисован
+    // СЛЕДУЮЩИЙ вопрос: понять, к чему относится перевод, было нельзя
+    // (поймал пользователь). Показ пары "слово - смысл" ещё раз работает
+    // на запоминание и в случае верного ответа, а одинаковое место и
+    // формат избавляют от поиска информации заново.
     var cls = feedback.correct ? 'ok' : 'no';
-    var text = feedback.correct ? '✅ Верно!' : ('❌ Не то, правильно: ' + feedback.target);
-    var html = '<div class="trainer-feedback ' + cls + '">' + text + '</div>';
+    var icon = feedback.correct ? '✅' : '❌';
+    var ar = feedback.arabic
+      ? '<span class="trainer-feedback-ar">' + feedback.arabic + '</span> — ' : '';
+    var html = '<div class="trainer-feedback ' + cls + '">' + icon + ' ' + ar +
+      feedback.target + '</div>';
     if (feedback.remaining_for_task > 0) {
       html += '<div class="trainer-hint">📝 Ещё ' + feedback.remaining_for_task +
         ' разных слов сегодня — и дневное задание «Слова» будет засчитано</div>';
@@ -1787,17 +1811,24 @@
       return;
     }
 
+    // Порядок блоков (30.08.2026): контекст -> задача -> действие -> прогресс.
+    // Раньше между словом и вариантами вклинивались "Верно за сеанс" и
+    // "Общий вес" с полосой - две строки статистики отодвигали кнопки от
+    // вопроса, и взгляд метался между ними. Заодно контекст был разорван:
+    // страница сверху, счёт за сеанс в середине. Теперь это одна мелкая
+    // строка, а прогресс уехал под варианты - он важен, но не в момент
+    // выбора ответа.
     var html = renderFeedbackBanner(d.feedback);
-    html += '<div class="trainer-info">📖 Твоя страница: ' + d.bookmark_page +
-      ' (слово со стр. ' + d.word_page + ')</div>';
+    html += '<div class="trainer-info">стр. ' + d.bookmark_page +
+      ' · слово со стр. ' + d.word_page +
+      ' · ✅ ' + d.session_correct + ' за сеанс</div>';
     html += '<div class="trainer-word-card"><div class="trainer-word">' + d.arabic + '</div></div>';
-    html += '<div class="trainer-session">✅ Верно за сеанс: ' + d.session_correct + '</div>';
-    html += renderOverallScore(d.overall_score);
     html += '<div class="trainer-options">';
     d.options.forEach(function (opt, i) {
       html += '<button class="trainer-opt" data-slot="' + i + '">' + opt + '</button>';
     });
     html += '</div>';
+    html += renderOverallScore(d.overall_score);
     html += '<div class="trainer-pagebar"><button id="tr-dec">➖</button><button id="tr-inc">➕</button></div>';
     html += '<div class="trainer-actions"><button id="tr-end">✅ Закончить</button><button id="tr-top">🏆 Рейтинг</button></div>';
     body.innerHTML = html;
