@@ -313,7 +313,19 @@
   tajweed[class=idgham_ghunnah] { color: #169777; }
   tajweed[class=idgham_wo_ghunnah] { color: #169200; }
   tajweed[class=ghunnah] { color: #FF7E1E; }
-  .marker { color: var(--marker-color); padding: 0 2px; }
+  /* Знак руку' ۞ - в V4-данных у него ПУСТОЙ code_v4, поэтому рендерится
+     обычным юникод-символом в Scheherazade, а не глифом мусхафа. В полный
+     размер он заметно шире соседних глифов: на стр. 7 строка с ним - 824px
+     против 732px у следующей по длине, то есть именно она задавала размер
+     шрифта ВСЕЙ странице (замер 30.08.2026 на живом сайте). Уменьшенный
+     кегль возвращает странице ~7% размера; у quran-stroka этот знак тоже
+     мелкий, а не в полный рост. */
+  .marker {
+    color: var(--marker-color);
+    padding: 0;
+    font-size: 0.45em;
+    vertical-align: 0.25em;
+  }
   .ayah-end {
     font-size: 0.55em;
     vertical-align: 0.15em;

@@ -28,6 +28,7 @@ feedback_never_invent_quran_translations в памяти, тот же принц
     python scripts/export_mushaf_page.py
 """
 import json
+import os
 import re
 import sys
 import time
@@ -303,6 +304,106 @@ def ayah_ranges_from_qul(qul):
     return [(s, bounds[s][0], bounds[s][1]) for s in order]
 
 
+FONT_CACHE_DIR = "sources/v4_fonts"
+# Ширина знака руку' ۞ в тех же единицах, что и глифы (доля от font-size,
+# ×100). Он рисуется НЕ глифом мусхафа (в V4-данных у него пустой code_v4),
+# а обычным юникод-символом в Scheherazade кеглем 0.45em - см. .marker в
+# mushaf_data/index.html. Замерено в браузере: 20px при font-size 40px.
+MARKER_WIDTH = 50.0
+
+
+def glyph_widths(page_number):
+    """Ширины глифов шрифта страницы, в единицах "при font-size 100".
+
+    Берём метрики из самого шрифта (advance width), а не из рендера в
+    браузере - сверено 29.08.2026 на стр. 7: обе дороги дают одну и ту же
+    разбивку строк до глифа. TTF, а не woff2 - у woff2 сжатие brotli, ради
+    которого пришлось бы тянуть ещё одну зависимость."""
+    from fontTools.ttLib import TTFont
+
+    os.makedirs(FONT_CACHE_DIR, exist_ok=True)
+    path = os.path.join(FONT_CACHE_DIR, f"p{page_number}.ttf")
+    if not os.path.exists(path):
+        r = requests.get(font_url_for_page(page_number, fmt="ttf"), timeout=30)
+        r.raise_for_status()
+        with open(path, "wb") as f:
+            f.write(r.content)
+    font = TTFont(path)
+    upm = font["head"].unitsPerEm
+    cmap = font.getBestCmap()
+    hmtx = font["hmtx"]
+    return {chr(cp): hmtx[gn][0] / upm * 100 for cp, gn in cmap.items()}
+
+
+def _token_width(token, widths):
+    if token["type"] == "marker":
+        return MARKER_WIDTH
+    return sum(widths.get(ch, 0.0) for ch in token.get("code_v4") or "")
+
+
+def _split_even(w, k):
+    """Разбить последовательность на РОВНО k непрерывных кусков, минимизируя
+    отклонение суммы куска от средней. Обычное ДП, O(k·n²)."""
+    n = len(w)
+    pre = [0.0]
+    for x in w:
+        pre.append(pre[-1] + x)
+    target = pre[n] / k
+    inf = float("inf")
+    dp = [[inf] * (n + 1) for _ in range(k + 1)]
+    parent = [[-1] * (n + 1) for _ in range(k + 1)]
+    dp[0][0] = 0.0
+    for kk in range(1, k + 1):
+        for i in range(kk, n + 1):
+            best, bj = inf, -1
+            for j in range(kk - 1, i):
+                if dp[kk - 1][j] == inf:
+                    continue
+                d = (pre[i] - pre[j]) - target
+                cost = dp[kk - 1][j] + d * d
+                if cost < best:
+                    best, bj = cost, j
+            dp[kk][i] = best
+            parent[kk][i] = bj
+    cuts, i = [], n
+    for kk in range(k, 0, -1):
+        j = parent[kk][i]
+        cuts.append((j, i))
+        i = j
+    cuts.reverse()
+    return cuts
+
+
+def relayout_lines(lines, page_number):
+    """Пересчитывает ТОЧКИ ПЕРЕНОСА строк внутри страницы (29.08.2026).
+
+    Зачем: раскладка из QUL-источника расходится с той, под которую нарисован
+    наш шрифт - строки получаются очень разной длины (на стр. 7 разброс 38%),
+    из-за чего justify раздувает пробелы между словами, а самая длинная строка
+    тянет вниз размер шрифта ВСЕЙ страницы. У глифов V4 кашида зашита в сам
+    глиф так, что "родная" строка заполняет страницу целиком - значит верная
+    разбивка это та, где ширины строк равны. Замеры (стр. 7): разброс 38% -> 5%,
+    заполнение строки 82% -> 97%, размер шрифта 17.8px -> 21.0px.
+
+    Что НЕ меняется: границы страниц, состав и порядок слов, число строк,
+    позиции header/bismillah. Меняется только то, на каком слове рвётся строка.
+    Разные печатные издания мусхафа тут и так расходятся между собой при
+    одинаковой пагинации (подтверждено пользователем 29.08.2026)."""
+    idx = [i for i, l in enumerate(lines) if l["type"] == "text"]
+    if len(idx) < 2:
+        return lines
+    widths = glyph_widths(page_number)
+    seq = [t for i in idx for t in lines[i]["tokens"]]
+    if not seq:
+        return lines
+    w = [_token_width(t, widths) for t in seq]
+    cuts = _split_even(w, len(idx))
+    for pos, i in enumerate(idx):
+        a, b = cuts[pos]
+        lines[i]["tokens"] = seq[a:b]
+    return lines
+
+
 def build_lines(ayahs_out, qul):
     """Строит lines[] (реальная построчная вёрстка) поверх уже готовых
     ayahs_out (наш текст/таджвид/перевод). line_of - откуда какое слово по
@@ -400,7 +501,7 @@ def export_page(conn, page_number):
             ayahs_out.append(entry)
             time.sleep(0.1)
 
-    lines = build_lines(ayahs_out, qul)
+    lines = relayout_lines(build_lines(ayahs_out, qul), page_number)
 
     surah_numbers = sorted({e[0] for e in entries})
     if missing_glyphs:
@@ -420,7 +521,6 @@ def export_page(conn, page_number):
 
 
 def main():
-    import os
     os.makedirs(OUT_DIR, exist_ok=True)
 
     conn = sqlite3.connect(HADITHS_DB)
@@ -442,5 +542,53 @@ def main():
         print(f"страница {page_number}: {len(data['ayahs'])} аятов, {n_words} слов -> {path}")
 
 
+def relayout_only():
+    """Пересчитать ТОЛЬКО раскладку строк в уже готовых page*.json.
+
+    Полный export_page() ходит в api.quran.com за таджвид-разметкой на каждую
+    страницу - это часы и лишний риск для уже выверенных данных (переводы,
+    склейки, чистка "*"). Раскладка же зависит исключительно от метрик шрифта,
+    поэтому её можно пересчитать на месте: текст, переводы, аяты и границы
+    страниц остаются байт-в-байт теми же, меняются только точки переноса строк.
+    Пригодится ещё раз, если сменится шрифт мусхафа."""
+    changed = total = 0
+    for page_number in range(START_PAGE, END_PAGE + 1):
+        path = os.path.join(OUT_DIR, f"page{page_number}.json")
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        total += 1
+        before = [
+            "".join(t.get("code_v4") or "" for t in l["tokens"])
+            for l in data["lines"] if l["type"] == "text"
+        ]
+        try:
+            data["lines"] = relayout_lines(data["lines"], page_number)
+        except Exception as e:
+            print(f"страница {page_number}: ОШИБКА пересчёта - {e}")
+            continue
+        after = [
+            "".join(t.get("code_v4") or "" for t in l["tokens"])
+            for l in data["lines"] if l["type"] == "text"
+        ]
+        if before == after:
+            print(f"страница {page_number}: раскладка не изменилась")
+            continue
+        # страховка: последовательность глифов на странице обязана совпасть
+        if "".join(before) != "".join(after):
+            print(f"страница {page_number}: ПРОПУСК - изменился состав слов")
+            continue
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        changed += 1
+        n_diff = sum(1 for a, b in zip(before, after) if a != b)
+        print(f"страница {page_number}: переставлено строк {n_diff} из {len(after)}")
+    print(f"\nготово: изменено {changed} страниц из {total}")
+
+
 if __name__ == "__main__":
-    main()
+    if "--relayout-only" in sys.argv:
+        relayout_only()
+    else:
+        main()
