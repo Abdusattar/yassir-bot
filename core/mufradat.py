@@ -323,6 +323,42 @@ def get_starred_question_pool(user_id, language=DEFAULT_LANGUAGE):
     return get_words_by_progress_keys(starred_keys, language) or None
 
 
+# Доля вопросов, которая берётся из "волны" наименее показанных слов
+# (30.08.2026, решение пользователя - "хотелось бы равномерности").
+#
+# Задача: у студента на 15-й странице пул уже за 1000 слов, и при чисто
+# случайном выборе охват крайне неровный - это "задача о собирателе
+# купонов": чтобы каждое из 1000 слов выпало хотя бы раз, нужно ~1000·ln(1000)
+# ≈ 6900 вопросов, то есть ~170 дней при 40 ответах в день. Симуляция на
+# этих же числах: за 60 дней 71 слово не показывалось НИ РАЗУ, а 67 других
+# спросились 5+ раз - ровно то, что пользователь и заметил.
+#
+# Волна = слова с минимальным числом показов среди кандидатов. Непоказанные
+# (нет строки прогресса) имеют 0 показов и потому идут первыми - включая
+# слова с РАННИХ страниц, что и просил пользователь. Внутри волны сохраняется
+# обычное взвешивание word_weight, так что слабое слово и там выпадает чаще.
+#
+# Оставшиеся 20% - обычный выбор по всему пулу: без них ошибочное или
+# забытое слово ждало бы следующей волны, а интервальное повторение - смысл
+# тренажёра, его нельзя выключать ради охвата. С этой долей симуляция даёт
+# полный охват 1000 слов за ~30 дней вместо ~170 и ноль слов "5+ раз".
+COVERAGE_WAVE_SHARE = 0.8
+
+
+def _times_shown(progress_row):
+    """Сколько раз слово вообще показывалось (верно + неверно).
+
+    Нет строки прогресса - слово не показывали ни разу, 0. Строка есть, но
+    счётчики нулевые - артефакт миграции: correct_count добавлен ADD COLUMN
+    18.08.2026, у более старых записей он 0, хотя слово спрашивали. Такую
+    запись считаем за 1 показ, иначе давно пройденные слова навсегда
+    оседали бы в первой волне и вытесняли по-настоящему новые."""
+    if not progress_row:
+        return 0
+    shown = (progress_row.get("correct_count") or 0) + (progress_row.get("wrong_count") or 0)
+    return max(1, shown)
+
+
 def word_weight(progress_row):
     """progress_row - словарь с correct_streak/wrong_count/last_correct_date
     или None (слово ещё не спрашивали). Новое слово получает вес как у
@@ -437,8 +473,16 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
         candidates.append(w)
     if not candidates:
         return None
-    weights = [word_weight(progress_by_id.get(w["progress_key"])) for w in candidates]
-    return random.choices(candidates, weights=weights, k=1)[0]
+    # Равномерность охвата (30.08.2026, см. COVERAGE_WAVE_SHARE): большую
+    # часть вопросов берём из волны наименее показанных слов, остальные -
+    # по всему пулу, чтобы повторение забытого не останавливалось.
+    pool = candidates
+    if random.random() < COVERAGE_WAVE_SHARE:
+        shown = {id(w): _times_shown(progress_by_id.get(w["progress_key"])) for w in candidates}
+        least = min(shown.values())
+        pool = [w for w in candidates if shown[id(w)] == least]
+    weights = [word_weight(progress_by_id.get(w["progress_key"])) for w in pool]
+    return random.choices(pool, weights=weights, k=1)[0]
 
 
 def generate_question(words, progress_by_id, n_options=8, starred_words=None):
