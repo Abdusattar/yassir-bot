@@ -50,9 +50,16 @@ sys.path.insert(0, ".")
 from config import OR_API_KEY, OR_URL
 from core.sampler import HADITHS_DB, save_mufradat_word
 
-SURAH = 2
-START_AYAH = 1
-END_AYAH = 69  # до страницы 10 включительно (resolve_page(10) = сура 2, аяты 62-69) - решение пользователя 26.08.2026
+# Диапазон задаётся списком (сура, аят_с, аят_по) - джуз 1 это сура 1
+# целиком плюс сура 2 до аята 141 включительно (решение пользователя
+# 30.08.2026 - "перевод доведём до конца первого джуза"). Аяты 2:1-2:69
+# уже переведены 26.08.2026; save_mufradat_word идемпотентен (UPDATE на
+# месте, progress_key не трогает), так что повторный прогон по ним
+# безопасен, но по умолчанию их не гоняем - см. RANGES ниже.
+RANGES = [
+    (1, 1, 7),      # Аль-Фатиха
+    (2, 70, 141),   # продолжение до конца джуза 1
+]
 SOURCE_LANGUAGE = "ru"
 TARGET_LANGUAGE = "ky"
 MODEL = "google/gemini-3.1-pro-preview"
@@ -62,18 +69,65 @@ MAX_RETRIES = 3
 _JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
 
 
-def get_source_words(ayah_number):
+def get_source_words(surah, ayah_number):
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT position, arabic_text, translation FROM mufradat_words "
             "WHERE surah_number=? AND ayah_number=? AND language=? ORDER BY position",
-            (SURAH, ayah_number, SOURCE_LANGUAGE)
+            (surah, ayah_number, SOURCE_LANGUAGE)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def build_prompt(ayah_number, words):
+def get_glossary(words):
+    """Уже принятые кыргызские переводы для слов ЭТОГО аята (30.08.2026).
+
+    Зачем: без такой опоры модель переводит одно и то же слово по-разному от
+    аята к аяту - замер по готовым 2:1-2:69 показал 93 расхождения на 684
+    арабских слова (13%), причём часть чисто косметические (регистр "бул"/
+    "Бул"), а часть содержательные: رَبَّكُمُ в 2:21 стало "Раббиңерге", а
+    رَّبِّهِمْ в 2:26 - "алардын Эгеси", то есть один и тот же термин то
+    арабизмом, то кыргызским словом.
+
+    Для тренажёра это не косметика: progress_key наследуется по паре
+    (arabic_text, перевод, язык), поэтому каждый новый вариант перевода
+    ПЛОДИТ ОТДЕЛЬНОЕ слово, и прогресс студента по нему размывается.
+
+    Берём самый частый уже принятый вариант на каждое арабское слово -
+    именно он и есть сложившаяся норма этого корпуса."""
+    arabics = {w["arabic_text"] for w in words}
+    if not arabics:
+        return {}
+    placeholders = ",".join("?" * len(arabics))
+    with sqlite3.connect(HADITHS_DB) as conn:
+        rows = conn.execute(
+            f"SELECT arabic_text, translation, COUNT(*) AS n FROM mufradat_words "
+            f"WHERE language=? AND arabic_text IN ({placeholders}) AND translation<>'*' "
+            f"GROUP BY arabic_text, translation ORDER BY n DESC",
+            (TARGET_LANGUAGE, *arabics)
+        ).fetchall()
+    best = {}
+    for arabic, translation, _ in rows:
+        best.setdefault(arabic, _normalize_case(translation))   # первый = самый частый
+    return best
+
+
+# Имена, которым заглавная буква положена и в середине фразы. Всё остальное
+# в глоссарии приводится к строчной: глоссы показываются в тренажёре по
+# одному и вперемешку, "начало аята" там не значит ничего, а разнобой
+# "бул"/"Бул" плодил лишние progress_key (9 таких пар на 2:1-2:69).
+_PROPER_PREFIXES = ("Аллах", "Рабби", "Куран", "Мухаммад", "Ибрахим", "Муса", "Иса", "Адам")
+
+
+def _normalize_case(translation):
+    text = translation.strip()
+    if not text or text.startswith(_PROPER_PREFIXES):
+        return text
+    return text[0].lower() + text[1:]
+
+
+def build_prompt(surah, ayah_number, words, glossary):
     full_arabic = " ".join(w["arabic_text"] for w in words)
     word_list = "\n".join(f"{w['position']}. {w['arabic_text']}" for w in words)
     star_positions = [w["position"] for w in words if w["translation"].strip() == "*"]
@@ -81,7 +135,20 @@ def build_prompt(ayah_number, words):
         f'Positions {star_positions} are grammatically fused into the PRECEDING word '
         f'(a compound phrase) — output "*" for them.' if star_positions else ""
     )
-    return f'''You are a Quranic Arabic scholar producing a WORD-BY-WORD (interlinear) Kyrgyz gloss for Quran Surah {SURAH}, Ayah {ayah_number}.
+    # Глоссарий уже принятых переводов - против расхождения одного и того же
+    # слова от аята к аяту (см. get_glossary). Не жёсткий приказ: контекст
+    # действительно может требовать другой падежной формы, кыргызский
+    # агглютинативный - поэтому "unless the context genuinely requires".
+    gloss_note = ""
+    if glossary:
+        pairs = "\n".join(f"- {a} → {t}" for a, t in glossary.items())
+        gloss_note = (
+            "\nALREADY-ESTABLISHED glossary (these exact Arabic words were glossed "
+            "earlier in this same corpus). Reuse the established Kyrgyz wording unless "
+            "the context genuinely requires a different case/form — consistency across "
+            "ayat matters here:\n" + pairs + "\n"
+        )
+    return f'''You are a Quranic Arabic scholar producing a WORD-BY-WORD (interlinear) Kyrgyz gloss for Quran Surah {surah}, Ayah {ayah_number}.
 
 Full ayah (Arabic): {full_arabic}
 
@@ -91,10 +158,11 @@ Words in order:
 TASK: for each numbered position above, give the most accurate literal Kyrgyz word-by-word equivalent of that specific Arabic word, using the classical Quranic meaning (per standard tafsir), considering the whole ayah's meaning for grammatical/semantic context. Pay attention to natural KYRGYZ word order/morphology for quantifiers, negation, and demonstratives — do not force Arabic or Russian word order onto Kyrgyz. Do not drop or merge any word's meaning into another position — every position must carry its own full meaning.
 
 {star_note}
-
+{gloss_note}
 RULES:
 - Output EXACTLY one entry per position listed above, same count, same order.
 - Kyrgyz text only (Cyrillic Kyrgyz letters and spaces only — no underscores, no hyphens joining words), no Russian, no explanations, no reasoning.
+- Use lowercase, EXCEPT for proper nouns and the names of Allah (Аллах, Рабби, ...). Do not capitalise a word merely because it starts the ayah — these are isolated glosses shown out of order in a trainer.
 - Output STRICT JSON ONLY: a list of objects {{"position": <int>, "translation": "<kyrgyz text>"}}. No markdown fences, no commentary, no reasoning text before or after.'''
 
 
@@ -134,13 +202,16 @@ def parse_translations(content, expected_positions, star_positions):
     return by_position
 
 
-def translate_ayah(ayah_number, words):
+def translate_ayah(surah, ayah_number, words):
     expected_positions = [w["position"] for w in words]
     star_positions = [w["position"] for w in words if w["translation"].strip() == "*"]
+    # Глоссарий берётся ПЕРЕД каждым аятом заново - в него попадают и слова,
+    # переведённые только что, в этом же прогоне (корпус растёт по ходу).
+    glossary = get_glossary(words)
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
-            content, cost = call_gemini(build_prompt(ayah_number, words))
+            content, cost = call_gemini(build_prompt(surah, ayah_number, words, glossary))
             translations = parse_translations(content, expected_positions, star_positions)
             return translations, cost
         except Exception as e:
@@ -158,32 +229,34 @@ def main():
     failed_ayat = []
     saved_words = 0
 
-    for ayah_number in range(START_AYAH, END_AYAH + 1):
-        words = get_source_words(ayah_number)
-        if not words:
-            print(f"  аят {ayah_number}: нет исходных ({SOURCE_LANGUAGE}) слов, пропуск")
-            continue
+    for surah, start_ayah, end_ayah in RANGES:
+        print(f"=== сура {surah}, аяты {start_ayah}-{end_ayah} ===")
+        for ayah_number in range(start_ayah, end_ayah + 1):
+            words = get_source_words(surah, ayah_number)
+            if not words:
+                print(f"  {surah}:{ayah_number}: нет исходных ({SOURCE_LANGUAGE}) слов, пропуск")
+                continue
 
-        try:
-            translations, cost = translate_ayah(ayah_number, words)
-        except Exception as e:
-            print(f"  аят {ayah_number}: ОШИБКА - {e}")
-            failed_ayat.append(ayah_number)
-            continue
+            try:
+                translations, cost = translate_ayah(surah, ayah_number, words)
+            except Exception as e:
+                print(f"  {surah}:{ayah_number}: ОШИБКА - {e}")
+                failed_ayat.append(f"{surah}:{ayah_number}")
+                continue
 
-        total_cost += cost
-        for w in words:
-            save_mufradat_word(
-                SURAH, ayah_number, w["position"], w["arabic_text"],
-                translations[w["position"]], TARGET_LANGUAGE
-            )
-            saved_words += 1
+            total_cost += cost
+            for w in words:
+                save_mufradat_word(
+                    surah, ayah_number, w["position"], w["arabic_text"],
+                    translations[w["position"]], TARGET_LANGUAGE
+                )
+                saved_words += 1
 
-        print(f"  аят {ayah_number}: готово (${cost:.4f}, всего ${total_cost:.4f})")
-        time.sleep(1)
+            print(f"  {surah}:{ayah_number}: готово (${cost:.4f}, всего ${total_cost:.4f})")
+            time.sleep(1)
 
     print()
-    print(f"Сохранено слов (сура {SURAH}, аяты {START_AYAH}-{END_AYAH}, язык {TARGET_LANGUAGE}): {saved_words}")
+    print(f"Сохранено слов (язык {TARGET_LANGUAGE}): {saved_words}")
     print(f"Не удалось перевести аятов: {len(failed_ayat)} {failed_ayat}")
     print(f"Итоговая стоимость: ${total_cost:.4f}")
 
