@@ -914,8 +914,8 @@
   <div class="confirm-card">
     <p id="confirm-text"></p>
     <div class="confirm-actions">
-      <button id="confirm-cancel">Отмена</button>
-      <button id="confirm-yes">Да</button>
+      <button id="confirm-cancel" data-i18n="btn_cancel">Отмена</button>
+      <button id="confirm-yes" data-i18n="btn_yes">Да</button>
     </div>
   </div>
 </div>
@@ -1052,8 +1052,6 @@
       back_dashboard: '← Дашборд',
       tab_mywords: '⭐ Мои слова',
       tab_mushaf: '📗 Мусхаф',
-      tab_trainer: 'Тренажёр',
-      tab_meaning: 'Смысл',
       btn_finish: '✅ Закончить',
       btn_rating: '🏆 Рейтинг',
       btn_back: '⬅️ Назад',
@@ -1061,17 +1059,31 @@
       btn_yes: 'Да',
       btn_cancel: 'Отмена',
       loading: 'Загрузка…',
-      page_short: 'стр.',
-      word_from_page: 'слово со стр.',
-      per_session: 'за сеанс',
-      today: 'сегодня',
+      page_n: 'стр. %N%',
+      ayah_n: 'аят %N%',
+      ayah_range: 'аят %A%–%B%',
+      word_from_page_n: 'слово со стр. %N%',
+      correct_n: '✅ %N% за сеанс',
+      daily_n: '%N%/%M% сегодня',
       overall_score: 'Общий вес',
       mastered_of: 'закреплено %N% из %M% слов',
-      ayah: 'аят',
-      which_page: '📖 Какая страница мусхафа?',
+      which_page_range: '📖 Какая страница мусхафа? (стр. %A%–%B%)',
+      bookmark_saved: '🔖 Закладка: стр. %N%',
+      session_done: 'Сессия завершена 🤲',
+      delta_up: '📈 Вырос за сеанс на +%N%',
+      delta_down: '📉 Снизился за сеанс на %N%',
+      delta_same: 'Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲',
+      rank_line: '🏆 Место в %D%: %X%',
+      x_of_y: '%P% из %T%',
+      btn_new_card: '🔁 Новая карточка',
+      btn_dashboard: '🏠 Дашборд',
+      top_title: '🏆 Топ по муфрадату',
+      no_rank_yet: 'Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲',
+      division_1: '🥇 Дивизион 1 (стр. 11+)',
+      division_2: '🥈 Дивизион 2 (стр. 2-10)',
       daily_left: '📝 Ещё %N% разных слов сегодня — и дневное задание «Слова» будет засчитано',
       mywords_empty: 'Пока пусто. Дважды нажми на слово во время чтения — оно попадёт сюда.',
-      rank_among: 'Место среди всех тренирующихся: ',
+      rank_among: 'Место среди всех тренирующихся: %X%',
       revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
       revision_done: '✅ Повторение засчитано',
       revision_already: 'Уже засчитано сегодня',
@@ -1080,11 +1092,10 @@
       meaning_missing: 'перевод смысла для этой страницы ещё не загружен',
       trainer_empty: 'Слова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше.',
       session_expired: 'Сессия Telegram истекла 🤲 Перезайди в приложение.',
-      mywords_title: '🔖 Мои слова',
       tab_meaning_full: '📜 Смысл',
       tab_trainer_full: '🌱 Тренажёр',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Мои слова',
-      online_now: 'сейчас в онлайне учатся ',
+      online_now_n: 'сейчас в онлайне учатся %N%',
     },
     ky: {
       dash_mushaf: 'Мусхаф',
@@ -1094,8 +1105,6 @@
       back_dashboard: '← Башкы бет',
       tab_mywords: '⭐ Менин сөздөрүм',
       tab_mushaf: '📗 Мусхаф',
-      tab_trainer: 'Машыгуу',
-      tab_meaning: 'Мааниси',
       btn_finish: '✅ Бүтүрүү',
       btn_rating: '🏆 Рейтинг',
       btn_back: '⬅️ Артка',
@@ -1103,17 +1112,31 @@
       btn_yes: 'Ооба',
       btn_cancel: 'Жокко чыгаруу',
       loading: 'Жүктөлүүдө…',
-      page_short: 'бет',
-      word_from_page: '-беттеги сөз',
-      per_session: 'сеанста',
-      today: 'бүгүн',
+      page_n: '%N%-бет',
+      ayah_n: '%N%-аят',
+      ayah_range: '%A%–%B%-аяттар',
+      word_from_page_n: '%N%-беттеги сөз',
+      correct_n: '✅ сеанста %N%',
+      daily_n: 'бүгүн %N%/%M%',
       overall_score: 'Жалпы балл',
       mastered_of: '%M% сөздөн %N% сөз жатталды',
-      ayah: 'аят',
-      which_page: '📖 Мусхафтын кайсы бети?',
+      which_page_range: '📖 Мусхафтын кайсы бети? (%A%–%B%-бет)',
+      bookmark_saved: '🔖 Кыстарма: %N%-бет',
+      session_done: 'Сеанс аяктады 🤲',
+      delta_up: '📈 Сеанста +%N% өстү',
+      delta_down: '📉 Сеанста %N% төмөндөдү',
+      delta_same: 'Сеанста балл өзгөргөн жок — дагы аракет кыл, ар бир туура жооп аны жылдырат 🤲',
+      rank_line: '🏆 %D% ичиндеги орун: %X%',
+      x_of_y: '%T% ичинен %P%',
+      btn_new_card: '🔁 Жаңы карточка',
+      btn_dashboard: '🏠 Башкы бет',
+      top_title: '🏆 Муфрадат боюнча топ',
+      no_rank_yet: 'Азырынча эч ким рейтингге кире турганчалык машыкканы жок 🤲',
+      division_1: '🥇 1-дивизион (11+ бет)',
+      division_2: '🥈 2-дивизион (2–10-бет)',
       daily_left: '📝 Бүгүн дагы %N% ар башка сөз — ошондо «Сөздөр» күндүк тапшырмасы аткарылат',
       mywords_empty: 'Азырынча бош. Окуп жатканда сөздү эки жолу бассаң, ал бул жерге кошулат.',
-      rank_among: 'Бардык катышуучулардын арасындагы орун: ',
+      rank_among: 'Бардык катышуучулардын арасындагы орун: %X%',
       revision_ask: 'Бакара сүрөсүн башынан кайталадыңбы?',
       revision_done: '✅ Кайталоо эсептелди',
       revision_already: 'Бүгүн эсептелген',
@@ -1122,11 +1145,10 @@
       meaning_missing: 'бул беттин маанилик котормосу азырынча жүктөлө элек',
       trainer_empty: 'Кыстармаңдагы сөздөр азырынча түгөндү 🤲 Бетти алдыга жылдыр.',
       session_expired: 'Telegram сессиясы бүттү 🤲 Колдонмого кайра кир.',
-      mywords_title: '🔖 Менин сөздөрүм',
       tab_meaning_full: '📜 Мааниси',
       tab_trainer_full: '🌱 Машыгуу',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Менин сөздөрүм',
-      online_now: 'азыр онлайн окуп жатышат ',
+      online_now_n: 'азыр онлайн окуп жатышат %N%',
     },
     uz: {
       dash_mushaf: 'Мусҳаф',
@@ -1136,8 +1158,6 @@
       back_dashboard: '← Бош саҳифа',
       tab_mywords: '⭐ Менинг сўзларим',
       tab_mushaf: '📗 Мусҳаф',
-      tab_trainer: 'Машқ',
-      tab_meaning: 'Маъноси',
       tab_meaning_full: '📜 Маъноси',
       tab_trainer_full: '🌱 Машқ',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Менинг сўзларим',
@@ -1148,17 +1168,31 @@
       btn_yes: 'Ҳа',
       btn_cancel: 'Бекор қилиш',
       loading: 'Юкланмоқда…',
-      page_short: 'бет',
-      word_from_page: '-бетдаги сўз',
-      per_session: 'сеансда',
-      today: 'бугун',
+      page_n: '%N%-бет',
+      ayah_n: '%N%-оят',
+      ayah_range: '%A%–%B%-оятлар',
+      word_from_page_n: '%N%-бетдаги сўз',
+      correct_n: '✅ сеансда %N%',
+      daily_n: 'бугун %N%/%M%',
       overall_score: 'Умумий балл',
       mastered_of: '%M% сўздан %N% сўз ёдланди',
-      ayah: 'оят',
-      which_page: '📖 Мусҳафнинг қайси бети?',
+      which_page_range: '📖 Мусҳафнинг қайси бети? (%A%–%B%-бет)',
+      bookmark_saved: '🔖 Хатчўп: %N%-бет',
+      session_done: 'Сеанс тугади 🤲',
+      delta_up: '📈 Сеансда +%N% ошди',
+      delta_down: '📉 Сеансда %N% камайди',
+      delta_same: 'Сеансда балл ўзгармади — яна ҳаракат қил, ҳар бир тўғри жавоб уни силжитади 🤲',
+      rank_line: '🏆 %D% ичидаги ўрин: %X%',
+      x_of_y: '%T% дан %P%',
+      btn_new_card: '🔁 Янги карточка',
+      btn_dashboard: '🏠 Бош саҳифа',
+      top_title: '🏆 Муфрадат бўйича топ',
+      no_rank_yet: 'Ҳозирча ҳеч ким рейтингга тушадиган даражада машқ қилмади 🤲',
+      division_1: '🥇 1-дивизион (11+ бет)',
+      division_2: '🥈 2-дивизион (2–10-бет)',
       daily_left: '📝 Бугун яна %N% хил сўз — шунда «Сўзлар» кунлик топшириғи бажарилади',
       mywords_empty: 'Ҳозирча бўш. Ўқиш пайтида сўзни икки марта боссанг, у шу ерга қўшилади.',
-      rank_among: 'Барча машқ қилувчилар орасидаги ўрин: ',
+      rank_among: 'Барча машқ қилувчилар орасидаги ўрин: %X%',
       revision_ask: 'Бақара сурасини бошидан такрорладингми?',
       revision_done: '✅ Такрорлаш ҳисобга олинди',
       revision_already: 'Бугун ҳисобга олинган',
@@ -1167,8 +1201,7 @@
       meaning_missing: 'бу бетнинг маъно таржимаси ҳозирча юкланмаган',
       trainer_empty: 'Хатчўпингдаги сўзлар ҳозирча тугади 🤲 Бетни олдинга сур.',
       session_expired: 'Telegram сеанси тугади 🤲 Иловага қайта кир.',
-      mywords_title: '🔖 Менинг сўзларим',
-      online_now: 'ҳозир онлайн ўқишяпти ',
+      online_now_n: 'ҳозир онлайн ўқишяпти %N%',
     },
   };
 
@@ -1234,9 +1267,9 @@
     // Экраны, собранные в JS, перерисовываем - иначе язык применится
     // только после следующего действия студента.
     if (document.getElementById('trainer').style.display !== 'none' && trainerState) renderTrainer();
-    if (typeof renderMyWords === 'function' &&
+    if (typeof loadMyWords === 'function' &&
         document.getElementById('view-mywords') &&
-        document.getElementById('view-mywords').classList.contains('active')) renderMyWords();
+        document.getElementById('view-mywords').classList.contains('active')) loadMyWords();
   }
 
   // Языков стало три (ru/ky/uz) - кнопка перебирает их по кругу, а не
@@ -1283,7 +1316,7 @@
       if (res.status === 401) return;
       var el = document.getElementById('dash-online');
       if (res.data && typeof res.data.online === 'number' && res.data.online >= ONLINE_BADGE_MIN) {
-        el.innerHTML = '<span class="dot"></span>сейчас в онлайне учатся ' + res.data.online;
+        el.innerHTML = '<span class="dot"></span>' + T('online_now_n', { N: res.data.online });
       } else {
         el.innerHTML = '';
       }
@@ -1462,8 +1495,10 @@
     document.getElementById('surah-name').textContent = currentSurahNameText;
     var firstAyah = data.ayahs[0], lastAyah = data.ayahs[data.ayahs.length - 1];
     document.getElementById('ayah-range').textContent =
-      'аят ' + firstAyah.ayah + (lastAyah.ayah !== firstAyah.ayah ? '–' + lastAyah.ayah : '');
-    document.getElementById('page-indicator').textContent = 'стр. ' + data.page;
+      lastAyah.ayah !== firstAyah.ayah
+        ? T('ayah_range', { A: firstAyah.ayah, B: lastAyah.ayah })
+        : T('ayah_n', { N: firstAyah.ayah });
+    document.getElementById('page-indicator').textContent = T('page_n', { N: data.page });
 
     // Настоящая построчная вёрстка (QUL/King Fahd Complex, 27.08.2026) -
     // каждая строка мусхафа - свой <div>, а не единый абзац с переносом
@@ -1597,7 +1632,7 @@
       arabic: el.getAttribute('data-arabic') || '',
       translation: el.getAttribute('data-tr') || '',
     } }).then(function (res) {
-      if (res.status !== 401) showPopupMessage(el, '✅ В «Мои слова»');
+      if (res.status !== 401) showPopupMessage(el, T('added_mywords'));
     });
   }
   document.getElementById('ayah-text').addEventListener('click', function (e) {
@@ -1626,7 +1661,7 @@
     // сосуществуют, не заменяют друг друга).
     var html = '';
     data.ayahs.forEach(function (a) {
-      html += '<div class="words-ayah-sep">аят ' + a.ayah + '</div>';
+      html += '<div class="words-ayah-sep">' + T('ayah_n', { N: a.ayah }) + '</div>';
       a.tokens.forEach(function (t) {
         if (t.type !== 'word') return;
         html += '<div class="word-row">' +
@@ -1648,12 +1683,12 @@
     data.ayahs.forEach(function (a) {
       if (!a.meaning) return;
       html += '<div class="meaning-row">' +
-        '<span class="ayah-num">аят ' + a.ayah + '</span>' +
+        '<span class="ayah-num">' + T('ayah_n', { N: a.ayah }) + '</span>' +
         '<div class="meaning-text">' + a.meaning + '</div>' +
         '</div>';
     });
     document.getElementById('meaning-list').innerHTML = html ||
-      '<div class="meaning-row"><span class="ayah-num">перевод смысла для этой страницы ещё не загружен</span></div>';
+      '<div class="meaning-row"><span class="ayah-num">' + T('meaning_missing') + '</span></div>';
   }
 
   // "Мои слова" достижимы и со Страницы, и из Тренажёра (см. openMushaf) -
@@ -1701,7 +1736,7 @@
     document.getElementById('page-nav').style.display = name === 'mywords' ? 'none' : 'flex';
     document.getElementById('ayah-range').style.display = name === 'mywords' ? 'none' : '';
     document.getElementById('surah-name').textContent =
-      name === 'mywords' ? '⭐ Мои слова' : currentSurahNameText;
+      name === 'mywords' ? T('tab_mywords') : currentSurahNameText;
     // 🔁 "повторение" (30.08.2026) - только на "Странице" (решение
     // пользователя), не на "Смысле"/"Мои слова".
     document.getElementById('btn-revision').style.display = name === 'page' ? '' : 'none';
@@ -1733,7 +1768,7 @@
   function renderMyWords(words) {
     var html;
     if (!words.length) {
-      html = '<div class="trainer-msg">Пока пусто. Дважды нажми на слово во время чтения — оно попадёт сюда.</div>';
+      html = '<div class="trainer-msg">' + T('mywords_empty') + '</div>';
     } else {
       html = words.map(function (w) {
         return '<div class="word-row mywords-row" data-surah="' + w.surah + '" data-ayah="' + w.ayah +
@@ -1744,11 +1779,11 @@
     document.getElementById('mywords-list').innerHTML = html;
   }
   function loadMyWords() {
-    document.getElementById('mywords-list').innerHTML = '<div class="trainer-msg">Загрузка…</div>';
+    document.getElementById('mywords-list').innerHTML = '<div class="trainer-msg">' + T('loading') + '</div>';
     apiCall('/words').then(function (res) {
       if (res.status === 401) {
         document.getElementById('mywords-list').innerHTML =
-          '<div class="trainer-msg">Сессия Telegram истекла 🤲 Перезайди в приложение.</div>';
+          '<div class="trainer-msg">' + T('session_expired') + '</div>';
         return;
       }
       renderMyWords(res.data.words);
@@ -1833,7 +1868,7 @@
   document.getElementById('btn-bookmark-save').addEventListener('click', function (e) {
     var btn = e.currentTarget;
     apiCall('/bookmark', { method: 'POST', body: { page: currentPage } }).then(function (res) {
-      if (res.status !== 401) showPopupMessage(btn, '🔖 Закладка: стр. ' + currentPage);
+      if (res.status !== 401) showPopupMessage(btn, T('bookmark_saved', { N: currentPage }));
     });
   });
   document.getElementById('btn-bookmark-go').addEventListener('click', function (e) {
@@ -1843,7 +1878,7 @@
       if (res.data && res.data.page) {
         loadPage(res.data.page);
       } else {
-        showPopupMessage(btn, 'Закладка ещё не сохранена');
+        showPopupMessage(btn, T('bookmark_none'));
       }
     });
   });
@@ -1854,11 +1889,11 @@
   // credit_revision_task) только после явного "Да".
   document.getElementById('btn-revision').addEventListener('click', function (e) {
     var btn = e.currentTarget;
-    showConfirm('Вы сделали повторение с начала суры Аль-Бакара?', function () {
+    showConfirm(T('revision_ask'), function () {
       apiCall('/revision', { method: 'POST' }).then(function (res) {
         if (res.status === 401) return;
         showPopupMessage(btn, res.data && res.data.credited ?
-          '✅ Повторение засчитано' : 'Уже засчитано сегодня');
+          T('revision_done') : T('revision_already'));
       });
     });
   });
@@ -1955,7 +1990,7 @@
     promise.then(function (res) {
       if (res.status === 401) {
         document.getElementById('trainer-body').innerHTML =
-          '<div class="trainer-msg">Сессия Telegram истекла 🤲 Перезайди в приложение.</div>';
+          '<div class="trainer-msg">' + T('session_expired') + '</div>';
         return;
       }
       cb(res.data);
@@ -1968,7 +2003,7 @@
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('app').style.display = 'none';
     document.getElementById('trainer').style.display = 'flex';
-    document.getElementById('trainer-body').innerHTML = '<div class="trainer-msg">Загрузка…</div>';
+    document.getElementById('trainer-body').innerHTML = '<div class="trainer-msg">' + T('loading') + '</div>';
     withAuthCheck(apiCall('/state'), function (data) { trainerState = data; renderTrainer(); });
   }
 
@@ -1976,6 +2011,17 @@
     document.getElementById('trainer').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
   });
+
+  // Название дивизиона приходит с сервера готовой РУССКОЙ строкой (она же
+  // идёт в /muftop в чате). Для приложения бэкенд шлёт рядом division_no -
+  // по нему берём перевод, а label оставляем запасным вариантом: старый
+  // ответ сервера без номера не должен ломать экран.
+  function divisionLabel(obj) {
+    if (obj && obj.division_no && I18N[UI_LANG]['division_' + obj.division_no]) {
+      return T('division_' + obj.division_no);
+    }
+    return (obj && obj.label) || '';
+  }
 
   function renderFeedbackBanner(feedback) {
     if (!feedback) return '';
@@ -1994,8 +2040,8 @@
     var html = '<div class="trainer-feedback ' + cls + '">' + icon + ' ' + ar +
       feedback.target + '</div>';
     if (feedback.remaining_for_task > 0) {
-      html += '<div class="trainer-hint">📝 Ещё ' + feedback.remaining_for_task +
-        ' разных слов сегодня — и дневное задание «Слова» будет засчитано</div>';
+      html += '<div class="trainer-hint">' +
+        T('daily_left', { N: feedback.remaining_for_task }) + '</div>';
     }
     return html;
   }
@@ -2003,8 +2049,8 @@
   function renderOverallScore(s) {
     if (!s) return '';
     var pct = Math.max(0, Math.min(100, s.score10 * 10));
-    return '<div class="trainer-score">📊 Общий вес: ' + s.score10.toFixed(2) + '/10 (закреплено ' +
-      s.mastered + ' из ' + s.total + ' слов)</div>' +
+    return '<div class="trainer-score">📊 ' + T('overall_score') + ': ' + s.score10.toFixed(2) +
+      '/10 (' + T('mastered_of', { N: s.mastered, M: s.total }) + ')</div>' +
       '<div class="trainer-score-bar"><div class="trainer-score-bar-fill" style="width:' + pct + '%"></div></div>';
   }
 
@@ -2016,7 +2062,7 @@
     var el = document.getElementById('trainer-daily');
     if (!d || d.daily_target == null) { el.textContent = ''; el.classList.remove('done'); return; }
     var done = d.daily_count >= d.daily_target;
-    el.textContent = d.daily_count + '/' + d.daily_target + ' сегодня';
+    el.textContent = T('daily_n', { N: d.daily_count, M: d.daily_target });
     el.classList.toggle('done', done);
   }
 
@@ -2028,10 +2074,10 @@
 
     if (d.needs_page) {
       body.innerHTML =
-        '<div class="trainer-msg">📖 Какая страница мусхафа? (стр. ' + d.first_page + '–' + d.last_page + ')</div>' +
+        '<div class="trainer-msg">' + T('which_page_range', { A: d.first_page, B: d.last_page }) + '</div>' +
         '<div class="trainer-page-input">' +
         '<input id="tp-input" type="number" inputmode="numeric" min="' + d.first_page + '" max="' + d.last_page + '">' +
-        '<button id="tp-submit">Начать</button></div>';
+        '<button id="tp-submit">' + T('btn_start') + '</button></div>';
       document.getElementById('tp-submit').addEventListener('click', function () {
         var n = parseInt(document.getElementById('tp-input').value, 10);
         if (!n) return;
@@ -2044,7 +2090,7 @@
 
     if (d.empty) {
       body.innerHTML = renderFeedbackBanner(d.feedback) +
-        '<div class="trainer-msg">Слова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше.</div>' +
+        '<div class="trainer-msg">' + T('trainer_empty') + '</div>' +
         renderOverallScore(d.overall_score) +
         '<div class="trainer-pagebar"><button id="tr-inc">➕</button></div>';
       document.getElementById('tr-inc').addEventListener('click', function () { stepPage(1); });
@@ -2059,9 +2105,9 @@
     // строка, а прогресс уехал под варианты - он важен, но не в момент
     // выбора ответа.
     var html = renderFeedbackBanner(d.feedback);
-    html += '<div class="trainer-info">стр. ' + d.bookmark_page +
-      ' · слово со стр. ' + d.word_page +
-      ' · ✅ ' + d.session_correct + ' за сеанс</div>';
+    html += '<div class="trainer-info">' + T('page_n', { N: d.bookmark_page }) +
+      ' · ' + T('word_from_page_n', { N: d.word_page }) +
+      ' · ' + T('correct_n', { N: d.session_correct }) + '</div>';
     html += '<div class="trainer-word-card"><div class="trainer-word">' + d.arabic + '</div></div>';
     html += '<div class="trainer-options">';
     d.options.forEach(function (opt, i) {
@@ -2070,7 +2116,8 @@
     html += '</div>';
     html += renderOverallScore(d.overall_score);
     html += '<div class="trainer-pagebar"><button id="tr-dec">➖</button><button id="tr-inc">➕</button></div>';
-    html += '<div class="trainer-actions"><button id="tr-end">✅ Закончить</button><button id="tr-top">🏆 Рейтинг</button></div>';
+    html += '<div class="trainer-actions"><button id="tr-end">' + T('btn_finish') +
+      '</button><button id="tr-top">' + T('btn_rating') + '</button></div>';
     body.innerHTML = html;
 
     Array.prototype.forEach.call(body.querySelectorAll('.trainer-opt'), function (btn) {
@@ -2098,18 +2145,21 @@
 
   function endSession() {
     withAuthCheck(apiCall('/end', { method: 'POST' }), function (d) {
-      var html = '<div class="trainer-msg">Сессия завершена 🤲</div>';
+      var html = '<div class="trainer-msg">' + T('session_done') + '</div>';
       html += renderOverallScore(d.overall_score);
       if (typeof d.delta === 'number') {
-        if (d.delta > 0) html += '<div class="trainer-info">📈 Вырос за сеанс на +' + d.delta.toFixed(2) + '</div>';
-        else if (d.delta < 0) html += '<div class="trainer-info">📉 Снизился за сеанс на ' + d.delta.toFixed(2) + '</div>';
-        else html += '<div class="trainer-info">Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲</div>';
+        if (d.delta > 0) html += '<div class="trainer-info">' + T('delta_up', { N: d.delta.toFixed(2) }) + '</div>';
+        else if (d.delta < 0) html += '<div class="trainer-info">' + T('delta_down', { N: Math.abs(d.delta).toFixed(2) }) + '</div>';
+        else html += '<div class="trainer-info">' + T('delta_same') + '</div>';
       }
       if (d.rank) {
-        html += '<div class="trainer-info">🏆 Место в ' + d.rank.division + ': ' + d.rank.place + ' из ' + d.rank.total + '</div>';
+        html += '<div class="trainer-info">' + T('rank_line', {
+          D: divisionLabel(d.rank),
+          X: T('x_of_y', { P: d.rank.place, T: d.rank.total }),
+        }) + '</div>';
       }
-      html += '<div class="trainer-actions"><button id="tr-restart">🔁 Новая карточка</button>' +
-        '<button id="tr-dashboard">🏠 Дашборд</button></div>';
+      html += '<div class="trainer-actions"><button id="tr-restart">' + T('btn_new_card') + '</button>' +
+        '<button id="tr-dashboard">' + T('btn_dashboard') + '</button></div>';
       document.getElementById('trainer-body').innerHTML = html;
       document.getElementById('tr-restart').addEventListener('click', openTrainer);
       document.getElementById('tr-dashboard').addEventListener('click', function () {
@@ -2121,23 +2171,26 @@
 
   function showLeaderboard() {
     withAuthCheck(apiCall('/leaderboard'), function (d) {
-      var html = '<div class="trainer-msg">🏆 Топ по муфрадату</div>';
+      var html = '<div class="trainer-msg">' + T('top_title') + '</div>';
       if (!d.in_group) {
         html += d.personal
-          ? '<div class="trainer-info">Место среди всех тренирующихся: ' + d.personal.rank + ' из ' + d.total + '</div>'
-          : '<div class="trainer-info">Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲</div>';
+          ? '<div class="trainer-info">' + T('rank_among', {
+              X: T('x_of_y', { P: d.personal.rank, T: d.total }),
+            }) + '</div>'
+          : '<div class="trainer-info">' + T('no_rank_yet') + '</div>';
       } else {
         d.divisions.forEach(function (div) {
           if (!div.entries.length) return;
-          html += '<div class="trainer-division">' + div.label + '</div>';
+          html += '<div class="trainer-division">' + divisionLabel(div) + '</div>';
           div.entries.slice(0, 7).forEach(function (e, i) {
             html += '<div class="trainer-lb-row' + (e.you ? ' you' : '') + '">' +
               (i + 1) + '. ' + e.name + ' (' + e.group + ') — ' +
-              e.accuracy.toFixed(0) + '% (' + e.correct + '/' + e.n + '), стр. ' + e.page + '</div>';
+              e.accuracy.toFixed(0) + '% (' + e.correct + '/' + e.n + '), ' +
+              T('page_n', { N: e.page }) + '</div>';
           });
         });
       }
-      html += '<div class="trainer-actions"><button id="tr-back-q">⬅️ Назад</button></div>';
+      html += '<div class="trainer-actions"><button id="tr-back-q">' + T('btn_back') + '</button></div>';
       document.getElementById('trainer-body').innerHTML = html;
       document.getElementById('tr-back-q').addEventListener('click', renderTrainer);
     });

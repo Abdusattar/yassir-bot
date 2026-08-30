@@ -323,10 +323,21 @@ async def handle_end(request, user_id):
     if end_score and state and state.get("start_score10") is not None:
         result["delta"] = round(end_score["score10"] - state["start_score10"], 2)
     if end_score:
-        rank_info = _find_rank(_split_by_division(_group_leaderboard_for_this_bot()), user_id)
+        divisions = _split_by_division(_group_leaderboard_for_this_bot())
+        rank_info = _find_rank(divisions, user_id)
         if rank_info:
             label, rank, total, _score = rank_info
-            result["rank"] = {"division": label, "place": rank, "total": total}
+            result["rank"] = {
+                "division": label,
+                # Порядковый номер дивизиона - чтобы приложение подставило
+                # НАЗВАНИЕ на языке студента (label - всегда русский, он
+                # общий с /muftop в чате, где язык один).
+                "division_no": next(
+                    (i for i, (lbl, _e) in enumerate(divisions, start=1) if lbl == label), None
+                ),
+                "place": rank,
+                "total": total,
+            }
     return web.json_response(result)
 
 
@@ -344,9 +355,10 @@ async def handle_leaderboard(request, user_id):
         })
 
     divisions = []
-    for label, entries in _split_by_division(_group_leaderboard_for_this_bot()):
+    for i, (label, entries) in enumerate(_split_by_division(_group_leaderboard_for_this_bot()), start=1):
         divisions.append({
             "label": label,
+            "division_no": i,
             "entries": [
                 {**score, "name": _display_name(uid), "group": _group_name(uid), "you": uid == user_id}
                 for uid, score in entries
