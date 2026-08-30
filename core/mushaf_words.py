@@ -253,9 +253,45 @@ def get_starred_progress_keys(user_id):
     return {r[0] for r in rows}
 
 
-def list_starred_words(user_id):
+def _translations_for(conn, triples, language):
+    """(surah, ayah, position) -> перевод на нужном языке, одним запросом.
+    Кусками по 200 троек: список "Моих слов" не ограничен по размеру (см.
+    модульный docstring), а у SQLite есть предел на число параметров."""
+    found = {}
+    triples = list(triples)
+    for i in range(0, len(triples), 200):
+        chunk = triples[i:i + 200]
+        where = " OR ".join(
+            ["(surah_number=? AND ayah_number=? AND position=?)"] * len(chunk)
+        )
+        params = [language]
+        for t in chunk:
+            params.extend(t)
+        rows = conn.execute(
+            "SELECT surah_number, ayah_number, position, translation FROM mufradat_words "
+            "WHERE language=? AND (" + where + ")",
+            params
+        ).fetchall()
+        for surah, ayah, position, translation in rows:
+            found[(surah, ayah, position)] = translation
+    return found
+
+
+def list_starred_words(user_id, language=_LANGUAGE):
     """Новые сверху - только что встреченное забытое слово должно быть
-    первым в списке, не погребено под старыми."""
+    первым в списке, не погребено под старыми.
+
+    Перевод берётся НА ЯЗЫКЕ СТУДЕНТА в момент чтения списка, а не тот,
+    что лежит в таблице (30.08.2026, живой баг: студент переключился на
+    кыргызский, а "Мои слова" остались русскими). В mushaf_starred_words
+    перевод - снимок момента добавления, всегда русский: и страница чтения,
+    и add_starred_word_by_progress_key работают с _LANGUAGE="ru". Хранить
+    по копии на каждый язык незачем - mufradat_words и так покрывает все
+    языки, ключ (surah, ayah, position) общий.
+
+    Нет перевода на целевом языке (кыргызский и узбекский готовы пока на
+    джуз 1) - остаётся русский из таблицы: пустая строка в списке для
+    повторения бесполезнее, чем перевод на другом языке."""
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
         rows = conn.execute(
@@ -263,10 +299,25 @@ def list_starred_words(user_id):
             "WHERE user_id=? ORDER BY added_at DESC",
             (user_id,)
         ).fetchall()
-    return [
-        {"surah": r[0], "ayah": r[1], "position": r[2], "arabic": r[3], "translation": r[4]}
-        for r in rows
-    ]
+        localized = {}
+        if language != _LANGUAGE and rows:
+            localized = _translations_for(
+                conn, [(r[0], r[1], r[2]) for r in rows], language
+            )
+    from core.mufradat import _clean_translation
+    out = []
+    for surah, ayah, position, arabic, translation in rows:
+        t = localized.get((surah, ayah, position))
+        # "*" - хвост устойчивого сочетания, его перевод целиком лежит на
+        # головном слове (см. _merge_tail_arabic): как самостоятельный
+        # перевод он бессмыслен, откатываемся на сохранённый.
+        if t and t.strip() and t.strip() != "*":
+            translation = _clean_translation(t)
+        out.append({
+            "surah": surah, "ayah": ayah, "position": position,
+            "arabic": arabic, "translation": translation,
+        })
+    return out
 
 
 # Закладка страницы чтения (30.08.2026, кнопка 🔖 в #page-nav) - НЕ то же

@@ -371,7 +371,7 @@ async def handle_leaderboard(request, user_id):
 async def handle_words_list(request, user_id):
     """GET - список "Мои слова" (core/mushaf_words.py - НЕ прогресс
     тренажёра муфрадата, отдельная функция страницы чтения)."""
-    return web.json_response({"words": list_starred_words(user_id)})
+    return web.json_response({"words": list_starred_words(user_id, get_current_lang(user_id))})
 
 
 def _parse_word_key(body):
@@ -408,7 +408,7 @@ async def handle_words_add(request, user_id):
         # пускать её в mushaf_starred_words (29.08.2026).
         return web.json_response({"error": "missing_text"}, status=400)
     add_starred_word(user_id, *key, arabic, translation)
-    return web.json_response({"words": list_starred_words(user_id)})
+    return web.json_response({"words": list_starred_words(user_id, get_current_lang(user_id))})
 
 
 @with_auth
@@ -424,7 +424,7 @@ async def handle_words_remove(request, user_id):
     if key is None:
         return web.json_response({"error": "bad_word"}, status=400)
     remove_starred_word(user_id, *key)
-    return web.json_response({"words": list_starred_words(user_id)})
+    return web.json_response({"words": list_starred_words(user_id, get_current_lang(user_id))})
 
 
 # Полный диапазон страниц чтения (mushaf_data/page1.json..page604.json) -
