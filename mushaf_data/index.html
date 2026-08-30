@@ -998,32 +998,32 @@
              Тренажёр, смотря откуда зашли (mywordsOrigin, т.к. "Мои
              слова" достижимы из обоих мест, см. openMushaf) -->
     <button id="tab-back" class="tab-btn" title="Назад">🔙</button>
-    <button id="tab-meaning" class="tab-btn" title="Смысл">📜 Смысл</button>
+    <button id="tab-meaning" class="tab-btn" data-i18n="tab_meaning_full">📜 Смысл</button>
     <!-- ⭐, не 🔖 (30.08.2026, пользователь поймал путаницу с закладкой
          страницы, у которой тот же 🔖) - совпадает с реальным именем
          таблицы в БД (mushaf_starred_words, "starred" = отмечено
          звёздочкой), две разные функции больше не выглядят одинаково. -->
-    <button id="tab-mywords" class="tab-btn" title="Мои слова"><span class="icon-gold">⭐</span> Мои слова</button>
+    <button id="tab-mywords" class="tab-btn" data-i18n-html="tab_mywords_gold"><span class="icon-gold">⭐</span> Мои слова</button>
     <!-- Прямой переход в Тренажёр без дашборда (30.08.2026, решение
          пользователя) - НЕ switchTab (уводит из #app целиком), поэтому
          .active никогда не проставляется - после клика вкладки всё равно
          не видны (см. openTrainer). -->
-    <button id="tab-trainer" class="tab-btn" title="Тренажёр">🌱 Тренажёр</button>
+    <button id="tab-trainer" class="tab-btn" data-i18n="tab_trainer_full">🌱 Тренажёр</button>
   </div>
 </div>
 
 <div id="trainer">
   <div id="trainer-topbar">
-    <button id="trainer-back">← Дашборд</button>
-    <span id="trainer-bookmark">Тренажёр</span>
+    <button id="trainer-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span id="trainer-bookmark" data-i18n="dash_trainer">Тренажёр</span>
     <span id="trainer-daily"></span>
   </div>
   <div id="trainer-body"></div>
   <!-- Прямой переход в Мусхаф/Мои слова без дашборда (30.08.2026, решение
        пользователя, симметрично 🌱 в #tabbar мусхафа). -->
   <div id="trainer-tabbar">
-    <button id="trainer-tab-mywords" class="tab-btn">⭐ Мои слова</button>
-    <button id="trainer-tab-mushaf" class="tab-btn">📗 Мусхаф</button>
+    <button id="trainer-tab-mywords" class="tab-btn" data-i18n="tab_mywords">⭐ Мои слова</button>
+    <button id="trainer-tab-mushaf" class="tab-btn" data-i18n="tab_mushaf">📗 Мусхаф</button>
   </div>
 </div>
 
@@ -1081,6 +1081,9 @@
       trainer_empty: 'Слова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше.',
       session_expired: 'Сессия Telegram истекла 🤲 Перезайди в приложение.',
       mywords_title: '🔖 Мои слова',
+      tab_meaning_full: '📜 Смысл',
+      tab_trainer_full: '🌱 Тренажёр',
+      tab_mywords_gold: '<span class="icon-gold">⭐</span> Мои слова',
       online_now: 'сейчас в онлайне учатся ',
     },
     ky: {
@@ -1120,7 +1123,52 @@
       trainer_empty: 'Кыстармаңдагы сөздөр азырынча түгөндү 🤲 Бетти алдыга жылдыр.',
       session_expired: 'Telegram сессиясы бүттү 🤲 Колдонмого кайра кир.',
       mywords_title: '🔖 Менин сөздөрүм',
+      tab_meaning_full: '📜 Мааниси',
+      tab_trainer_full: '🌱 Машыгуу',
+      tab_mywords_gold: '<span class="icon-gold">⭐</span> Менин сөздөрүм',
       online_now: 'азыр онлайн окуп жатышат ',
+    },
+    uz: {
+      dash_mushaf: 'Мусҳаф',
+      dash_mushaf_sub: 'Тажвид ва таржима билан ўқиш',
+      dash_trainer: 'Машқ',
+      dash_trainer_sub: 'Муфрадат — Қуръон сўзларини ўрган',
+      back_dashboard: '← Бош саҳифа',
+      tab_mywords: '⭐ Менинг сўзларим',
+      tab_mushaf: '📗 Мусҳаф',
+      tab_trainer: 'Машқ',
+      tab_meaning: 'Маъноси',
+      tab_meaning_full: '📜 Маъноси',
+      tab_trainer_full: '🌱 Машқ',
+      tab_mywords_gold: '<span class="icon-gold">⭐</span> Менинг сўзларим',
+      btn_finish: '✅ Тугатиш',
+      btn_rating: '🏆 Рейтинг',
+      btn_back: '⬅️ Орқага',
+      btn_start: 'Бошлаш',
+      btn_yes: 'Ҳа',
+      btn_cancel: 'Бекор қилиш',
+      loading: 'Юкланмоқда…',
+      page_short: 'бет',
+      word_from_page: '-бетдаги сўз',
+      per_session: 'сеансда',
+      today: 'бугун',
+      overall_score: 'Умумий балл',
+      mastered_of: '%M% сўздан %N% сўз ёдланди',
+      ayah: 'оят',
+      which_page: '📖 Мусҳафнинг қайси бети?',
+      daily_left: '📝 Бугун яна %N% хил сўз — шунда «Сўзлар» кунлик топшириғи бажарилади',
+      mywords_empty: 'Ҳозирча бўш. Ўқиш пайтида сўзни икки марта боссанг, у шу ерга қўшилади.',
+      rank_among: 'Барча машқ қилувчилар орасидаги ўрин: ',
+      revision_ask: 'Бақара сурасини бошидан такрорладингми?',
+      revision_done: '✅ Такрорлаш ҳисобга олинди',
+      revision_already: 'Бугун ҳисобга олинган',
+      added_mywords: '✅ «Менинг сўзларим»га қўшилди',
+      bookmark_none: 'Хатчўп ҳозирча сақланмаган',
+      meaning_missing: 'бу бетнинг маъно таржимаси ҳозирча юкланмаган',
+      trainer_empty: 'Хатчўпингдаги сўзлар ҳозирча тугади 🤲 Бетни олдинга сур.',
+      session_expired: 'Telegram сеанси тугади 🤲 Иловага қайта кир.',
+      mywords_title: '🔖 Менинг сўзларим',
+      online_now: 'ҳозир онлайн ўқишяпти ',
     },
   };
 
@@ -1174,9 +1222,14 @@
   } catch (e) {}
 
   function applyLang() {
-    langBtn.textContent = UI_LANG === 'ky' ? 'KY' : 'RU';
+    langBtn.textContent = UI_LANG.toUpperCase();
     document.querySelectorAll('[data-i18n]').forEach(function (el) {
       el.textContent = T(el.getAttribute('data-i18n'));
+    });
+    // Отдельно - строки с разметкой внутри (иконка в своём span), им нужен
+    // innerHTML, а не textContent.
+    document.querySelectorAll('[data-i18n-html]').forEach(function (el) {
+      el.innerHTML = T(el.getAttribute('data-i18n-html'));
     });
     // Экраны, собранные в JS, перерисовываем - иначе язык применится
     // только после следующего действия студента.
@@ -1186,8 +1239,12 @@
         document.getElementById('view-mywords').classList.contains('active')) renderMyWords();
   }
 
+  // Языков стало три (ru/ky/uz) - кнопка перебирает их по кругу, а не
+  // переключает два. Порядок фиксированный: русский первым, он же дефолт.
+  var LANG_CYCLE = ['ru', 'ky', 'uz'];
   langBtn.addEventListener('click', function () {
-    UI_LANG = UI_LANG === 'ky' ? 'ru' : 'ky';
+    var i = LANG_CYCLE.indexOf(UI_LANG);
+    UI_LANG = LANG_CYCLE[(i + 1) % LANG_CYCLE.length];
     try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e) {}
     applyLang();
     // Серверу сообщаем тем же эндпоинтом, что и раньше менял язык СЛОВ -
