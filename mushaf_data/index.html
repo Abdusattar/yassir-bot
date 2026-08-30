@@ -614,6 +614,54 @@
   #btn-lang-toggle {
     font-size: 13px; font-weight: 700; color: var(--accent);
   }
+  /* Выбор языка списком (30.08.2026, вместо перебора по кругу). С тремя
+     языками цикл требовал до двух тапов, и каждый промежуточный тап
+     РЕАЛЬНО сохранял язык на сервере и перезагружал страницу - бросив на
+     полпути, студент оставался не на своём языке. Список: один тап
+     открыть, один выбрать, из любого состояния в любое, запись на сервер
+     одна. Названия родные ("Кыргызча", не "KY") - расшифровывать нечего.
+     Не отдельный экран и не модалка по центру: панель выезжает прямо под
+     кнопкой, дашборд остаётся на виду (решение пользователя). */
+  #lang-menu {
+    position: absolute; top: 64px; right: 16px;
+    z-index: 70;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    min-width: 156px;
+    display: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* Страница мусхафа живёт в dir="rtl" - без явного ltr flex-дети
+       зеркалятся, и галочка уезжает ВЛЕВО от названия языка (поймано
+       скриншотом 30.08.2026, см. wiki/mushaf_yassirapp.md про RTL-ловушку:
+       координаты и ширины такое не ловят). Тот же приём, что у
+       #confirm-overlay. */
+    direction: ltr;
+    transform-origin: top right;
+    animation: lang-menu-in 0.14s ease-out;
+  }
+  #lang-menu.visible { display: block; }
+  @keyframes lang-menu-in {
+    from { opacity: 0; transform: scale(0.94) translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+  .lang-opt {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    background: none; border: none;
+    /* Крупнее обычной кнопки - палец на телефоне, список выбирают редко,
+       промахиваться тут неприятнее, чем экономить пиксели. */
+    font-size: 15px; color: var(--ink);
+    text-align: left; cursor: pointer;
+  }
+  .lang-opt + .lang-opt { border-top: 1px solid var(--card-border); }
+  .lang-opt.active { color: var(--accent); font-weight: 700; }
+  .lang-opt .check { opacity: 0; }
+  .lang-opt.active .check { opacity: 1; }
   #dashboard h1 {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 21px;
@@ -895,8 +943,17 @@
 <body>
 <div id="dashboard">
   <div id="dash-settings">
-    <button id="btn-lang-toggle" title="Тил / Язык">RU</button>
+    <button id="btn-lang-toggle" title="Тил / Язык" aria-haspopup="true"
+            aria-expanded="false">RU</button>
     <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
+  </div>
+  <div id="lang-menu" role="menu" aria-labelledby="btn-lang-toggle">
+    <button class="lang-opt" data-lang="ru" role="menuitem">
+      <span>Русский</span><span class="check">✓</span></button>
+    <button class="lang-opt" data-lang="ky" role="menuitem">
+      <span>Кыргызча</span><span class="check">✓</span></button>
+    <button class="lang-opt" data-lang="uz" role="menuitem">
+      <span>Ўзбекча</span><span class="check">✓</span></button>
   </div>
   <h1>YassirApp</h1>
   <div id="dash-online"></div>
@@ -1256,6 +1313,7 @@
 
   function applyLang() {
     langBtn.textContent = UI_LANG.toUpperCase();
+    if (typeof markActiveLang === 'function') markActiveLang();
     document.querySelectorAll('[data-i18n]').forEach(function (el) {
       el.textContent = T(el.getAttribute('data-i18n'));
     });
@@ -1272,13 +1330,51 @@
         document.getElementById('view-mywords').classList.contains('active')) loadMyWords();
   }
 
-  // Языков стало три (ru/ky/uz) - кнопка перебирает их по кругу, а не
-  // переключает два. Порядок фиксированный: русский первым, он же дефолт.
-  var LANG_CYCLE = ['ru', 'ky', 'uz'];
-  langBtn.addEventListener('click', function () {
-    var i = LANG_CYCLE.indexOf(UI_LANG);
-    UI_LANG = LANG_CYCLE[(i + 1) % LANG_CYCLE.length];
-    try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e) {}
+  // Выбор языка списком (30.08.2026, см. CSS #lang-menu - почему не цикл).
+  // Порядок фиксированный: русский первым, он же дефолт.
+  var langMenu = document.getElementById('lang-menu');
+
+  function markActiveLang() {
+    langMenu.querySelectorAll('.lang-opt').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-lang') === UI_LANG);
+    });
+  }
+  function closeLangMenu() {
+    langMenu.classList.remove('visible');
+    langBtn.setAttribute('aria-expanded', 'false');
+  }
+  function openLangMenu() {
+    markActiveLang();
+    langMenu.classList.add('visible');
+    langBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  langBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (langMenu.classList.contains('visible')) closeLangMenu();
+    else openLangMenu();
+  });
+  // Тап мимо списка закрывает его - привычное поведение выпадающих меню,
+  // отдельной кнопки "закрыть" в такой мелкой панели быть не должно.
+  document.addEventListener('click', function (e) {
+    if (langMenu.classList.contains('visible') && !langMenu.contains(e.target)) {
+      closeLangMenu();
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeLangMenu();
+  });
+
+  langMenu.addEventListener('click', function (e) {
+    var btn = e.target.closest('.lang-opt');
+    if (!btn) return;
+    var lang = btn.getAttribute('data-lang');
+    closeLangMenu();
+    // Тап по уже выбранному языку - просто закрыть: ни запроса к серверу,
+    // ни перезагрузки страницы.
+    if (!I18N[lang] || lang === UI_LANG) return;
+    UI_LANG = lang;
+    try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e2) {}
     applyLang();
     // Серверу сообщаем тем же эндпоинтом, что и раньше менял язык СЛОВ -
     // язык один на интерфейс и на переводы, разводить их незачем.
