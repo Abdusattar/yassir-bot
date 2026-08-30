@@ -37,9 +37,19 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # script_stop - обязательно. Без него шаг доходит до конца и
+          # рапортует success, даже если git pull упал: 30.08.2026 три
+          # коммита подряд "успешно задеплоились", а на сервере оставался
+          # старый код (pull отказывался перезаписать неотслеживаемый
+          # файл, который до этого положили на сервер руками).
+          script_stop: true
           script: |
+            set -e
             cd ~/yassir-bot && git pull origin master
             source ~/yassir-bot/venv/bin/activate && pip install -r requirements.txt -q
             cp ~/yassir-bot/mushaf_data/index.html /var/www/yassir-app/index.html
             sudo systemctl restart yassir-bot
+            # Печатаем реальный HEAD - в логе Actions сразу видно, что
+            # выкатилось, без похода на сервер.
+            git -C ~/yassir-bot log --oneline -1
             echo "Deploy done"
