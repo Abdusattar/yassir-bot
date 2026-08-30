@@ -392,6 +392,13 @@
   #page-indicator {
     font-size: 13px; color: var(--muted);
     cursor: pointer; padding: 4px 10px; border-radius: 8px;
+    /* direction: ltr обязателен (30.08.2026). Контейнер наследует
+       dir="rtl" от страницы мусхафа, а кыргызская и узбекская формы
+       НАЧИНАЮТСЯ с числа ("7-бет", "38-оят") - двунаправленный алгоритм
+       разрывает такую строку и показывает её как "бет-7". По-русски
+       ("стр. 7") дефекта не было: строка начинается с букв, поэтому
+       поймать это можно было только скриншотом на ky/uz. */
+    direction: ltr;
   }
   #page-indicator:active { background: var(--chrome-border); }
   #page-jump-input {
@@ -473,6 +480,9 @@
     color: var(--marker-color);
     font-size: 12px;
     padding: 10px 0 2px;
+    /* Та же причина, что у #page-indicator выше: список слов - RTL-контейнер
+       (арабский прижат вправо), а разделитель "38-оят" начинается с числа. */
+    direction: ltr;
   }
 
   /* "Мои слова" (29.08.2026) - тот же паттерн, что и #ayah-text: колонка
@@ -979,7 +989,7 @@
 <div id="app" style="display:none">
   <div id="topbar">
     <div class="topbar-left">
-      <button id="mushaf-back" class="topbar-back">← Дашборд</button>
+      <button id="mushaf-back" class="topbar-back" data-i18n="back_dashboard">← Дашборд</button>
       <span class="surah-name" id="surah-name">—</span>
     </div>
     <div class="topbar-right">
