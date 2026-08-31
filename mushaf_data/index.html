@@ -209,6 +209,90 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   #topbar .surah-name { font-weight: 600; color: var(--ink); }
+
+  /* Переход по названию суры (31.08.2026) - точкой входа в список 114 сур
+     служит САМО название суры в шапке, а не новая кнопка. Причина: в
+     #page-nav места уже нет (6 элементов на экране 360px, см. историю
+     30.08.2026), а высоту у текста мусхафа отнимать нельзя - список
+     всплывает оверлеем поверх страницы и закрывается, постоянного места
+     не занимает вообще. */
+  #btn-surah-pick {
+    background: none; border: none; padding: 4px 2px; cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+    font-family: inherit; color: inherit; line-height: 1.2;
+  }
+  /* Шеврон - CSS-треугольник на границах, а не символ: шрифтовые ▾/⌄ сидят
+     в своём em-квадрате по-разному в разных фолбек-шрифтах и всплывают над
+     строкой (поймано headless-скриншотом 31.08.2026). Треугольнику ещё и
+     нечем зеркалиться в RTL. */
+  .surah-caret {
+    width: 0; height: 0; margin-top: 2px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid var(--muted);
+  }
+  #btn-surah-pick:disabled { cursor: default; }
+  #btn-surah-pick:disabled .surah-caret { display: none; }
+
+  /* Оверлей со списком сур. Отдельный от #confirm-overlay (тот - модалка
+     "да/нет" с фиксированной .confirm-card), здесь нужен прокручиваемый
+     лист снизу на 114 строк. */
+  #surah-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: flex-end; justify-content: center;
+    z-index: 70;
+    direction: ltr;
+  }
+  #surah-overlay.visible { display: flex; }
+  .surah-sheet {
+    background: var(--card-bg);
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow-md);
+    width: 100%; max-width: 520px; max-height: 78vh;
+    display: flex; flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .surah-sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--card-border);
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+  #surah-close {
+    background: none; border: none; font-size: 17px; line-height: 1;
+    color: var(--muted); cursor: pointer; padding: 4px 6px;
+    font-family: inherit;
+  }
+  #surah-list {
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 4px 0 10px;
+  }
+  .surah-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 16px; cursor: pointer;
+    /* direction: ltr - строка живёт внутри #app, наследующего dir="rtl"
+       (см. правило 30.08.2026 про RTL-контейнеры). Само арабское имя
+       внутри своего span всё равно раскладывается справа налево - это
+       делает bidi по сильным символам, контейнер тут ни при чём. */
+    direction: ltr;
+  }
+  .surah-row:active { background: var(--chrome-border); }
+  .surah-row.current { background: var(--chrome-bg); }
+  .surah-row.current .s-ar { color: var(--accent); }
+  .surah-row .s-num {
+    flex: 0 0 26px; text-align: center;
+    font-size: 12px; color: var(--muted); direction: ltr;
+  }
+  .surah-row .s-ar { flex: 1 1 auto; font-size: 19px; color: var(--ink); }
+  .surah-row .s-page {
+    flex: 0 0 auto; font-size: 12px; color: var(--muted);
+    /* direction: ltr обязателен - кыргызская и узбекская формы начинаются
+       с числа ("50-бет"), в rtl-контексте bidi показал бы "бет-50"
+       (тот же дефект, что был у #page-indicator 30.08.2026). */
+    direction: ltr;
+  }
   #topbar .nav-btn {
     background: none; border: none; color: var(--ink);
     font-size: 20px; padding: 4px 10px; cursor: pointer; line-height: 1;
@@ -986,11 +1070,28 @@
     </div>
   </div>
 </div>
+
+<!-- Список сур (31.08.2026) - для тех, кто уже вышел за Аль-Бакару и
+     не должен помнить номера страниц наизусть. -->
+<div id="surah-overlay">
+  <div class="surah-sheet">
+    <div class="surah-sheet-head">
+      <span data-i18n="surah_list_title">Суры</span>
+      <button id="surah-close">✕</button>
+    </div>
+    <div id="surah-list"></div>
+  </div>
+</div>
 <div id="app" style="display:none">
   <div id="topbar">
     <div class="topbar-left">
       <button id="mushaf-back" class="topbar-back" data-i18n="back_dashboard">← Дашборд</button>
-      <span class="surah-name" id="surah-name">—</span>
+      <!-- Название суры само и есть кнопка списка сур (31.08.2026) - новых
+           элементов в хроме не появилось, текст мусхафа не потеснён. -->
+      <button id="btn-surah-pick">
+        <span class="surah-name" id="surah-name">—</span>
+        <span class="surah-caret"></span>
+      </button>
     </div>
     <div class="topbar-right">
       <!-- Отметка "повторение" (30.08.2026) - студент сам подтверждает, что
@@ -1118,6 +1219,7 @@
       dash_trainer_sub: 'Муфрадат — учи слова Корана',
       back_dashboard: '← Дашборд',
       tab_mywords: '⭐ Мои слова',
+      surah_list_title: 'Суры',
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Закончить',
       btn_rating: '🏆 Рейтинг',
@@ -1171,6 +1273,7 @@
       dash_trainer_sub: 'Муфрадат — Курандын сөздөрүн үйрөн',
       back_dashboard: '← Башкы бет',
       tab_mywords: '⭐ Менин сөздөрүм',
+      surah_list_title: 'Сүрөлөр',
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Бүтүрүү',
       btn_rating: '🏆 Рейтинг',
@@ -1224,6 +1327,7 @@
       dash_trainer_sub: 'Муфрадат — Қуръон сўзларини ўрган',
       back_dashboard: '← Бош саҳифа',
       tab_mywords: '⭐ Менинг сўзларим',
+      surah_list_title: 'Суралар',
       tab_mushaf: '📗 Мусҳаф',
       tab_meaning_full: '📜 Маъноси',
       tab_trainer_full: '🌱 Машқ',
@@ -1596,8 +1700,16 @@
   }
 
   var currentSurahNameText = '';
+  // Номера сур, представленных на текущей странице (обычно одна, но бывает
+  // переход - напр. стр. 106: конец Ан-Нисы + начало Аль-Маиды). Нужны
+  // только для подсветки текущего места в списке сур.
+  var currentSurahNums = [];
   function renderPage(data) {
     currentSurahNameText = data.surah_names.join(', ');
+    currentSurahNums = [];
+    data.ayahs.forEach(function (a) {
+      if (currentSurahNums.indexOf(a.surah) === -1) currentSurahNums.push(a.surah);
+    });
     document.getElementById('surah-name').textContent = currentSurahNameText;
     var firstAyah = data.ayahs[0], lastAyah = data.ayahs[data.ayahs.length - 1];
     document.getElementById('ayah-range').textContent =
@@ -1843,6 +1955,9 @@
     document.getElementById('ayah-range').style.display = name === 'mywords' ? 'none' : '';
     document.getElementById('surah-name').textContent =
       name === 'mywords' ? T('tab_mywords') : currentSurahNameText;
+    // На "Моих словах" в шапке стоит заголовок вкладки, а не имя суры -
+    // открывать оттуда список сур бессмысленно, гасим вместе с шевроном.
+    document.getElementById('btn-surah-pick').disabled = name === 'mywords';
     // 🔁 "повторение" (30.08.2026) - только на "Странице" (решение
     // пользователя), не на "Смысле"/"Мои слова".
     document.getElementById('btn-revision').style.display = name === 'page' ? '' : 'none';
@@ -1965,6 +2080,87 @@
   var BAQARA_START_PAGE = 2;
   document.getElementById('btn-go-baqara').addEventListener('click', function () {
     loadPage(BAQARA_START_PAGE);
+  });
+
+  // ── Список сур (31.08.2026) ───────────────────────────────────────────
+  // Студенты, закончившие Аль-Бакару, уходят дальше по мусхафу, и держать
+  // в голове номер страницы каждой суры им незачем. Точка входа - само
+  // название суры в шапке (#btn-surah-pick), список всплывает оверлеем:
+  // постоянного места в хроме не занимает, текст мусхафа не теснит.
+  //
+  // Таблица [номер, арабское имя, первая страница] выведена программно из
+  // наших же 604 page*.json (первое вхождение аята суры + surah_name_ar из
+  // строки-заголовка; у 17 сур заголовочной строки в данных нет - имя взято
+  // из surah_names той же страницы). Сверена с печатным мадани-мусхафом на
+  // независимо известных началах: Аль-Кахф 293, Ясин 440, Ар-Рахман 531,
+  // Аль-Мульк 562, Ан-Наба 582, Аль-Ихлас 604 - все совпали.
+  var SURAH_INDEX = [
+    [1,"الفاتحة",1],[2,"البقرة",2],[3,"آل عمران",50],[4,"النساء",77],[5,"المائدة",106],
+    [6,"الأنعام",128],[7,"الأعراف",151],[8,"الأنفال",177],[9,"التوبة",187],[10,"يونس",208],
+    [11,"هود",221],[12,"يوسف",235],[13,"الرعد",249],[14,"ابراهيم",255],[15,"الحجر",262],
+    [16,"النحل",267],[17,"الإسراء",282],[18,"الكهف",293],[19,"مريم",305],[20,"طه",312],
+    [21,"الأنبياء",322],[22,"الحج",332],[23,"المؤمنون",342],[24,"النور",350],[25,"الفرقان",359],
+    [26,"الشعراء",367],[27,"النمل",377],[28,"القصص",385],[29,"العنكبوت",396],[30,"الروم",404],
+    [31,"لقمان",411],[32,"السجدة",415],[33,"الأحزاب",418],[34,"سبإ",428],[35,"فاطر",434],
+    [36,"يس",440],[37,"الصافات",446],[38,"ص",453],[39,"الزمر",458],[40,"غافر",467],
+    [41,"فصلت",477],[42,"الشورى",483],[43,"الزخرف",489],[44,"الدخان",496],[45,"الجاثية",499],
+    [46,"الأحقاف",502],[47,"محمد",507],[48,"الفتح",511],[49,"الحجرات",515],[50,"ق",518],
+    [51,"الذاريات",520],[52,"الطور",523],[53,"النجم",526],[54,"القمر",528],[55,"الرحمن",531],
+    [56,"الواقعة",534],[57,"الحديد",537],[58,"المجادلة",542],[59,"الحشر",545],[60,"الممتحنة",549],
+    [61,"الصف",551],[62,"الجمعة",553],[63,"المنافقون",554],[64,"التغابن",556],[65,"الطلاق",558],
+    [66,"التحريم",560],[67,"الملك",562],[68,"القلم",564],[69,"الحاقة",566],[70,"المعارج",568],
+    [71,"نوح",570],[72,"الجن",572],[73,"المزمل",574],[74,"المدثر",575],[75,"القيامة",577],
+    [76,"الانسان",578],[77,"المرسلات",580],[78,"النبإ",582],[79,"النازعات",583],[80,"عبس",585],
+    [81,"التكوير",586],[82,"الإنفطار",587],[83,"المطففين",587],[84,"الإنشقاق",589],[85,"البروج",590],
+    [86,"الطارق",591],[87,"الأعلى",591],[88,"الغاشية",592],[89,"الفجر",593],[90,"البلد",594],
+    [91,"الشمس",595],[92,"الليل",595],[93,"الضحى",596],[94,"الشرح",596],[95,"التين",597],
+    [96,"العلق",597],[97,"القدر",598],[98,"البينة",598],[99,"الزلزلة",599],[100,"العاديات",599],
+    [101,"القارعة",600],[102,"التكاثر",600],[103,"العصر",601],[104,"الهمزة",601],[105,"الفيل",601],
+    [106,"قريش",602],[107,"الماعون",602],[108,"الكوثر",602],[109,"الكافرون",603],[110,"النصر",603],
+    [111,"المسد",603],[112,"الإخلاص",604],[113,"الفلق",604],[114,"الناس",604]
+  ];
+
+  var surahOverlay = document.getElementById('surah-overlay');
+  var surahListEl = document.getElementById('surah-list');
+
+  function renderSurahList() {
+    var html = '';
+    SURAH_INDEX.forEach(function (row) {
+      var cur = currentSurahNums.indexOf(row[0]) !== -1;
+      html += '<div class="surah-row' + (cur ? ' current' : '') + '" data-page="' + row[2] +
+              '" data-num="' + row[0] + '">' +
+              '<span class="s-num">' + row[0] + '</span>' +
+              '<span class="s-ar">' + row[1] + '</span>' +
+              '<span class="s-page">' + T('page_n', { N: row[2] }) + '</span>' +
+              '</div>';
+    });
+    surahListEl.innerHTML = html;
+  }
+
+  function openSurahList() {
+    renderSurahList();
+    surahOverlay.classList.add('visible');
+    // Прокрутка к текущей суре - студент открывает список там, где читает,
+    // а не с Аль-Фатихи (иначе с 60-й суры пришлось бы листать вручную).
+    var cur = surahListEl.querySelector('.surah-row.current');
+    if (cur) cur.scrollIntoView({ block: 'center' });
+  }
+  function closeSurahList() { surahOverlay.classList.remove('visible'); }
+
+  document.getElementById('btn-surah-pick').addEventListener('click', openSurahList);
+  document.getElementById('surah-close').addEventListener('click', closeSurahList);
+  // Тап по затемнению - тоже закрытие (привычный жест листа снизу).
+  surahOverlay.addEventListener('click', function (e) {
+    if (e.target === surahOverlay) closeSurahList();
+  });
+  surahListEl.addEventListener('click', function (e) {
+    var row = e.target.closest ? e.target.closest('.surah-row') : null;
+    if (!row) return;
+    closeSurahList();
+    // Со "Смысла"/"Моих слов" переход по суре возвращает на саму страницу
+    // мусхафа - выбор суры это про чтение, а не про текущую вкладку.
+    switchTab('page');
+    loadPage(parseInt(row.getAttribute('data-page'), 10));
   });
 
   // Закладка страницы чтения (30.08.2026) - 🔖 сохраняет ТЕКУЩУЮ страницу
