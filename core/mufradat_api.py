@@ -45,6 +45,7 @@ from core.mufradat_bot import (
 from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
     get_reading_bookmark, set_reading_bookmark,
+    get_hifz_pointer, set_hifz_pointer,
 )
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 
@@ -458,6 +459,34 @@ async def handle_bookmark_set(request, user_id):
 
 
 @with_auth
+async def handle_hifz_get(request, user_id):
+    """GET - указатель режима заучивания 40+40: где студент сейчас.
+    null, если он ещё ни разу не входил в режим (тогда фронтенд один раз
+    спрашивает строчку)."""
+    return web.json_response({"pointer": get_hifz_pointer(user_id)})
+
+
+@with_auth
+async def handle_hifz_set(request, user_id):
+    """POST {page, line, stage} - студент выбрал строчку, перешёл на
+    следующую или сменил этап. Строка - индекс ТЕКСТОВОЙ строки страницы
+    (0..15: в мадани-мусхафе их 15, плюс запас), этап 1..3."""
+    try:
+        body = await request.json()
+        page = int(body["page"])
+        line = int(body["line"])
+        stage = int(body["stage"])
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
+        return web.json_response({"error": "bad_page"}, status=400)
+    if not (0 <= line <= 15) or stage not in (1, 2, 3):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    set_hifz_pointer(user_id, page, line, stage)
+    return web.json_response({"pointer": {"page": page, "line": line, "stage": stage}})
+
+
+@with_auth
 async def handle_revision_credit(request, user_id):
     """POST - кнопка "🔁" в #topbar на странице чтения (30.08.2026).
     Подтверждение ("вы сделали повторение...?") уже показано на фронтенде
@@ -511,6 +540,8 @@ def build_app():
     app.router.add_post("/api/muf/words/remove", handle_words_remove)
     app.router.add_get("/api/muf/bookmark", handle_bookmark_get)
     app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
+    app.router.add_get("/api/muf/hifz", handle_hifz_get)
+    app.router.add_post("/api/muf/hifz", handle_hifz_set)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     return app

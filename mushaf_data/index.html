@@ -299,6 +299,117 @@
   }
   #topbar .nav-btn:disabled { color: var(--chrome-border); }
 
+  /* ─── Режим заучивания 40+40 (01.09.2026) ──────────────────────────
+     Порядок повторяет привычку студентов (см. materials/7f.jpeg, стороннее
+     приложение, которым они пользуются сейчас): ОДИН ТАП — строчка выделена
+     подложкой на всю ширину, переход подсвечен вполсилы уже на следующей
+     строке, дальше повторы, дальше отправка. Всё это происходит НА САМОЙ
+     СТРАНИЦЕ, а не на отдельном экране — иначе ломается привычка.
+
+     Текст не перекрашиваем: у V4 цвета таджвида зашиты в шрифт (COLR/CPAL),
+     CSS их не перебьёт, да и незачем — таджвида в том приложении нет вовсе.
+     Наш эквивалент выделения: подложка плюс мягкое приглушение остального.
+     Приглушение именно мягкое (0.42): страница должна остаться страницей,
+     студент привык видеть весь лист. */
+  /* !important обязателен: switchTab ставит #page-nav/#tabbar инлайновый
+     display, а инлайн бьёт обычное правило. */
+  #app.hifz #page-nav,
+  #app.hifz #tabbar { display: none !important; }
+  #app.hifz #hifz-head,
+  #app.hifz #hifz-foot { display: flex; }
+
+  #hifz-head, #hifz-foot {
+    display: none;
+    flex: 0 0 auto;
+    background: var(--chrome-bg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* direction: ltr обязателен — контейнеры внутри #app, который наследует
+       dir="rtl" для арабского. Правило от 30.08.2026: любой элемент с
+       направленными символами (‹ › ✕) в rtl-контейнере получает свой ltr,
+       иначе и порядок, и сами глифы переворачиваются. */
+    direction: ltr;
+  }
+  #hifz-head {
+    align-items: center; justify-content: space-between;
+    padding: 7px 12px; border-bottom: 1px solid var(--chrome-border);
+  }
+  #hifz-head .where { text-align: right; line-height: 1.3; }
+  #hifz-head .where b { display: block; font-size: 12.5px; color: var(--ink); font-weight: 600; }
+  #hifz-head .where small { font-size: 11px; color: var(--muted); }
+  #hifz-head .where .fix {
+    font-weight: 500; font-size: 11px; color: var(--accent);
+    border-bottom: 1px dashed var(--accent); margin-left: 5px; cursor: pointer;
+  }
+  #hifz-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 15px; line-height: 1; cursor: pointer; padding: 4px 6px;
+    font-family: inherit;
+  }
+  /* direction: ltr — иначе flex переставляет кубики этапов справа налево,
+     и залитым выглядит третий вместо первого (поймано скриншотом
+     01.09.2026, тот же RTL-капкан, что и с кнопками 30.08). */
+  #hifz-stage {
+    display: none; gap: 4px; padding: 7px 12px 0; flex: 0 0 auto;
+    direction: ltr;
+  }
+  #app.hifz #hifz-stage { display: flex; }
+  #hifz-stage span { flex: 1; height: 3px; border-radius: 2px; background: var(--chrome-border); }
+  #hifz-stage span.on { background: var(--accent); }
+
+  #hifz-foot {
+    align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px 11px; border-top: 1px solid var(--chrome-border);
+  }
+  #hifz-foot button {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 9px 12px; font: inherit; font-size: 12.5px;
+    color: var(--ink); cursor: pointer;
+  }
+  #hifz-foot button.primary {
+    background: var(--accent); border-color: var(--accent);
+    color: var(--accent-ink); font-weight: 600;
+  }
+  #hifz-foot button:disabled { opacity: .4; cursor: default; }
+
+  /* Выделение строчки. Подложка на всю ширину — это и есть привычное
+     «выделил строку»; box-shadow добавляет ей воздуха, не сдвигая вёрстку. */
+  .mushaf-line.hifz-lit {
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--marker-color) 16%, transparent);
+    border-radius: 4px;
+  }
+  .mushaf-line.hifz-dim { opacity: .42; }
+  /* Переходные слова — та же подложка вполсилы, уже на следующей строчке:
+     видно, докуда дочитать, и видно, что это не твоя строка. */
+  .mushaf-line .hifz-tail {
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+    border-radius: 3px;
+  }
+  .mushaf-line.hifz-has-tail { opacity: 1; }
+  .mushaf-line.hifz-has-tail > span:not(.hifz-tail) { opacity: .42; }
+  /* Выбор строчки: спрашивается один раз, поэтому подсказка крупная. */
+  #app.hifz-pick .mushaf-line { cursor: pointer; border-radius: 4px; }
+  #app.hifz-pick .mushaf-line:active {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  /* «Крупно» — не основной экран, а кнопка для тех, кому мелко. */
+  #hifz-big {
+    position: fixed; inset: 0; z-index: 55;
+    background: linear-gradient(180deg, var(--mushaf-bg-start), var(--mushaf-bg-end));
+    display: none; flex-direction: column;
+  }
+  #hifz-big.visible { display: flex; }
+  #hifz-big .big-inner {
+    flex: 1 1 auto; min-height: 0; display: flex; align-items: center;
+    justify-content: center; padding: 10px 14px; direction: rtl;
+  }
+  #hifz-big .big-words {
+    display: flex; flex-wrap: wrap; gap: 10px 4px;
+    justify-content: center; align-items: baseline; line-height: 1.9;
+  }
+  #hifz-big .big-words .hifz-tail { opacity: .45; background: none; }
+
   .view {
     display: none;
     flex: 1 1 auto;
@@ -1061,6 +1172,14 @@
   </div>
 </div>
 <div id="word-popup"></div>
+<div id="hifz-big">
+  <div id="hifz-big-head" style="flex:0 0 auto"></div>
+  <div class="big-inner"><div class="big-words" id="hifz-big-words"></div></div>
+  <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
+    <button id="hifz-big-close" style="flex:1;background:var(--card-bg);border:1px solid var(--card-border);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer">На страницу</button>
+  </div>
+</div>
+
 <div id="confirm-overlay">
   <div class="confirm-card">
     <p id="confirm-text"></p>
@@ -1101,6 +1220,11 @@
            сообщение в группу. Видна только на вкладке "Страница" (см.
            switchTab) - #topbar уже direction:ltr (в отличие от #page-nav),
            поэтому RTL-зеркалирование тут не грозит. -->
+      <!-- 📖 Заучивание (01.09.2026) — вход в режим 40+40. Стоит рядом с
+           🔁 «Повторение» намеренно: это два из трёх дневных заданий, и оба
+           теперь делаются там, где студент и так находится. Третье (слова) —
+           тренажёр. -->
+      <button id="btn-hifz" title="Заучивание 40+40">📖</button>
       <button id="btn-revision" title="Отметить повторение">🔁</button>
       <span id="ayah-range"></span>
     </div>
@@ -1121,6 +1245,17 @@
     <button id="btn-bookmark-go" class="page-nav-util" title="К закладке">«</button>
     <button id="btn-bookmark-save" class="page-nav-util" title="Сохранить закладку"><span class="icon-gold">🔖</span></button>
   </div>
+
+  <!-- Режим заучивания: своя шапка вместо #page-nav и своя нижняя полоса
+       вместо #tabbar. Место не отнимается — обе панели просто подменяются. -->
+  <div id="hifz-head">
+    <button id="hifz-close" title="Выйти из режима">✕</button>
+    <div class="where">
+      <b><span id="hifz-where">—</span><span class="fix" id="hifz-fix">поправить</span></b>
+      <small id="hifz-sub">—</small>
+    </div>
+  </div>
+  <div id="hifz-stage"><span></span><span></span><span></span></div>
 
   <div id="view-page" class="view">
     <div id="page-wrap">
@@ -1153,6 +1288,12 @@
        тапом/кликом, но уже здесь, по строке (см. #mywords-list ниже). -->
   <div id="view-mywords" class="view">
     <div id="mywords-list"></div>
+  </div>
+
+  <div id="hifz-foot">
+    <button id="hifz-prev">‹ пред.</button>
+    <button id="hifz-big-btn">Крупно</button>
+    <button id="hifz-next" class="primary">след. ›</button>
   </div>
 
   <div id="tabbar">
@@ -1220,6 +1361,18 @@
       back_dashboard: '← Дашборд',
       tab_mywords: '⭐ Мои слова',
       surah_list_title: 'Суры',
+      hifz_pick: 'С какой строчки начинаем?',
+      hifz_pick_sub: 'дальше режим ведёт сам',
+      hifz_line_of: 'строчка %N% из %M%',
+      hifz_lines_range: 'строчки %A%–%B%',
+      hifz_whole: 'страница целиком',
+      hifz_stage1: 'этап 1 — по строчкам, 40+40',
+      hifz_stage2: 'этап 2 — половина страницы, 40+40',
+      hifz_stage3: 'этап 3 — вся страница, 40+40',
+      hifz_prev: '‹ пред.',
+      hifz_next: 'след. ›',
+      hifz_big: 'Крупно',
+      hifz_fix: 'поправить',
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Закончить',
       btn_rating: '🏆 Рейтинг',
@@ -1273,6 +1426,9 @@
       dash_trainer_sub: 'Муфрадат — Курандын сөздөрүн үйрөн',
       back_dashboard: '← Башкы бет',
       tab_mywords: '⭐ Менин сөздөрүм',
+      // Строки режима заучивания (hifz_*) намеренно только по-русски
+      // (01.09.2026): фича ещё шлифуется, локализуем одним проходом,
+      // когда устоится. T() сам откатывается на русский по ключу.
       surah_list_title: 'Сүрөлөр',
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Бүтүрүү',
@@ -1699,12 +1855,14 @@
     });
   }
 
+  var currentPageData = null;
   var currentSurahNameText = '';
   // Номера сур, представленных на текущей странице (обычно одна, но бывает
   // переход - напр. стр. 106: конец Ан-Нисы + начало Аль-Маиды). Нужны
   // только для подсветки текущего места в списке сур.
   var currentSurahNums = [];
   function renderPage(data) {
+    currentPageData = data;
     currentSurahNameText = data.surah_names.join(', ');
     currentSurahNums = [];
     data.ayahs.forEach(function (a) {
@@ -1723,13 +1881,14 @@
     // по ширине браузера. surah_name_ar - реальное арабское имя суры
     // (quran_transcript), не наша русская транслитерация из SURAH_NAMES.
     var html = '';
+    var textLineNo = 0;
     (data.lines || []).forEach(function (line) {
       if (line.type === 'header') {
         html += '<div class="surah-banner">سُورَةُ ' + line.surah_name_ar + '</div>';
       } else if (line.type === 'bismillah') {
         if (line.html) html += '<div class="bismillah">' + line.html + '</div>';
       } else if (line.type === 'text') {
-        html += '<div class="mushaf-line">';
+        html += '<div class="mushaf-line" data-line="' + (textLineNo++) + '">';
         line.tokens.forEach(function (t) {
           if (t.type === 'word') {
             // data-surah/data-ayah/data-pos/data-arabic - только вместе с
@@ -1759,6 +1918,7 @@
     });
     var reveal = function () {
       document.getElementById('ayah-text').innerHTML = html;
+      if (typeof hifzApply === 'function') hifzApply();
       // document.fonts.ready, не сразу clampFontToFit() - у loadV4Font()
       // .load() резолвится, как только байты шрифта скачаны и распаршены,
       // но браузеру ещё нужно применить его к УЖЕ ВСТАВЛЕННОМУ тексту
@@ -2067,6 +2227,266 @@
         try { localStorage.setItem('yassir_mushaf_page', String(n)); } catch (e) {}
       });
   }
+
+  // ── Режим заучивания 40+40 (01.09.2026) ───────────────────────────────
+  // Порядок и вид повторяют то, к чему студенты привыкли в стороннем
+  // приложении (materials/7f.jpeg): один тап — строчка выделена, переход
+  // подсвечен на следующей строке, дальше повторы. Счётчиков 40 нет
+  // намеренно — студент считает сам, руками (решение пользователя).
+  var hifz = { on: false, line: null, stage: 1, picking: false };
+
+  // Правило переходного слова (решение пользователя 01.09.2026): строка
+  // читается не до своего конца, а ДО НАЧАЛА СЛЕДУЮЩЕЙ. Сколько слов
+  // захватить — считается, а не берётся всегда по одному:
+  //   • первое слово следующей строки;
+  //   • если в нём 3 буквы или меньше без огласовок (предлог, местоимение,
+  //     частица) — добавляем второе;
+  //   • если на нём заканчивается аят — добавляем ещё одно;
+  //   • потолок три слова, чтобы «переход» не стал полстрокой.
+  var HIFZ_HARAKAT = /[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g;
+  function hifzBaseLen(html) {
+    return String(html).replace(/<[^>]+>/g, '').replace(HIFZ_HARAKAT, '').length;
+  }
+
+  function hifzTextLines() {
+    if (!currentPageData) return [];
+    return (currentPageData.lines || []).filter(function (l) { return l.type === 'text'; });
+  }
+
+  /* Сколько ПЕРВЫХ ТОКЕНОВ следующей строки составляют переход. Считаем в
+     токенах, а не в словах: между словами может стоять знак конца аята, и
+     подсветить надо всё подряд, без дырки. */
+  function hifzTailTokens(lineIdx) {
+    var lines = hifzTextLines();
+    var next = lines[lineIdx + 1];
+    if (!next || !next.tokens) return 0;
+    var taken = 0, lastTokenIdx = -1;
+    for (var i = 0; i < next.tokens.length && taken < 3; i++) {
+      var t = next.tokens[i];
+      if (t.type !== 'word') continue;
+      taken++;
+      lastTokenIdx = i;
+      if (taken === 1 && hifzBaseLen(t.html) > 3) {
+        // Слово нормальной длины — хватит одного, но проверим конец аята.
+        var after = next.tokens[i + 1];
+        if (!after || after.type !== 'ayah_end') break;
+      } else if (taken >= 2) {
+        var after2 = next.tokens[i + 1];
+        if (!after2 || after2.type !== 'ayah_end') break;
+      }
+    }
+    return lastTokenIdx + 1;
+  }
+
+  /* Половины страницы: первая — floor(n/2) строк, вторая — остальные.
+     На 15 строках это 7+8, ровно как в печатной раскладке. */
+  function hifzHalf(lineIdx) {
+    var n = hifzTextLines().length;
+    return lineIdx < Math.floor(n / 2) ? 0 : 1;
+  }
+  function hifzHalfRange(half) {
+    var n = hifzTextLines().length, mid = Math.floor(n / 2);
+    return half === 0 ? [0, mid - 1] : [mid, n - 1];
+  }
+
+  function hifzApply() {
+    var app = document.getElementById('app');
+    app.classList.toggle('hifz', hifz.on);
+    app.classList.toggle('hifz-pick', hifz.on && hifz.picking);
+    var rows = document.querySelectorAll('#ayah-text .mushaf-line');
+    Array.prototype.forEach.call(rows, function (row) {
+      row.classList.remove('hifz-lit', 'hifz-dim', 'hifz-has-tail');
+      Array.prototype.forEach.call(row.children, function (sp) {
+        sp.classList.remove('hifz-tail');
+      });
+    });
+    if (!hifz.on || hifz.picking || hifz.line === null) return;
+
+    var lit = [];
+    if (hifz.stage === 1) lit = [hifz.line];
+    else if (hifz.stage === 2) {
+      var r = hifzHalfRange(hifzHalf(hifz.line));
+      for (var i = r[0]; i <= r[1]; i++) lit.push(i);
+    } else {
+      for (var j = 0; j < rows.length; j++) lit.push(j);
+    }
+    Array.prototype.forEach.call(rows, function (row, idx) {
+      row.classList.add(lit.indexOf(idx) !== -1 ? 'hifz-lit' : 'hifz-dim');
+    });
+    // Переход — на строке, следующей за последней подсвеченной.
+    var tailLine = lit[lit.length - 1] + 1;
+    var tailCount = hifzTailTokens(lit[lit.length - 1]);
+    if (tailCount && rows[tailLine]) {
+      rows[tailLine].classList.remove('hifz-dim');
+      rows[tailLine].classList.add('hifz-has-tail');
+      for (var k = 0; k < tailCount && k < rows[tailLine].children.length; k++) {
+        rows[tailLine].children[k].classList.add('hifz-tail');
+      }
+    }
+    hifzHead();
+  }
+
+  function hifzHead() {
+    var n = hifzTextLines().length;
+    var where = document.getElementById('hifz-where');
+    var sub = document.getElementById('hifz-sub');
+    if (hifz.picking) {
+      where.textContent = T('hifz_pick');
+      sub.textContent = T('hifz_pick_sub');
+    } else if (hifz.stage === 1) {
+      var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
+      where.textContent = T('page_n', { N: currentPage }) + ' · ' +
+        T('hifz_line_of', { N: hifz.line - r[0] + 1, M: r[1] - r[0] + 1 });
+      sub.textContent = T('hifz_stage1');
+    } else if (hifz.stage === 2) {
+      var rr = hifzHalfRange(hifzHalf(hifz.line));
+      where.textContent = T('page_n', { N: currentPage }) + ' · ' +
+        T('hifz_lines_range', { A: rr[0] + 1, B: rr[1] + 1 });
+      sub.textContent = T('hifz_stage2');
+    } else {
+      where.textContent = T('page_n', { N: currentPage }) + ' · ' + T('hifz_whole');
+      sub.textContent = T('hifz_stage3');
+    }
+    var pips = document.querySelectorAll('#hifz-stage span');
+    Array.prototype.forEach.call(pips, function (sp, i) {
+      sp.classList.toggle('on', !hifz.picking && i < hifz.stage);
+    });
+    document.getElementById('hifz-prev').disabled = hifz.picking || hifz.stage !== 1;
+    document.getElementById('hifz-next').disabled = hifz.picking;
+    document.getElementById('hifz-big-btn').disabled = hifz.picking || hifz.stage !== 1;
+    document.getElementById('hifz-big-btn').textContent = T('hifz_big');
+    document.getElementById('hifz-prev').textContent = T('hifz_prev');
+    document.getElementById('hifz-next').textContent = T('hifz_next');
+    document.getElementById('hifz-fix').textContent = T('hifz_fix');
+    document.getElementById('hifz-fix').style.display = hifz.picking ? 'none' : '';
+  }
+
+  function hifzSave() {
+    if (hifz.line === null) return;
+    apiCall('/hifz', { method: 'POST', body: {
+      page: currentPage, line: hifz.line, stage: hifz.stage
+    } }).catch(function () {});
+  }
+
+  function hifzEnter() {
+    hifz.on = true;
+    if (hifz.line === null) hifz.picking = true;
+    hifzApply();
+    hifzHead();
+  }
+  function hifzExit() {
+    hifz.on = false; hifz.picking = false;
+    document.getElementById('hifz-big').classList.remove('visible');
+    hifzApply();
+  }
+
+  /* Следующий шаг методики. Порядок жёсткий, отказа нет: метод 40+40 не
+     предусматривает возврата (решение пользователя 01.09.2026). */
+  function hifzNext() {
+    var n = hifzTextLines().length;
+    if (hifz.stage === 1) {
+      var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
+      if (hifz.line < r[1]) hifz.line += 1;
+      else hifz.stage = 2;                       // строчки половины закончились
+    } else if (hifz.stage === 2) {
+      if (hifzHalf(hifz.line) === 0) {           // первая половина сдана
+        hifz.line = hifzHalfRange(1)[0];
+        hifz.stage = 1;
+      } else {
+        hifz.stage = 3;                          // обе половины сданы
+      }
+    } else {
+      if (currentPage < LAST_PAGE) {             // страница закрыта — дальше
+        hifz.stage = 1; hifz.line = 0;
+        loadPage(currentPage + 1);
+        hifzSave();
+        return;
+      }
+    }
+    hifzApply();
+    hifzSave();
+  }
+  function hifzPrev() {
+    if (hifz.stage !== 1 || hifz.line === null) return;
+    var r = hifzHalfRange(hifzHalf(hifz.line));
+    if (hifz.line > r[0]) { hifz.line -= 1; hifzApply(); hifzSave(); }
+  }
+
+  document.getElementById('btn-hifz').addEventListener('click', function () {
+    if (hifz.on) { hifzExit(); return; }
+    hifzEnter();
+  });
+  document.getElementById('hifz-close').addEventListener('click', hifzExit);
+  document.getElementById('hifz-fix').addEventListener('click', function () {
+    hifz.picking = true; hifzApply(); hifzHead();
+  });
+  document.getElementById('hifz-prev').addEventListener('click', hifzPrev);
+  document.getElementById('hifz-next').addEventListener('click', hifzNext);
+
+  // Выбор строчки тапом прямо по странице — спрашивается один раз, дальше
+  // режим ведёт сам; вернуться сюда можно всегда через «поправить».
+  document.getElementById('ayah-text').addEventListener('click', function (e) {
+    if (!hifz.on || !hifz.picking) return;
+    var row = e.target.closest ? e.target.closest('.mushaf-line') : null;
+    if (!row) return;
+    e.stopPropagation();
+    hifz.line = parseInt(row.getAttribute('data-line'), 10);
+    hifz.stage = 1;
+    hifz.picking = false;
+    hifzApply();
+    hifzSave();
+  }, true);
+
+  // «Крупно» — та же строчка и тот же переход, только крупнее.
+  function hifzBigRender() {
+    var lines = hifzTextLines(), line = lines[hifz.line], next = lines[hifz.line + 1];
+    if (!line) return;
+    var html = '';
+    line.tokens.forEach(function (t) {
+      html += '<span class="v4-word">' + (t.code_v4 || t.html) + '</span>';
+    });
+    var tail = hifzTailTokens(hifz.line);
+    for (var i = 0; i < tail && next && i < next.tokens.length; i++) {
+      var t2 = next.tokens[i];
+      html += '<span class="v4-word hifz-tail">' + (t2.code_v4 || t2.html) + '</span>';
+    }
+    var box = document.getElementById('hifz-big-words');
+    box.innerHTML = html;
+    document.getElementById('hifz-big-head').innerHTML =
+      '<div style="padding:10px 14px;font:600 12.5px -apple-system,sans-serif;' +
+      'color:var(--ink);direction:ltr;border-bottom:1px solid var(--chrome-border);' +
+      'background:var(--chrome-bg)">' +
+      document.getElementById('hifz-where').textContent + '</div>';
+    // Кегль подбираем под область: строка может лечь в два-три ряда, это
+    // нормально — цель «удобно читать глядя», а не «уместить в одну строку».
+    var area = box.parentNode;
+    var size = 46;
+    box.style.width = (area.clientWidth - 20) + 'px';
+    while (size > 18) {
+      box.style.fontSize = size + 'px';
+      if (box.scrollHeight <= area.clientHeight - 12) break;
+      size -= 1;
+    }
+  }
+  document.getElementById('hifz-big-btn').addEventListener('click', function () {
+    document.getElementById('hifz-big').classList.add('visible');
+    hifzBigRender();
+  });
+  document.getElementById('hifz-big-close').addEventListener('click', function () {
+    document.getElementById('hifz-big').classList.remove('visible');
+  });
+
+  // Указатель с сервера: он двигается ОБОИМИ каналами сдачи, поэтому живёт
+  // не в localStorage. Если студент ещё не заходил в режим — null, тогда
+  // при первом входе спросим строчку.
+  apiCall('/hifz').then(function (d) {
+    if (d && d.pointer) {
+      hifz.line = d.pointer.line;
+      hifz.stage = d.pointer.stage;
+      hifzPointerPage = d.pointer.page;
+    }
+  }).catch(function () {});
+  var hifzPointerPage = null;
 
   document.getElementById('btn-prev').addEventListener('click', function () {
     loadPage(currentPage + 1);

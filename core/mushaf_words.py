@@ -347,6 +347,52 @@ def set_reading_bookmark(user_id, page_number):
         )
 
 
+# Указатель режима заучивания 40+40 (01.09.2026) - "где студент сейчас":
+# страница, номер СТРОКИ на ней и этап (1 - по строчкам, 2 - половина
+# страницы, 3 - страница целиком). Третья по счёту "закладка" в проекте, и
+# все три - разные вещи, путать нельзя:
+#   mufradat_page          - "дошёл до страницы N", задаёт пул вопросов тренажёра
+#   mushaf_reading_bookmark - произвольная точка возврата, кнопка 🔖
+#   mushaf_hifz_pointer    - место в методике заучивания, двигается сдачами
+# На сервере по Telegram ID, а не в localStorage: указатель двигают ОБА
+# канала сдачи (режим в мусхафе и старая сдача в группе), и он обязан
+# переживать смену устройства.
+_HIFZ_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mushaf_hifz_pointer(
+        user_id TEXT PRIMARY KEY,
+        page_number INTEGER NOT NULL,
+        line_index INTEGER NOT NULL,
+        stage INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+"""
+
+
+def set_hifz_pointer(user_id, page_number, line_index, stage):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_HIFZ_SCHEMA)
+        conn.execute(
+            "INSERT OR REPLACE INTO mushaf_hifz_pointer "
+            "(user_id, page_number, line_index, stage, updated_at) VALUES (?,?,?,?,?)",
+            (user_id, page_number, line_index, stage,
+             datetime.now(timezone.utc).isoformat())
+        )
+
+
+def get_hifz_pointer(user_id):
+    """None, если студент ещё ни разу не входил в режим заучивания."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_HIFZ_SCHEMA)
+        row = conn.execute(
+            "SELECT page_number, line_index, stage FROM mushaf_hifz_pointer "
+            "WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+    if not row:
+        return None
+    return {"page": row[0], "line": row[1], "stage": row[2]}
+
+
 def get_reading_bookmark(user_id):
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(_BOOKMARK_SCHEMA)
