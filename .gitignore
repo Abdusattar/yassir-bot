@@ -30,3 +30,7 @@ audio/
 # Сгенерированные данные мусхаф-страниц (scripts/export_mushaf_page.py) -
 # регенерируются из mufradat_words, не нужны в истории git
 mushaf_data/*.json
+
+# Кэш HTML печатной раскладки KFGQPC V4 из QUL (scripts/fix_mushaf_lines.py) -
+# 97 МБ скачанных превью, нужен только для перезапуска починки разметки.
+qul_cache/

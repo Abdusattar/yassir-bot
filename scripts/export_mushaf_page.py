@@ -165,6 +165,48 @@ def fetch_tajweed_ayah(surah, ayah, retries=3):
             raise
 
 
+def _strip_tags(html):
+    return _TAG_OR_TEXT_RE.sub("", html)
+
+
+def _split_glued_chunk(chunk, first, second):
+    """Разрезает ОДИН чанк таджвид-HTML на два слова.
+
+    Зачем: api.quran.com местами пишет слитно то, что quran_transcript
+    (и сам шрифт V4, и печатная раскладка) считает двумя словами —
+    'بَعْدَمَا' против 'بَعْدَ' + 'مَا'. Из-за этого счёт слов расходился
+    на единицу и аят пропускался ЦЕЛИКОМ (см. skipped_ayat в export_page):
+    так из мусхафа выпали 2:181 и 13:37 — обнаружено 01.09.2026.
+
+    Точка реза НЕ угадывается: она берётся из длины первого слова, а
+    результат проверяется посимвольно. Не сошлось — возвращаем None и
+    аят пропускается как раньше, лучше дыра, чем выдуманный текст
+    (см. память feedback_never_invent_quran_translations).
+
+    Резать умеет уже существующий _tokenize_arabic_html: вставляем пробел
+    в нужное место и отдаём чанк ему — он сам закроет и переоткроет теги
+    на новой границе, так что обе половины остаются валидным HTML."""
+    if _strip_tags(chunk) != first + second:
+        return None
+    out, seen, cut = [], 0, len(first)
+    for part in _TAG_OR_TEXT_RE.split(chunk):
+        if part.startswith("<"):
+            out.append(part)
+            continue
+        if seen < cut <= seen + len(part):
+            k = cut - seen
+            out.append(part[:k] + " " + part[k:])
+        else:
+            out.append(part)
+        seen += len(part)
+    halves = [c for c in _tokenize_arabic_html("".join(out)) if c.strip()]
+    if len(halves) != 2:
+        return None
+    if _strip_tags(halves[0]) != first or _strip_tags(halves[1]) != second:
+        return None
+    return halves
+
+
 def parse_ayah_tokens(raw_html, words, surah, ayah, missing_glyphs):
     """raw_html - text_uthmani_tajweed сырой из API. words - позиции этого
     аята (position, arabic_text, translation), по порядку. surah/ayah -
@@ -184,14 +226,8 @@ def parse_ayah_tokens(raw_html, words, surah, ayah, missing_glyphs):
 
     chunks = [c for c in _tokenize_arabic_html(body) if c.strip()]
     tokens = []
-    word_iter = iter(words)
-    for chunk in chunks:
-        if chunk in _MARKER_CHARS:
-            tokens.append({"type": "marker", "html": chunk})
-            continue
-        w = next(word_iter, None)
-        if w is None:
-            raise ValueError("больше токенов-слов, чем позиций в аяте")
+
+    def emit_word(chunk, w):
         code_v4 = get_code_v4(surah, ayah, w["position"])
         if code_v4 is None:
             missing_glyphs.append((surah, ayah, w["position"]))
@@ -200,9 +236,29 @@ def parse_ayah_tokens(raw_html, words, surah, ayah, missing_glyphs):
             "position": w["position"], "translation": w["translation"],
             "code_v4": code_v4, "surah": surah, "ayah": ayah,
         })
-    leftover = list(word_iter)
-    if leftover:
-        raise ValueError(f"остались несопоставленные слова: {leftover}")
+
+    wi = 0
+    for chunk in chunks:
+        if chunk in _MARKER_CHARS:
+            tokens.append({"type": "marker", "html": chunk})
+            continue
+        if wi >= len(words):
+            raise ValueError("больше токенов-слов, чем позиций в аяте")
+        w = words[wi]
+        # Слитно записанное слово: один чанк = два слова quran_transcript.
+        if _strip_tags(chunk) != w["arabic_text"] and wi + 1 < len(words):
+            halves = _split_glued_chunk(
+                chunk, w["arabic_text"], words[wi + 1]["arabic_text"]
+            )
+            if halves:
+                emit_word(halves[0], w)
+                emit_word(halves[1], words[wi + 1])
+                wi += 2
+                continue
+        emit_word(chunk, w)
+        wi += 1
+    if wi < len(words):
+        raise ValueError(f"остались несопоставленные слова: {words[wi:]}")
 
     if ayah_end_glyph:
         end_position = len(words) + 1
@@ -435,6 +491,13 @@ def build_lines(ayahs_out, qul):
     lines_out = []
     current_tokens = []
     current_line = None
+    # Токены до первой известной строки (знак руку' ۞ в самом начале
+    # страницы наследовать ещё нечего) — придерживаем и отдаём первой же
+    # настоящей строке. Раньше на этом месте стояло `n = 0`, и на 49
+    # страницах из 604 появлялась НЕСУЩЕСТВУЮЩАЯ строка 0: в печатном
+    # мадани-мусхафе строк всегда 15, а выходило 16, и весь текст съезжал
+    # (обнаружено 01.09.2026, см. scripts/fix_mushaf_lines.py).
+    pending = []
 
     def flush():
         if current_line is not None:
@@ -448,12 +511,20 @@ def build_lines(ayahs_out, qul):
             else:
                 n = current_line
             if n is None:
-                n = 0
+                pending.append(t)
+                continue
             if n != current_line:
                 flush()
                 current_tokens = []
                 current_line = n
+            if pending:
+                current_tokens.extend(pending)
+                pending = []
             current_tokens.append(t)
+    if pending:
+        raise ValueError(
+            "на странице есть токены, для которых не нашлось ни одной строки"
+        )
     flush()
 
     for n, meta in line_meta.items():
