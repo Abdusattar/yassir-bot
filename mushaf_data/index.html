@@ -366,6 +366,12 @@
     background: var(--chrome-bg); border-radius: 16px 16px 0 0;
     padding: 16px 16px 22px; text-align: center;
   }
+  #hifz-rec .card { position: relative; }
+  #hifz-rec-close {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none; color: var(--muted);
+    font-size: 16px; line-height: 1; padding: 4px 6px; cursor: pointer;
+  }
   #hifz-rec .place { font-size: 12.5px; color: var(--muted); }
   #hifz-rec .timer {
     font-size: 30px; font-weight: 600; color: var(--ink);
@@ -392,11 +398,11 @@
     background: color-mix(in srgb, var(--marker-color) 10%, var(--chrome-bg));
     border-top: 1px solid var(--chrome-border);
   }
-  #hifz-tail-hint .lbl {
-    direction: ltr; font-size: 11px; color: var(--muted);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-  #hifz-tail-hint .words { font-size: 20px; opacity: .75; }
+  #hifz-tail-hint .words { font-size: 22px; opacity: .8; }
+  /* Слово с ЧУЖОГО листа: рисуется настоящим арабским юникодом
+     (t.html) обычным шрифтом — глифовые коды V4 чужой страницы наш
+     шрифт прочитает как другие буквы (02.09.2026). */
+  .tail-plain { font-family: 'Scheherazade New', serif; }
 
   #hifz-foot {
     align-items: center; justify-content: space-between; gap: 8px;
@@ -1345,6 +1351,7 @@
   <!-- Запись сдачи: сначала слушаешь себя, только потом отправляешь. -->
   <div id="hifz-rec">
     <div class="card">
+      <button id="hifz-rec-close" title="Закрыть">✕</button>
       <div class="place" id="hifz-rec-place">—</div>
       <div class="timer" id="hifz-rec-timer">0:00</div>
       <div class="hint" id="hifz-rec-hint"></div>
@@ -1430,13 +1437,11 @@
       hifz_next: 'след. ›',
       hifz_big: 'Крупно',
       hifz_fix: 'поправить',
-      hifz_tail_next_page: 'переход на след. странице:',
       hifz_submit: '🎙 Сдать',
       hifz_rec_start: 'Записать',
       hifz_rec_stop: 'Стоп',
       hifz_rec_again: 'Перезаписать',
       hifz_rec_send: 'Отправить',
-      hifz_rec_delete: 'Удалить',
       hifz_rec_hint_idle: 'Прочитай вслух то, что заучивал',
       hifz_rec_hint_rec: 'Идёт запись — нажми «Стоп», когда закончишь',
       hifz_rec_hint_done: 'Послушай себя. Всё хорошо — отправляй устазу',
@@ -2360,19 +2365,34 @@
   }
 
   /* Откуда брать переход для строки lineIdx: следующая строка этой же
-     страницы или первая строка следующей. null — если данных ещё нет. */
+     страницы или первая строка следующей. null — если данных ещё нет.
+
+     foreign=true означает «строка с ДРУГОГО листа». Это важно при
+     отрисовке: code_v4 — не юникод, а номера глифов ВНУТРИ шрифта своей
+     страницы, а шрифт у каждой страницы свой. Нарисовать коды 16-й
+     страницы шрифтом 15-й = показать чужие буквы (поймано пользователем
+     02.09.2026; ровно тот же класс бага, что чинили 01.09 — «305 слов
+     чужим шрифтом»). Поэтому чужую строку рисуем из t.html — настоящий
+     арабский юникод — обычным Scheherazade. */
   function hifzTailLine(lineIdx) {
     var lines = hifzTextLines();
-    if (lineIdx + 1 < lines.length) return lines[lineIdx + 1];
+    if (lineIdx + 1 < lines.length) return { line: lines[lineIdx + 1], foreign: false };
     if (hifzNextPage.page === currentPage + 1 && hifzNextPage.lines && hifzNextPage.lines.length) {
-      return hifzNextPage.lines[0];
+      return { line: hifzNextPage.lines[0], foreign: true };
     }
     hifzFetchNextPage();
     return null;
   }
 
+  /* Один токен перехода в HTML — с оглядкой на то, чей это лист. */
+  function hifzTailWord(token, foreign) {
+    if (foreign) return '<span class="tail-plain">' + (token.html || '') + '</span>';
+    return '<span class="v4-word">' + (token.code_v4 || token.html) + '</span>';
+  }
+
   function hifzTailTokens(lineIdx) {
-    var next = hifzTailLine(lineIdx);
+    var src = hifzTailLine(lineIdx);
+    var next = src && src.line;
     if (!next || !next.tokens) return 0;
     var taken = 0, lastTokenIdx = -1;
     for (var i = 0; i < next.tokens.length && taken < 3; i++) {
@@ -2447,18 +2467,19 @@
     hifzHead();
   }
 
-  /* Подсказка «докуда дочитать», когда переход уехал на следующий лист. */
+  /* Подсказка «докуда дочитать», когда переход уехал на следующий лист.
+     Без подписи (02.09.2026): полоса под страницей и так читается как
+     продолжение, слово говорит само за себя, а место мусхафа дороже. */
   function hifzShowTailHint(lineIdx) {
     var src = hifzTailLine(lineIdx);
     var box = document.getElementById('hifz-tail-hint');
-    if (!src || !src.tokens) { hifzHideTailHint(); return; }
+    if (!src || !src.line || !src.line.tokens) { hifzHideTailHint(); return; }
+    var toks = src.line.tokens;
     var n = hifzTailTokens(lineIdx), html = '';
-    for (var i = 0; i < n && i < src.tokens.length; i++) {
-      var t = src.tokens[i];
-      html += '<span class="v4-word">' + (t.code_v4 || t.html) + '</span>';
+    for (var i = 0; i < n && i < toks.length; i++) {
+      html += hifzTailWord(toks[i], src.foreign);
     }
-    box.innerHTML = '<span class="lbl">' + T('hifz_tail_next_page') + '</span>' +
-      '<span class="words">' + html + '</span>';
+    box.innerHTML = '<span class="words">' + html + '</span>';
     box.style.display = 'flex';
     hifzHead();
   }
@@ -2580,7 +2601,8 @@
   // «Крупно» — та же строчка и тот же переход, только крупнее.
   function hifzBigRender() {
     var lines = hifzTextLines(), line = lines[hifz.line];
-    var next = hifzTailLine(hifz.line);
+    var src = hifzTailLine(hifz.line);
+    var next = src && src.line;
     if (!line) return;
     var html = '';
     line.tokens.forEach(function (t) {
@@ -2588,8 +2610,8 @@
     });
     var tail = hifzTailTokens(hifz.line);
     for (var i = 0; i < tail && next && i < next.tokens.length; i++) {
-      var t2 = next.tokens[i];
-      html += '<span class="v4-word hifz-tail">' + (t2.code_v4 || t2.html) + '</span>';
+      // Тот же капкан с чужим шрифтом, что и в подсказке ниже страницы.
+      html += '<span class="hifz-tail">' + hifzTailWord(next.tokens[i], src.foreign) + '</span>';
     }
     var box = document.getElementById('hifz-big-words');
     box.innerHTML = html;
@@ -2694,11 +2716,10 @@
     var box = document.getElementById('hifz-rec-actions');
     box.innerHTML = '';
     var defs = {
-      idle:   [['hifz-rec-go', 'hifz_rec_start', true], ['hifz-rec-cancel', 'hifz_rec_delete', false]],
+      idle:   [['hifz-rec-go', 'hifz_rec_start', true]],
       rec:    [['hifz-rec-stop', 'hifz_rec_stop', true]],
       done:   [['hifz-rec-again', 'hifz_rec_again', false],
-               ['hifz-rec-send', 'hifz_rec_send', true],
-               ['hifz-rec-cancel', 'hifz_rec_delete', false]],
+               ['hifz-rec-send', 'hifz_rec_send', true]],
       sending: []
     };
     (defs[state] || []).forEach(function (d) {
@@ -2819,8 +2840,8 @@
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
       hifzRecButtons('idle'); }
     else if (id === 'hifz-rec-send') hifzRecSend();
-    else if (id === 'hifz-rec-cancel') hifzRecClose();
   });
+  document.getElementById('hifz-rec-close').addEventListener('click', hifzRecClose);
 
   // Указатель с сервера: он двигается ОБОИМИ каналами сдачи, поэтому живёт
   // не в localStorage. Если студент ещё не заходил в режим — null, тогда
