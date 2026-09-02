@@ -429,8 +429,44 @@
   .mushaf-line.hifz-has-tail > span:not(.hifz-tail) { opacity: .42; }
   /* Выбор строчки: спрашивается один раз, поэтому подсказка крупная. */
   #app.hifz-pick .mushaf-line { cursor: pointer; border-radius: 4px; }
-  #app.hifz-pick .mushaf-line:active {
+  #app.hifz-pick.pick-line .mushaf-line:active {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  /* Выбор ПОЛОВИНЫ листа (02.09.2026): страница физически превращается в
+     два блока — студенту не нужно объяснять словами, куда тапать, и он
+     заодно видит, где вообще проходит граница половины (нигде больше она
+     не показана). Подсветка групповая, поэтому :active на отдельной
+     строке здесь выключен — он подсказывал бы построчную точность,
+     которой на этом шаге нет. */
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-a,
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-b {
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-b {
+    background: color-mix(in srgb, var(--marker-color) 9%, transparent);
+  }
+  /* Зазор между половинами — сама граница, без отдельной линии. */
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-first-b { margin-top: 10px; }
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-last-a {
+    padding-bottom: 4px; border-bottom: 1px dashed var(--chrome-border);
+  }
+
+  /* Выбор единицы (строка / половина / страница) живёт в нижней панели и
+     только на время выбора: в обычном режиме там [Крупно] [Сдать], и обе
+     всё равно были бы выключены, пока идёт выбор. */
+  #hifz-units { display: none; gap: 8px; flex: 1 1 auto; }
+  #app.hifz-pick #hifz-units { display: flex; }
+  #app.hifz-pick #hifz-big-btn,
+  #app.hifz-pick #hifz-submit { display: none; }
+  #hifz-units button {
+    flex: 1; padding: 9px 6px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 500 12.5px inherit;
+  }
+  #hifz-units button.on {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+    font-weight: 600;
   }
 
   /* «Крупно» — не основной экран, а кнопка для тех, кому мелко. */
@@ -1338,6 +1374,14 @@
   <div id="hifz-foot">
     <button id="hifz-big-btn">Крупно</button>
     <button id="hifz-submit" class="primary">🎙 Сдать</button>
+    <!-- Выбор единицы — только пока идёт выбор места (02.09.2026). Студент
+         может стартовать не с первой строки, а сразу с половины или всей
+         страницы, если эту часть он уже знает. -->
+    <div id="hifz-units">
+      <button data-unit="line">Строка</button>
+      <button data-unit="half">Половина</button>
+      <button data-unit="page">Страница</button>
+    </div>
   </div>
 
   <!-- Запись сдачи: сначала слушаешь себя, только потом отправляешь. -->
@@ -1418,8 +1462,13 @@
       tab_mywords: '⭐ Мои слова',
       surah_list_title: 'Суры',
       hifz_pick: 'С какой строчки начинаем?',
-      hifz_pick_sub: 'дальше режим ведёт сам',
+      hifz_pick_sub: 'тапни по строке',
       hifz_pick_sub_elsewhere: 'твоё место осталось на стр. %N%',
+      hifz_pick_half: 'Верхняя или нижняя?',
+      hifz_pick_half_sub: 'тапни по половине',
+      hifz_unit_line: 'Строка',
+      hifz_unit_half: 'Половина',
+      hifz_unit_page: 'Страница',
       hifz_line_of: 'строчка %N% из %M%',
       hifz_lines_range: 'строчки %A%–%B%',
       hifz_whole: 'страница целиком',
@@ -2301,7 +2350,12 @@
   // приложении (materials/7f.jpeg): один тап — строчка выделена, переход
   // подсвечен на следующей строке, дальше повторы. Счётчиков 40 нет
   // намеренно — студент считает сам, руками (решение пользователя).
-  var hifz = { on: false, line: null, stage: 1, picking: false };
+  // unit — что выбирается ПРЯМО СЕЙЧАС на экране выбора места: строка,
+  // половина листа или вся страница (02.09.2026). Это не то же, что stage:
+  // stage — где студент по методике, unit живёт только на время выбора и
+  // по умолчанию всегда 'line' (кто не вникает — тапает строку, как
+  // раньше).
+  var hifz = { on: false, line: null, stage: 1, picking: false, unit: 'line' };
 
   // Правило переходного слова (решение пользователя 01.09.2026): строка
   // читается не до своего конца, а ДО НАЧАЛА СЛЕДУЮЩЕЙ. Сколько слов
@@ -2423,13 +2477,27 @@
     var app = document.getElementById('app');
     app.classList.toggle('hifz', hifz.on);
     app.classList.toggle('hifz-pick', hifz.on && hifz.picking);
+    app.classList.toggle('pick-line', hifz.picking && hifz.unit !== 'half');
+    app.classList.toggle('pick-half', hifz.picking && hifz.unit === 'half');
     var rows = document.querySelectorAll('#ayah-text .mushaf-line');
     Array.prototype.forEach.call(rows, function (row) {
-      row.classList.remove('hifz-lit', 'hifz-dim', 'hifz-has-tail');
+      row.classList.remove('hifz-lit', 'hifz-dim', 'hifz-has-tail',
+        'pick-half-a', 'pick-half-b', 'pick-half-first-b', 'pick-half-last-a');
       Array.prototype.forEach.call(row.children, function (sp) {
         sp.classList.remove('hifz-tail');
       });
     });
+    // Выбор половины: красим строки двумя группами, чтобы лист сам показал,
+    // где граница и куда тапать. Без этого студент видит обычную страницу и
+    // не понимает, чего от него ждут.
+    if (hifz.picking && hifz.unit === 'half') {
+      var mid = Math.floor(rows.length / 2);
+      Array.prototype.forEach.call(rows, function (row, idx) {
+        row.classList.add(idx < mid ? 'pick-half-a' : 'pick-half-b');
+        if (idx === mid - 1) row.classList.add('pick-half-last-a');
+        if (idx === mid) row.classList.add('pick-half-first-b');
+      });
+    }
     if (!hifz.on || hifz.picking || hifz.line === null) return;
 
     var lit = [];
@@ -2465,12 +2533,17 @@
     var where = document.getElementById('hifz-where');
     var sub = document.getElementById('hifz-sub');
     if (hifz.picking) {
-      where.textContent = T('hifz_pick');
+      // Шапка спрашивает ровно про ту единицу, что выбрана внизу — «укажи
+      // этап» нигде не пишем, вопрос всегда конкретный (02.09.2026).
+      var half = hifz.unit === 'half';
+      where.textContent = half ? T('hifz_pick_half') : T('hifz_pick');
       // Место осталось на другом листе — без этой строки студент не поймёт,
       // куда делся его прогресс, и решит, что приложение забыло (02.09.2026).
+      // Она важнее инструкции «тапни по…»: та и так видна по тому, что
+      // страница откликается на тап.
       sub.textContent = (hifzPointerPage && hifzPointerPage !== currentPage)
         ? T('hifz_pick_sub_elsewhere', { N: hifzPointerPage })
-        : T('hifz_pick_sub');
+        : (half ? T('hifz_pick_half_sub') : T('hifz_pick_sub'));
     } else if (hifz.stage === 1) {
       var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
       where.textContent = T('page_n', { N: currentPage }) + ' · ' +
@@ -2491,6 +2564,11 @@
     document.getElementById('hifz-submit').disabled = hifz.picking;
     document.getElementById('hifz-fix').textContent = T('hifz_fix');
     document.getElementById('hifz-fix').style.display = hifz.picking ? 'none' : '';
+    var units = document.querySelectorAll('#hifz-units button');
+    Array.prototype.forEach.call(units, function (b) {
+      b.textContent = T('hifz_unit_' + b.getAttribute('data-unit'));
+      b.classList.toggle('on', b.getAttribute('data-unit') === hifz.unit);
+    });
   }
 
   function hifzSave() {
@@ -2503,6 +2581,7 @@
 
   function hifzEnter() {
     hifz.on = true;
+    hifz.unit = 'line';   // выбор всегда открывается на строке
     // Указатель принадлежит своей странице. Пришёл на другую — его строка
     // здесь ничего не значит, спрашиваем заново (и тем самым переносим
     // место сюда: студент явно решил учить тут).
@@ -2511,7 +2590,7 @@
     hifzHead();
   }
   function hifzExit() {
-    hifz.on = false; hifz.picking = false;
+    hifz.on = false; hifz.picking = false; hifz.unit = 'line';
     document.getElementById('hifz-big').classList.remove('visible');
     hifzApply();
   }
@@ -2555,7 +2634,9 @@
   });
   document.getElementById('hifz-close').addEventListener('click', hifzExit);
   document.getElementById('hifz-fix').addEventListener('click', function () {
-    hifz.picking = true; hifzApply(); hifzHead();
+    // «Поправить» — тот же экран выбора, значит и та же панель единиц:
+    // менять можно не только строку, но и этап (02.09.2026).
+    hifz.picking = true; hifz.unit = 'line'; hifzApply(); hifzHead();
   });
 
   // Выбор строчки тапом прямо по странице — спрашивается один раз, дальше
@@ -2565,12 +2646,44 @@
     var row = e.target.closest ? e.target.closest('.mushaf-line') : null;
     if (!row) return;
     e.stopPropagation();
-    hifz.line = parseInt(row.getAttribute('data-line'), 10);
-    hifz.stage = 1;
+    var idx = parseInt(row.getAttribute('data-line'), 10);
+    if (hifz.unit === 'half') {
+      // Тапнул по любой строке половины — значит выбрал ЭТУ половину.
+      // Указатель ставим на её первую строку: этап 2 определяет половину
+      // через hifzHalf(line), поэтому строка обязана лежать внутри неё.
+      hifz.line = hifzHalfRange(hifzHalf(idx))[0];
+      hifz.stage = 2;
+    } else {
+      hifz.line = idx;
+      hifz.stage = 1;
+    }
+    hifzPickDone();
+  }, true);
+
+  /* Конец выбора: единица возвращается к строке (иначе следующий вход в
+     «поправить» открылся бы в режиме половины, чего студент не просил). */
+  function hifzPickDone() {
     hifz.picking = false;
+    hifz.unit = 'line';
     hifzApply();
     hifzSave();
-  }, true);
+  }
+
+  document.getElementById('hifz-units').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-unit]') : null;
+    if (!b || !hifz.picking) return;
+    var unit = b.getAttribute('data-unit');
+    if (unit === 'page') {
+      // Вся страница — выбирать больше нечего, место уже однозначно.
+      hifz.line = 0;
+      hifz.stage = 3;
+      hifzPickDone();
+      return;
+    }
+    hifz.unit = unit;
+    hifzApply();
+    hifzHead();
+  });
 
   // «Крупно» — та же строчка и тот же переход, только крупнее.
   function hifzBigRender() {
