@@ -25,6 +25,8 @@ mufradat_words покрывает весь Коран (1-114, синк на пр
 память project_mufradat_local_full_quran_data), так что резолвится
 практически всегда; не нашли - progress_key остаётся NULL, слово просто
 списком для чтения, как и было изначально."""
+import json
+import os
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -401,3 +403,74 @@ def get_reading_bookmark(user_id):
             (user_id,)
         ).fetchone()
     return row[0] if row else None
+
+
+# ── Движение указателя 40+40 ────────────────────────────────────────────
+# Тот же автомат, что на фронтенде (hifzNext в mushaf_data/index.html):
+# этап 1 идёт по строчкам внутри половины листа, дойдя до конца - этап 2
+# (половина целиком); сдав первую половину, возвращаемся на этап 1 уже во
+# второй; сдав вторую - этап 3 (страница целиком); сдав страницу - на
+# следующую, снова с первой строки.
+#
+# Дублирование автомата осознанное: в приложении переход должен случиться
+# МГНОВЕННО, без ожидания ответа сервера, а сдача голосом в группе идёт
+# вообще мимо приложения. Формулу половины ("line < n//2") держать
+# одинаковой в обоих местах - расхождение будет означать, что после сдачи
+# в группе студент увидит в приложении не ту строку.
+
+_MUSHAF_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "mushaf_data")
+_page_line_counts = {}
+_HIFZ_LAST_PAGE = 604
+
+
+def page_text_line_count(page_number, default=15):
+    """Сколько ТЕКСТОВЫХ строк на листе: строка с названием суры и басмала
+    в счёт не идут, иначе половина листа съедет. Читаем из тех же
+    page*.json, что отдаёт приложение; результат кэшируем."""
+    if page_number in _page_line_counts:
+        return _page_line_counts[page_number]
+    path = os.path.join(_MUSHAF_DATA_DIR, f"page{page_number}.json")
+    count = default
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        found = sum(1 for l in data.get("lines", []) if l.get("type") == "text")
+        if found:
+            count = found
+    except (OSError, ValueError):
+        pass
+    _page_line_counts[page_number] = count
+    return count
+
+
+def next_hifz_position(page, line, stage, page_lines=None):
+    """Чистая функция: (страница, строка, этап) -> следующая позиция.
+    Возвращает то же самое, если дальше идти некуда (последняя страница)."""
+    n = page_lines or page_text_line_count(page)
+    mid = n // 2
+    if stage == 1:
+        half_end = (mid - 1) if line < mid else (n - 1)
+        if line < half_end:
+            return page, line + 1, 1
+        return page, line, 2
+    if stage == 2:
+        if line < mid:
+            return page, mid, 1          # первая половина сдана - идём во вторую
+        return page, line, 3
+    if page < _HIFZ_LAST_PAGE:
+        return page + 1, 0, 1
+    return page, line, stage
+
+
+def advance_hifz_pointer(user_id):
+    """Сдвигает указатель студента на одну единицу вперёд. Ничего не делает,
+    если студент ещё ни разу не заходил в режим заучивания - тогда у него
+    нет места, которое можно двигать, и выдумывать его нельзя."""
+    pointer = get_hifz_pointer(user_id)
+    if not pointer:
+        return None
+    page, line, stage = next_hifz_position(pointer["page"], pointer["line"], pointer["stage"])
+    if (page, line, stage) == (pointer["page"], pointer["line"], pointer["stage"]):
+        return pointer
+    set_hifz_pointer(user_id, page, line, stage)
+    return {"page": page, "line": line, "stage": stage}

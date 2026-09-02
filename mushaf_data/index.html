@@ -1225,6 +1225,7 @@
   <div class="big-inner"><div class="big-words" id="hifz-big-words"></div></div>
   <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
     <button id="hifz-big-close" style="flex:1;background:var(--card-bg);border:1px solid var(--card-border);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer">На страницу</button>
+    <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer">🎙 Сдать</button>
   </div>
 </div>
 
@@ -1341,11 +1342,12 @@
        он физически на следующей. Показываем отдельной полосой под текстом. -->
   <div id="hifz-tail-hint"></div>
 
+  <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
+       метод 40+40 не предусматривает "проскочить единицу, не сдав её".
+       Поправить место можно всегда - "поправить" в шапке. -->
   <div id="hifz-foot">
-    <button id="hifz-prev">‹ пред.</button>
     <button id="hifz-big-btn">Крупно</button>
     <button id="hifz-submit" class="primary">🎙 Сдать</button>
-    <button id="hifz-next">след. ›</button>
   </div>
 
   <!-- Запись сдачи: сначала слушаешь себя, только потом отправляешь. -->
@@ -1427,14 +1429,13 @@
       surah_list_title: 'Суры',
       hifz_pick: 'С какой строчки начинаем?',
       hifz_pick_sub: 'дальше режим ведёт сам',
+      hifz_pick_sub_elsewhere: 'твоё место осталось на стр. %N%',
       hifz_line_of: 'строчка %N% из %M%',
       hifz_lines_range: 'строчки %A%–%B%',
       hifz_whole: 'страница целиком',
       hifz_stage1: 'этап 1 — по строчкам, 40+40',
       hifz_stage2: 'этап 2 — половина страницы, 40+40',
       hifz_stage3: 'этап 3 — вся страница, 40+40',
-      hifz_prev: '‹ пред.',
-      hifz_next: 'след. ›',
       hifz_big: 'Крупно',
       hifz_fix: 'поправить',
       hifz_submit: '🎙 Сдать',
@@ -2494,7 +2495,11 @@
     var sub = document.getElementById('hifz-sub');
     if (hifz.picking) {
       where.textContent = T('hifz_pick');
-      sub.textContent = T('hifz_pick_sub');
+      // Место осталось на другом листе — без этой строки студент не поймёт,
+      // куда делся его прогресс, и решит, что приложение забыло (02.09.2026).
+      sub.textContent = (hifzPointerPage && hifzPointerPage !== currentPage)
+        ? T('hifz_pick_sub_elsewhere', { N: hifzPointerPage })
+        : T('hifz_pick_sub');
     } else if (hifz.stage === 1) {
       var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
       where.textContent = T('page_n', { N: currentPage }) + ' · ' +
@@ -2509,12 +2514,8 @@
       where.textContent = T('page_n', { N: currentPage }) + ' · ' + T('hifz_whole');
       sub.textContent = T('hifz_stage3');
     }
-    document.getElementById('hifz-prev').disabled = hifz.picking || hifz.stage !== 1;
-    document.getElementById('hifz-next').disabled = hifz.picking;
     document.getElementById('hifz-big-btn').disabled = hifz.picking || hifz.stage !== 1;
     document.getElementById('hifz-big-btn').textContent = T('hifz_big');
-    document.getElementById('hifz-prev').textContent = T('hifz_prev');
-    document.getElementById('hifz-next').textContent = T('hifz_next');
     document.getElementById('hifz-submit').textContent = T('hifz_submit');
     document.getElementById('hifz-submit').disabled = hifz.picking;
     document.getElementById('hifz-fix').textContent = T('hifz_fix');
@@ -2523,6 +2524,7 @@
 
   function hifzSave() {
     if (hifz.line === null) return;
+    hifzPointerPage = currentPage;
     apiCall('/hifz', { method: 'POST', body: {
       page: currentPage, line: hifz.line, stage: hifz.stage
     } }).catch(function () {});
@@ -2530,7 +2532,10 @@
 
   function hifzEnter() {
     hifz.on = true;
-    if (hifz.line === null) hifz.picking = true;
+    // Указатель принадлежит своей странице. Пришёл на другую — его строка
+    // здесь ничего не значит, спрашиваем заново (и тем самым переносим
+    // место сюда: студент явно решил учить тут).
+    if (hifz.line === null || hifzPointerPage !== currentPage) hifz.picking = true;
     hifzApply();
     hifzHead();
   }
@@ -2567,12 +2572,6 @@
     hifzApply();
     hifzSave();
   }
-  function hifzPrev() {
-    if (hifz.stage !== 1 || hifz.line === null) return;
-    var r = hifzHalfRange(hifzHalf(hifz.line));
-    if (hifz.line > r[0]) { hifz.line -= 1; hifzApply(); hifzSave(); }
-  }
-
   document.getElementById('btn-hifz').addEventListener('click', function () {
     if (hifz.on) { hifzExit(); return; }
     hifzEnter();
@@ -2581,8 +2580,6 @@
   document.getElementById('hifz-fix').addEventListener('click', function () {
     hifz.picking = true; hifzApply(); hifzHead();
   });
-  document.getElementById('hifz-prev').addEventListener('click', hifzPrev);
-  document.getElementById('hifz-next').addEventListener('click', hifzNext);
 
   // Выбор строчки тапом прямо по странице — спрашивается один раз, дальше
   // режим ведёт сам; вернуться сюда можно всегда через «поправить».
@@ -2809,6 +2806,11 @@
     }).then(function (res) {
       if (res.ok && res.data.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        // Сдал — значит единица закрыта, указатель сам идёт дальше (строка,
+        // половина, страница). Это и есть движение вперёд в методе; стрелок
+        // для этого больше нет. Когда появится приём устазом (пересдача),
+        // переход встанет за подтверждением, а не за отправкой.
+        hifzNext();
         setTimeout(hifzRecClose, 1200);
         return;
       }
@@ -2843,17 +2845,34 @@
   });
   document.getElementById('hifz-rec-close').addEventListener('click', hifzRecClose);
 
+  /* «Сдать» прямо с «Крупно»: именно там студент делает свои 40 повторов,
+     и закончив, не должен искать кнопку на другом экране. Крупный экран
+     закрываем — сдача идёт поверх страницы, и после отправки указатель
+     уже уедет на следующую единицу. */
+  document.getElementById('hifz-big-submit').addEventListener('click', function () {
+    document.getElementById('hifz-big').classList.remove('visible');
+    document.getElementById('hifz-submit').click();
+  });
+
   // Указатель с сервера: он двигается ОБОИМИ каналами сдачи, поэтому живёт
   // не в localStorage. Если студент ещё не заходил в режим — null, тогда
   // при первом входе спросим строчку.
-  apiCall('/hifz').then(function (d) {
-    if (d && d.pointer) {
-      hifz.line = d.pointer.line;
-      hifz.stage = d.pointer.stage;
-      hifzPointerPage = d.pointer.page;
-    }
-  }).catch(function () {});
+  /* apiCall отдаёт {status, data} — раньше здесь читали d.pointer напрямую,
+     и указатель не восстанавливался НИ РАЗУ: каждый вход в режим заново
+     спрашивал строчку (поймал пользователь 02.09.2026).
+
+     Строка имеет смысл только вместе со СТРАНИЦЕЙ: «строка 7» на стр. 5 и
+     на стр. 200 — разные места. Поэтому храним и страницу указателя, а
+     подставляем сохранённую строку, только если студент на этой же
+     странице; на любой другой — честно спрашиваем, где он (и подсказываем
+     в подзаголовке, где осталось его место). */
   var hifzPointerPage = null;
+  apiCall('/hifz').then(function (res) {
+    if (res.status === 401 || !res.data || !res.data.pointer) return;
+    hifz.line = res.data.pointer.line;
+    hifz.stage = res.data.pointer.stage;
+    hifzPointerPage = res.data.pointer.page;
+  }).catch(function () {});
 
   document.getElementById('btn-prev').addEventListener('click', function () {
     loadPage(currentPage + 1);

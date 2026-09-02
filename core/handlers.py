@@ -41,6 +41,7 @@ from core.transfers import (
     send_new_student_prep_redirect,
 )
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
+from core.mushaf_words import advance_hifz_pointer
 
 log = logging.getLogger(__name__)
 
@@ -1706,6 +1707,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # ── Голосовая/аудио сдача заучивания — ждёт проверки устаза ───────────────
     if is_voice and message_id:
         save_voice_submission(s["id"], group_id, chat_id, message_id, get_date(), voice_file_id)
+        # Указатель 40+40 двигают ОБА канала сдачи (решение пользователя
+        # 02.09.2026, было заложено ещё в макете 01.09): иначе студент,
+        # сдавший голосом прямо в группе, откроет приложение и увидит ту же
+        # строчку - будто сдачи не было. Тем, кто в режим заучивания ни разу
+        # не заходил, двигать нечего - advance_hifz_pointer молча выходит.
+        advance_hifz_pointer(phone)
 
     # ── Явный узр: слово "узр"/"uzr" первым в сообщении, дальше причина ──────
     uzr_match = re.match(r"^(узр|uzr)\b[:\s]*(.*)", text.strip(), re.IGNORECASE | re.DOTALL)
