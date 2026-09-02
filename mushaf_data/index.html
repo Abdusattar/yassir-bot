@@ -391,14 +391,6 @@
   }
   #hifz-rec .actions button:disabled { opacity: .45; cursor: default; }
 
-  #hifz-tail-hint {
-    display: none; flex: 0 0 auto;
-    align-items: center; justify-content: center; gap: 8px;
-    padding: 7px 12px; direction: rtl;
-    background: color-mix(in srgb, var(--marker-color) 10%, var(--chrome-bg));
-    border-top: 1px solid var(--chrome-border);
-  }
-  #hifz-tail-hint .words { font-size: 22px; opacity: .8; }
   /* Слово с ЧУЖОГО листа: рисуется настоящим арабским юникодом
      (t.html) обычным шрифтом — глифовые коды V4 чужой страницы наш
      шрифт прочитает как другие буквы (02.09.2026). */
@@ -1339,10 +1331,6 @@
   <div id="view-mywords" class="view">
     <div id="mywords-list"></div>
   </div>
-
-  <!-- Переход с последней строчки листа: подсветить его на странице нельзя,
-       он физически на следующей. Показываем отдельной полосой под текстом. -->
-  <div id="hifz-tail-hint"></div>
 
   <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
        метод 40+40 не предусматривает "проскочить единицу, не сдав её".
@@ -2398,12 +2386,6 @@
     return '<span class="' + cls + '"' + tr + '>' + glyph + '</span>';
   }
 
-  /* Один токен перехода в HTML — с оглядкой на то, чей это лист. */
-  function hifzTailWord(token, foreign) {
-    if (foreign) return '<span class="tail-plain">' + (token.html || '') + '</span>';
-    return '<span class="v4-word">' + (token.code_v4 || token.html) + '</span>';
-  }
-
   function hifzTailTokens(lineIdx) {
     var src = hifzTailLine(lineIdx);
     var next = src && src.line;
@@ -2470,36 +2452,12 @@
       for (var k = 0; k < tailCount && k < rows[tailLine].children.length; k++) {
         rows[tailLine].children[k].classList.add('hifz-tail');
       }
-    } else if (tailCount && !rows[tailLine]) {
-      // Последняя строчка листа: переходное слово физически на следующей
-      // странице, подсветить нечего. Показываем его отдельной строкой под
-      // страницей — иначе студент не знает, докуда дочитать.
-      hifzShowTailHint(lit[lit.length - 1]);
-      return;
     }
-    hifzHideTailHint();
+    // На последней строчке листа переход физически на следующей странице —
+    // подсветить на этом листе нечего. Отдельной полосы внизу больше нет
+    // (02.09.2026): она отъедала место у самого мусхафа. Переходное слово
+    // видно в «Крупно», там оно и так дорисовывается к строке.
     hifzHead();
-  }
-
-  /* Подсказка «докуда дочитать», когда переход уехал на следующий лист.
-     Без подписи (02.09.2026): полоса под страницей и так читается как
-     продолжение, слово говорит само за себя, а место мусхафа дороже. */
-  function hifzShowTailHint(lineIdx) {
-    var src = hifzTailLine(lineIdx);
-    var box = document.getElementById('hifz-tail-hint');
-    if (!src || !src.line || !src.line.tokens) { hifzHideTailHint(); return; }
-    var toks = src.line.tokens;
-    var n = hifzTailTokens(lineIdx), html = '';
-    for (var i = 0; i < n && i < toks.length; i++) {
-      html += hifzTailWord(toks[i], src.foreign);
-    }
-    box.innerHTML = '<span class="words">' + html + '</span>';
-    box.style.display = 'flex';
-    hifzHead();
-  }
-  function hifzHideTailHint() {
-    var box = document.getElementById('hifz-tail-hint');
-    if (box) box.style.display = 'none';
   }
 
   function hifzHead() {
@@ -2554,7 +2512,6 @@
   }
   function hifzExit() {
     hifz.on = false; hifz.picking = false;
-    hifzHideTailHint();
     document.getElementById('hifz-big').classList.remove('visible');
     hifzApply();
   }
@@ -2828,6 +2785,9 @@
         // для этого больше нет. Когда появится приём устазом (пересдача),
         // переход встанет за подтверждением, а не за отправкой.
         hifzNext();
+        // Сдавали с «Крупно» — он остался открытым, перерисуем под новую
+        // единицу, иначе на экране висела бы уже сданная строка.
+        if (document.getElementById('hifz-big').classList.contains('visible')) hifzBigRender();
         setTimeout(hifzRecClose, 1200);
         return;
       }
@@ -2864,10 +2824,10 @@
 
   /* «Сдать» прямо с «Крупно»: именно там студент делает свои 40 повторов,
      и закончив, не должен искать кнопку на другом экране. Крупный экран
-     закрываем — сдача идёт поверх страницы, и после отправки указатель
-     уже уедет на следующую единицу. */
+     НЕ закрываем — окно записи и так рисуется поверх него, и после
+     отправки студент остаётся там же, где повторял, уже на следующей
+     строчке (02.09.2026). */
   document.getElementById('hifz-big-submit').addEventListener('click', function () {
-    document.getElementById('hifz-big').classList.remove('visible');
     document.getElementById('hifz-submit').click();
   });
 
