@@ -2544,7 +2544,14 @@
   }
   document.getElementById('btn-hifz').addEventListener('click', function () {
     if (hifz.on) { hifzExit(); return; }
-    hifzEnter();
+    // Указатель тянется с сервера асинхронно (см. apiCall('/hifz') ниже) -
+    // если тапнуть по 📖 быстро после открытия приложения, ответ может ещё
+    // не прийти: hifz.line всё ещё null, и режим решит, что указателя нет
+    // вообще, хотя он есть. Реальный случай (02.09.2026, сын пользователя,
+    // Залкар): один раз указал строку, в другой раз открыл — снова
+    // спросило. Ждём ответ (с потолком на случай плохой связи), и только
+    // потом решаем, спрашивать строку или нет.
+    hifzPointerReady().then(hifzEnter);
   });
   document.getElementById('hifz-close').addEventListener('click', hifzExit);
   document.getElementById('hifz-fix').addEventListener('click', function () {
@@ -2844,12 +2851,22 @@
      странице; на любой другой — честно спрашиваем, где он (и подсказываем
      в подзаголовке, где осталось его место). */
   var hifzPointerPage = null;
-  apiCall('/hifz').then(function (res) {
+  var hifzPointerLoaded = apiCall('/hifz').then(function (res) {
     if (res.status === 401 || !res.data || !res.data.pointer) return;
     hifz.line = res.data.pointer.line;
     hifz.stage = res.data.pointer.stage;
     hifzPointerPage = res.data.pointer.page;
   }).catch(function () {});
+  // Потолок на случай плохой связи (02.09.2026) - тап по 📖 не должен
+  // зависнуть навсегда, если ответ так и не пришёл; после 2.5 сек режим
+  // открывается с тем, что успело подгрузиться (в худшем случае - как
+  // раньше, спросит строку).
+  function hifzPointerReady() {
+    return Promise.race([
+      hifzPointerLoaded,
+      new Promise(function (resolve) { setTimeout(resolve, 2500); })
+    ]);
+  }
 
   document.getElementById('btn-prev').addEventListener('click', function () {
     loadPage(currentPage + 1);
