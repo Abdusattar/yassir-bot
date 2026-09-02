@@ -350,6 +350,41 @@
     font-size: 15px; line-height: 1; cursor: pointer; padding: 4px 6px;
     font-family: inherit;
   }
+  /* ─── Сдача 40+40: запись прямо в приложении (02.09.2026) ────────────
+     Порядок из макета: записал → ПРОСЛУШАЛ СЕБЯ → отправил / перезаписал /
+     удалил. Пока не отправил — сдачи не существует, поэтому «Удалить»
+     просто закрывает окно, ничего не спрашивая на сервере. */
+  #hifz-rec {
+    display: none; position: fixed; inset: 0; z-index: 60;
+    align-items: flex-end; justify-content: center;
+    background: rgba(0, 0, 0, .45); direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #hifz-rec.visible { display: flex; }
+  #hifz-rec .card {
+    width: 100%; max-width: 520px; box-sizing: border-box;
+    background: var(--chrome-bg); border-radius: 16px 16px 0 0;
+    padding: 16px 16px 22px; text-align: center;
+  }
+  #hifz-rec .place { font-size: 12.5px; color: var(--muted); }
+  #hifz-rec .timer {
+    font-size: 30px; font-weight: 600; color: var(--ink);
+    margin: 10px 0 2px; font-variant-numeric: tabular-nums;
+  }
+  #hifz-rec .timer.rec { color: #c0392b; }
+  #hifz-rec .hint { font-size: 12px; color: var(--muted); min-height: 16px; }
+  #hifz-rec audio { width: 100%; margin: 12px 0 4px; }
+  #hifz-rec .actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+  #hifz-rec .actions button {
+    flex: 1; padding: 11px 8px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 600 13px inherit;
+  }
+  #hifz-rec .actions button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  #hifz-rec .actions button:disabled { opacity: .45; cursor: default; }
+
   #hifz-tail-hint {
     display: none; flex: 0 0 auto;
     align-items: center; justify-content: center; gap: 8px;
@@ -1303,7 +1338,19 @@
   <div id="hifz-foot">
     <button id="hifz-prev">‹ пред.</button>
     <button id="hifz-big-btn">Крупно</button>
-    <button id="hifz-next" class="primary">след. ›</button>
+    <button id="hifz-submit" class="primary">🎙 Сдать</button>
+    <button id="hifz-next">след. ›</button>
+  </div>
+
+  <!-- Запись сдачи: сначала слушаешь себя, только потом отправляешь. -->
+  <div id="hifz-rec">
+    <div class="card">
+      <div class="place" id="hifz-rec-place">—</div>
+      <div class="timer" id="hifz-rec-timer">0:00</div>
+      <div class="hint" id="hifz-rec-hint"></div>
+      <audio id="hifz-rec-audio" controls style="display:none"></audio>
+      <div class="actions" id="hifz-rec-actions"></div>
+    </div>
   </div>
 
   <div id="tabbar">
@@ -1384,6 +1431,20 @@
       hifz_big: 'Крупно',
       hifz_fix: 'поправить',
       hifz_tail_next_page: 'переход на след. странице:',
+      hifz_submit: '🎙 Сдать',
+      hifz_rec_start: 'Записать',
+      hifz_rec_stop: 'Стоп',
+      hifz_rec_again: 'Перезаписать',
+      hifz_rec_send: 'Отправить',
+      hifz_rec_delete: 'Удалить',
+      hifz_rec_hint_idle: 'Прочитай вслух то, что заучивал',
+      hifz_rec_hint_rec: 'Идёт запись — нажми «Стоп», когда закончишь',
+      hifz_rec_hint_done: 'Послушай себя. Всё хорошо — отправляй устазу',
+      hifz_rec_hint_sending: 'Отправляю…',
+      hifz_rec_no_mic: 'Не получилось включить микрофон. Разреши доступ в настройках Telegram',
+      hifz_rec_sent: 'Отправлено устазу в группу 🤲',
+      hifz_rec_failed: 'Не отправилось. Попробуй ещё раз',
+      hifz_rec_no_group: 'Ты пока не в учебной группе',
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Закончить',
       btn_rating: '🏆 Рейтинг',
@@ -2433,6 +2494,8 @@
     document.getElementById('hifz-big-btn').textContent = T('hifz_big');
     document.getElementById('hifz-prev').textContent = T('hifz_prev');
     document.getElementById('hifz-next').textContent = T('hifz_next');
+    document.getElementById('hifz-submit').textContent = T('hifz_submit');
+    document.getElementById('hifz-submit').disabled = hifz.picking;
     document.getElementById('hifz-fix').textContent = T('hifz_fix');
     document.getElementById('hifz-fix').style.display = hifz.picking ? 'none' : '';
   }
@@ -2552,6 +2615,211 @@
   });
   document.getElementById('hifz-big-close').addEventListener('click', function () {
     document.getElementById('hifz-big').classList.remove('visible');
+  });
+
+  /* ─── Сдача 40+40: запись, прослушивание себя, отправка ────────────────
+     Устаз получает в группе картинку прочитанного места и голосовое —
+     принимает привычным реплаем, как обычную голосовую сдачу.
+
+     Картинку рисуем ЗДЕСЬ, на canvas: настоящий шрифт V4 (свой на каждую
+     страницу) есть только у клиента, на сервере рендер пословный и другим
+     шрифтом — устаз увидел бы не то, что видел студент. */
+  var HIFZ_REC_MAX_MS = 10 * 60 * 1000;
+  var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null };
+
+  function hifzSubmitLines() {
+    var lines = hifzTextLines();
+    if (hifz.stage === 1) return [hifz.line];
+    if (hifz.stage === 2) {
+      var r = hifzHalfRange(hifzHalf(hifz.line)), out = [];
+      for (var i = r[0]; i <= r[1]; i++) out.push(i);
+      return out;
+    }
+    var all = [];
+    for (var j = 0; j < lines.length; j++) all.push(j);
+    return all;
+  }
+
+  function hifzLinesToPng(lineIdxs) {
+    var lines = hifzTextLines();
+    var scale = 2, size = 42, lh = size * 1.9, pad = 20;
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    var texts = lineIdxs.map(function (idx) {
+      var l = lines[idx];
+      if (!l || !l.tokens) return '';
+      return l.tokens.map(function (t) { return t.code_v4 || ''; }).join(' ');
+    });
+    ctx.font = size + 'px mushaf-v4';
+    var maxW = 0;
+    texts.forEach(function (t) { maxW = Math.max(maxW, ctx.measureText(t).width); });
+    canvas.width = Math.ceil((maxW + pad * 2) * scale);
+    canvas.height = Math.ceil((texts.length * lh + pad * 2) * scale);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#fbf8f0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Палитру таджвида canvas не поддерживает (font-palette только в CSS) —
+    // глифы рисуются базовым цветом шрифта, для сверки «что читал» этого
+    // достаточно.
+    ctx.fillStyle = '#1c1710';
+    ctx.font = size + 'px mushaf-v4';
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
+    texts.forEach(function (t, i) {
+      ctx.fillText(t, (maxW + pad), pad + lh * (i + 0.75));
+    });
+    return new Promise(function (resolve) {
+      canvas.toBlob(function (b) { resolve(b); }, 'image/png');
+    });
+  }
+
+  function hifzRecReset() {
+    if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
+    if (rec.stream) { rec.stream.getTracks().forEach(function (t) { t.stop(); }); rec.stream = null; }
+    if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
+    rec.mr = null; rec.chunks = []; rec.blob = null;
+    var a = document.getElementById('hifz-rec-audio');
+    a.pause(); a.removeAttribute('src'); a.style.display = 'none';
+    document.getElementById('hifz-rec-timer').classList.remove('rec');
+    document.getElementById('hifz-rec-timer').textContent = '0:00';
+  }
+
+  function hifzRecClose() {
+    hifzRecReset();
+    document.getElementById('hifz-rec').classList.remove('visible');
+  }
+
+  function hifzRecButtons(state) {
+    var box = document.getElementById('hifz-rec-actions');
+    box.innerHTML = '';
+    var defs = {
+      idle:   [['hifz-rec-go', 'hifz_rec_start', true], ['hifz-rec-cancel', 'hifz_rec_delete', false]],
+      rec:    [['hifz-rec-stop', 'hifz_rec_stop', true]],
+      done:   [['hifz-rec-again', 'hifz_rec_again', false],
+               ['hifz-rec-send', 'hifz_rec_send', true],
+               ['hifz-rec-cancel', 'hifz_rec_delete', false]],
+      sending: []
+    };
+    (defs[state] || []).forEach(function (d) {
+      var b = document.createElement('button');
+      b.id = d[0];
+      b.textContent = T(d[1]);
+      if (d[2]) b.className = 'primary';
+      box.appendChild(b);
+    });
+  }
+
+  function hifzRecTimer() {
+    var el = document.getElementById('hifz-rec-timer');
+    var s = Math.floor((Date.now() - rec.t0) / 1000);
+    el.textContent = Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+  }
+
+  function hifzRecStart() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_no_mic');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      rec.stream = stream;
+      rec.chunks = [];
+      // Формат не навязываем: Chrome/Android даёт webm/opus, Safari/iOS —
+      // mp4/aac. Оба приводит к ogg сервер (ffmpeg), Telegram принимает
+      // в голосовые только ogg/opus.
+      // 32 кбит/с — речь остаётся разборчивой, а минута весит ~240 КБ:
+      // студенты сдают с мобильного интернета, и есть предел на загрузку.
+      try {
+        rec.mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+      } catch (e) {
+        rec.mr = new MediaRecorder(stream);
+      }
+      rec.mr.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
+      rec.mr.onstop = function () {
+        rec.blob = new Blob(rec.chunks, { type: rec.chunks[0] ? rec.chunks[0].type : 'audio/webm' });
+        if (rec.stream) { rec.stream.getTracks().forEach(function (t) { t.stop(); }); rec.stream = null; }
+        if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
+        rec.url = URL.createObjectURL(rec.blob);
+        var a = document.getElementById('hifz-rec-audio');
+        a.src = rec.url; a.style.display = '';
+        document.getElementById('hifz-rec-timer').classList.remove('rec');
+        document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_done');
+        hifzRecButtons('done');
+      };
+      rec.mr.start();
+      rec.t0 = Date.now();
+      rec.tick = setInterval(function () {
+        hifzRecTimer();
+        if (Date.now() - rec.t0 > HIFZ_REC_MAX_MS) hifzRecStop();
+      }, 500);
+      document.getElementById('hifz-rec-timer').classList.add('rec');
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');
+      hifzRecButtons('rec');
+    }).catch(function () {
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_no_mic');
+    });
+  }
+
+  function hifzRecStop() {
+    if (rec.mr && rec.mr.state === 'recording') rec.mr.stop();
+  }
+
+  function hifzRecSend() {
+    if (!rec.blob) return;
+    hifzRecButtons('sending');
+    document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
+    hifzLinesToPng(hifzSubmitLines()).then(function (png) {
+      var fd = new FormData();
+      fd.append('audio', rec.blob, 'rec');
+      if (png) fd.append('image', png, 'lines.png');
+      fd.append('page', String(currentPage));
+      fd.append('line', String(hifz.line));
+      fd.append('stage', String(hifz.stage));
+      // Строк на листе не всегда 15 — сервер по этому же числу считает,
+      // какая половина (та же формула, что hifzHalf выше).
+      fd.append('lines', String(hifzTextLines().length));
+      return fetch(API_BASE + '/hifz/submit', {
+        method: 'POST',
+        headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' },
+        body: fd
+      });
+    }).then(function (r) {
+      return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+    }).then(function (res) {
+      if (res.ok && res.data.ok) {
+        document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        setTimeout(hifzRecClose, 1200);
+        return;
+      }
+      document.getElementById('hifz-rec-hint').textContent =
+        res.data && res.data.error === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
+      hifzRecButtons('done');
+    }).catch(function () {
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');
+      hifzRecButtons('done');
+    });
+  }
+
+  document.getElementById('hifz-submit').addEventListener('click', function () {
+    if (hifz.line === null || hifz.picking) return;
+    hifzRecReset();
+    document.getElementById('hifz-rec-place').textContent =
+      document.getElementById('hifz-where').textContent;
+    document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
+    hifzRecButtons('idle');
+    document.getElementById('hifz-rec').classList.add('visible');
+  });
+
+  // Один слушатель на всю панель: кнопки пересобираются под состояние.
+  document.getElementById('hifz-rec-actions').addEventListener('click', function (e) {
+    var id = e.target && e.target.id;
+    if (id === 'hifz-rec-go') hifzRecStart();
+    else if (id === 'hifz-rec-stop') hifzRecStop();
+    else if (id === 'hifz-rec-again') { hifzRecReset();
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
+      hifzRecButtons('idle'); }
+    else if (id === 'hifz-rec-send') hifzRecSend();
+    else if (id === 'hifz-rec-cancel') hifzRecClose();
   });
 
   // Указатель с сервера: он двигается ОБОИМИ каналами сдачи, поэтому живёт

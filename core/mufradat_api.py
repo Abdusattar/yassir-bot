@@ -41,6 +41,7 @@ from core.mufradat import (
 from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
+    submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES,
 )
 from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
@@ -487,6 +488,59 @@ async def handle_hifz_set(request, user_id):
 
 
 @with_auth
+async def handle_hifz_submit(request, user_id):
+    """POST multipart - сдача 40+40, записанная в приложении (02.09.2026).
+    Поля: audio (запись), image (картинка прочитанной строчки, рисует сам
+    фронтенд на canvas настоящим шрифтом V4 - на сервере такого рендера
+    нет, там только пословный Scheherazade), page/line/stage - что читал.
+
+    Размер режем на входе: mp3/opus-минута весит сотни килобайт, 20 МБ -
+    это уже не сдача, а сбой записи или чужой файл."""
+    try:
+        reader = await request.multipart()
+    except Exception:
+        return web.json_response({"error": "bad_form"}, status=400)
+
+    audio, image, fields = None, None, {}
+    while True:
+        part = await reader.next()
+        if part is None:
+            break
+        if part.name in ("audio", "image"):
+            data = await part.read(decode=False)
+            if len(data) > HIFZ_MAX_UPLOAD_BYTES:
+                return web.json_response({"error": "too_big"}, status=413)
+            if part.name == "audio":
+                audio = data
+            else:
+                image = data
+        else:
+            fields[part.name] = (await part.read(decode=False)).decode("utf-8", "replace")
+
+    if not audio:
+        return web.json_response({"error": "no_audio"}, status=400)
+    try:
+        page = int(fields["page"])
+        line = int(fields["line"])
+        stage = int(fields["stage"])
+    except (KeyError, ValueError, TypeError):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
+        return web.json_response({"error": "bad_page"}, status=400)
+    if not (0 <= line <= 15) or stage not in (1, 2, 3):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    try:
+        page_lines = int(fields.get("lines", 15))
+    except (ValueError, TypeError):
+        page_lines = 15
+    if not (1 <= page_lines <= 16):
+        page_lines = 15
+
+    result = await submit_hifz_recording(user_id, audio, image, page, line, stage, page_lines)
+    return web.json_response(result, status=200 if result.get("ok") else 400)
+
+
+@with_auth
 async def handle_revision_credit(request, user_id):
     """POST - кнопка "🔁" в #topbar на странице чтения (30.08.2026).
     Подтверждение ("вы сделали повторение...?") уже показано на фронтенде
@@ -527,7 +581,10 @@ async def handle_heartbeat(request, user_id):
 
 
 def build_app():
-    app = web.Application()
+    # client_max_size по умолчанию 1 МБ - голосовая сдача 40+40 (несколько
+    # минут записи из браузера) в него не влезает, aiohttp обрывал бы её
+    # до нашего обработчика. Свой предел проверяем уже в handle_hifz_submit.
+    app = web.Application(client_max_size=HIFZ_MAX_UPLOAD_BYTES + 1024 * 1024)
     app.router.add_get("/api/muf/state", handle_state)
     app.router.add_post("/api/muf/page", handle_page)
     app.router.add_post("/api/muf/answer", handle_answer)
@@ -542,6 +599,7 @@ def build_app():
     app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
     app.router.add_get("/api/muf/hifz", handle_hifz_get)
     app.router.add_post("/api/muf/hifz", handle_hifz_set)
+    app.router.add_post("/api/muf/hifz/submit", handle_hifz_submit)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     return app

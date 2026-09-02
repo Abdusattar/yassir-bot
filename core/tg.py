@@ -127,7 +127,8 @@ async def send_photo_with_buttons(chat_id, photo_path, buttons, caption=None):
     return await _raw_send_photo(cid, photo_path, caption, reply_markup=keyboard)
 
 
-async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_markup=None):
+async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_markup=None,
+                                reply_to_message_id=None):
     """Как _raw_send_photo, но принимает BytesIO вместо пути на диске -
     для сгенерированных на лету картинок (core/mufradat_render.py),
     не плодит временные файлы на сервере."""
@@ -138,6 +139,8 @@ async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_
         data.add_field("parse_mode", "HTML")
     if reply_markup:
         data.add_field("reply_markup", json.dumps(reply_markup))
+    if reply_to_message_id:
+        data.add_field("reply_to_message_id", str(reply_to_message_id))
     data.add_field("photo", photo_bytes, filename=filename, content_type="image/png")
     try:
         async with aiohttp.ClientSession() as s:
@@ -151,6 +154,58 @@ async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_
                 return result
     except Exception as e:
         log.error("sendPhoto(bytes) error: %s: %s", type(e).__name__, e)
+        return None
+
+
+async def send_photo_bytes(chat_id, photo_bytes, filename, caption=None, reply_to_message_id=None):
+    """Картинка из памяти в группу, с поддержкой shadow-режима (как
+    send_photo) - в отличие от send_photo_bytes_with_button_rows, та
+    только для личных карточек тренажёра."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    if SHADOW_CHAT_IDS and str(chat_id).startswith("-"):
+        header = "👁 [shadow → " + str(chat_id) + "]:\n"
+        for observer in SHADOW_CHAT_IDS:
+            try:
+                obs_id = int(observer)
+            except (ValueError, TypeError):
+                obs_id = observer
+            await _raw_send_photo_bytes(obs_id, photo_bytes, filename, header + (caption or ""))
+        return None
+    return await _raw_send_photo_bytes(cid, photo_bytes, filename, caption,
+                                       reply_to_message_id=reply_to_message_id)
+
+
+async def send_voice_bytes(chat_id, voice_bytes, caption=None, reply_to_message_id=None):
+    """Голосовое сообщение из памяти (сдача 40+40, записанная в YassirApp).
+    Telegram принимает в sendVoice ТОЛЬКО ogg/opus - конвертация лежит на
+    вызывающем коде (core/mufradat_bot.transcode_to_ogg), здесь байты
+    уходят как есть."""
+    try:
+        cid = int(str(chat_id))
+    except (ValueError, TypeError):
+        cid = chat_id
+    data = aiohttp.FormData()
+    data.add_field("chat_id", str(cid))
+    if caption:
+        data.add_field("caption", caption)
+    if reply_to_message_id:
+        data.add_field("reply_to_message_id", str(reply_to_message_id))
+    data.add_field("voice", voice_bytes, filename="hifz.ogg", content_type="audio/ogg")
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                TG_API + "/sendVoice", data=data,
+                timeout=aiohttp.ClientTimeout(total=120)
+            ) as r:
+                result = await r.json()
+                if result and not result.get("ok"):
+                    log.error("sendVoice failed: %s", result.get("description", result))
+                return result
+    except Exception as e:
+        log.error("sendVoice error: %s: %s", type(e).__name__, e)
         return None
 
 

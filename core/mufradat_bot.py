@@ -26,11 +26,15 @@ core/mufradat.py) - студенту не нужно вручную добавл
 набора текста - именно так описал пользователь: "рядом кнопка плюс,
 кнопка минус тоже".
 """
+import asyncio
 import logging
 import re
 
 from core.content import SHORT_TASKS
-from core.db import find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date, get_today_report
+from core.db import (
+    find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
+    get_today_report, save_voice_submission,
+)
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
     set_current_page, get_current_page, get_words_for_bookmark, get_leaderboard,
@@ -42,7 +46,7 @@ from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.tg import (
     send_message, send_message_with_button_rows, edit_message_with_button_rows,
     send_photo_bytes_with_button_rows, edit_message_media_with_button_rows,
-    edit_message_caption_with_button_rows,
+    edit_message_caption_with_button_rows, send_photo_bytes, send_voice_bytes,
 )
 from core.mufradat_render import render_word_png_bytes
 
@@ -277,6 +281,123 @@ async def credit_revision_task(user_id):
             f"{user['name']}, {SHORT_TASKS['r'].lower()} + (через YassirApp, Мусхаф)."
         )
     return True
+
+
+HIFZ_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+_FFMPEG_TIMEOUT = 60
+
+
+async def transcode_to_ogg(audio_bytes):
+    """Запись из браузера -> ogg/opus, единственный формат, который Telegram
+    принимает в sendVoice. Браузеры дают РАЗНОЕ: Chrome/Android - webm/opus,
+    Safari/iOS - mp4/aac, поэтому формат входа не фиксируем (ffmpeg
+    определяет сам по содержимому), фиксируем только выход.
+
+    Возвращает None, если ffmpeg недоступен или запись битая - вызывающий
+    код тогда отвечает студенту ошибкой, а не шлёт в группу мусор."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", "pipe:0",
+            "-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000",
+            "-f", "ogg", "pipe:1",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except (FileNotFoundError, OSError) as e:
+        log.error("ffmpeg недоступен: %s: %s", type(e).__name__, e)
+        return None
+    try:
+        out, err = await asyncio.wait_for(proc.communicate(audio_bytes), timeout=_FFMPEG_TIMEOUT)
+    except asyncio.TimeoutError:
+        proc.kill()
+        log.error("ffmpeg не уложился в %s сек", _FFMPEG_TIMEOUT)
+        return None
+    if proc.returncode != 0 or not out:
+        log.error("ffmpeg вернул %s: %s", proc.returncode, (err or b"")[:400])
+        return None
+    return out
+
+
+def _hifz_place(page, line, stage, page_lines=15):
+    """Что именно читал студент - подпись под картинкой строки. Этап решает
+    единицу сдачи: 1 - строчка, 2 - половина листа, 3 - вся страница.
+
+    page_lines приходит с фронтенда: строк на листе не всегда 15 (страницы
+    с названием суры/басмалой короче), а граница половины должна совпасть
+    с той, по которой подсвечивает сам мусхаф (hifzHalf в index.html:
+    line < floor(n/2) - верхняя половина)."""
+    if stage == 1:
+        return f"стр. {page}, строка {line + 1}"
+    if stage == 2:
+        half = "верхняя" if line < page_lines // 2 else "нижняя"
+        return f"стр. {page}, {half} половина"
+    return f"стр. {page}, вся страница"
+
+
+async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, stage, page_lines=15):
+    """Сдача 40+40, записанная прямо в YassirApp (02.09.2026).
+
+    Идёт тем же путём, что обычная голосовая сдача в группе: аудио уходит
+    в группу голосовым сообщением, запись кладётся в voice_submissions -
+    значит устаз принимает её ПРИВЫЧНЫМ реплаем (core/handlers.py уже
+    зовёт mark_voice_reviewed на любой реплай устаза), отдельному кабинету
+    учиться не нужно. Перед голосовым уходит картинка со строчкой,
+    которую студент читал - без неё устазу не видно, что именно проверять
+    (решение пользователя: "аудио в группу с указанием студента + маленький
+    скриншот этого текста").
+
+    Дневное задание "m" засчитывается один раз в день (как у обычной
+    сдачи), но САМА запись уходит в группу каждый раз - каждая сдача это
+    отдельный материал для устаза, а не повторный тап по кнопке.
+
+    Возвращает dict со статусом - фронтенду нужно отличать "нет группы"
+    от "не смогли сконвертировать"."""
+    group = get_learning_group(user_id)
+    if not group or not group["chat_id"]:
+        return {"ok": False, "error": "no_group"}
+    if "m" not in get_group_tasks(group):
+        return {"ok": False, "error": "task_off"}
+    user = find_user_by_phone(user_id)
+    if not user:
+        return {"ok": False, "error": "no_user"}
+
+    ogg = await transcode_to_ogg(audio_bytes)
+    if not ogg:
+        return {"ok": False, "error": "bad_audio"}
+
+    place = _hifz_place(page, line, stage, page_lines)
+    photo_msg_id = None
+    if image_bytes:
+        res = await send_photo_bytes(
+            group["chat_id"], image_bytes, "hifz.png",
+            caption=f"{user['name']} — {place}"
+        )
+        if res and res.get("ok"):
+            photo_msg_id = res["result"]["message_id"]
+
+    already = get_today_report(user["id"], group["id"]) or {}
+    credited = not already.get("m")
+    caption = f"{user['name']}, {SHORT_TASKS['m'].lower()} + (через YassirApp, 40+40)."
+    if not credited:
+        # Задание уже засчитано сегодня - "+" в подписи означал бы второй
+        # зачёт, которого нет. Устазу запись всё равно нужна: он слушает
+        # каждую сдачу, а не только первую за день.
+        caption = f"{user['name']}, {place} (через YassirApp, 40+40)."
+    res = await send_voice_bytes(
+        group["chat_id"], ogg, caption=caption, reply_to_message_id=photo_msg_id
+    )
+    if not (res and res.get("ok")):
+        return {"ok": False, "error": "send_failed"}
+
+    voice_msg_id = res["result"]["message_id"]
+    file_id = (res["result"].get("voice") or {}).get("file_id")
+    save_voice_submission(user["id"], group["id"], group["chat_id"],
+                          voice_msg_id, get_date(), file_id)
+    if credited:
+        save_report(user["id"], group["id"], get_date(), {"m": True})
+    return {"ok": True, "credited": credited, "place": place}
 
 
 async def handle_stale_answer_tap(user_id, chat_id):
