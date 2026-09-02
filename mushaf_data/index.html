@@ -763,7 +763,9 @@
     opacity: 0;
     transform: translate(-50%, -100%);
     transition: opacity 0.25s ease;
-    z-index: 50;
+    /* Выше #hifz-big (55) и #hifz-rec (60): перевод по тапу нужен и на
+       крупном экране, где студент делает повторы (02.09.2026). */
+    z-index: 70;
     direction: ltr;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     white-space: nowrap;
@@ -2385,6 +2387,17 @@
     return null;
   }
 
+  /* Слово для крупного экрана: тот же выбор шрифта, что у перехода, плюс
+     перевод в data-tr — на «Крупно» тап по слову показывает подсказку, как
+     и на самой странице (просьба пользователя 02.09.2026: «повторяешь и
+     иногда забыл — хочется глянуть перевод, не выходя»). */
+  function hifzBigWord(token, foreign) {
+    var tr = token.translation ? ' data-tr="' + escapeAttr(token.translation) + '"' : '';
+    var glyph = foreign ? (token.html || '') : (token.code_v4 || token.html);
+    var cls = foreign ? 'tail-plain' : 'v4-word';
+    return '<span class="' + cls + '"' + tr + '>' + glyph + '</span>';
+  }
+
   /* Один токен перехода в HTML — с оглядкой на то, чей это лист. */
   function hifzTailWord(token, foreign) {
     if (foreign) return '<span class="tail-plain">' + (token.html || '') + '</span>';
@@ -2603,12 +2616,12 @@
     if (!line) return;
     var html = '';
     line.tokens.forEach(function (t) {
-      html += '<span class="v4-word">' + (t.code_v4 || t.html) + '</span>';
+      html += hifzBigWord(t, false);
     });
     var tail = hifzTailTokens(hifz.line);
     for (var i = 0; i < tail && next && i < next.tokens.length; i++) {
       // Тот же капкан с чужим шрифтом, что и в подсказке ниже страницы.
-      html += '<span class="hifz-tail">' + hifzTailWord(next.tokens[i], src.foreign) + '</span>';
+      html += '<span class="hifz-tail">' + hifzBigWord(next.tokens[i], src.foreign) + '</span>';
     }
     var box = document.getElementById('hifz-big-words');
     box.innerHTML = html;
@@ -2631,6 +2644,10 @@
   document.getElementById('hifz-big-btn').addEventListener('click', function () {
     document.getElementById('hifz-big').classList.add('visible');
     hifzBigRender();
+  });
+  document.getElementById('hifz-big-words').addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-tr]') : null;
+    if (el) showWordPopup(el);
   });
   document.getElementById('hifz-big-close').addEventListener('click', function () {
     document.getElementById('hifz-big').classList.remove('visible');

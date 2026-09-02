@@ -46,12 +46,19 @@ def test_half_boundary_follows_line_count_not_hardcoded_8():
     assert mw.next_hifz_position(1, 5, 1, 15) == (1, 6, 1)
 
 
-def test_advance_pointer_noop_for_student_without_pointer(test_db):
+def test_advance_pointer_noop_for_student_without_pointer(test_hadiths_db):
     assert mw.advance_hifz_pointer("no_such_user") is None
 
 
-def test_advance_pointer_moves_and_persists(test_db):
+def test_advance_pointer_moves_and_persists(test_hadiths_db):
+    import os
+
     mw.set_hifz_pointer("u1", 5, 0, 1)
+    # Заодно доказываем, что писали во ВРЕМЕННУЮ базу, а не в настоящую
+    # sources/hadiths.db (у разработчика она существует и молча приняла бы
+    # запись - именно так тест и проходил локально, роняя CI).
+    assert os.path.exists(test_hadiths_db)
+
     assert mw.advance_hifz_pointer("u1") == {"page": 5, "line": 1, "stage": 1}
     assert mw.get_hifz_pointer("u1") == {"page": 5, "line": 1, "stage": 1}
 
