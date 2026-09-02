@@ -2753,34 +2753,73 @@
     return all;
   }
 
+  /* t.html — разметка ДЛЯ innerHTML (теги <tajweed class=...>, красит цвет
+     прямо в браузере), не голый текст. Везде она и уходит через innerHTML —
+     кроме canvas: там fillText рисует теги буквально как символы, а не
+     парсит их (поймано пользователем 02.09.2026 на картинке сдачи, где
+     переход берётся с чужой страницы через t.html). */
+  function hifzPlainText(html) {
+    return (html || '').replace(/<[^>]+>/g, '');
+  }
+
   function hifzLinesToPng(lineIdxs) {
     var lines = hifzTextLines();
     var scale = 2, size = 42, lh = size * 1.9, pad = 20;
+    var rows = lineIdxs.map(function (idx) {
+      var l = lines[idx];
+      return {
+        text: (l && l.tokens) ? l.tokens.map(function (t) { return t.code_v4 || ''; }).join(' ') : '',
+        font: 'mushaf-v4'
+      };
+    });
+    // Переходное слово студент читает следом за единицей — тем же тапом,
+    // что подсвечивает его на самой странице и в «Крупно». Картинка сдачи
+    // была единственным местом, где его забыли: устаз получал скрин, где
+    // текст обрывался ровно на последней строке единицы, хотя в записи
+    // переход уже прозвучал (поймал пользователь 02.09.2026).
+    var lastIdx = lineIdxs[lineIdxs.length - 1];
+    var tailCount = hifzTailTokens(lastIdx);
+    if (tailCount) {
+      var src = hifzTailLine(lastIdx);
+      if (src && src.line && src.line.tokens) {
+        var toks = src.line.tokens.slice(0, tailCount);
+        rows.push({
+          // Тот же капкан с чужим шрифтом, что и везде: чужая страница —
+          // t.html обычным Scheherazade, не глифы V4 текущей страницы. И
+          // html — это разметка тегами, canvas её не парсит, нужен голый
+          // текст (hifzPlainText).
+          text: toks.map(function (t) {
+            return src.foreign ? hifzPlainText(t.html) : (t.code_v4 || '');
+          }).join(' '),
+          font: src.foreign ? "'Scheherazade New'" : 'mushaf-v4',
+          tail: true
+        });
+      }
+    }
     var canvas = document.createElement('canvas');
     var ctx = canvas.getContext('2d');
-    var texts = lineIdxs.map(function (idx) {
-      var l = lines[idx];
-      if (!l || !l.tokens) return '';
-      return l.tokens.map(function (t) { return t.code_v4 || ''; }).join(' ');
-    });
-    ctx.font = size + 'px mushaf-v4';
     var maxW = 0;
-    texts.forEach(function (t) { maxW = Math.max(maxW, ctx.measureText(t).width); });
+    rows.forEach(function (r) {
+      ctx.font = size + 'px ' + r.font;
+      maxW = Math.max(maxW, ctx.measureText(r.text).width);
+    });
     canvas.width = Math.ceil((maxW + pad * 2) * scale);
-    canvas.height = Math.ceil((texts.length * lh + pad * 2) * scale);
+    canvas.height = Math.ceil((rows.length * lh + pad * 2) * scale);
     ctx.scale(scale, scale);
     ctx.fillStyle = '#fbf8f0';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    // Палитру таджвида canvas не поддерживает (font-palette только в CSS) —
-    // глифы рисуются базовым цветом шрифта, для сверки «что читал» этого
-    // достаточно.
-    ctx.fillStyle = '#1c1710';
-    ctx.font = size + 'px mushaf-v4';
     ctx.direction = 'rtl';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'alphabetic';
-    texts.forEach(function (t, i) {
-      ctx.fillText(t, (maxW + pad), pad + lh * (i + 0.75));
+    rows.forEach(function (r, i) {
+      // Палитру таджвида canvas не поддерживает (font-palette только в
+      // CSS) — глифы рисуются базовым цветом, для сверки «что читал»
+      // этого достаточно. Переходное слово чуть светлее — та же логика
+      // приглушения, что и на самой странице, чтобы устазу было видно,
+      // где кончается единица и начинается переход.
+      ctx.fillStyle = r.tail ? '#8a8370' : '#1c1710';
+      ctx.font = size + 'px ' + r.font;
+      ctx.fillText(r.text, (maxW + pad), pad + lh * (i + 0.75));
     });
     return new Promise(function (resolve) {
       canvas.toBlob(function (b) { resolve(b); }, 'image/png');
