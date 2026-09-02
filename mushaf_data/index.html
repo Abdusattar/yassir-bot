@@ -411,6 +411,26 @@
   }
   #hifz-foot button:disabled { opacity: .4; cursor: default; }
 
+  /* Прослушать: компактная круглая кнопка (не текстовая, как соседи) —
+     иконка сама объясняет назначение, а вкл/выкл читается по заливке,
+     как у остальных toggle-кнопок приложения (#hifz-units button.on). */
+  .hifz-listen-btn {
+    flex: 0 0 auto; width: 38px; height: 38px; padding: 0 !important;
+    border-radius: 50%; font-size: 16px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .hifz-listen-btn.on {
+    background: var(--accent) !important; border-color: var(--accent) !important;
+    color: var(--accent-ink) !important;
+    animation: hifzListenPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes hifzListenPulse {
+    0%, 100% { opacity: 1; } 50% { opacity: .6; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hifz-listen-btn.on { animation: none; }
+  }
+
   /* Выделение строчки. Подложка на всю ширину — это и есть привычное
      «выделил строку»; box-shadow добавляет ей воздуха, не сдвигая вёрстку. */
   .mushaf-line.hifz-lit {
@@ -1255,6 +1275,7 @@
   <div class="big-inner"><div class="big-words" id="hifz-big-words"></div></div>
   <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
     <button id="hifz-big-close" style="flex:1;background:var(--card-bg);border:1px solid var(--card-border);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer">На страницу</button>
+    <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать">🔊</button>
     <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer">🎙 Сдать</button>
   </div>
 </div>
@@ -1373,6 +1394,12 @@
        Поправить место можно всегда - "поправить" в шапке. -->
   <div id="hifz-foot">
     <button id="hifz-big-btn">Крупно</button>
+    <!-- Прослушать Хусари (Muallim) — вкл/выкл, играет ТЕКУЩУЮ единицу
+         по кругу с паузой между повторами (02.09.2026). Та же кнопка
+         живёт и в «Крупно» (#hifz-big-listen-btn) — состояние общее,
+         один <audio> на оба места, там же где студент делает 40
+         повторов открывать заново не нужно. -->
+    <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать">🔊</button>
     <button id="hifz-submit" class="primary">🎙 Сдать</button>
     <!-- Выбор единицы — только пока идёт выбор места (02.09.2026). Студент
          может стартовать не с первой строки, а сразу с половины или всей
@@ -2589,8 +2616,80 @@
     hifzApply();
     hifzHead();
   }
+  /* ─── Прослушать Хусари (Muallim) — вкл/выкл (02.09.2026) ─────────────
+     Играет ТЕКУЩУЮ единицу (строку/половину/страницу) по кругу с паузой
+     между повторами, пока не выключат — тот же принцип, что и текстовые
+     40 повторов, только на слух. Один <audio> на всё приложение и на оба
+     места, где есть кнопка (страница и «Крупно») — они делят одно и то
+     же состояние: открыл «Крупно» во время прослушки — звук не дёрнется,
+     это та же единица.
+
+     Имена файлов совпадают с scripts/generate_hifz_audio.py 1:1 - смена
+     схемы там требует смены и здесь. Сгенерировано пока только для
+     стр. 2-106 (пилот) - на прочих страницах play() получит 404 и кнопка
+     сама молча выключится, ничего не обещая. */
+  var HIFZ_LISTEN_PAUSE_MS = 1200;
+  var hifzListenAudio = new Audio();
+  var hifzListenTimer = null;
+  var hifzListening = false;
+
+  function hifzAudioSlot() {
+    // Порт group_slot() из generate_hifz_audio.py - должен давать то же
+    // имя, что и генератор, иначе кнопка будет играть не ту единицу.
+    if (hifz.stage === 3) return 'full';
+    if (hifz.stage === 2) return hifzHalf(hifz.line) === 0 ? 'first_half' : 'second_half';
+    var n = hifzTextLines().length, mid = Math.floor(n / 2);
+    return hifz.line < mid ? ('first_' + hifz.line) : ('second_' + (hifz.line - mid));
+  }
+
+  function hifzAudioUrl() {
+    var page = ('000' + currentPage).slice(-3);
+    return 'audio/husary/page_' + page + '_' + hifzAudioSlot() + '.mp3';
+  }
+
+  function hifzListenButtons() {
+    var btns = document.querySelectorAll('.hifz-listen-btn');
+    Array.prototype.forEach.call(btns, function (b) {
+      b.classList.toggle('on', hifzListening);
+      b.title = hifzListening ? 'Остановить' : 'Прослушать';
+    });
+  }
+
+  function hifzListenStop() {
+    if (hifzListenTimer) { clearTimeout(hifzListenTimer); hifzListenTimer = null; }
+    hifzListening = false;
+    hifzListenAudio.pause();
+    hifzListenButtons();
+  }
+
+  function hifzListenPlayOnce() {
+    hifzListenAudio.src = hifzAudioUrl();
+    hifzListenAudio.play().catch(function () {
+      // Файла нет (страница вне пилота) или автоплей запрещён - тихо
+      // выключаем, без надписи об ошибке поверх мусхафа.
+      hifzListenStop();
+    });
+  }
+  hifzListenAudio.addEventListener('ended', function () {
+    if (!hifzListening) return;
+    hifzListenTimer = setTimeout(hifzListenPlayOnce, HIFZ_LISTEN_PAUSE_MS);
+  });
+  hifzListenAudio.addEventListener('error', function () {
+    if (hifzListening) hifzListenStop();
+  });
+
+  function hifzListenToggle() {
+    if (hifzListening) { hifzListenStop(); return; }
+    hifzListening = true;
+    hifzListenButtons();
+    hifzListenPlayOnce();
+  }
+  document.getElementById('hifz-listen-btn').addEventListener('click', hifzListenToggle);
+  document.getElementById('hifz-big-listen-btn').addEventListener('click', hifzListenToggle);
+
   function hifzExit() {
     hifz.on = false; hifz.picking = false; hifz.unit = 'line';
+    hifzListenStop();
     document.getElementById('hifz-big').classList.remove('visible');
     hifzApply();
   }
@@ -2598,6 +2697,7 @@
   /* Следующий шаг методики. Порядок жёсткий, отказа нет: метод 40+40 не
      предусматривает возврата (решение пользователя 01.09.2026). */
   function hifzNext() {
+    hifzListenStop();  // единица меняется - старая запись больше не подходит
     var n = hifzTextLines().length;
     if (hifz.stage === 1) {
       var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
@@ -2665,6 +2765,7 @@
   function hifzPickDone() {
     hifz.picking = false;
     hifz.unit = 'line';
+    hifzListenStop();
     hifzApply();
     hifzSave();
   }
@@ -2961,6 +3062,7 @@
 
   document.getElementById('hifz-submit').addEventListener('click', function () {
     if (hifz.line === null || hifz.picking) return;
+    hifzListenStop();  // запись голоса и прослушка Хусари одновременно мешают друг другу
     hifzRecReset();
     document.getElementById('hifz-rec-place').textContent =
       document.getElementById('hifz-where').textContent;
