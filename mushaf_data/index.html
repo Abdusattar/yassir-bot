@@ -821,6 +821,19 @@
   }
   .mywords-row { cursor: pointer; }
   .mywords-row:active { background: var(--accent-soft); }
+  /* Деление "Новые"/"Забытые" (03.09.2026, пункт 7 старого макета 40+40) -
+     заголовок секции появляется только когда есть хоть одно "Новое" слово
+     (see renderMyWords) - до тех пор список выглядит как раньше, без
+     лишнего "Забытые" над всем и так привычным списком. */
+  .mywords-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 2px 4px;
+  }
+  .mywords-section-title:first-child { padding-top: 2px; }
 
   /* Тап по слову на странице чтения - всплывающий перевод (28.08.2026),
      --popup-bg/--popup-ink были заведены заранее для этого же, до этого не
@@ -1688,6 +1701,8 @@
       division_2: '🥈 Дивизион 2 (стр. 2-10)',
       daily_left: '📝 Ещё %N% разных слов сегодня — и дневное задание «Слова» будет засчитано',
       mywords_empty: 'Пока пусто. Дважды нажми на слово во время чтения — оно попадёт сюда.',
+      mywords_new: 'Новые',
+      mywords_old: 'Забытые',
       rank_among: 'Место среди всех тренирующихся: %X%',
       revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
       revision_done: '✅ Повторение засчитано',
@@ -2459,16 +2474,29 @@
   // пользователя - строка не открывает тренажёр), только двойной убирает
   // слово из списка.
   var mywordsTapTimer = null, mywordsTapTarget = null;
+  function myWordsRowHtml(w) {
+    return '<div class="word-row mywords-row" data-surah="' + w.surah + '" data-ayah="' + w.ayah +
+      '" data-pos="' + w.position + '"><span class="arabic">' + w.arabic +
+      '</span><span class="translation">' + w.translation + '</span></div>';
+  }
   function renderMyWords(words) {
     var html;
     if (!words.length) {
       html = '<div class="trainer-msg">' + T('mywords_empty') + '</div>';
     } else {
-      html = words.map(function (w) {
-        return '<div class="word-row mywords-row" data-surah="' + w.surah + '" data-ayah="' + w.ayah +
-          '" data-pos="' + w.position + '"><span class="arabic">' + w.arabic +
-          '</span><span class="translation">' + w.translation + '</span></div>';
-      }).join('');
+      // Секции показываем, только если есть хоть одно "Новое" (is_new) -
+      // иначе список выглядит как раньше, без лишнего заголовка "Забытые"
+      // над всем и так привычным списком (03.09.2026).
+      var newWords = words.filter(function (w) { return w.is_new; });
+      var oldWords = words.filter(function (w) { return !w.is_new; });
+      if (newWords.length) {
+        html = '<div class="mywords-section-title">' + T('mywords_new') + '</div>' +
+          newWords.map(myWordsRowHtml).join('') +
+          '<div class="mywords-section-title">' + T('mywords_old') + '</div>' +
+          oldWords.map(myWordsRowHtml).join('');
+      } else {
+        html = words.map(myWordsRowHtml).join('');
+      }
     }
     document.getElementById('mywords-list').innerHTML = html;
   }

@@ -48,6 +48,7 @@ from core.mushaf_words import (
     get_reading_bookmark, set_reading_bookmark,
     get_hifz_pointer, set_hifz_pointer,
     get_hifz_progress, add_hifz_progress, HIFZ_PROGRESS_TARGET,
+    check_new_words_for_line,
 )
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 
@@ -485,6 +486,11 @@ async def handle_hifz_set(request, user_id):
     if not (0 <= line <= 15) or stage not in (1, 2, 3):
         return web.json_response({"error": "bad_pointer"}, status=400)
     set_hifz_pointer(user_id, page, line, stage)
+    if stage == 1:
+        # "Новые" слова в "Мои слова" (03.09.2026) - только на этапе 1: это
+        # единственный этап, где строка проходится ПЕРВЫЙ раз, этапы 2/3
+        # повторяют уже пройденные строки, повторно проверять незачем.
+        check_new_words_for_line(user_id, page, line)
     return web.json_response({"pointer": {"page": page, "line": line, "stage": stage}})
 
 

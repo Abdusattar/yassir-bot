@@ -64,6 +64,10 @@ _SCHEMA = """
 # (mufradat_words хранит несколько языков в одной таблице).
 _LANGUAGE = "ru"
 
+# Сколько дней слово с source='hifz_new' считается "Новым" в "Мои слова"
+# (03.09.2026, решение пользователя), дальше само становится "Забытым".
+_NEW_WORD_DAYS = 3
+
 
 def _ensure_schema(conn):
     conn.execute(_SCHEMA)
@@ -80,6 +84,12 @@ def _ensure_schema(conn):
         # с 29.08.2026) - DEFAULT 'reading' ставит их в верхнюю секцию,
         # это просто безопасный дефолт колонки, не восстановленный факт.
         conn.execute("ALTER TABLE mushaf_starred_words ADD COLUMN source TEXT NOT NULL DEFAULT 'reading'")
+        # Третья дорожка (03.09.2026) - 'hifz_new', см. check_new_words_for_line
+        # ниже: слово, чьё самое первое вхождение в Коране приходится на
+        # строку, которую студент сейчас впервые проходит в заучивании (не
+        # раньше его стартовой страницы). В списке "Новое" 3 дня (см.
+        # list_starred_words), дальше само становится обычным "Забытым" -
+        # без удаления, просто перестаёт быть новым.
 
 
 def _resolve_progress_key(conn, surah, ayah, position):
@@ -143,10 +153,12 @@ def add_starred_word(user_id, surah, ayah, position, arabic_html, translation):
         )
 
 
-def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE):
+def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE, source="trainer"):
     """Авто-добавление при неверном ответе в тренажёре (core/mufradat.py:
     record_answer, 29.08.2026, решение пользователя "должно уходить в мои
-    слова"). В отличие от add_starred_word (тап на странице чтения, есть
+    слова") - ИЛИ при первом вхождении слова в строке заучивания
+    (check_new_words_for_line, 03.09.2026, source="hifz_new"). В отличие от
+    add_starred_word (тап на странице чтения, есть
     surah/ayah/position/arabic/translation готовыми), тут есть только
     progress_key - берём представительную строку из mufradat_words (тот же
     подход, что get_words_by_progress_keys в core/mufradat.py: arabic_text/
@@ -154,7 +166,7 @@ def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE):
     построению, конкретные surah/ayah/position роли не играют, просто нужен
     один реальный идентификатор для PRIMARY KEY таблицы). Идемпотентно, как
     и add_starred_word - если это же вхождение уже в списке, ничего не
-    меняет."""
+    меняет (source у уже существующей строки тоже не меняется)."""
     if progress_key is None:
         return
     with sqlite3.connect(HADITHS_DB) as conn:
@@ -186,7 +198,7 @@ def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE):
             "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key, source) "
             "VALUES (?,?,?,?,?,?,?,?,?)",
             (user_id, surah, ayah, position, arabic_text, translation,
-             datetime.now(timezone.utc).isoformat(), progress_key, "trainer")
+             datetime.now(timezone.utc).isoformat(), progress_key, source)
         )
 
 
@@ -307,8 +319,8 @@ def list_starred_words(user_id, language=_LANGUAGE):
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
         rows = conn.execute(
-            "SELECT surah, ayah, position, arabic_html, translation, source FROM mushaf_starred_words "
-            "WHERE user_id=? ORDER BY added_at DESC",
+            "SELECT surah, ayah, position, arabic_html, translation, source, added_at "
+            "FROM mushaf_starred_words WHERE user_id=? ORDER BY added_at DESC",
             (user_id,)
         ).fetchall()
         localized = {}
@@ -317,17 +329,30 @@ def list_starred_words(user_id, language=_LANGUAGE):
                 conn, [(r[0], r[1], r[2]) for r in rows], language
             )
     from core.mufradat import _clean_translation
+    now = datetime.now(timezone.utc)
     out = []
-    for surah, ayah, position, arabic, translation, source in rows:
+    for surah, ayah, position, arabic, translation, source, added_at in rows:
         t = localized.get((surah, ayah, position))
         # "*" - хвост устойчивого сочетания, его перевод целиком лежит на
         # головном слове (см. _merge_tail_arabic): как самостоятельный
         # перевод он бессмыслен, откатываемся на сохранённый.
         if t and t.strip() and t.strip() != "*":
             translation = _clean_translation(t)
+        # "Новое" держится _NEW_WORD_DAYS дней с момента добавления, дальше
+        # само становится "Забытым" - никакого отдельного перевода строки,
+        # просто это поле начинает считаться иначе при следующем чтении
+        # списка (03.09.2026, решение пользователя).
+        is_new = False
+        if source == "hifz_new":
+            try:
+                added = datetime.fromisoformat(added_at)
+            except ValueError:
+                added = now
+            is_new = (now - added).days < _NEW_WORD_DAYS
         out.append({
             "surah": surah, "ayah": ayah, "position": position,
             "arabic": arabic, "translation": translation, "source": source,
+            "is_new": is_new,
         })
     return out
 
@@ -413,6 +438,152 @@ def get_reading_bookmark(user_id):
             (user_id,)
         ).fetchone()
     return row[0] if row else None
+
+
+# ── "Новые" слова в "Мои слова" (03.09.2026, пункт 7 старого макета 40+40)──
+# Стартовая страница заучивания - записывается РОВНО ОДИН РАЗ, на первый
+# вызов (INSERT OR IGNORE), и больше не трогается. В отличие от
+# mushaf_hifz_pointer (текущее место, двигается каждой сдачей) это
+# ИСТОРИЧЕСКИЙ факт "откуда студент начал" - восстановить его для уже
+# действующих студентов нельзя, указатель раньше перезаписывался без
+# истории, так что для них стартом станет страница, на которой они окажутся
+# в момент первого вызова этой функции после деплоя. Решение пользователя
+# 03.09.2026: то, что было раньше старта - не новое и не забытое, трогать
+# не нужно вообще.
+_HIFZ_START_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mushaf_hifz_start(
+        user_id TEXT PRIMARY KEY,
+        start_page INTEGER NOT NULL,
+        set_at TEXT NOT NULL
+    )
+"""
+
+
+def get_or_init_hifz_start_page(user_id, current_page):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_HIFZ_START_SCHEMA)
+        conn.execute(
+            "INSERT OR IGNORE INTO mushaf_hifz_start (user_id, start_page, set_at) VALUES (?,?,?)",
+            (user_id, current_page, datetime.now(timezone.utc).isoformat())
+        )
+        row = conn.execute(
+            "SELECT start_page FROM mushaf_hifz_start WHERE user_id=?", (user_id,)
+        ).fetchone()
+    return row[0]
+
+
+# Артикль "ال"/огласовки НЕ делают слово новым для студента (03.09.2026,
+# решение пользователя - "как в английском the/a, учит то же слово и
+# перевод"; но если ПЕРЕВОД другой - это уже другое слово, даже при
+# совпадающем костяке букв без огласовок, см. _normalize_translation).
+# Эвристика, не грамматический разбор: ٱ/ا перед ل в начале слова считается
+# артиклем (почти всегда так в кораническом тексте), أ/إ - НЕТ (корневая
+# хамза, не артикль - "أَنتَ" не должно потерять свою "أ").
+_DIACRITICS_RE = re.compile("[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]")
+_ARTICLE_RE = re.compile("^[\u0671\u0627]\u0644")
+_TRANSLATION_PUNCT_RE = re.compile(r"^[\s\-–—«»,.:;!?]+|[\s\-–—«»,.:;!?]+$")
+
+
+def _normalize_rasm(arabic_text):
+    if not arabic_text:
+        return ""
+    text = _DIACRITICS_RE.sub("", arabic_text)
+    return _ARTICLE_RE.sub("", text)
+
+
+def _normalize_translation(translation):
+    if not translation:
+        return ""
+    return _TRANSLATION_PUNCT_RE.sub("", translation).strip().lower()
+
+
+# (нормализованный костяк буквы, нормализованный перевод) -> первая
+# страница Корана, где эта пара вообще встречается (глобально, не зависит
+# от студента) - считается один раз за жизнь процесса из mufradat_words
+# (~35 тыс. лемм, доли секунды), дальше просто кэш в памяти; пересчитывать
+# при рестарте дёшево, хранить на диск незачем.
+_first_occurrence_cache = None
+
+
+def _first_occurrence_pages(conn):
+    global _first_occurrence_cache
+    if _first_occurrence_cache is not None:
+        return _first_occurrence_cache
+    from core.quran_pages import page_for_ayah
+    rows = conn.execute(
+        "SELECT surah_number, ayah_number, arabic_text, translation FROM mufradat_words "
+        "WHERE language=? ORDER BY surah_number, ayah_number, position",
+        (_LANGUAGE,)
+    ).fetchall()
+    cache = {}
+    for surah, ayah, arabic_text, translation in rows:
+        key = (_normalize_rasm(arabic_text), _normalize_translation(translation))
+        if key == ("", "") or key in cache:
+            continue
+        page = page_for_ayah(surah, ayah)
+        if page is not None:
+            cache[key] = page
+    _first_occurrence_cache = cache
+    return cache
+
+
+def _line_word_triples(page_number, line_index):
+    """(surah, ayah, position) слов ТЕКСТОВОЙ строки line_index (0-based) на
+    странице - из того же page{N}.json, что рендерит фронтенд ("lines",
+    там "line" 1-based)."""
+    path = os.path.join(_MUSHAF_DATA_DIR, f"page{page_number}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    for line in data.get("lines", []):
+        if line.get("type") == "text" and line.get("line") == line_index + 1:
+            return [
+                (t["surah"], t["ayah"], t["position"])
+                for t in line.get("tokens", [])
+                if t.get("type") == "word"
+            ]
+    return []
+
+
+def check_new_words_for_line(user_id, page_number, line_index):
+    """Автодобавление "новых" слов в "Мои слова" при входе на строку ЭТАПА 1
+    заучивания (вызывается из handle_hifz_set в core/mufradat_api.py, только
+    для stage==1 - этапы 2/3 повторяют уже пройденные строки, повторно
+    проверять незачем). "Новое" - слово, чья пара (костяк букв без
+    огласовок/артикля, перевод) впервые во всём Коране встречается РОВНО на
+    этой странице и не раньше стартовой страницы студента
+    (get_or_init_hifz_start_page, _first_occurrence_pages). Добавляем в
+    "Мои слова" при этом КОНКРЕТНЫЙ progress_key этого вхождения (не трогая
+    систему тренажёра - там артикль/огласовки по-прежнему разные карточки,
+    см. _normalize_rasm). Источник 'hifz_new' в add_starred_word_by_progress_key
+    сам "стареет" через 3 дня (list_starred_words) - без отдельного
+    удаления, слово просто остаётся в списке уже как обычное "Забытое"."""
+    start_page = get_or_init_hifz_start_page(user_id, page_number)
+    if page_number < start_page:
+        return
+    triples = _line_word_triples(page_number, line_index)
+    if not triples:
+        return
+    with sqlite3.connect(HADITHS_DB) as conn:
+        _ensure_schema(conn)
+        occ = _first_occurrence_pages(conn)
+        new_pks = set()
+        for surah, ayah, position in triples:
+            row = conn.execute(
+                "SELECT progress_key, arabic_text, translation FROM mufradat_words "
+                "WHERE surah_number=? AND ayah_number=? AND position=? AND language=?",
+                (surah, ayah, position, _LANGUAGE)
+            ).fetchone()
+            if row is None or row[0] is None:
+                continue
+            pk, arabic_text, translation = row
+            key = (_normalize_rasm(arabic_text), _normalize_translation(translation))
+            if occ.get(key) == page_number and page_number >= start_page:
+                new_pks.add(pk)
+    for pk in new_pks:
+        add_starred_word_by_progress_key(user_id, pk, source="hifz_new")
 
 
 # ── Движение указателя 40+40 ────────────────────────────────────────────

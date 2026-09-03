@@ -7,6 +7,8 @@ mushaf_data/index.html), потому что в приложении перех�
 очередь границу половины листа (line < n//2), из-за которой уже был
 рассинхрон между JS и Python в подписи сдачи.
 """
+import sqlite3
+
 import core.mushaf_words as mw
 
 
@@ -102,3 +104,93 @@ def test_hifz_progress_units_are_independent(test_hadiths_db):
 def test_hifz_progress_ignores_negative_delta(test_hadiths_db):
     mw.add_hifz_progress("u1", 5, 2, 0, 30)
     assert mw.add_hifz_progress("u1", 5, 2, 0, -100) == 30
+
+
+# ── "Новые" слова в "Мои слова" (03.09.2026) ────────────────────────────
+
+def _seed_mufradat_words(db_path, rows):
+    """rows: (surah, ayah, position, progress_key, arabic_text, translation)."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mufradat_words(
+            surah_number INTEGER, ayah_number INTEGER, position INTEGER,
+            language TEXT, progress_key INTEGER, arabic_text TEXT, translation TEXT
+        )
+    """)
+    conn.executemany(
+        "INSERT INTO mufradat_words (surah_number, ayah_number, position, language, "
+        "progress_key, arabic_text, translation) VALUES (?,?,?,'ru',?,?,?)",
+        rows
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_hifz_start_page_set_once(test_hadiths_db):
+    assert mw.get_or_init_hifz_start_page("u1", 15) == 15
+    # Повторный вызов с другой страницей не должен перезаписать - это
+    # ИСТОРИЧЕСКИЙ факт "откуда начал", а не текущий указатель.
+    assert mw.get_or_init_hifz_start_page("u1", 20) == 15
+
+
+def test_check_new_words_adds_words_from_start_page(test_hadiths_db):
+    # Реальные (surah, ayah, position) со страницы 2, строка JSON "line":3
+    # (line_index=2) - начало Аль-Бакара, mushaf_data/page2.json (FIRST_PAGE).
+    mw._first_occurrence_cache = None  # изолируем от кэша прошлых тестов
+    _seed_mufradat_words(test_hadiths_db, [
+        (2, 1, 1, 201, "الٓمٓ", "Алиф лам мим"),
+        (2, 2, 1, 202, "ذَٰلِكَ", "Это"),
+        (2, 2, 2, 203, "ٱلْكِتَـٰبُ", "Писание"),
+        (2, 2, 3, 204, "لَا", "нет"),
+        (2, 2, 4, 205, "رَيْبَ", "сомнения"),
+        (2, 2, 5, 206, "فِيهِ", "в нём"),
+        (2, 2, 6, 207, "هُدًى", "руководство"),
+    ])
+    mw.get_or_init_hifz_start_page("u1", 2)
+    mw.check_new_words_for_line("u1", 2, 2)
+    words = mw.list_starred_words("u1")
+    assert len(words) == 7
+    assert all(w["source"] == "hifz_new" and w["is_new"] for w in words)
+
+
+def test_check_new_words_skips_before_start_page(test_hadiths_db):
+    mw._first_occurrence_cache = None
+    _seed_mufradat_words(test_hadiths_db, [
+        (2, 1, 1, 201, "الٓمٓ", "Алиф лам мим"),
+    ])
+    mw.get_or_init_hifz_start_page("u1", 5)  # старт - стр. 5, стр. 2 уже позади
+    mw.check_new_words_for_line("u1", 2, 2)
+    assert mw.list_starred_words("u1") == []
+
+
+def test_check_new_words_article_and_diacritics_do_not_make_it_new(test_hadiths_db):
+    """03.09.2026, решение пользователя: ٱلْكِتَـٰبُ (стр. 2, "Писание") и
+    كِتَـٰبَ (стр. 15, "Писание") - одно и то же слово для студента (как
+    английские the/a), артикль и огласовки не в счёт - только сама первая
+    встреченная пара (костяк+перевод) считается новой."""
+    mw._first_occurrence_cache = None
+    _seed_mufradat_words(test_hadiths_db, [
+        (2, 2, 2, 203, "ٱلْكِتَـٰبُ", "Писание"),   # реально стр. 2, "line":3
+        (2, 101, 16, 1681, "كِتَـٰبَ", "Писание"),  # реально стр. 15, "line":15
+    ])
+    mw.get_or_init_hifz_start_page("u1", 2)
+    mw.check_new_words_for_line("u1", 2, 2)    # стр. 2, line_index=2 ("line":3)
+    mw.check_new_words_for_line("u1", 15, 14)  # стр. 15, line_index=14 ("line":15)
+    words = mw.list_starred_words("u1")
+    assert len(words) == 1
+    assert words[0]["surah"] == 2 and words[0]["ayah"] == 2  # только вхождение со стр. 2
+
+
+def test_check_new_words_different_translation_is_still_new(test_hadiths_db):
+    """А вот если перевод другой - это уже другое слово (решение
+    пользователя), даже если костяк букв совпадает."""
+    mw._first_occurrence_cache = None
+    _seed_mufradat_words(test_hadiths_db, [
+        (2, 2, 2, 203, "ٱلْكِتَـٰبُ", "Писание"),
+        (2, 101, 16, 1681, "كِتَـٰبَ", "предписал"),  # тот же костяк, другой смысл
+    ])
+    mw.get_or_init_hifz_start_page("u1", 2)
+    mw.check_new_words_for_line("u1", 2, 2)
+    mw.check_new_words_for_line("u1", 15, 14)
+    words = mw.list_starred_words("u1")
+    assert len(words) == 2
