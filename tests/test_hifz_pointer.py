@@ -7,6 +7,8 @@ mushaf_data/index.html), потому что в приложении перех�
 очередь границу половины листа (line < n//2), из-за которой уже был
 рассинхрон между JS и Python в подписи сдачи.
 """
+import json
+import os
 import sqlite3
 
 import core.mushaf_words as mw
@@ -126,6 +128,22 @@ def _seed_mufradat_words(db_path, rows):
     conn.close()
 
 
+def _write_page_json(pages_dir, page_number, line_number, triples):
+    """mushaf_data/*.json сгенерированы (scripts/export_mushaf_page.py) и
+    намеренно НЕ в git (.gitignore) - на CI-раннере их нет вообще, поэтому
+    тесты, трогающие _line_word_triples, пишут свой минимальный файл в
+    monkeypatch-нутый _MUSHAF_DATA_DIR, а не читают настоящие данные."""
+    data = {"lines": [{
+        "line": line_number, "type": "text",
+        "tokens": [
+            {"type": "word", "surah": s, "ayah": a, "position": p}
+            for s, a, p in triples
+        ],
+    }]}
+    with open(os.path.join(pages_dir, f"page{page_number}.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
 def test_hifz_start_page_set_once(test_hadiths_db):
     assert mw.get_or_init_hifz_start_page("u1", 15) == 15
     # Повторный вызов с другой страницей не должен перезаписать - это
@@ -133,10 +151,12 @@ def test_hifz_start_page_set_once(test_hadiths_db):
     assert mw.get_or_init_hifz_start_page("u1", 20) == 15
 
 
-def test_check_new_words_adds_words_from_start_page(test_hadiths_db):
-    # Реальные (surah, ayah, position) со страницы 2, строка JSON "line":3
-    # (line_index=2) - начало Аль-Бакара, mushaf_data/page2.json (FIRST_PAGE).
+def test_check_new_words_adds_words_from_start_page(test_hadiths_db, tmp_path, monkeypatch):
+    # (surah, ayah, position) - условная страница 2, одна текстовая строка.
+    monkeypatch.setattr(mw, "_MUSHAF_DATA_DIR", str(tmp_path))
     mw._first_occurrence_cache = None  # изолируем от кэша прошлых тестов
+    triples = [(2, 1, 1), (2, 2, 1), (2, 2, 2), (2, 2, 3), (2, 2, 4), (2, 2, 5), (2, 2, 6)]
+    _write_page_json(str(tmp_path), 2, 3, triples)  # line_index=2 -> json "line":3
     _seed_mufradat_words(test_hadiths_db, [
         (2, 1, 1, 201, "الٓمٓ", "Алиф лам мим"),
         (2, 2, 1, 202, "ذَٰلِكَ", "Это"),
@@ -153,8 +173,10 @@ def test_check_new_words_adds_words_from_start_page(test_hadiths_db):
     assert all(w["source"] == "hifz_new" and w["is_new"] for w in words)
 
 
-def test_check_new_words_skips_before_start_page(test_hadiths_db):
+def test_check_new_words_skips_before_start_page(test_hadiths_db, tmp_path, monkeypatch):
+    monkeypatch.setattr(mw, "_MUSHAF_DATA_DIR", str(tmp_path))
     mw._first_occurrence_cache = None
+    _write_page_json(str(tmp_path), 2, 3, [(2, 1, 1)])
     _seed_mufradat_words(test_hadiths_db, [
         (2, 1, 1, 201, "الٓمٓ", "Алиф лам мим"),
     ])
@@ -163,15 +185,18 @@ def test_check_new_words_skips_before_start_page(test_hadiths_db):
     assert mw.list_starred_words("u1") == []
 
 
-def test_check_new_words_article_and_diacritics_do_not_make_it_new(test_hadiths_db):
-    """03.09.2026, решение пользователя: ٱلْكِتَـٰبُ (стр. 2, "Писание") и
-    كِتَـٰبَ (стр. 15, "Писание") - одно и то же слово для студента (как
-    английские the/a), артикль и огласовки не в счёт - только сама первая
-    встреченная пара (костяк+перевод) считается новой."""
+def test_check_new_words_article_and_diacritics_do_not_make_it_new(test_hadiths_db, tmp_path, monkeypatch):
+    """03.09.2026, решение пользователя: ٱلْكِتَـٰبُ ("Писание", условно стр. 2)
+    и كِتَـٰبَ ("Писание", условно стр. 15) - одно и то же слово для студента
+    (как английские the/a), артикль и огласовки не в счёт - только сама
+    первая встреченная пара (костяк+перевод) считается новой."""
+    monkeypatch.setattr(mw, "_MUSHAF_DATA_DIR", str(tmp_path))
     mw._first_occurrence_cache = None
+    _write_page_json(str(tmp_path), 2, 3, [(2, 2, 2)])
+    _write_page_json(str(tmp_path), 15, 15, [(2, 101, 16)])
     _seed_mufradat_words(test_hadiths_db, [
-        (2, 2, 2, 203, "ٱلْكِتَـٰبُ", "Писание"),   # реально стр. 2, "line":3
-        (2, 101, 16, 1681, "كِتَـٰبَ", "Писание"),  # реально стр. 15, "line":15
+        (2, 2, 2, 203, "ٱلْكِتَـٰبُ", "Писание"),
+        (2, 101, 16, 1681, "كِتَـٰبَ", "Писание"),
     ])
     mw.get_or_init_hifz_start_page("u1", 2)
     mw.check_new_words_for_line("u1", 2, 2)    # стр. 2, line_index=2 ("line":3)
@@ -181,10 +206,13 @@ def test_check_new_words_article_and_diacritics_do_not_make_it_new(test_hadiths_
     assert words[0]["surah"] == 2 and words[0]["ayah"] == 2  # только вхождение со стр. 2
 
 
-def test_check_new_words_different_translation_is_still_new(test_hadiths_db):
+def test_check_new_words_different_translation_is_still_new(test_hadiths_db, tmp_path, monkeypatch):
     """А вот если перевод другой - это уже другое слово (решение
     пользователя), даже если костяк букв совпадает."""
+    monkeypatch.setattr(mw, "_MUSHAF_DATA_DIR", str(tmp_path))
     mw._first_occurrence_cache = None
+    _write_page_json(str(tmp_path), 2, 3, [(2, 2, 2)])
+    _write_page_json(str(tmp_path), 15, 15, [(2, 101, 16)])
     _seed_mufradat_words(test_hadiths_db, [
         (2, 2, 2, 203, "ٱلْكِتَـٰبُ", "Писание"),
         (2, 101, 16, 1681, "كِتَـٰبَ", "предписал"),  # тот же костяк, другой смысл
