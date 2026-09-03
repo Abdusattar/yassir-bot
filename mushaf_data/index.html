@@ -1799,14 +1799,20 @@
 
   // Узнаём язык с сервера при старте - он главнее локального кэша
   // (студент мог переключиться с другого устройства).
-  apiCall('/lang').then(function (d) {
-    if (d && d.language && I18N[d.language] && d.language !== UI_LANG) {
-      UI_LANG = d.language;
-      try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e) {}
-      applyLang();
-      if (typeof loadPage === 'function' && currentPage) loadPage(currentPage);
-    }
-  }).catch(function () {});
+  // setTimeout(...,0) - та же ловушка порядка объявлений, что у hifz
+  // ниже (var API_BASE присваивается позже по файлу): без отсрочки этот
+  // вызов на живом сервере всегда уходил на "undefined/lang" и 404
+  // (03.09.2026, видно в логе nginx рядом с undefined/hifz).
+  setTimeout(function () {
+    apiCall('/lang').then(function (d) {
+      if (d && d.language && I18N[d.language] && d.language !== UI_LANG) {
+        UI_LANG = d.language;
+        try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e) {}
+        applyLang();
+        if (typeof loadPage === 'function' && currentPage) loadPage(currentPage);
+      }
+    }).catch(function () {});
+  }, 0);
 
   applyLang();
 
@@ -3114,12 +3120,24 @@
      странице; на любой другой — честно спрашиваем, где он (и подсказываем
      в подзаголовке, где осталось его место). */
   var hifzPointerPage = null;
-  var hifzPointerLoaded = apiCall('/hifz').then(function (res) {
-    if (res.status === 401 || !res.data || !res.data.pointer) return;
-    hifz.line = res.data.pointer.line;
-    hifz.stage = res.data.pointer.stage;
-    hifzPointerPage = res.data.pointer.page;
-  }).catch(function () {});
+  // setTimeout(...,0), не прямой вызов - ровно та же ловушка, что у
+  // heartbeat выше (var API_BASE присваивается НИЖЕ по файлу, hoisting
+  // не спасает присваивание): этот код идёт раньше той строки, значит
+  // ушёл бы на "undefined/hifz" и 404. Живой случай (03.09.2026) -
+  // "GET /undefined/hifz" в логе 9 раз за утро, указатель НИ РАЗУ не
+  // долетал до сервера, хотя там он был - предыдущий фикс "автопереход
+  // на страницу указателя" (это же утро) не мог сработать, потому что
+  // указатель никогда и не приходил.
+  var hifzPointerLoaded = new Promise(function (resolve) {
+    setTimeout(function () {
+      apiCall('/hifz').then(function (res) {
+        if (res.status === 401 || !res.data || !res.data.pointer) return;
+        hifz.line = res.data.pointer.line;
+        hifz.stage = res.data.pointer.stage;
+        hifzPointerPage = res.data.pointer.page;
+      }).catch(function () {}).then(resolve);
+    }, 0);
+  });
   // Потолок на случай плохой связи (02.09.2026) - тап по 📖 не должен
   // зависнуть навсегда, если ответ так и не пришёл; после 2.5 сек режим
   // открывается с тем, что успело подгрузиться (в худшем случае - как
