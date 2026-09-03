@@ -1804,7 +1804,13 @@
   // вызов на живом сервере всегда уходил на "undefined/lang" и 404
   // (03.09.2026, видно в логе nginx рядом с undefined/hifz).
   setTimeout(function () {
-    apiCall('/lang').then(function (d) {
+    apiCall('/lang').then(function (res) {
+      // apiCall отдаёт {status, data} - здесь читали language прямо с
+      // верхнего уровня, а сервер кладёт его в data (см. handle_lang_get,
+      // core/mufradat_api.py:290) - синхронизация языка с другого
+      // устройства при старте молчаливо не срабатывала НИКОГДА, отдельно
+      // от ловушки undefined/lang выше (найдено 03.09.2026).
+      var d = res && res.data;
       if (d && d.language && I18N[d.language] && d.language !== UI_LANG) {
         UI_LANG = d.language;
         try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e) {}
