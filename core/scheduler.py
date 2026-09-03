@@ -16,7 +16,7 @@ from core.db import (
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
     get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date,
     count_unpublished_parts, get_users_due_for_survey, get_users_due_for_survey_nudge,
-    start_survey, touch_survey_stage, get_prep_group
+    start_survey, touch_survey_stage, get_prep_group, get_pending_voice_reviews,
 )
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
@@ -228,6 +228,34 @@ async def voice_review_report():
         lines.append("Не проверено: " + ", ".join(names))
 
     await send_message(_VOICE_REVIEW_CHAT_ID, "\n".join(lines))
+
+
+# ── Сводка устазу "тебя ждут" (пункт 15 старого макета 40+40) ────────────────
+# logs/terminal/2026-09-01.md, 01.09.2026: НЕ звон на каждую сдачу, а редкая
+# сводка 5 раз в день, и молчание, если ждать нечего. Отдельно от
+# voice_review_report выше (тот - раз в день, за ПОЗАВЧЕРА, в фиксированный
+# чат _VOICE_REVIEW_CHAT_ID) - это то, что ждёт ПРЯМО СЕЙЧАС, лично устазу в
+# личку, тем же путём, что и dm_connect_reminder.
+
+async def ustaz_waiting_digest():
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == "tadabbur":
+            continue
+        try:
+            pending = get_pending_voice_reviews([group["id"]])
+            if not pending:
+                continue
+            title = group["title"] or str(group["chat_id"])
+            for admin_phone in get_group_admins(group["id"]):
+                if not admin_phone:
+                    continue
+                await send_message(
+                    admin_phone,
+                    "🎙 В «" + title + "» ждут проверки " + str(len(pending)) + " голосовых сдач."
+                )
+                await asyncio.sleep(0.3)
+        except Exception as e:
+            log.error("ustaz_waiting_digest error in group %s: %s", group["id"], e)
 
 
 # ── Отчёт по качеству AI-проверки муфрадат/таджвид/нахв (15:00) ──────────────
@@ -1739,6 +1767,14 @@ async def scheduler():
                 await maybe_run("monthly_report", monthly_report)
                 if now.month in (1, 4, 7, 10):
                     await maybe_run("quarterly_leaders_report", quarterly_leaders_report)
+
+            # Отдельный if, не elif-ветка (03.09.2026): своя сетка часов
+            # (06/10/15/19/22, 14:00 сдвинут на 15:00 из-за намаза - тот же
+            # час, что у individual_reminders выше, конфликта нет - это
+            # просто ДВА разных maybe_run в одном тике), не должна зависеть
+            # от того, что попало в elif-цепочку.
+            if m == 0 and h in (6, 10, 15, 19, 22):
+                await maybe_run("ustaz_waiting_digest", ustaz_waiting_digest)
 
             await asyncio.sleep(30)
 

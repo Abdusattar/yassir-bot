@@ -70,6 +70,16 @@ def _ensure_schema(conn):
     cols = {row[1] for row in conn.execute("PRAGMA table_info(mushaf_starred_words)")}
     if "progress_key" not in cols:
         conn.execute("ALTER TABLE mushaf_starred_words ADD COLUMN progress_key INTEGER")
+    if "source" not in cols:
+        # "Мои слова": Новые/Забытые (03.09.2026, пункт 7 старого макета
+        # 40+40) - откуда слово попало в список, две УЖЕ существующие с
+        # 29.08.2026 дорожки: 'reading' (двойной тап на странице чтения,
+        # add_starred_word) и 'trainer' (неверный ответ, автоматически,
+        # add_starred_word_by_progress_key). У строк, накопленных ДО этой
+        # миграции, источник неизвестен (оба пути уже работали одновременно
+        # с 29.08.2026) - DEFAULT 'reading' ставит их в верхнюю секцию,
+        # это просто безопасный дефолт колонки, не восстановленный факт.
+        conn.execute("ALTER TABLE mushaf_starred_words ADD COLUMN source TEXT NOT NULL DEFAULT 'reading'")
 
 
 def _resolve_progress_key(conn, surah, ayah, position):
@@ -126,10 +136,10 @@ def add_starred_word(user_id, surah, ayah, position, arabic_html, translation):
         arabic_html = _merge_tail_arabic(conn, surah, ayah, position, arabic_html)
         conn.execute(
             "INSERT OR IGNORE INTO mushaf_starred_words "
-            "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key, source) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             (user_id, surah, ayah, position, _strip_tajweed_tags(arabic_html), translation,
-             datetime.now(timezone.utc).isoformat(), progress_key)
+             datetime.now(timezone.utc).isoformat(), progress_key, "reading")
         )
 
 
@@ -173,10 +183,10 @@ def add_starred_word_by_progress_key(user_id, progress_key, language=_LANGUAGE):
         translation = _clean_translation(translation)
         conn.execute(
             "INSERT OR IGNORE INTO mushaf_starred_words "
-            "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key, source) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             (user_id, surah, ayah, position, arabic_text, translation,
-             datetime.now(timezone.utc).isoformat(), progress_key)
+             datetime.now(timezone.utc).isoformat(), progress_key, "trainer")
         )
 
 
@@ -297,7 +307,7 @@ def list_starred_words(user_id, language=_LANGUAGE):
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
         rows = conn.execute(
-            "SELECT surah, ayah, position, arabic_html, translation FROM mushaf_starred_words "
+            "SELECT surah, ayah, position, arabic_html, translation, source FROM mushaf_starred_words "
             "WHERE user_id=? ORDER BY added_at DESC",
             (user_id,)
         ).fetchall()
@@ -308,7 +318,7 @@ def list_starred_words(user_id, language=_LANGUAGE):
             )
     from core.mufradat import _clean_translation
     out = []
-    for surah, ayah, position, arabic, translation in rows:
+    for surah, ayah, position, arabic, translation, source in rows:
         t = localized.get((surah, ayah, position))
         # "*" - хвост устойчивого сочетания, его перевод целиком лежит на
         # головном слове (см. _merge_tail_arabic): как самостоятельный
@@ -317,7 +327,7 @@ def list_starred_words(user_id, language=_LANGUAGE):
             translation = _clean_translation(t)
         out.append({
             "surah": surah, "ayah": ayah, "position": position,
-            "arabic": arabic, "translation": translation,
+            "arabic": arabic, "translation": translation, "source": source,
         })
     return out
 

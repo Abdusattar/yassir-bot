@@ -30,7 +30,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import TELEGRAM_TOKEN
-from core.db import get_learning_group
+from core.db import get_learning_group, get_admin_groups, get_pending_voice_reviews
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
@@ -623,9 +623,34 @@ def _online_count():
 async def handle_heartbeat(request, user_id):
     """POST - "я сейчас держу YassirApp открытым", шлётся с фронтенда
     периодически. Возвращает текущее число "онлайн" сразу же, отдельного
-    GET не нужно."""
+    GET не нужно.
+
+    is_ustaz/waiting_count (03.09.2026) едут тем же ответом - дешёвая
+    точка для дашборда узнать, показывать ли 4-ю дверь "Устаз" и красный
+    счётчик на ней, без отдельного запроса на каждое открытие."""
     _last_seen[user_id] = time.time()
-    return web.json_response({"online": _online_count()})
+    admin_groups = get_admin_groups(user_id)
+    waiting = get_pending_voice_reviews([g["id"] for g in admin_groups]) if admin_groups else []
+    return web.json_response({
+        "online": _online_count(),
+        "is_ustaz": bool(admin_groups),
+        "waiting_count": len(waiting),
+    })
+
+
+@with_auth
+async def handle_ustaz_waiting(request, user_id):
+    """GET - сдачи, ждущие проверки устазом, по ВСЕМ его группам сразу
+    (03.09.2026) - вход в кабинет устаза, пункт 13 старого макета режима
+    заучивания. Только чтение: приём/отклонение сдачи по-прежнему идёт
+    реплаем в группе Telegram, кабинет здесь ничего не решает - гейт
+    "пересдача блокирует этап" (пункт 11 макета) отложен отдельно, до
+    согласования с Умар устазом."""
+    admin_groups = get_admin_groups(user_id)
+    if not admin_groups:
+        return web.json_response({"error": "not_ustaz"}, status=403)
+    items = get_pending_voice_reviews([g["id"] for g in admin_groups])
+    return web.json_response({"items": items})
 
 
 def build_app():
@@ -652,6 +677,7 @@ def build_app():
     app.router.add_post("/api/muf/hifz/submit", handle_hifz_submit)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
+    app.router.add_get("/api/muf/ustaz/waiting", handle_ustaz_waiting)
     return app
 
 

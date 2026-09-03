@@ -972,6 +972,20 @@ def is_any_group_admin(phone):
     return row is not None
 
 
+def get_admin_groups(phone):
+    """Группы, где phone числится устазом (role='admin', активная связь).
+    Список, не булев признак - один устаз реально ведёт несколько групп,
+    а устаз реален только в СВОЕЙ группе (уже наступали на эту грабль -
+    не обобщать is_group_admin на все группы разом)."""
+    with db() as c:
+        return c.execute("""
+            SELECT g.* FROM groups g
+            JOIN user_groups ug ON ug.group_id = g.id
+            JOIN users u ON u.id = ug.user_id
+            WHERE u.phone=? AND ug.role='admin' AND ug.active=1 AND g.active=1
+        """, (phone,)).fetchall()
+
+
 # ── Users / Students ──────────────────────────────────────────────────────────
 
 def _student_row_sql():
@@ -1313,6 +1327,29 @@ def save_umar_review(chat_id, message_id, review_type, review_file_id=None, revi
             " WHERE chat_id=? AND message_id=? AND review_type IS NULL",
             (review_type, review_file_id, review_text, chat_id, message_id)
         )
+
+
+def get_pending_voice_reviews(group_ids):
+    """Голосовые сдачи без реплая устаза, по заданным group_id сразу -
+    вход в кабинет устаза (03.09.2026), пункт 13 старого макета режима
+    заучивания (logs/terminal/2026-09-01.md). Только чтение: сам приём/
+    отклонение сдачи всё ещё идёт реплаем в группе Telegram, как раньше -
+    гейт "пересдача блокирует этап" (пункт 11 того же макета) откладывался
+    отдельно, это не он."""
+    if not group_ids:
+        return []
+    with db() as c:
+        placeholders = ",".join("?" * len(group_ids))
+        rows = c.execute(
+            f"SELECT vs.sent_at, u.name AS student_name, g.title AS group_title"
+            f" FROM voice_submissions vs"
+            f" JOIN users u ON u.id = vs.student_id"
+            f" JOIN groups g ON g.id = vs.group_id"
+            f" WHERE vs.group_id IN ({placeholders}) AND vs.reviewed_at IS NULL"
+            f" ORDER BY vs.sent_at",
+            group_ids
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def get_voice_review_stats(group_id, date):
