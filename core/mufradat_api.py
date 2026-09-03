@@ -47,6 +47,7 @@ from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
     get_reading_bookmark, set_reading_bookmark,
     get_hifz_pointer, set_hifz_pointer,
+    get_hifz_progress, add_hifz_progress, HIFZ_PROGRESS_TARGET,
 )
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 
@@ -488,6 +489,53 @@ async def handle_hifz_set(request, user_id):
 
 
 @with_auth
+async def handle_hifz_progress_get(request, user_id):
+    """GET ?page=&stage=&half= - сколько повторов (0-80) уже накоплено по
+    ТЕКУЩЕЙ единице этапа 2/3 (03.09.2026). У этапа 1 (строка) счётчика
+    нет - там одна сдача и так закрывает единицу, спрашивать нечего."""
+    try:
+        page = int(request.query["page"])
+        stage = int(request.query["stage"])
+        half = int(request.query["half"])
+    except (KeyError, ValueError, TypeError):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
+        return web.json_response({"error": "bad_page"}, status=400)
+    if stage not in (2, 3) or half not in (0, 1):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    return web.json_response({
+        "count": get_hifz_progress(user_id, page, stage, half),
+        "target": HIFZ_PROGRESS_TARGET,
+    })
+
+
+@with_auth
+async def handle_hifz_progress_add(request, user_id):
+    """POST {page, stage, half, delta} - "сколько добавил сегодня" к
+    единице этапа 2/3 (03.09.2026). Дельта, не абсолютное число - так
+    нельзя случайно занизить уже сохранённый счёт. `closed` в ответе
+    говорит фронтенду, дошло ли до 80 - только тогда указатель должен
+    сдвинуться дальше, частичная сдача его не трогает."""
+    try:
+        body = await request.json()
+        page = int(body["page"])
+        stage = int(body["stage"])
+        half = int(body["half"])
+        delta = int(body["delta"])
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
+        return web.json_response({"error": "bad_page"}, status=400)
+    if stage not in (2, 3) or half not in (0, 1) or not (1 <= delta <= HIFZ_PROGRESS_TARGET):
+        return web.json_response({"error": "bad_pointer"}, status=400)
+    count = add_hifz_progress(user_id, page, stage, half, delta)
+    return web.json_response({
+        "count": count, "target": HIFZ_PROGRESS_TARGET,
+        "closed": count >= HIFZ_PROGRESS_TARGET,
+    })
+
+
+@with_auth
 async def handle_hifz_submit(request, user_id):
     """POST multipart - сдача 40+40, записанная в приложении (02.09.2026).
     Поля: audio (запись), image (картинка прочитанной строчки, рисует сам
@@ -599,6 +647,8 @@ def build_app():
     app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
     app.router.add_get("/api/muf/hifz", handle_hifz_get)
     app.router.add_post("/api/muf/hifz", handle_hifz_set)
+    app.router.add_get("/api/muf/hifz/progress", handle_hifz_progress_get)
+    app.router.add_post("/api/muf/hifz/progress", handle_hifz_progress_add)
     app.router.add_post("/api/muf/hifz/submit", handle_hifz_submit)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)

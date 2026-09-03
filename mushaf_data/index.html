@@ -391,6 +391,35 @@
   }
   #hifz-rec .actions button:disabled { opacity: .45; cursor: default; }
 
+  /* Захват прогресса 40+40 (03.09.2026) - см. #hifz-rec .actions выше,
+     та же палитра кнопок, отдельный блок ниже записи. */
+  #hifz-progress { display: none; text-align: left; margin-top: 6px; }
+  #hifz-progress .hp-title {
+    font-size: 13.5px; font-weight: 600; color: var(--ink); margin: 4px 0 2px;
+  }
+  #hifz-progress .hp-prev {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12.5px; color: var(--muted);
+    padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--chrome-border);
+  }
+  #hifz-progress .hp-prev b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  #hifz-progress .hp-chips, #hifz-progress .hp-own-row { display: flex; gap: 8px; }
+  #hifz-progress .hp-chips button, #hifz-progress .hp-own-row button {
+    flex: 1; padding: 11px 8px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 600 13px inherit; font-variant-numeric: tabular-nums;
+  }
+  #hifz-progress .hp-own-row input {
+    flex: 1; border: 1px solid var(--accent); border-radius: 10px;
+    padding: 9px 10px; font: 13px inherit; color: var(--ink); background: var(--bg);
+  }
+  #hifz-progress .hp-own-row input:focus { outline: none; }
+  #hifz-progress .hp-save {
+    width: 100%; margin-top: 12px; padding: 11px 0; border: none; border-radius: 10px;
+    cursor: pointer; background: var(--accent); color: var(--accent-ink); font: 600 13.5px inherit;
+  }
+  #hifz-progress .hp-save.closing { background: var(--ok); }
+
   /* Слово с ЧУЖОГО листа: рисуется настоящим арабским юникодом
      (t.html) обычным шрифтом — глифовые коды V4 чужой страницы наш
      шрифт прочитает как другие буквы (02.09.2026). */
@@ -1420,6 +1449,28 @@
       <div class="hint" id="hifz-rec-hint"></div>
       <audio id="hifz-rec-audio" controls style="display:none"></audio>
       <div class="actions" id="hifz-rec-actions"></div>
+
+      <!-- Захват прогресса 40+40 (03.09.2026) - только этапы 2/3, после
+           успешной отправки. Строка (этап 1) закрывается одной сдачей,
+           этой панели не видит. -->
+      <div id="hifz-progress">
+        <p class="hp-title" data-i18n="hifz_progress_title">Сколько сделал сегодня?</p>
+        <div class="hp-prev">
+          <span data-i18n="hifz_progress_was">Было по этапу</span>
+          <span><b id="hifz-progress-count">0</b> <span data-i18n="hifz_progress_of">из</span> <span id="hifz-progress-target">80</span></span>
+        </div>
+        <div class="hp-chips" id="hifz-progress-chips">
+          <button type="button" data-add="10">+10</button>
+          <button type="button" data-add="20">+20</button>
+          <button type="button" data-add="40">+40</button>
+          <button type="button" id="hifz-progress-own" data-i18n="hifz_progress_own">своё</button>
+        </div>
+        <div class="hp-own-row" id="hifz-progress-own-row" style="display:none">
+          <input id="hifz-progress-own-input" type="number" min="1" max="80" inputmode="numeric">
+          <button type="button" id="hifz-progress-own-ok" data-i18n="hifz_progress_ok">ок</button>
+        </div>
+        <button type="button" id="hifz-progress-save" class="hp-save" data-i18n="hifz_progress_save">Сохранить и продолжить</button>
+      </div>
     </div>
   </div>
 
@@ -1517,6 +1568,16 @@
       hifz_rec_sent: 'Отправлено устазу в группу 🤲',
       hifz_rec_failed: 'Не отправилось. Попробуй ещё раз',
       hifz_rec_no_group: 'Ты пока не в учебной группе',
+      hifz_progress_looking_only: 'глядя %N%/40',
+      hifz_progress_both: 'глядя 40/40 ✓ · не глядя %N%/40',
+      hifz_progress_done: 'глядя 40/40 ✓ · не глядя 40/40 ✓',
+      hifz_progress_title: 'Сколько сделал сегодня?',
+      hifz_progress_was: 'Было по этапу',
+      hifz_progress_of: 'из',
+      hifz_progress_own: 'своё',
+      hifz_progress_ok: 'ок',
+      hifz_progress_save: 'Сохранить и продолжить',
+      hifz_progress_close: 'Этап закрыт, дальше →',
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Закончить',
       btn_rating: '🏆 Рейтинг',
@@ -2395,6 +2456,7 @@
   // по умолчанию всегда 'line' (кто не вникает — тапает строку, как
   // раньше).
   var hifz = { on: false, line: null, stage: 1, picking: false, unit: 'line' };
+  var HIFZ_PROGRESS_TARGET = 80;
 
   // Правило переходного слова (решение пользователя 01.09.2026): строка
   // читается не до своего конца, а ДО НАЧАЛА СЛЕДУЮЩЕЙ. Сколько слов
@@ -2592,10 +2654,13 @@
       var rr = hifzHalfRange(hifzHalf(hifz.line));
       where.textContent = T('page_n', { N: currentPage }) + ' · ' +
         T('hifz_lines_range', { A: rr[0] + 1, B: rr[1] + 1 });
-      sub.textContent = T('hifz_stage2');
+      // Прогресс 40+40 (03.09.2026) - в ту же строку, что и раньше стоял
+      // статичный "этап 2 — половина страницы, 40+40": она уже вне потока
+      // мусхафа (chrome-бар), место текста Корана не трогает.
+      sub.textContent = hifzProgressSubText(2, hifzHalf(hifz.line));
     } else {
       where.textContent = T('page_n', { N: currentPage }) + ' · ' + T('hifz_whole');
-      sub.textContent = T('hifz_stage3');
+      sub.textContent = hifzProgressSubText(3, 0);
     }
     document.getElementById('hifz-big-btn').disabled = hifz.picking || hifz.stage !== 1;
     document.getElementById('hifz-big-btn').textContent = T('hifz_big');
@@ -2957,6 +3022,13 @@
     a.pause(); a.removeAttribute('src'); a.style.display = 'none';
     document.getElementById('hifz-rec-timer').classList.remove('rec');
     document.getElementById('hifz-rec-timer').textContent = '0:00';
+    // Захват прогресса (см. hifzProgressOpen) прячет запись на время
+    // выбора чипов - при новом открытии панели или закрытии обе стороны
+    // возвращаем в исходное состояние.
+    document.getElementById('hifz-rec-actions').style.display = '';
+    document.getElementById('hifz-progress').style.display = 'none';
+    document.getElementById('hifz-progress-chips').style.display = 'flex';
+    document.getElementById('hifz-progress-own-row').style.display = 'none';
   }
 
   function hifzRecClose() {
@@ -3061,15 +3133,20 @@
     }).then(function (res) {
       if (res.ok && res.data.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
-        // Сдал — значит единица закрыта, указатель сам идёт дальше (строка,
-        // половина, страница). Это и есть движение вперёд в методе; стрелок
-        // для этого больше нет. Когда появится приём устазом (пересдача),
-        // переход встанет за подтверждением, а не за отправкой.
-        hifzNext();
-        // Сдавали с «Крупно» — он остался открытым, перерисуем под новую
-        // единицу, иначе на экране висела бы уже сданная строка.
-        if (document.getElementById('hifz-big').classList.contains('visible')) hifzBigRender();
-        setTimeout(hifzRecClose, 1200);
+        if (hifz.stage === 1) {
+          // Строка закрывается ОДНОЙ сдачей - указатель сам идёт дальше,
+          // как и раньше. Стрелок для этого нет - методика без возврата.
+          hifzNext();
+          if (document.getElementById('hifz-big').classList.contains('visible')) hifzBigRender();
+          setTimeout(hifzRecClose, 1200);
+          return;
+        }
+        // Этапы 2/3 (половина/страница, 40+40) студенты обычно сдают по
+        // частям за 2-3 дня (поймано пользователем 03.09.2026) - одна
+        // запись больше НЕ закрывает единицу сама по себе. Вместо
+        // немедленного hifzNext() спрашиваем, сколько повторов добавилось
+        // сегодня; указатель сдвинется только когда счётчик дойдёт до 80.
+        hifzProgressOpen();
         return;
       }
       document.getElementById('hifz-rec-hint').textContent =
@@ -3103,6 +3180,124 @@
     else if (id === 'hifz-rec-send') hifzRecSend();
   });
   document.getElementById('hifz-rec-close').addEventListener('click', hifzRecClose);
+
+  /* ─── Захват прогресса 40+40 (03.09.2026) ──────────────────────────────
+     Единица — (страница, этап, половина); половина имеет смысл только на
+     этапе 2 (hifzHalf(line)), на этапе 3 всегда 0. Кэш по ключу - чтобы
+     не дёргать сервер повторно, пока студент не ушёл на другую единицу. */
+  var hifzProgressCache = {};
+  function hifzProgressHalf() { return hifz.stage === 2 ? hifzHalf(hifz.line) : 0; }
+  function hifzProgressKey(page, stage, half) { return page + ':' + stage + ':' + half; }
+
+  // Число одно (0-80), фаза выводится из него - методика строго
+  // последовательна (40 глядя, потом 40 не глядя), не два счётчика.
+  function hifzProgressPhaseText(count) {
+    if (count <= 0) return null;
+    if (count >= HIFZ_PROGRESS_TARGET) return T('hifz_progress_done');
+    if (count > 40) return T('hifz_progress_both', { N: count - 40 });
+    return T('hifz_progress_looking_only', { N: count });
+  }
+
+  function hifzProgressEnsureLoaded(page, stage, half) {
+    var key = hifzProgressKey(page, stage, half);
+    if (hifzProgressCache[key]) return;
+    hifzProgressCache[key] = { count: 0, target: HIFZ_PROGRESS_TARGET };
+    apiCall('/hifz/progress?page=' + page + '&stage=' + stage + '&half=' + half).then(function (res) {
+      if (res.status === 401 || !res.data) return;
+      hifzProgressCache[key] = { count: res.data.count || 0, target: res.data.target || HIFZ_PROGRESS_TARGET };
+      // Число могло уже стоять на шапке, пока грузилось - перерисовать,
+      // только если студент всё ещё на этой же единице.
+      if (hifz.on && !hifz.picking && hifzProgressKey(currentPage, hifz.stage, hifzProgressHalf()) === key) {
+        hifzHead();
+      }
+    }).catch(function () {});
+  }
+
+  // Текст для #hifz-sub на этапах 2/3 - пока по единице ничего не
+  // сдавалось (count === 0), показываем прежнюю общую подпись этапа.
+  function hifzProgressSubText(stage, half) {
+    hifzProgressEnsureLoaded(currentPage, stage, half);
+    var p = hifzProgressCache[hifzProgressKey(currentPage, stage, half)];
+    return (p && hifzProgressPhaseText(p.count)) || T('hifz_stage' + stage);
+  }
+
+  function hifzProgressRenderPanel(count) {
+    document.getElementById('hifz-progress-count').textContent = count;
+    document.getElementById('hifz-progress-target').textContent = HIFZ_PROGRESS_TARGET;
+    var btn = document.getElementById('hifz-progress-save');
+    var closed = count >= HIFZ_PROGRESS_TARGET;
+    btn.textContent = closed ? T('hifz_progress_close') : T('hifz_progress_save');
+    btn.classList.toggle('closing', closed);
+  }
+
+  // Открывается вместо мгновенного hifzNext() после успешной сдачи на
+  // этапах 2/3 - запись прячем (панель занимает её место), число тянем
+  // из кэша сразу, а следом перепроверяем с сервера (могли сдать с
+  // другого устройства с тех пор).
+  function hifzProgressOpen() {
+    var page = currentPage, stage = hifz.stage, half = hifzProgressHalf();
+    document.getElementById('hifz-rec-actions').style.display = 'none';
+    document.getElementById('hifz-progress').style.display = 'block';
+    var key = hifzProgressKey(page, stage, half);
+    var cached = hifzProgressCache[key];
+    hifzProgressRenderPanel(cached ? cached.count : 0);
+    apiCall('/hifz/progress?page=' + page + '&stage=' + stage + '&half=' + half).then(function (res) {
+      if (res.status === 401 || !res.data) return;
+      hifzProgressCache[key] = { count: res.data.count || 0, target: res.data.target || HIFZ_PROGRESS_TARGET };
+      hifzProgressRenderPanel(hifzProgressCache[key].count);
+    }).catch(function () {});
+  }
+
+  // Дельта, не абсолютное число - каждый тап прибавляет и сохраняется
+  // сразу же на сервере, а не копится локально до отдельного "сохранить":
+  // так тап не потеряется, если студент уйдёт со страницы раньше.
+  function hifzProgressSubmitDelta(delta) {
+    var page = currentPage, stage = hifz.stage, half = hifzProgressHalf();
+    return apiCall('/hifz/progress', {
+      method: 'POST', body: { page: page, stage: stage, half: half, delta: delta }
+    }).then(function (res) {
+      if (!(res.data && typeof res.data.count === 'number')) return;
+      hifzProgressCache[hifzProgressKey(page, stage, half)] =
+        { count: res.data.count, target: res.data.target || HIFZ_PROGRESS_TARGET };
+      hifzProgressRenderPanel(res.data.count);
+    }).catch(function () {});
+  }
+
+  document.getElementById('hifz-progress-chips').addEventListener('click', function (e) {
+    var addBtn = e.target.closest('button[data-add]');
+    if (addBtn) { hifzProgressSubmitDelta(parseInt(addBtn.getAttribute('data-add'), 10)); return; }
+    if (e.target.id === 'hifz-progress-own') {
+      document.getElementById('hifz-progress-chips').style.display = 'none';
+      document.getElementById('hifz-progress-own-row').style.display = 'flex';
+      document.getElementById('hifz-progress-own-input').focus();
+    }
+  });
+  function hifzProgressCommitOwn() {
+    var input = document.getElementById('hifz-progress-own-input');
+    var n = parseInt(input.value, 10);
+    document.getElementById('hifz-progress-chips').style.display = 'flex';
+    document.getElementById('hifz-progress-own-row').style.display = 'none';
+    input.value = '';
+    if (isFinite(n) && n > 0) hifzProgressSubmitDelta(Math.min(n, HIFZ_PROGRESS_TARGET));
+  }
+  document.getElementById('hifz-progress-own-ok').addEventListener('click', hifzProgressCommitOwn);
+  document.getElementById('hifz-progress-own-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') hifzProgressCommitOwn();
+  });
+
+  // Кнопка внизу панели: пока не 80 - просто закрывает (числа уже
+  // сохранены по каждому тапу), после 80 - закрывает И двигает указатель
+  // (частичная сдача его никогда не трогает, только полный счёт).
+  document.getElementById('hifz-progress-save').addEventListener('click', function () {
+    var key = hifzProgressKey(currentPage, hifz.stage, hifzProgressHalf());
+    var p = hifzProgressCache[key];
+    var closed = p && p.count >= HIFZ_PROGRESS_TARGET;
+    hifzRecClose();
+    if (closed) {
+      hifzNext();
+      if (document.getElementById('hifz-big').classList.contains('visible')) hifzBigRender();
+    }
+  });
 
   /* «Сдать» прямо с «Крупно»: именно там студент делает свои 40 повторов,
      и закончив, не должен искать кнопку на другом экране. Крупный экран

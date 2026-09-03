@@ -67,3 +67,38 @@ def test_page_text_line_count_reads_real_page_data():
     """Реальные данные мусхафа: строка названия суры и басмала не должны
     попадать в счёт, иначе половина листа съедет."""
     assert mw.page_text_line_count(5) == 15
+
+
+# ── Счётчик прогресса 40+40 (03.09.2026) ────────────────────────────────
+# Частичные сдачи по этапам 2/3 (половина/страница) растягиваются на
+# 2-3 дня - число одно (0-80), дельта прибавляется, не заменяет.
+
+def test_hifz_progress_starts_at_zero(test_hadiths_db):
+    assert mw.get_hifz_progress("u1", 5, 2, 0) == 0
+
+
+def test_hifz_progress_accumulates_deltas(test_hadiths_db):
+    assert mw.add_hifz_progress("u1", 5, 2, 0, 15) == 15
+    assert mw.add_hifz_progress("u1", 5, 2, 0, 20) == 35
+    assert mw.get_hifz_progress("u1", 5, 2, 0) == 35
+
+
+def test_hifz_progress_clamps_at_target(test_hadiths_db):
+    mw.add_hifz_progress("u1", 5, 3, 0, 70)
+    assert mw.add_hifz_progress("u1", 5, 3, 0, 40) == mw.HIFZ_PROGRESS_TARGET
+
+
+def test_hifz_progress_units_are_independent(test_hadiths_db):
+    """Половина листа, страница целиком и разные половины (0/1) - разные
+    единицы, счётчик одной не должен утекать в другую."""
+    mw.add_hifz_progress("u1", 5, 2, 0, 10)
+    mw.add_hifz_progress("u1", 5, 2, 1, 25)
+    mw.add_hifz_progress("u1", 5, 3, 0, 5)
+    assert mw.get_hifz_progress("u1", 5, 2, 0) == 10
+    assert mw.get_hifz_progress("u1", 5, 2, 1) == 25
+    assert mw.get_hifz_progress("u1", 5, 3, 0) == 5
+
+
+def test_hifz_progress_ignores_negative_delta(test_hadiths_db):
+    mw.add_hifz_progress("u1", 5, 2, 0, 30)
+    assert mw.add_hifz_progress("u1", 5, 2, 0, -100) == 30

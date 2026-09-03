@@ -462,6 +462,64 @@ def next_hifz_position(page, line, stage, page_lines=None):
     return page, line, stage
 
 
+# Счётчик повторов внутри этапа 2/3 (03.09.2026) - "сколько из 80 уже
+# сделано" по ЭТОЙ конкретной единице (половина листа или лист целиком).
+# Отдельная таблица, не колонка в mushaf_hifz_pointer: тот пишется через
+# INSERT OR REPLACE (см. set_hifz_pointer выше) и обнулял бы новое поле
+# при каждом шаге методики. Число одно (0-80), а не два "глядя"/"не
+# глядя" раздельно - методика строго последовательна (подтверждено
+# пользователем 03.09.2026), 0-40 это "глядя", 41-80 "не глядя", фаза
+# вычисляется из числа на фронтенде, здесь просто целое.
+_HIFZ_PROGRESS_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mushaf_hifz_progress(
+        user_id TEXT NOT NULL,
+        page_number INTEGER NOT NULL,
+        stage INTEGER NOT NULL,
+        half INTEGER NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, page_number, stage, half)
+    )
+"""
+HIFZ_PROGRESS_TARGET = 80
+
+
+def get_hifz_progress(user_id, page_number, stage, half):
+    """Сколько повторов уже накоплено по этой единице. 0, если ещё не
+    сдавал ни разу по ней - единица только начата."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_HIFZ_PROGRESS_SCHEMA)
+        row = conn.execute(
+            "SELECT count FROM mushaf_hifz_progress "
+            "WHERE user_id=? AND page_number=? AND stage=? AND half=?",
+            (user_id, page_number, stage, half)
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def add_hifz_progress(user_id, page_number, stage, half, delta):
+    """Прибавляет к уже накопленному ДЕЛЬТУ ("сколько сделал сегодня"),
+    не заменяет число целиком - случайно занизить счёт нельзя. Возвращает
+    новый итог, зажатый в [0, HIFZ_PROGRESS_TARGET]."""
+    delta = max(0, min(int(delta), HIFZ_PROGRESS_TARGET))
+    now = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_HIFZ_PROGRESS_SCHEMA)
+        conn.execute(
+            "INSERT INTO mushaf_hifz_progress "
+            "(user_id, page_number, stage, half, count, updated_at) VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(user_id, page_number, stage, half) DO UPDATE SET "
+            "count = MIN(?, count + excluded.count), updated_at = excluded.updated_at",
+            (user_id, page_number, stage, half, delta, now, HIFZ_PROGRESS_TARGET)
+        )
+        row = conn.execute(
+            "SELECT count FROM mushaf_hifz_progress "
+            "WHERE user_id=? AND page_number=? AND stage=? AND half=?",
+            (user_id, page_number, stage, half)
+        ).fetchone()
+    return row[0]
+
+
 def advance_hifz_pointer(user_id):
     """Сдвигает указатель студента на одну единицу вперёд. Ничего не делает,
     если студент ещё ни разу не заходил в режим заучивания - тогда у него
