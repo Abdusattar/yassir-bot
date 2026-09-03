@@ -34,3 +34,7 @@ mushaf_data/*.json
 # Кэш HTML печатной раскладки KFGQPC V4 из QUL (scripts/fix_mushaf_lines.py) -
 # 97 МБ скачанных превью, нужен только для перезапуска починки разметки.
 qul_cache/
+
+# Аудит раскладки мусхафа (пересоздаётся scripts/audit_mushaf_layout.py)
+sources/layout_audit.json
+sources/qul_layout_cache/

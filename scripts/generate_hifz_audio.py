@@ -292,6 +292,51 @@ def tail_word_segments(page_number, line_idx, timings_cache):
     return out
 
 
+def unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=False):
+    """Токены НЕСКОЛЬКИХ строк подряд, слитые в один список (verse_key,
+    start_ms, end_ms) - соседние токены ОДНОГО аята объединяются в общий
+    непрерывный отрезок ДАЖЕ через границу строки.
+
+    Раньше half/full клеились из уже нарезанных ПОСТРОЧНЫХ кусочков
+    (line_word_segments по каждой строке отдельно) - если аят продолжался
+    на следующей строке, получались два независимых реза одного и того же
+    исходного mp3 в соседних точках и шов между ними. Резка -acodec copy
+    режет по границе mp3-фрейма (~26 мс), не по миллисекундам - два
+    отдельных реза почти никогда не совпадают идеально, шов слышен
+    (поймано пользователем на слух 02.09.2026). Эта функция режет аят
+    ОДНИМ куском независимо от того, сколько строк он занимает - шов
+    остаётся только на границе между РАЗНЫМИ аятами (разные исходные
+    mp3 - это уже не наша резка, а естественная пауза чтеца)."""
+    lines = text_lines(page_number)
+    out = []
+
+    def add_token(t):
+        vk = f"{t['surah']}:{t['ayah']}"
+        timings = timings_cache.setdefault(t["surah"], fetch_chapter_timings(t["surah"]))
+        seg = word_segment_ms(vk, t["position"], timings)
+        if not seg:
+            return
+        start_ms, end_ms = seg
+        if out and out[-1][0] == vk:
+            out[-1] = (vk, out[-1][1], end_ms)
+        else:
+            out.append((vk, start_ms, end_ms))
+
+    for li in line_indices:
+        for t in lines[li].get("tokens") or []:
+            if t.get("type") == "word":
+                add_token(t)
+
+    if tail_from_last:
+        next_line, foreign, count = tail_tokens(page_number, line_indices[-1])
+        if count and next_line:
+            for t in (next_line.get("tokens") or [])[:count]:
+                if t.get("type") == "word":
+                    add_token(t)
+
+    return out
+
+
 # ── Обработка страницы ────────────────────────────────────────────────
 
 def process_page(page_number, out_dir, timings_cache):
@@ -326,48 +371,61 @@ def process_page(page_number, out_dir, timings_cache):
                 parts.append(dest)
         return parts
 
-    # Каждая строка отдельно: content + свой переход.
-    line_content, line_trans = {}, {}
-    for li in range(n):
-        segs = line_word_segments(page_number, li, timings_cache)
-        line_content[li] = cut_segments(segs, f"l{li}c")
-        tsegs = tail_word_segments(page_number, li, timings_cache)
-        line_trans[li] = cut_segments(tsegs, f"l{li}t")
-
     mid = n // 2
 
     def group_slot(idx):
         return f"first_{idx}" if idx < mid else f"second_{idx - mid}"
 
+    # Каждая строка отдельно: content + свой переход. Пропуск ПОФАЙЛОВО
+    # (не только по всей странице) - их логика резки не менялась между
+    # версиями генератора, пересчитывать уже готовые незачем (реальный
+    # случай 02.09.2026: правился только шов половин/страницы целиком,
+    # пользователь спросил "зачем перезаписываешь строки, их нарезка была
+    # нормальной" - справедливо, раньше это тратило CPU впустую).
     for li in range(n):
-        parts = line_content[li] + line_trans[li]
+        out = os.path.join(out_dir, f"page_{page_number:03d}_{group_slot(li)}.mp3")
+        if os.path.exists(out):
+            continue
+        segs = line_word_segments(page_number, li, timings_cache)
+        if not segs:
+            # Пустая строка. На стр. 1-2 в печати часть рядов пуста
+            # (декоративная рамка начала Корана) - файла быть не должно:
+            # иначе останется одно переходное слово со следующей строки,
+            # и студент, нажав "Слушать", услышит слово из ниоткуда
+            # (поймано 02.09.2026 после приведения раскладки к печатной).
+            continue
+        content = cut_segments(segs, f"l{li}c")
+        tsegs = tail_word_segments(page_number, li, timings_cache)
+        trans = cut_segments(tsegs, f"l{li}t")
+        parts = content + trans
         if not parts:
             print(f"  строка {li}: нет сегментов")
             continue
-        out = os.path.join(out_dir, f"page_{page_number:03d}_{group_slot(li)}.mp3")
         ok = concat(parts, out)
         print(f"  строка {li} [{group_slot(li)}]: {'OK' if ok else 'ОШИБКА'}")
 
-    # Половины: контент всех строк группы + переход только последней.
+    # Половины и страница целиком: единый список сегментов через ВСЕ их
+    # строки (unit_word_segments), не склейка уже нарезанных построчных
+    # кусочков - та давала слышимый шов на стыке строк внутри одного аята
+    # (поймано пользователем на слух 02.09.2026, см. докстрочку функции).
     for half, label in ((0, "first_half"), (1, "second_half")):
         r0, r1 = half_range(page_number, half)
         if r0 > r1:
             continue
-        parts = []
-        for li in range(r0, r1):
-            parts.extend(line_content[li])
-        parts.extend(line_content[r1])
-        parts.extend(line_trans[r1])
         out = os.path.join(out_dir, f"page_{page_number:03d}_{label}.mp3")
+        if os.path.exists(out):
+            continue
+        content_segs = unit_word_segments(page_number, list(range(r0, r1 + 1)), timings_cache)
+        if not content_segs:
+            continue  # половина без текста (см. комментарий про пустые строки выше)
+        segs = unit_word_segments(page_number, list(range(r0, r1 + 1)), timings_cache, tail_from_last=True)
+        parts = cut_segments(segs, label)
         ok = concat(parts, out)
         print(f"  {label}: {'OK' if ok else 'ОШИБКА'}")
 
-    # Страница целиком.
-    parts = []
-    for li in range(n - 1):
-        parts.extend(line_content[li])
-    parts.extend(line_content[n - 1])
-    parts.extend(line_trans[n - 1])
+    # Страница целиком - тот же принцип.
+    segs = unit_word_segments(page_number, list(range(n)), timings_cache, tail_from_last=True)
+    parts = cut_segments(segs, "full")
     # full.mp3 - маркер "страница полностью готова" для пропуска при
     # повторном запуске (process_page выше). Обрыв процесса ПОСЛЕ concat,
     # но не полностью атомарный путь мог оставить файл, который resume
