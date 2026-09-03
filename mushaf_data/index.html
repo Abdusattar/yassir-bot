@@ -1860,10 +1860,10 @@
 
   // Узнаём язык с сервера при старте - он главнее локального кэша
   // (студент мог переключиться с другого устройства).
-  // setTimeout(...,0) - та же ловушка порядка объявлений, что у hifz
-  // ниже (var API_BASE присваивается позже по файлу): без отсрочки этот
-  // вызов на живом сервере всегда уходил на "undefined/lang" и 404
-  // (03.09.2026, видно в логе nginx рядом с undefined/hifz).
+  // setTimeout(...,0) оставлен как есть (безвредно), хотя сама причина -
+  // apiBase() теперь функция, порядок строк файла её больше не касается
+  // (03.09.2026, комментарий у apiBase() ниже - там же "undefined/lang"
+  // и "undefined/hifz" из лога nginx, повод для этой правки).
   setTimeout(function () {
     apiCall('/lang').then(function (res) {
       // apiCall отдаёт {status, data} - здесь читали language прямо с
@@ -1878,7 +1878,7 @@
         applyLang();
         if (typeof loadPage === 'function' && currentPage) loadPage(currentPage);
       }
-    }).catch(function () {});
+    }).catch(function (err) { console.error('lang sync', err); });
   }, 0);
 
   applyLang();
@@ -1886,11 +1886,11 @@
   // "Сейчас онлайн" (30.08.2026) - heartbeat каждые 20 сек, пока YassirApp
   // открыт (независимо от того, какой экран сейчас - дашборд/мусхаф/
   // тренажёр), бейдж обновляется только на дашборде. setTimeout(..., 0)
-  // вместо прямого вызова - apiCall/API_BASE объявлены НИЖЕ по файлу
-  // (var, hoisting не помогает с присваиванием), первый вызов должен
-  // случиться уже ПОСЛЕ того, как синхронное исполнение скрипта дойдёт до
-  // той строчки - setInterval-колбэки и так асинхронны, а вот этот, самый
-  // первый, синхронно выполнился бы слишком рано без отложенного старта.
+  // вместо прямого вызова - функция apiCall объявлена НИЖЕ по файлу
+  // (function-декларация хойстится целиком и вызвать её можно откуда
+  // угодно, но здесь важнее сам сдвиг за пределы синхронного старта:
+  // setInterval-колбэки и так асинхронны, а вот этот, самый первый,
+  // синхронно выполнился бы слишком рано без отложенного старта).
   var HEARTBEAT_INTERVAL_MS = 20000;
   var ONLINE_BADGE_MIN = 3; // меньше - не показываем совсем (решение
   // пользователя 30.08.2026 - 1-2 "онлайн" выглядит бедно, не украшает)
@@ -3123,7 +3123,7 @@
       // Строк на листе не всегда 15 — сервер по этому же числу считает,
       // какая половина (та же формула, что hifzHalf выше).
       fd.append('lines', String(hifzTextLines().length));
-      return fetch(API_BASE + '/hifz/submit', {
+      return fetch(apiBase() + '/hifz/submit', {
         method: 'POST',
         headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' },
         body: fd
@@ -3321,14 +3321,12 @@
      странице; на любой другой — честно спрашиваем, где он (и подсказываем
      в подзаголовке, где осталось его место). */
   var hifzPointerPage = null;
-  // setTimeout(...,0), не прямой вызов - ровно та же ловушка, что у
-  // heartbeat выше (var API_BASE присваивается НИЖЕ по файлу, hoisting
-  // не спасает присваивание): этот код идёт раньше той строки, значит
-  // ушёл бы на "undefined/hifz" и 404. Живой случай (03.09.2026) -
-  // "GET /undefined/hifz" в логе 9 раз за утро, указатель НИ РАЗУ не
-  // долетал до сервера, хотя там он был - предыдущий фикс "автопереход
-  // на страницу указателя" (это же утро) не мог сработать, потому что
-  // указатель никогда и не приходил.
+  // setTimeout(...,0) оставлен как есть (безвредно) - причина ("var
+  // API_BASE присваивается ниже по файлу") закрыта отдельно: apiBase()
+  // теперь функция (см. её комментарий ниже), порядок строк файла
+  // больше ни на что не влияет. Живой случай, который это вскрыл
+  // (03.09.2026) - "GET /undefined/hifz" в логе 9 раз за утро, указатель
+  // НИ РАЗУ не долетал до сервера, хотя там он был.
   var hifzPointerLoaded = new Promise(function (resolve) {
     setTimeout(function () {
       apiCall('/hifz').then(function (res) {
@@ -3336,7 +3334,7 @@
         hifz.line = res.data.pointer.line;
         hifz.stage = res.data.pointer.stage;
         hifzPointerPage = res.data.pointer.page;
-      }).catch(function () {}).then(resolve);
+      }).catch(function (err) { console.error('hifz pointer', err); }).then(resolve);
     }, 0);
   });
   // Потолок на случай плохой связи (02.09.2026) - тап по 📖 не должен
@@ -3550,9 +3548,20 @@
   // MUFRADAT_API_PORT) - nginx разводит по префиксу пути /api/muf/<bot>/,
   // поэтому фронтенду нужно знать профиль (?bot=male|female в ссылке,
   // подставляется ботом - core/handlers.py:/mushaf,/yassirapp).
-  var BOT_PROFILE = (new URLSearchParams(window.location.search)).get('bot') || 'male';
-  var API_BASE = '/api/muf/' + BOT_PROFILE;
-
+  // Функция, не var (03.09.2026) - объявления функций хойстятся ЦЕЛИКОМ,
+  // с телом, в отличие от var (только имя, не присваивание). Раньше
+  // apiCall() читал var API_BASE, присвоенный на этой же строке файла -
+  // любой код ВЫШЕ неё (hifzPointerLoaded, синхронизация языка при
+  // старте) на самом деле вызывался раньше присваивания и получал
+  // "undefined" вместо базы: живой случай - "GET /undefined/hifz" и
+  // "GET /undefined/lang" в логе nginx, оба чинены точечно через
+  // setTimeout(fn, 0) (см. комментарии у обоих мест) - те правки не
+  // тронуты, они безвредны, здесь закрывается сам КЛАСС ошибки, чтобы
+  // следующий такой вызов, где бы он в файле ни стоял, просто работал.
+  function apiBase() {
+    var profile = (new URLSearchParams(window.location.search)).get('bot') || 'male';
+    return '/api/muf/' + profile;
+  }
 
   function apiCall(path, opts) {
     opts = opts || {};
@@ -3562,7 +3571,7 @@
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(opts.body);
     }
-    return fetch(API_BASE + path, init).then(function (r) {
+    return fetch(apiBase() + path, init).then(function (r) {
       return r.json().then(function (data) { return { status: r.status, data: data }; });
     });
   }
