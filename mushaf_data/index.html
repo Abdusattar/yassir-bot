@@ -1909,6 +1909,7 @@
       subs_month_misses: 'пропусков %N% из %M%',
       subs_month_misses_no_limit: 'пропусков %N%',
       subs_month_legend: 'Чем светлее день, тем меньше сдано',
+      subs_month_open: 'открыть месяц',
       ustaz_students_empty: 'В этой группе пока нет активных студентов',
       ustaz_misses: 'пропусков %N% из %M%',
       ustaz_misses_no_limit: 'пропусков %N%',
@@ -4351,12 +4352,31 @@
       '<div class="stu-legend">' + miss + ' · ' + T('subs_month_legend') + '</div>';
   }
 
+  // Одной строкой, разворачивается тапом (04.09.2026, жалоба: полный
+  // календарь наверху экрана оттеснял вниз сами сдачи - а они здесь главное).
+  // Тот же приём и тот же класс, что у "ещё N старше" в очереди устаза -
+  // студент уже видел этот жест там, учить второму незачем.
+  function subsMonthSummaryHTML(d) {
+    var miss = d.threshold
+      ? T('subs_month_misses', { N: d.missed, M: d.threshold })
+      : T('subs_month_misses_no_limit', { N: d.missed });
+    return '<div class="ustaz-older" id="subs-month-summary">' +
+      miss + ' — ' + T('subs_month_open') + '</div>';
+  }
+
   function subsLoadMonth() {
     var box = document.getElementById('subs-month');
     if (!box) return;
     apiCall('/month').then(function (res) {
-      if (!res.data || !res.data.days) return;
-      box.innerHTML = subsCalendarHTML(res.data);
+      var d = res.data;
+      // group_title есть только когда у студента вообще есть учебная группа
+      // (см. handle_my_month) - без неё "days" приходит пустым {} и открывать
+      // нечего, а не "пропусков undefined".
+      if (!d || d.group_title == null) return;
+      box.innerHTML = subsMonthSummaryHTML(d);
+      document.getElementById('subs-month-summary').addEventListener('click', function () {
+        box.innerHTML = subsCalendarHTML(d);
+      });
     }).catch(function () {});
   }
 
