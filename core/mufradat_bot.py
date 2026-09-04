@@ -218,7 +218,9 @@ async def _credit_task_if_applicable(user_id, chat_id):
     ботом (тренажёр), поэтому группа иначе не узнала бы - дублируем
     короткое уведомление в group["chat_id"] с текущим весом (решение
     пользователя 17.08.2026)."""
-    group = get_learning_group(user_id)
+    # include_prep - студент подготовительной сдаёт те же задания в свою
+    # группу (04.09.2026, см. get_learning_group).
+    group = get_learning_group(user_id, include_prep=True)
     if not group or "t" not in get_group_tasks(group):
         return
     user = find_user_by_phone(user_id)
@@ -262,7 +264,7 @@ async def credit_revision_task(user_id):
     (тихо, без сообщения в группу - тот же принцип, что у
     _credit_task_if_applicable выше, не спамим группу на повторный тап) или
     если "r" не входит в задания группы студента / студент не найден."""
-    group = get_learning_group(user_id)
+    group = get_learning_group(user_id, include_prep=True)
     if not group or "r" not in get_group_tasks(group):
         return False
     user = find_user_by_phone(user_id)
@@ -354,7 +356,7 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
 
     Возвращает dict со статусом - фронтенду нужно отличать "нет группы"
     от "не смогли сконвертировать"."""
-    group = get_learning_group(user_id)
+    group = get_learning_group(user_id, include_prep=True)
     if not group or not group["chat_id"]:
         return {"ok": False, "error": "no_group"}
     if "m" not in get_group_tasks(group):

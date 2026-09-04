@@ -1005,16 +1005,39 @@ def find_user_by_phone(phone):
         ).fetchone()
 
 
-def get_learning_group(phone):
-    """Возвращает учебную группу (pro/relaxed) в которой студент уже состоит, или None."""
+def get_learning_group(phone, include_prep=False):
+    """Возвращает учебную группу (pro/relaxed) в которой студент уже состоит, или None.
+
+    include_prep=True (04.09.2026) добавляет в выборку подготовительную -
+    её студенты сдают ТЕ ЖЕ задания m/r/t в свою группу, и приложение
+    (запись 40+40, кнопка "повторение", зачёт "Слова") должно уметь
+    засчитывать сдачу и им. Жалоба: в заучивании кнопка "Сдать" отвечала
+    "Ты пока не в учебной группе".
+
+    Флагом, а НЕ снятием исключения для всех вызовов: на этой же функции
+    висит проверка регистрации (core/handlers.py - "не студент ли уже в
+    другой учебной группе"). Считай она prep учебной группой, выпускник
+    подготовительной при входе в постоянную группу получал бы отказ "ты
+    уже студент группы «Yassir подготовительная»" - то есть ломался бы
+    сам переход, ради которого подготовительная и существует. По той же
+    причине флаг не трогает рейтинг (участие в групповом рейтинге -
+    отдельное решение, не следствие права сдавать).
+
+    Постоянная группа идёт ПЕРВОЙ: в момент перехода студент короткое
+    время активен и там, и в prep (из prep он деактивируется по факту
+    прихода, см. core/prep.py), и сдача должна уйти в новую группу."""
+    allowed = ("pro", "relaxed", "prep") if include_prep else ("pro", "relaxed")
+    placeholders = ",".join("?" * len(allowed))
     with db() as c:
-        return c.execute("""
+        return c.execute(f"""
             SELECT g.* FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
             JOIN groups g ON ug.group_id=g.id
             WHERE u.phone=? AND ug.role='student' AND ug.active=1
-              AND (g.group_type='pro' OR g.group_type='relaxed' OR g.group_type IS NULL)
-        """, (phone,)).fetchone()
+              AND (g.group_type IN ({placeholders}) OR g.group_type IS NULL)
+            ORDER BY CASE WHEN g.group_type='prep' THEN 1 ELSE 0 END
+            LIMIT 1
+        """, (phone, *allowed)).fetchone()
 
 
 def is_active_prep_student(phone):
