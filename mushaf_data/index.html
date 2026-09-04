@@ -1280,6 +1280,53 @@
     direction: ltr;
   }
   .ustaz-empty { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; }
+  /* Зоны кабинета: "Ждут" - что делать сейчас, "Студенты" - кто как идёт
+     (04.09.2026, макет 01.09). Отдельная полоса над вкладками групп, чтобы
+     не путать два разных переключателя. */
+  .ustaz-zones {
+    display: flex; gap: 6px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 10px; padding: 3px;
+  }
+  .ustaz-zones button {
+    flex: 1 1 0; padding: 8px 6px; border: none; border-radius: 8px;
+    background: none; font: inherit; font-size: 13px; color: var(--muted);
+    cursor: pointer;
+  }
+  .ustaz-zones button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  /* Месяц полосками: один столбик - один день, высота одна, цвет по числу
+     сданных заданий. Не график, а «видно с одного взгляда, где провалы». */
+  .stu-row {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 11px 13px;
+    display: flex; flex-direction: column; gap: 7px; cursor: pointer;
+  }
+  .stu-row .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .stu-row .name { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+  .stu-row .miss { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .stu-row .miss.near { color: var(--no); font-weight: 700; }
+  .stu-strip { display: flex; gap: 2px; align-items: flex-end; }
+  .stu-strip i {
+    flex: 1 1 0; height: 16px; border-radius: 2px;
+    background: var(--no-soft);
+  }
+  .stu-strip i.d1 { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .stu-strip i.d2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+  .stu-strip i.d3 { background: var(--accent); }
+  .stu-strip i.future { background: var(--card-border); opacity: .5; }
+  .stu-legend { font-size: 11.5px; color: var(--muted); text-align: center; }
+  /* Календарь одного студента - тот же, что потом увидит он сам. */
+  .stu-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .stu-cal .c {
+    aspect-ratio: 1; border-radius: 6px; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--no-soft); color: var(--ink);
+  }
+  .stu-cal .c.d1 { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .stu-cal .c.d2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+  .stu-cal .c.d3 { background: var(--accent); color: #fff; }
+  .stu-cal .c.empty { background: none; }
+  .stu-cal .c.future { background: var(--card-border); opacity: .45; }
   .ustaz-row {
     background: var(--card-bg); border: 1px solid var(--card-border);
     border-radius: 12px; padding: 12px 14px;
@@ -1848,6 +1895,15 @@
       ustaz_empty: 'Пока никто не ждёт проверки 🤲',
       ustaz_loading: 'Загрузка…',
       ustaz_waiting_since: 'ждёт с %N%',
+      ustaz_zone_queue: 'Ждут',
+      ustaz_zone_students: 'Студенты',
+      ustaz_students_empty: 'В этой группе пока нет активных студентов',
+      ustaz_misses: 'пропусков %N% из %M%',
+      ustaz_misses_no_limit: 'пропусков %N%',
+      ustaz_lesson_misses: 'пропущено онлайн-уроков: %N% из 3',
+      ustaz_strip_legend: 'Месяц по дням: чем светлее столбик, тем меньше сдано',
+      ustaz_student_back: '← Студенты',
+      ustaz_day_tasks: '%D% — %T%',
       ustaz_window_empty: 'За последние дни никто не ждёт проверки 🤲',
       ustaz_waits: 'ждёт %N%',
       ustaz_older: 'Ещё %N% старше — показать',
@@ -4581,7 +4637,7 @@
       ustazGroupFilter = ustazDefaultGroup(groups);
     }
     var current = groups.filter(function (g) { return g.id === ustazGroupFilter; })[0] || null;
-    var html = ustazGroupTabs(groups);
+    var html = ustazZones() + ustazGroupTabs(groups);
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
     } else {
@@ -4593,6 +4649,7 @@
         T('ustaz_older', { N: olderCount }) + '</div>';
     }
     body.innerHTML = html;
+    ustazBindZones(body);
 
     Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
       el.addEventListener('click', function () {
@@ -4631,7 +4688,179 @@
     });
   }
 
+  /* ─── Зона "Студенты" (04.09.2026, макет 01.09) ────────────────────────
+     Не рейтинг, а "кому нужна помощь": месяц полосками по дням и пропуски
+     против ПОРОГА ГРУППЫ, названного прямо. Порог берём с сервера, где он
+     совпадает с тем, по которому студента реально переводят в Тадаббур
+     (core/transfers.py) - два разных числа тут были бы обманом.
+
+     Успеваемость видит ЛЮБОЙ устаз по ЛЮБОЙ группе (решение пользователя):
+     проверять он по-прежнему может только у себя, а знать - про всех. */
+  var ustazZone = 'queue';          // 'queue' | 'students'
+  var stuGroups = null;             // все группы, грузим один раз за сессию
+  var stuGroupId = null;
+  var stuData = null;
+
+  function ustazZones() {
+    return '<div class="ustaz-zones">' +
+      '<button data-zone="queue"' + (ustazZone === 'queue' ? ' class="on"' : '') + '>' +
+      T('ustaz_zone_queue') + '</button>' +
+      '<button data-zone="students"' + (ustazZone === 'students' ? ' class="on"' : '') + '>' +
+      T('ustaz_zone_students') + '</button></div>';
+  }
+
+  function ustazBindZones(body) {
+    Array.prototype.forEach.call(body.querySelectorAll('.ustaz-zones button'), function (b) {
+      b.addEventListener('click', function () {
+        ustazZone = b.getAttribute('data-zone');
+        body.scrollTop = 0;
+        if (ustazZone === 'queue') openUstaz(); else openStudents();
+      });
+    });
+  }
+
+  function stuGroupTabs() {
+    if (!stuGroups || stuGroups.length < 2) return '';
+    return '<div class="ustaz-groups">' + stuGroups.map(function (g) {
+      return '<div class="g' + (g.id === stuGroupId ? ' on' : '') +
+        (g.mine ? '' : ' foreign') + '" data-gid="' + g.id + '">' +
+        '<span>' + ustazEsc(g.title) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  // Сколько дней в месяце и какой день сегодня - чтобы будущие дни не
+  // выглядели пропусками (студент их ещё не мог сдать).
+  function stuMonthInfo(month, today) {
+    var y = parseInt(month.slice(0, 4), 10), m = parseInt(month.slice(5, 7), 10);
+    var days = new Date(y, m, 0).getDate();
+    var isCurrent = today.slice(0, 7) === month;
+    return { year: y, month: m, days: days, today: isCurrent ? parseInt(today.slice(8, 10), 10) : days };
+  }
+
+  function stuDayKey(month, day) {
+    return month + '-' + (day < 10 ? '0' : '') + day;
+  }
+
+  function stuStrip(days, month, today) {
+    var info = stuMonthInfo(month, today), out = '';
+    for (var d = 1; d <= info.days; d++) {
+      var n = days[stuDayKey(month, d)] || 0;
+      var cls = d > info.today ? 'future' : (n ? 'd' + Math.min(3, n) : '');
+      out += '<i class="' + cls + '"></i>';
+    }
+    return '<div class="stu-strip">' + out + '</div>';
+  }
+
+  function stuMissLine(st, threshold) {
+    if (!threshold) return T('ustaz_misses_no_limit', { N: st.missed });
+    return T('ustaz_misses', { N: st.missed, M: threshold });
+  }
+
+  function openStudents() {
+    ustazZone = 'students';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('ustaz').style.display = 'flex';
+    var body = document.getElementById('ustaz-body');
+    body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
+    var load = stuGroups
+      ? Promise.resolve({ data: { groups: stuGroups } })
+      : apiCall('/ustaz/groups');
+    load.then(function (res) {
+      stuGroups = (res.data && res.data.groups) || [];
+      if (!stuGroups.length) {
+        body.innerHTML = ustazZones() + '<div class="ustaz-empty">' +
+          T('ustaz_students_empty') + '</div>';
+        ustazBindZones(body);
+        return;
+      }
+      if (!stuGroupId || !stuGroups.some(function (g) { return g.id === stuGroupId; })) {
+        stuGroupId = stuGroups[0].id;   // своя группа первая, см. сортировку на сервере
+      }
+      return apiCall('/ustaz/students?group=' + stuGroupId).then(function (r) {
+        stuData = r.data || {};
+        stuRenderList();
+      });
+    }).catch(function () {
+      body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_empty') + '</div>';
+    });
+  }
+
+  function stuRenderList() {
+    var body = document.getElementById('ustaz-body');
+    var data = stuData || {};
+    var students = data.students || [];
+    var html = ustazZones() + stuGroupTabs();
+    if (!students.length) {
+      html += '<div class="ustaz-empty">' + T('ustaz_students_empty') + '</div>';
+    } else {
+      html += students.map(function (st) {
+        // Красным - когда до порога осталось меньше четверти запаса: это
+        // ещё не перевод, но уже разговор.
+        var near = data.threshold && st.missed >= data.threshold * 0.75;
+        return '<div class="stu-row" data-sid="' + st.id + '">' +
+          '<div class="top"><span class="name">' + ustazEsc(st.name) + '</span>' +
+          '<span class="miss' + (near ? ' near' : '') + '">' +
+          stuMissLine(st, data.threshold) + '</span></div>' +
+          stuStrip(st.days || {}, data.month, data.today) +
+          (st.lesson_missed ? '<div class="stu-legend">' +
+            T('ustaz_lesson_misses', { N: st.lesson_missed }) + '</div>' : '') +
+          '</div>';
+      }).join('') + '<div class="stu-legend">' + T('ustaz_strip_legend') + '</div>';
+    }
+    body.innerHTML = html;
+    ustazBindZones(body);
+    Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
+      el.addEventListener('click', function () {
+        stuGroupId = parseInt(el.getAttribute('data-gid'), 10);
+        body.scrollTop = 0;
+        openStudents();
+      });
+    });
+    Array.prototype.forEach.call(body.querySelectorAll('.stu-row'), function (el) {
+      el.addEventListener('click', function () {
+        stuOpenStudent(parseInt(el.getAttribute('data-sid'), 10));
+      });
+    });
+  }
+
+  // Календарь одного студента - ровно тот же, что потом увидит он сам:
+  // разговор "ты пропускал" перестаёт быть спором, оба смотрят в один экран.
+  function stuOpenStudent(studentId) {
+    var body = document.getElementById('ustaz-body');
+    body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
+    apiCall('/ustaz/student?id=' + studentId + '&group=' + stuGroupId).then(function (res) {
+      var d = res.data || {};
+      var info = stuMonthInfo(d.month, d.today);
+      // Пустые клетки до первого дня месяца - чтобы столбцы попали на свои
+      // дни недели (понедельник первый).
+      var first = new Date(info.year, info.month - 1, 1).getDay();
+      var lead = (first + 6) % 7;
+      var cells = '';
+      for (var i = 0; i < lead; i++) cells += '<div class="c empty"></div>';
+      for (var day = 1; day <= info.days; day++) {
+        var tasks = (d.days || {})[stuDayKey(d.month, day)] || [];
+        var cls = day > info.today ? 'future' : (tasks.length ? 'd' + Math.min(3, tasks.length) : '');
+        cells += '<div class="c ' + cls + '">' + day + '</div>';
+      }
+      var missed = 0;
+      for (var dd = 1; dd <= info.today; dd++) {
+        if (!((d.days || {})[stuDayKey(d.month, dd)] || []).length) missed++;
+      }
+      body.innerHTML = '<div class="ustaz-zones"><button class="on" id="stu-back">' +
+        T('ustaz_student_back') + '</button></div>' +
+        '<div class="ustaz-group-title">' + ustazEsc(d.name) + '</div>' +
+        '<div class="stu-cal">' + cells + '</div>' +
+        '<div class="stu-legend">' +
+        (d.threshold ? T('ustaz_misses', { N: missed, M: d.threshold })
+                     : T('ustaz_misses_no_limit', { N: missed })) + '</div>';
+      document.getElementById('stu-back').addEventListener('click', openStudents);
+    }).catch(function () {
+      openStudents();
+    });
+  }
+
   function openUstaz() {
+    ustazZone = 'queue';
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('ustaz').style.display = 'flex';
     var body = document.getElementById('ustaz-body');

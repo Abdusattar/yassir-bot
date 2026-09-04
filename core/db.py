@@ -1867,6 +1867,97 @@ def get_consecutive_skips(uid):
     return skips
 
 
+# Пороги пропусков живут в core/transfers.py (PRO_INACTIVE_DAYS = 10,
+# RELAXED_INACTIVE_DAYS = 20) - там, где реально происходит перевод в
+# Тадаббур. Импортировать оттуда сюда нельзя: transfers сам тянет db, вышло
+# бы кольцо. Дублируем ЧИСЛА с явной ссылкой - и тестом, который упадёт,
+# если там их поменяют, а здесь забудут (tests/test_students_zone.py).
+MISS_THRESHOLDS = {"pro": 10, "relaxed": 20}
+
+
+def group_miss_threshold(group_type):
+    """Сколько пропусков за месяц уводит в Тадаббур. None - у этого типа
+    групп такого правила нет (prep живёт по своему счёту дней, tadabbur -
+    сам Тадаббур)."""
+    return MISS_THRESHOLDS.get(group_type or "relaxed")
+
+
+def get_group_month_progress(group_id, month=None):
+    """Зона "Студенты" кабинета устаза (04.09.2026, макет 01.09): по каждому
+    активному студенту группы - сколько заданий сдано в КАЖДЫЙ день месяца и
+    сколько дней пропущено.
+
+    Дни считаем по score_events (category='task') - это единственный источник
+    сдач в проекте, из него же считает и перевод в Тадаббур. Пропуски берём у
+    get_skip_count_month_detail, чтобы число на экране совпадало с тем, по
+    которому студента реально переводят: два разных счёта здесь были бы
+    прямым обманом.
+
+    month - 'YYYY-MM', по умолчанию текущий."""
+    tz = pytz.timezone(TZ)
+    today = datetime.now(tz).date()
+    month = month or today.strftime("%Y-%m")
+    month_start = month + "-01"
+    # Конец месяца: первое число следующего - граница выборки (не включая).
+    y, m = int(month[:4]), int(month[5:7])
+    nxt = f"{y + 1}-01-01" if m == 12 else f"{y}-{m + 1:02d}-01"
+
+    students = get_students(group_id)
+    if not students:
+        return []
+    ids = [st["id"] for st in students]
+    placeholders = ",".join("?" * len(ids))
+    with db() as c:
+        rows = c.execute(
+            f"SELECT student_id, date, COUNT(DISTINCT subcategory) AS n"
+            f" FROM score_events"
+            f" WHERE group_id=? AND category='task' AND date>=? AND date<?"
+            f" AND student_id IN ({placeholders})"
+            f" GROUP BY student_id, date",
+            (group_id, month_start, nxt, *ids)
+        ).fetchall()
+    by_student = {}
+    for r in rows:
+        by_student.setdefault(r["student_id"], {})[r["date"]] = r["n"]
+
+    out = []
+    for st in students:
+        detail = get_skip_count_month_detail(st["id"], group_id) or {}
+        out.append({
+            "id": st["id"],
+            "name": st["name"],
+            "days": by_student.get(st["id"], {}),
+            "missed": detail.get("missed", 0),
+            "submitted": detail.get("submitted", 0),
+            "window_start": detail.get("start"),
+            "lesson_missed": get_lesson_skip_count_month(st["id"], group_id),
+        })
+    # Кому нужна помощь - тот выше: сортируем по пропускам, а не по алфавиту.
+    out.sort(key=lambda x: (-x["missed"], x["name"]))
+    return out
+
+
+def get_student_month_days(student_id, group_id, month=None):
+    """Разбивка по дням для одного студента: какие именно задания сданы.
+    Тот же экран потом показывается и самому студенту - одна картина у обоих
+    (условие макета)."""
+    tz = pytz.timezone(TZ)
+    month = month or datetime.now(tz).date().strftime("%Y-%m")
+    y, m = int(month[:4]), int(month[5:7])
+    nxt = f"{y + 1}-01-01" if m == 12 else f"{y}-{m + 1:02d}-01"
+    with db() as c:
+        rows = c.execute(
+            "SELECT date, subcategory FROM score_events"
+            " WHERE student_id=? AND group_id=? AND category='task'"
+            " AND date>=? AND date<? ORDER BY date",
+            (student_id, group_id, month + "-01", nxt)
+        ).fetchall()
+    days = {}
+    for r in rows:
+        days.setdefault(r["date"], []).append(r["subcategory"])
+    return days
+
+
 def get_skip_count_month_detail(uid, group_id=None):
     """Детали окна подсчёта пропусков текущего месяца: начало/конец окна,
     сколько дней сдано, сколько всего дней в окне, сколько пропущено."""
