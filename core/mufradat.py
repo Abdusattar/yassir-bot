@@ -377,11 +377,31 @@ def get_starred_question_pool(user_id, language=DEFAULT_LANGUAGE):
 # слова с РАННИХ страниц, что и просил пользователь. Внутри волны сохраняется
 # обычное взвешивание word_weight, так что слабое слово и там выпадает чаще.
 #
-# Оставшиеся 20% - обычный выбор по всему пулу: без них ошибочное или
+# Оставшаяся доля - обычный выбор по всему пулу: без него ошибочное или
 # забытое слово ждало бы следующей волны, а интервальное повторение - смысл
 # тренажёра, его нельзя выключать ради охвата. С этой долей симуляция даёт
 # полный охват 1000 слов за ~30 дней вместо ~170 и ноль слов "5+ раз".
-COVERAGE_WAVE_SHARE = 0.8
+#
+# ПЕРЕСМОТРЕНО 04.09.2026 (жалоба студента: "закреплён 21 слово и не двигается
+# несколько дней"). Доля волны была 0.8, и это оказалось перекосом в охват:
+# пока в пуле есть сотни ни разу не показанных слов, волна ВСЕГДА состоит из
+# новых, а "закреплено" требует MASTERY_STREAK верных ПОДРЯД по одному слову.
+# Слово, отвеченное верно один раз, уходит из волны (у него уже 1 показ) и
+# может вернуться только через общую долю - шанс порядка 1 к тысяче за вопрос.
+# Итог: охват растёт, закрепление стоит на месте - ровно то, что студент и
+# увидел.
+#
+# Теперь корзины три (пропорции согласованы с пользователем 04.09.2026):
+#   50% - волна новых (охват),
+#   30% - ЗАКРЕПЛЕНИЕ: начатые и недоведённые слова (стрик 1..MASTERY_STREAK-1),
+#   20% - обычный взвешенный выбор по всему пулу (забытое/просроченное).
+# Пустая корзина закрепления (у новичка её просто нет) отдаёт свою долю
+# волне - поведение как до правки, отдельного случая объяснять студенту не
+# нужно. Слова со стриком 0, по которым уже ошиблись, сюда НЕ входят: они
+# автоматически попадают в "Мои слова" (core/mushaf_words.py) и достаются
+# своей квотой каждый STARRED_QUESTION_QUOTA-й вопрос.
+COVERAGE_WAVE_SHARE = 0.5
+CONSOLIDATION_SHARE = 0.3
 
 
 def _times_shown(progress_row):
@@ -396,6 +416,16 @@ def _times_shown(progress_row):
         return 0
     shown = (progress_row.get("correct_count") or 0) + (progress_row.get("wrong_count") or 0)
     return max(1, shown)
+
+
+def _is_consolidating(progress_row):
+    """Слово начато, но не доведено: есть хотя бы один верный ответ подряд и
+    ещё не MASTERY_STREAK (04.09.2026, см. CONSOLIDATION_SHARE). Стрик 0 сюда
+    не входит - это либо совсем непоказанное слово (его берёт волна), либо
+    слово, по которому только что ошиблись (его берёт квота "Моих слов")."""
+    if not progress_row:
+        return False
+    return 0 < progress_row["correct_streak"] < MASTERY_STREAK
 
 
 def word_weight(progress_row):
@@ -516,10 +546,17 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
     # часть вопросов берём из волны наименее показанных слов, остальные -
     # по всему пулу, чтобы повторение забытого не останавливалось.
     pool = candidates
-    if random.random() < COVERAGE_WAVE_SHARE:
-        shown = {id(w): _times_shown(progress_by_id.get(w["progress_key"])) for w in candidates}
-        least = min(shown.values())
-        pool = [w for w in candidates if shown[id(w)] == least]
+    roll = random.random()
+    if roll < COVERAGE_WAVE_SHARE + CONSOLIDATION_SHARE:
+        if roll >= COVERAGE_WAVE_SHARE:
+            # Корзина закрепления: слово уже отвечено верно, но до
+            # "выученного" не доведено. Пустая - падаем в волну ниже.
+            pool = [w for w in candidates
+                    if _is_consolidating(progress_by_id.get(w["progress_key"]))]
+        if roll < COVERAGE_WAVE_SHARE or not pool:
+            shown = {id(w): _times_shown(progress_by_id.get(w["progress_key"])) for w in candidates}
+            least = min(shown.values())
+            pool = [w for w in candidates if shown[id(w)] == least]
     weights = [word_weight(progress_by_id.get(w["progress_key"])) for w in pool]
     return random.choices(pool, weights=weights, k=1)[0]
 

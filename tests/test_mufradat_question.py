@@ -11,7 +11,10 @@
 Функция чистая (в БД не ходит), поэтому фикстуры баз здесь не нужны.
 """
 
-from core.mufradat import MASTERY_STREAK, generate_question
+import core.mufradat as mufradat
+from core.mufradat import (
+    COVERAGE_WAVE_SHARE, MASTERY_STREAK, generate_question, pick_question_word,
+)
 
 
 def _word(i, arabic, translation):
@@ -77,3 +80,53 @@ def test_none_only_when_main_pool_is_exhausted():
     progress.update(_mastered(99))
 
     assert generate_question(words, progress, starred_words=starred) is None
+
+
+# ── Три корзины выбора цели (04.09.2026, см. CONSOLIDATION_SHARE) ──────────
+
+
+def _started(progress_key, streak=1, shown=1):
+    """Слово начато и не доведено - корзина закрепления."""
+    return {progress_key: {
+        "correct_streak": streak,
+        "wrong_count": 0,
+        "correct_count": shown,
+        "last_correct_date": "2026-09-04",
+    }}
+
+
+def _fixed_roll(monkeypatch, value):
+    """random.random() решает, из какой корзины берём цель."""
+    monkeypatch.setattr(mufradat.random, "random", lambda: value)
+
+
+def test_consolidation_bucket_picks_started_word(monkeypatch):
+    """В своей доле вопрос идёт по НЕДОВЕДЁННОМУ слову, а не по новому -
+    иначе "закреплено" стоит на месте (жалоба студента)."""
+    words = _pool()
+    progress = _started(words[0]["progress_key"])
+    _fixed_roll(monkeypatch, COVERAGE_WAVE_SHARE + 0.01)
+
+    for _ in range(20):
+        assert pick_question_word(words, progress)["progress_key"] == words[0]["progress_key"]
+
+
+def test_consolidation_bucket_empty_falls_back_to_wave(monkeypatch):
+    """У новичка недоведённых слов нет - доля закрепления должна уходить
+    волне, а не ронять выбор."""
+    words = _pool()
+    _fixed_roll(monkeypatch, COVERAGE_WAVE_SHARE + 0.01)
+
+    assert pick_question_word(words, {}) is not None
+
+
+def test_wave_share_still_picks_least_shown(monkeypatch):
+    """Волна на месте: в своей доле берётся ни разу не показанное слово."""
+    words = _pool()
+    progress = {}
+    for w in words[:-1]:
+        progress.update(_started(w["progress_key"], streak=1, shown=3))
+    _fixed_roll(monkeypatch, 0.0)
+
+    for _ in range(20):
+        assert pick_question_word(words, progress)["progress_key"] == words[-1]["progress_key"]
