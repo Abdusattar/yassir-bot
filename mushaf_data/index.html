@@ -1926,6 +1926,16 @@
       ustaz_place_page: 'стр. %P% целиком',
       ustaz_today: 'сегодня',
       ustaz_yesterday: 'вчера',
+      // Заголовок дня в очереди и в "Проверено" (04.09.2026): "Пятница
+      // (29.08)" - Date.getUTCDay() индексирует с воскресенья, порядок
+      // здесь тот же (см. ustazDayLabel).
+      wd_sun: 'Воскресенье',
+      wd_mon: 'Понедельник',
+      wd_tue: 'Вторник',
+      wd_wed: 'Среда',
+      wd_thu: 'Четверг',
+      wd_fri: 'Пятница',
+      wd_sat: 'Суббота',
       ustaz_hours: '%N% ч',
       ustaz_days: '%N% дн',
       ustaz_minutes: '%N% мин',
@@ -4638,6 +4648,50 @@
     return full;
   }
 
+  // Только время, без дня - для строки ПОД уже показанным заголовком дня
+  // (ustazDaySections): "сегодня 14:32" на каждой из десятка строк одного
+  // дня - шум, день уже назван один раз заголовком выше.
+  function ustazTimeOnly(sentAt) {
+    return (sentAt && sentAt.length >= 16) ? sentAt.slice(11, 16) : '';
+  }
+
+  var UD_WEEKDAY_KEYS = ['wd_sun', 'wd_mon', 'wd_tue', 'wd_wed', 'wd_thu', 'wd_fri', 'wd_sat'];
+
+  // Заголовок дня для группировки списка (04.09.2026, жалоба: "дни идут
+  // скролом"): "Сегодня (04.09)" / "Вчера (03.09)" / "Пятница (29.08)".
+  // Без времени - это шапка дня, а не метка одной строки. UTC-якорь (как в
+  // subsDateAdd) - иначе часовой пояс устройства сдвинул бы день недели.
+  function ustazDayLabel(dateStr, today) {
+    if (!dateStr) return '';
+    var short = dateStr.slice(8, 10) + '.' + dateStr.slice(5, 7);
+    var cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1); };
+    if (dateStr === today) return cap(T('ustaz_today')) + ' (' + short + ')';
+    var y = new Date(today + 'T00:00:00Z');
+    y.setUTCDate(y.getUTCDate() - 1);
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var yStr = y.getUTCFullYear() + '-' + pad(y.getUTCMonth() + 1) + '-' + pad(y.getUTCDate());
+    if (dateStr === yStr) return cap(T('ustaz_yesterday')) + ' (' + short + ')';
+    var d = new Date(dateStr + 'T00:00:00Z');
+    return T(UD_WEEKDAY_KEYS[d.getUTCDay()]) + ' (' + short + ')';
+  }
+
+  // Список, разбитый на секции по дню - общее для очереди "Ждут" и
+  // "Проверено". items уже отсортированы сервером так, что одна дата идёт
+  // подряд (не вперемешку) - группировка просто склеивает соседние строки
+  // с одинаковым dateOf(it), пересортировки не требуется.
+  function ustazDaySections(items, today, dateOf, renderRow) {
+    var days = [];
+    items.forEach(function (it) {
+      var d = dateOf(it);
+      if (!days.length || days[days.length - 1].date !== d) days.push({ date: d, rows: [] });
+      days[days.length - 1].rows.push(it);
+    });
+    return days.map(function (day) {
+      return '<div class="ustaz-group-title">' + ustazDayLabel(day.date, today) + '</div>' +
+        day.rows.map(renderRow).join('');
+    }).join('');
+  }
+
   // "ждёт 14 ч". Минуты считает СЕРВЕР (waited_min) - см. _minutes_since в
   // core/db.py, там же почему не в браузере.
   function ustazWaited(min) {
@@ -4675,7 +4729,7 @@
     return '<div class="ustaz-row"' + open + '><div class="name">' + ustazEsc(item.student_name) + '</div>' +
       '<div class="meta">' + ustazPlace(item) +
       (withGroup ? ' · ' + ustazEsc(item.group_title) : '') + '</div>' +
-      '<div class="meta">' + ustazWhen(item, today) +
+      '<div class="meta">' + ustazTimeOnly(item.sent_at) +
       (waited ? ' · <b' + (late ? ' class="late"' : '') + '>' + waited + '</b>' : '') +
       '</div></div>';
   }
@@ -4728,7 +4782,8 @@
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
     } else {
-      html += items.map(function (it) { return ustazRow(it, today, false); }).join('');
+      html += ustazDaySections(items, today, function (it) { return it.date; },
+        function (it) { return ustazRow(it, today, false); });
     }
     var olderCount = current ? current.older : data.older;
     if (olderCount) {
@@ -4767,8 +4822,10 @@
       });
       var el = document.getElementById('ustaz-older');
       if (!el) return;
-      el.outerHTML = '<div class="ustaz-group-title">' + T('ustaz_older_title') + '</div>' +
-        items.map(function (it) { return ustazRow(it, data.today || '', true); }).join('');
+      // Заголовки дня сами делят хвост на понятные куски - отдельный
+      // "Старше последних дней" сверху был бы лишней строкой над ними.
+      el.outerHTML = ustazDaySections(items, data.today || '', function (it) { return it.date; },
+        function (it) { return ustazRow(it, data.today || '', true); });
     }).catch(function () {
       var el = document.getElementById('ustaz-older');
       if (el) el.textContent = T('ustaz_older', { N: data.older });
@@ -4872,24 +4929,24 @@
       if (!items.length) {
         html += '<div class="ustaz-empty">' + T('ustaz_done_empty') + '</div>';
       } else {
-        var lastDate = null;
-        items.forEach(function (it) {
-          if (it.date !== lastDate) {
-            lastDate = it.date;
-            html += '<div class="ustaz-group-title">' +
-              ustazWhen({ date: it.date, sent_at: it.reviewed_at }, today) + '</div>';
-          }
-          var pill = it.verdict === 'accepted'
-            ? ['done', T('subs_verdict_ok')]
-            : (it.verdict === 'retake' ? ['retake', T('subs_verdict_retake')]
-              : ['wait', T('subs_done')]);
-          html += '<div class="sub-row"><div class="top">' +
-            '<span class="place">' + ustazEsc(it.student_name) + '</span>' +
-            '<span class="sub-pill ' + pill[0] + '">' + pill[1] + '</span></div>' +
-            '<div class="meta">' + ustazPlace(it) +
-            (it.verdict_by_name ? ' · ' + T('ustaz_by', { N: ustazEsc(it.verdict_by_name) }) : '') +
-            '</div></div>';
-        });
+        // Группируем по дате РАЗБОРА (reviewed_at), не сдачи (date) - список
+        // отсортирован по reviewed_at, и группировка по другому полю рвала
+        // бы соседние строки одного дня в два разных, повторяющихся
+        // заголовка (04.09.2026, поймано на ревью).
+        html += ustazDaySections(items, today,
+          function (it) { return it.reviewed_at ? it.reviewed_at.slice(0, 10) : it.date; },
+          function (it) {
+            var pill = it.verdict === 'accepted'
+              ? ['done', T('subs_verdict_ok')]
+              : (it.verdict === 'retake' ? ['retake', T('subs_verdict_retake')]
+                : ['wait', T('subs_done')]);
+            return '<div class="sub-row"><div class="top">' +
+              '<span class="place">' + ustazEsc(it.student_name) + '</span>' +
+              '<span class="sub-pill ' + pill[0] + '">' + pill[1] + '</span></div>' +
+              '<div class="meta">' + ustazPlace(it) +
+              (it.verdict_by_name ? ' · ' + T('ustaz_by', { N: ustazEsc(it.verdict_by_name) }) : '') +
+              '</div></div>';
+          });
       }
       body.innerHTML = html;
       ustazBindZones(body);
