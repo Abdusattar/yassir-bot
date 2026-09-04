@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Исправленная раскладка, стр. 7 (не боевой файл)</title>
+<style>
+  @font-face { font-family:'Scheherazade New';
+    src:url('../../assets/fonts/ScheherazadeNew-Regular.ttf') format('truetype'); font-display:swap; }
+  @font-palette-values --P7 { font-family:'v4taj'; base-palette:0; }
+
+  :root { --bg-start:#fbf8f0; --bg-end:#f4ecd8; --chrome:#f8f5ec; --border:#ddd6c0;
+          --muted:#8a8370; --ink:#1a1a1a; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:0 0 40px; background:#e9e5d8; color:var(--ink);
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+  #banner { background:#2b2b2b; color:#fff; padding:12px 16px; font-size:12px; line-height:1.6; }
+  #banner b { color:#ffd76a; }
+
+  .phone-frame { width:390px; max-width:100%; margin:14px auto;
+    background:linear-gradient(180deg,var(--bg-start),var(--bg-end));
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;
+    box-shadow:0 4px 18px rgba(0,0,0,.12); }
+  .head { background:var(--chrome); border-bottom:1px solid var(--border);
+          padding:8px 12px; font-size:11px; color:var(--muted); }
+  .head b { color:var(--ink); font-size:12px; }
+  .head .meta { display:block; margin-top:3px; }
+
+  .ayah-text { direction:rtl; line-height:2.05; width:100%; padding:10px 8px 16px;
+               font-family:'v4taj','Scheherazade New',serif; font-palette:--P7; }
+  .mushaf-line { display:flex; flex-wrap:nowrap; justify-content:space-between; align-items:baseline; }
+  .mushaf-line > span { flex:0 0 auto; white-space:nowrap; }
+  .measuring .mushaf-line { justify-content:flex-start; }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <b>Стр. 7: раскладка строк исправлена.</b> Отдельный файл, боевой мусхаф не тронут.
+  Тот же наш шрифт V4 Tajweed (цветной), те же глифы — изменилось ТОЛЬКО то, в какой
+  строке стоит каждое слово: взято из api.quran.com (line_number есть у всех
+  элементов, включая знаки конца аята), вместо нынешнего источника
+  zonetecde/mushaf-layout, где у знаков конца аята своей строки нет.
+</div>
+
+<div class="phone-frame">
+  <div class="head"><b>Как сейчас на проде</b><span class="meta" id="m-now">…</span></div>
+  <div class="ayah-text" id="p-now"></div>
+</div>
+
+<div class="phone-frame">
+  <div class="head"><b>Раскладка из api.quran.com</b><span class="meta" id="m-fix">…</span></div>
+  <div class="ayah-text" id="p-fix"></div>
+</div>
+
+<div class="phone-frame">
+  <div class="head"><b>Эталонная раскладка (quran-stroka) + НАШИ глифы и шрифт</b>
+    <span class="meta" id="m-ref">…</span></div>
+  <div class="ayah-text" id="p-ref"></div>
+</div>
+
+<script>
+function fit(el, label) {
+  var lines = el.querySelectorAll('.mushaf-line');
+  var avail = el.clientWidth - 16;
+  el.classList.add('measuring');
+  el.style.fontSize = '40px';
+  var ws = [];
+  lines.forEach(function (l) { ws.push(l.scrollWidth); });
+  el.classList.remove('measuring');
+  var max = Math.max.apply(null, ws), mn = Math.min.apply(null, ws);
+  var size = 40 * (avail / max) * 0.985;
+  el.style.fontSize = size.toFixed(1) + 'px';
+  var fill = Math.round(ws.reduce(function (s, x) { return s + x; }, 0) / ws.length / max * 100);
+  document.getElementById(label).innerHTML =
+    'размер <b>' + size.toFixed(1) + 'px</b> &nbsp;·&nbsp; разброс длин строк <b>'
+    + Math.round((max / mn - 1) * 100) + '%</b> &nbsp;·&nbsp; заполнено в среднем <b>'
+    + fill + '%</b>';
+  return size;
+}
+
+Promise.all([
+  fetch('/page7.json').then(function (r) { return r.json(); }),
+  fetch('/v4font_test/fixed7.json').then(function (r) { return r.json(); }),
+  fetch('/v4font_test/their7_layout.json').then(function (r) { return r.json(); })
+]).then(function (d) {
+  var page = d[0], fixed = d[1], ref = d[2];
+
+  var h3 = '';
+  ref.forEach(function (line) {
+    h3 += '<div class="mushaf-line">';
+    line.glyphs.forEach(function (g) { h3 += '<span>' + (g.ours || g.their) + '</span>'; });
+    h3 += '</div>';
+  });
+  document.getElementById('p-ref').innerHTML = h3;
+
+  var h = '';
+  page.lines.filter(function (l) { return l.type === 'text'; }).forEach(function (line) {
+    h += '<div class="mushaf-line">';
+    line.tokens.forEach(function (t) { if (t.code_v4) h += '<span>' + t.code_v4 + '</span>'; });
+    h += '</div>';
+  });
+  document.getElementById('p-now').innerHTML = h;
+
+  var h2 = '';
+  fixed.forEach(function (line) {
+    h2 += '<div class="mushaf-line">';
+    line.glyphs.forEach(function (g) { h2 += '<span>' + g + '</span>'; });
+    h2 += '</div>';
+  });
+  document.getElementById('p-fix').innerHTML = h2;
+
+  var f = new FontFace('v4taj', "url('" + page.font_url + "')");
+  return f.load().then(function (l) { document.fonts.add(l); });
+}).then(function () { return document.fonts.ready; }).then(function () {
+  fit(document.getElementById('p-now'), 'm-now');
+  fit(document.getElementById('p-fix'), 'm-fix');
+  fit(document.getElementById('p-ref'), 'm-ref');
+});
+</script>
+</body>
+</html>

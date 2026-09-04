@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>qcf7 + CSS-таджвид, стр. 7 (не боевой файл)</title>
+<style>
+  @font-face {
+    font-family: 'Scheherazade New';
+    src: url('../../assets/fonts/ScheherazadeNew-Regular.ttf') format('truetype');
+    font-display: swap;
+  }
+  @font-palette-values --P7 { font-family: 'v4taj'; base-palette: 0; }
+
+  :root { --bg-start:#fbf8f0; --bg-end:#f4ecd8; --chrome:#f8f5ec; --border:#ddd6c0;
+          --muted:#8a8370; --ink:#1a1a1a; --marker:#b08d2e; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:0 0 40px; background:#e9e5d8; color:var(--ink);
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+  #banner { background:#2b2b2b; color:#fff; padding:12px 16px; font-size:12px; line-height:1.6; }
+  #banner b { color:#ffd76a; }
+  #warn { background:#7a2318; color:#fff; padding:10px 16px; font-size:12px; line-height:1.6; }
+
+  .phone-frame { width:390px; max-width:100%; margin:14px auto;
+    background:linear-gradient(180deg,var(--bg-start),var(--bg-end));
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;
+    box-shadow:0 4px 18px rgba(0,0,0,.12); }
+  .head { background:var(--chrome); border-bottom:1px solid var(--border);
+          padding:8px 12px; font-size:11px; color:var(--muted); }
+  .head b { color:var(--ink); font-size:12px; }
+  .head .meta { display:block; margin-top:3px; }
+
+  .ayah-text { direction:rtl; line-height:2.05; width:100%; padding:10px 8px 16px; }
+  .mushaf-line { display:flex; flex-wrap:nowrap; justify-content:space-between; align-items:baseline; }
+  .mushaf-line > span { flex:0 0 auto; white-space:nowrap; }
+  .measuring .mushaf-line { justify-content:flex-start; }
+  .f-qcf { font-family:'qcf7own','Scheherazade New',serif; }
+  .f-v4  { font-family:'v4taj','Scheherazade New',serif; font-palette:--P7; }
+  .marker { color:var(--marker); font-size:0.45em; vertical-align:0.25em; }
+
+  /* Пословная покраска: слово целиком получает цвет ЕДИНСТВЕННОГО правила
+     таджвида, если оно в слове одно. Слова с несколькими разными правилами
+     покрасить нечем - глиф неделим, поэтому они остаются чёрными. */
+  .t-ham_wasl, .t-slnt, .t-laam_shamsiyah,
+  .t-idgham_mutajanisayn, .t-idgham_mutaqaribayn { color:#AAAAAA; }
+  .t-madda_normal { color:#537FFF; }
+  .t-madda_permissible { color:#4050FF; }
+  .t-madda_necessary { color:#000EBC; }
+  .t-qalaqah { color:#DD0008; }
+  .t-madda_obligatory { color:#2144C1; }
+  .t-ikhafa_shafawi { color:#D500B7; }
+  .t-ikhafa { color:#9400A8; }
+  .t-idgham_shafawi { color:#58B800; }
+  .t-iqlab { color:#26BFFD; }
+  .t-idgham_ghunnah { color:#169777; }
+  .t-idgham_wo_ghunnah { color:#169200; }
+  .t-ghunnah { color:#FF7E1E; }
+  .t-mixed { color:#1a1a1a; }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <b>qcf7 + таджвид через CSS, стр. 7.</b> Отдельный файл, боевой мусхаф не тронут.
+  Внизу для сравнения — как сейчас на проде (V4 Tajweed, цвета зашиты в шрифт).
+</div>
+<div id="warn" id="warnbox">Считаю…</div>
+
+<div class="phone-frame">
+  <div class="head"><b>qcf7 + CSS-таджвид (пословно)</b><span class="meta" id="m-qcf">…</span></div>
+  <div class="ayah-text f-qcf" id="p-qcf"></div>
+</div>
+
+<div class="phone-frame">
+  <div class="head"><b>Для сравнения: V4 Tajweed, как сейчас на проде</b><span class="meta" id="m-v4">…</span></div>
+  <div class="ayah-text f-v4" id="p-v4"></div>
+</div>
+
+<script>
+// Из html-разметки слова достаём набор правил таджвида.
+function rulesOf(html) {
+  var set = {}, re = /<tajweed class=([a-z_]+)>/g, m;
+  while ((m = re.exec(html || ''))) set[m[1]] = true;
+  return Object.keys(set);
+}
+// Доля слова, покрытая правилом - чтобы понять, честно ли красить целиком.
+function coverage(html) {
+  var plain = (html || '').replace(/<[^>]+>/g, '');
+  var inside = 0, re = /<tajweed class=[a-z_]+>(.*?)<\/tajweed>/g, m;
+  while ((m = re.exec(html || ''))) inside += m[1].length;
+  return plain.length ? inside / plain.length : 0;
+}
+
+var stats = { total:0, plain:0, one:0, many:0, partial:0 };
+
+function render(el, lines, mode) {
+  var html = '';
+  lines.forEach(function (line) {
+    html += '<div class="mushaf-line">';
+    line.tokens.forEach(function (t) {
+      if (t.type === 'marker') { html += '<span class="marker">۞</span>'; return; }
+      if (!t.code_v4) return;
+      if (mode === 'v4') { html += '<span>' + t.code_v4 + '</span>'; return; }
+      var r = rulesOf(t.html);
+      var cls = '';
+      if (t.type === 'word') {
+        stats.total++;
+        if (r.length === 0) { stats.plain++; }
+        else if (r.length === 1) {
+          stats.one++;
+          if (coverage(t.html) < 0.6) stats.partial++;
+          cls = ' class="t-' + r[0] + '"';
+        } else { stats.many++; cls = ' class="t-mixed"'; }
+      }
+      html += '<span' + cls + '>' + t.code_v4 + '</span>';
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function fit(el, label) {
+  var lines = el.querySelectorAll('.mushaf-line');
+  var avail = el.clientWidth - 16;
+  el.classList.add('measuring');
+  el.style.fontSize = '40px';
+  var max = 0;
+  lines.forEach(function (l) { if (l.scrollWidth > max) max = l.scrollWidth; });
+  el.classList.remove('measuring');
+  var size = 40 * (avail / max) * 0.985;
+  el.style.fontSize = size.toFixed(1) + 'px';
+  document.getElementById(label).innerHTML = 'размер <b>' + size.toFixed(1) + 'px</b>';
+  return size;
+}
+
+function loadFace(fam, url) {
+  var f = new FontFace(fam, "url('" + url + "')");
+  return f.load().then(function (l) { document.fonts.add(l); }, function(){});
+}
+
+fetch('/page7.json').then(function (r) { return r.json(); }).then(function (d) {
+  var lines = d.lines.filter(function (l) { return l.type === 'text'; });
+  render(document.getElementById('p-qcf'), lines, 'qcf');
+  render(document.getElementById('p-v4'), lines, 'v4');
+  return Promise.all([
+    loadFace('qcf7own', 'https://quran-stroka.vercel.app/data/fonts/p7.woff2'),
+    loadFace('v4taj', d.font_url)
+  ]);
+}).then(function () { return document.fonts.ready; }).then(function () {
+  var sq = fit(document.getElementById('p-qcf'), 'm-qcf');
+  var sv = fit(document.getElementById('p-v4'), 'm-v4');
+  var w = document.getElementById('warn');
+  var lost = stats.many + stats.partial;
+  w.innerHTML =
+    '<b>Что получилось на этой странице.</b> Слов всего ' + stats.total
+    + '. Из них: без правил таджвида — ' + stats.plain
+    + '; ровно одно правило (можно покрасить слово целиком) — ' + stats.one
+    + '; несколько разных правил в одном слове — <b>' + stats.many
+    + '</b> (покрасить нечем, глиф неделим, остались чёрными).<br>'
+    + 'Ещё <b>' + stats.partial + '</b> слов покрашены целиком, хотя правило '
+    + 'реально покрывает меньше 60% букв — цвет говорит неправду о том, где '
+    + 'применяется правило.<br>'
+    + 'Итого искажено или потеряно: <b>' + lost + ' из ' + stats.total + ' слов ('
+    + Math.round(lost / stats.total * 100) + '%)</b>. '
+    + 'Размер шрифта при этом: qcf7 ' + sq.toFixed(1) + 'px против V4 ' + sv.toFixed(1)
+    + 'px — выигрыш всего ' + Math.round((sq / sv - 1) * 100) + '%.';
+});
+</script>
+</body>
+</html>

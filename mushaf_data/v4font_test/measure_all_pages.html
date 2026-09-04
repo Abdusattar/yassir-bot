@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Измеритель плотности всех 604 страниц</title>
+<style>
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; padding: 16px; background:#f6f4ec; }
+  #log { font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre; }
+  #summary { background:#2b2b2b; color:#fff; padding:12px; border-radius:8px; margin-bottom:12px; font-size:13px; line-height:1.6; }
+  #summary b { color:#ffd76a; }
+</style>
+</head>
+<body>
+<div id="summary">Измеряю... (грузит 604 шрифта с CDN, займёт несколько минут)</div>
+<div id="log"></div>
+
+<script>
+// Измеряет "натуральную ширину" самой широкой строки КАЖДОЙ страницы
+// мусхафа при font-size 100px, тем же способом вёрстки, что в реальном
+// приложении (span на слово, nowrap, без flex-shrink - тот артефакт
+// занижал прошлые замеры примерно на 14%).
+// Методика проверена: она в точности воспроизвела реальный размер
+// шрифта на живом quran-stroka (560/1581*100 = 35.4px = их 35.43px).
+
+var results = [];
+var log = document.getElementById('log');
+var summary = document.getElementById('summary');
+
+function measureLine(fontFamily, tokens) {
+  var box = document.createElement('div');
+  box.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;'
+    + 'white-space:nowrap;direction:rtl;font-size:100px;font-family:' + fontFamily + ';';
+  tokens.forEach(function (t) {
+    if (!t.code_v4) return;
+    var s = document.createElement('span');
+    s.style.cssText = 'flex:0 0 auto;white-space:nowrap;';
+    s.textContent = t.code_v4;
+    box.appendChild(s);
+  });
+  document.body.appendChild(box);
+  var w = box.getBoundingClientRect().width;
+  document.body.removeChild(box);
+  return w;
+}
+
+var currentFace = null;
+async function measurePage(p) {
+  var data = await fetch('/page' + p + '.json').then(function (r) { return r.json(); });
+  var fam = 'mv4p' + p;
+  var face = new FontFace(fam, "url('" + data.font_url + "')");
+  await face.load().then(function (f) { document.fonts.add(f); });
+  if (currentFace) { try { document.fonts.delete(currentFace); } catch (e) {} }
+  currentFace = face;
+
+  var maxW = 0, worstLine = null;
+  (data.lines || []).forEach(function (line, i) {
+    if (line.type !== 'text') return;
+    var w = measureLine("'" + fam + "'", line.tokens || []);
+    if (w > maxW) { maxW = w; worstLine = i; }
+  });
+  return { page: p, maxWidthAt100px: Math.round(maxW), worstLine: worstLine };
+}
+
+(async function () {
+  for (var p = 1; p <= 604; p++) {
+    try {
+      var r = await measurePage(p);
+      results.push(r);
+    } catch (e) {
+      results.push({ page: p, err: String(e).slice(0, 60) });
+    }
+    if (p % 25 === 0 || p === 604) {
+      var ok = results.filter(function (r) { return r.maxWidthAt100px; });
+      var mx = ok.reduce(function (a, b) { return b.maxWidthAt100px > a.maxWidthAt100px ? b : a; }, ok[0]);
+      summary.innerHTML = 'Обработано <b>' + p + '/604</b>. '
+        + 'Пока самая плотная: стр. <b>' + mx.page + '</b> (' + mx.maxWidthAt100px + 'px при шрифте 100px)';
+    }
+  }
+
+  var ok = results.filter(function (r) { return r.maxWidthAt100px; });
+  ok.sort(function (a, b) { return b.maxWidthAt100px - a.maxWidthAt100px; });
+  var widest = ok[0];
+  var median = ok[Math.floor(ok.length / 2)].maxWidthAt100px;
+  var narrowest = ok[ok.length - 1];
+
+  // Доступная ширина текста на типичном телефоне: 390px экран минус
+  // горизонтальные padding'и колонки чтения.
+  function sizeFor(avail, natural) { return (avail / natural * 100); }
+  var AVAIL_390_p14 = 390 - 28;   // текущий padding 14px в проде
+  var AVAIL_390_p8  = 390 - 16;   // если ужать padding до 8px
+  var AVAIL_360_p8  = 360 - 16;   // узкий телефон (iPhone SE / mini)
+
+  summary.innerHTML =
+    'Готово, измерено <b>' + ok.length + '</b> страниц.<br>'
+    + 'Самая ПЛОТНАЯ страница всего мусхафа: <b>стр. ' + widest.page + '</b> — '
+    + widest.maxWidthAt100px + 'px (при шрифте 100px)<br>'
+    + 'Медиана по всем страницам: ' + median + 'px &nbsp;|&nbsp; самая рыхлая: стр. '
+    + narrowest.page + ' (' + narrowest.maxWidthAt100px + 'px)<br><br>'
+    + '<b>ЕДИНЫЙ размер на все 604 страницы</b> (влезает даже на самой плотной):<br>'
+    + '&nbsp;&nbsp;экран 390px, padding 14px → <b>' + sizeFor(AVAIL_390_p14, widest.maxWidthAt100px).toFixed(1) + 'px</b><br>'
+    + '&nbsp;&nbsp;экран 390px, padding 8px&nbsp; → <b>' + sizeFor(AVAIL_390_p8, widest.maxWidthAt100px).toFixed(1) + 'px</b><br>'
+    + '&nbsp;&nbsp;экран 360px, padding 8px&nbsp; → <b>' + sizeFor(AVAIL_360_p8, widest.maxWidthAt100px).toFixed(1) + 'px</b><br><br>'
+    + 'Для сравнения, ПО МЕДИАННОЙ странице (390px/p8): '
+    + sizeFor(AVAIL_390_p8, median).toFixed(1) + 'px — вот сколько теряем, фиксируя размер по худшей.';
+
+  var top = ok.slice(0, 15).map(function (r) { return 'стр ' + r.page + ': ' + r.maxWidthAt100px; }).join('\n');
+  var bottom = ok.slice(-10).map(function (r) { return 'стр ' + r.page + ': ' + r.maxWidthAt100px; }).join('\n');
+  log.textContent = '=== 15 самых ПЛОТНЫХ страниц ===\n' + top
+    + '\n\n=== 10 самых рыхлых ===\n' + bottom;
+
+  window.__MEASURE_RESULTS__ = ok;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ПРОТО-МУСХАФ — текст+таджвид (не боевой файл)</title>
+<style>
+  @font-face {
+    font-family: 'Scheherazade New';
+    src: url('../../assets/fonts/ScheherazadeNew-Regular.ttf') format('truetype');
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #ffffff;
+    --ink: #1a1a1a;
+    --mushaf-bg-start: #fbf8f0;
+    --mushaf-bg-end: #f4ecd8;
+    --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 45%, #ffffff);
+    --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
+    --muted: #8a8370;
+    --marker-color: #b08d2e;
+    --accent: #1f7a52;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    background: #e9e5d8;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  #banner {
+    background: #2b2b2b; color: #fff;
+    padding: 10px 16px; font-size: 13px; line-height: 1.5;
+  }
+  #banner b { color: #ffd76a; }
+  #controls {
+    background: var(--chrome-bg);
+    border-bottom: 1px solid var(--chrome-border);
+    padding: 10px 16px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 13px; color: var(--muted);
+  }
+  #controls input[type=range] { width: 160px; }
+  #fontSizeLabel { font-weight: 600; color: var(--ink); min-width: 46px; display: inline-block; }
+
+  .proto-page {
+    max-width: 560px;
+    margin: 18px auto;
+    background: linear-gradient(180deg, var(--mushaf-bg-start), var(--mushaf-bg-end));
+    border: 1px solid var(--chrome-border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .proto-page-head {
+    background: var(--chrome-bg);
+    border-bottom: 1px solid var(--chrome-border);
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+  .proto-page-head b { color: var(--ink); }
+
+  .ayah-text {
+    direction: rtl;
+    line-height: 2.0;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 10px 14px 18px;
+    font-family: 'Scheherazade New', serif;
+    /* font-size задаётся ТОЛЬКО через ползунок ниже, ОДИН И ТОТ ЖЕ на
+       обе страницы разом - никакого per-page clampFontToFit. */
+  }
+  .mushaf-line {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .surah-banner {
+    display: block;
+    text-align: center;
+    font-size: 0.7em;
+    color: var(--marker-color);
+    margin: 0.3em 0 0.5em;
+    padding-bottom: 0.15em;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .bismillah { display: block; text-align: center; margin: 0 0 0.4em; }
+  .marker { color: var(--marker-color); padding: 0 2px; }
+  .ayah-end {
+    font-size: 0.55em;
+    vertical-align: 0.15em;
+    color: var(--marker-color);
+    margin: 0 2px;
+    display: inline-block;
+  }
+
+  /* Цвета таджвида - ТОТ ЖЕ набор, что уже есть в mushaf_data/index.html
+     (официальная легенда alquran.cloud/tajweed-guide, сверено вручную
+     27.08.2026) - скопировано 1:1, ничего не придумано заново. */
+  tajweed[class=ham_wasl],
+  tajweed[class=slnt],
+  tajweed[class=laam_shamsiyah],
+  tajweed[class=idgham_mutajanisayn],
+  tajweed[class=idgham_mutaqaribayn] { color: #AAAAAA; }
+  tajweed[class=madda_normal] { color: #537FFF; }
+  tajweed[class=madda_permissible] { color: #4050FF; }
+  tajweed[class=madda_necessary] { color: #000EBC; }
+  tajweed[class=qalaqah] { color: #DD0008; }
+  tajweed[class=madda_obligatory] { color: #2144C1; }
+  tajweed[class=ikhafa_shafawi] { color: #D500B7; }
+  tajweed[class=ikhafa] { color: #9400A8; }
+  tajweed[class=idgham_shafawi] { color: #58B800; }
+  tajweed[class=iqlab] { color: #26BFFD; }
+  tajweed[class=idgham_ghunnah] { color: #169777; }
+  tajweed[class=idgham_wo_ghunnah] { color: #169200; }
+  tajweed[class=ghunnah] { color: #FF7E1E; }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <b>ПРОТО-МУСХАФ</b> — отдельный тестовый файл, НЕ часть боевого приложения.
+  Ничего в mushaf_data/index.html не менялось.<br>
+  Задача: показать, что при обычном юникод-тексте (не per-page V4-шрифт)
+  ОДИН размер шрифта одинаково хорошо ложится на разные по плотности
+  страницы — без по-страничного сжатия (clampFontToFit).<br>
+  Текст и таджвид-разметка — из наших же page1.json/page2.json
+  (поле <code>html</code>, официальная легенда alquran.cloud/tajweed-guide).
+  Шрифт — Scheherazade New (тот же, что уже используется в проекте как
+  запасной).
+</div>
+
+<div id="controls">
+  Размер шрифта на ОБЕИХ страницах разом:
+  <input type="range" id="fontSize" min="16" max="40" value="30">
+  <span id="fontSizeLabel">30px</span>
+</div>
+
+<div class="proto-page">
+  <div class="proto-page-head">
+    <span>Страница 1 — <b>Аль-Фатиха</b> (7 строк, редкий текст)</span>
+    <span>page1.json</span>
+  </div>
+  <div class="ayah-text" id="page1"></div>
+</div>
+
+<div class="proto-page">
+  <div class="proto-page-head">
+    <span>Страница 2 — <b>Аль-Бакара</b>, начало (8 строк, плотный текст)</span>
+    <span>page2.json</span>
+  </div>
+  <div class="ayah-text" id="page2"></div>
+</div>
+
+<script>
+// Данные — вырезка "lines" 1:1 из наших реальных mushaf_data/page1.json и
+// page2.json (без изменений). Здесь используем ТОЛЬКО t.html (обычный
+// юникод-текст с <tajweed> тегами), НЕ t.code_v4 (PUA-глиф V4-шрифта).
+var PAGE1_LINES = [{"line":1,"type":"header","surah":1,"surah_name_ar":"الفاتحة"},{"line":2,"type":"text","tokens":[{"type":"word","html":"بِسْمِ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed>للَّهِ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed><tajweed class=laam_shamsiyah>ل</tajweed>رَّحْمَ<tajweed class=madda_normal>ـٰ</tajweed>نِ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed><tajweed class=laam_shamsiyah>ل</tajweed>رَّح<tajweed class=madda_permissible>ِي</tajweed>مِ"},{"type":"ayah_end","html":"١"}]},{"line":3,"type":"text","tokens":[{"type":"word","html":"ٱلْحَمْدُ"},{"type":"word","html":"لِلَّهِ"},{"type":"word","html":"رَبِّ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed>لْعَ<tajweed class=madda_normal>ـٰ</tajweed>لَم<tajweed class=madda_permissible>ِي</tajweed>نَ"},{"type":"ayah_end","html":"٢"}]},{"line":4,"type":"text","tokens":[{"type":"word","html":"ٱ<tajweed class=laam_shamsiyah>ل</tajweed>رَّحْمَ<tajweed class=madda_normal>ـٰ</tajweed>نِ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed><tajweed class=laam_shamsiyah>ل</tajweed>رَّح<tajweed class=madda_permissible>ِي</tajweed>مِ"},{"type":"ayah_end","html":"٣"},{"type":"word","html":"مَ<tajweed class=madda_normal>ـٰ</tajweed>لِكِ"},{"type":"word","html":"يَوْمِ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed><tajweed class=laam_shamsiyah>ل</tajweed>دّ<tajweed class=madda_permissible>ِي</tajweed>نِ"},{"type":"ayah_end","html":"٤"}]},{"line":5,"type":"text","tokens":[{"type":"word","html":"إِيَّاكَ"},{"type":"word","html":"نَعْبُدُ"},{"type":"word","html":"وَإِيَّاكَ"},{"type":"word","html":"نَسْتَع<tajweed class=madda_permissible>ِي</tajweed>نُ"},{"type":"ayah_end","html":"٥"},{"type":"word","html":"ٱهْدِنَا"}]},{"line":6,"type":"text","tokens":[{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed><tajweed class=laam_shamsiyah>ل</tajweed>صِّر<tajweed class=madda_normal>َٲ</tajweed>طَ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed>لْمُسْتَق<tajweed class=madda_permissible>ِي</tajweed>مَ"},{"type":"ayah_end","html":"٦"},{"type":"word","html":"صِر<tajweed class=madda_normal>َٲ</tajweed>طَ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed>لَّذِينَ"},{"type":"word","html":"أَنْعَمْتَ"}]},{"line":7,"type":"text","tokens":[{"type":"word","html":"عَلَيْهِمْ"},{"type":"word","html":"غَيْرِ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed>لْمَغْضُوبِ"},{"type":"word","html":"عَلَيْهِمْ"}]},{"line":8,"type":"text","tokens":[{"type":"word","html":"وَلَا"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed><tajweed class=laam_shamsiyah>ل</tajweed>ضّ<tajweed class=madda_necessary>َا</tajweed>ٓلّ<tajweed class=madda_permissible>ِي</tajweed>نَ"},{"type":"ayah_end","html":"٧"}]}];
+
+var PAGE2_LINES = [{"line":1,"type":"header","surah":2,"surah_name_ar":"البقرة"},{"line":2,"type":"bismillah","html":"بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"},{"line":3,"type":"text","tokens":[{"type":"word","html":"ا<tajweed class=madda_necessary>لٓ</tajweed><tajweed class=madda_necessary>مٓ</tajweed>"},{"type":"ayah_end","html":"١"},{"type":"word","html":"ذ<tajweed class=madda_normal>َٲ</tajweed>لِكَ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed>لْكِتَ<tajweed class=madda_normal>ـٰ</tajweed>بُ"},{"type":"word","html":"لَا"},{"type":"word","html":"رَيْبَ‌ۛ"},{"type":"word","html":"فِيهِ‌ۛ"},{"type":"word","html":"هُ<tajweed class=idgham_wo_ghunnah>دًى</tajweed>"}]},{"line":4,"type":"text","tokens":[{"type":"word","html":"<tajweed class=idgham_wo_ghunnah>ل</tajweed>ِّلْمُتَّق<tajweed class=madda_permissible>ِي</tajweed>نَ"},{"type":"ayah_end","html":"٢"},{"type":"word","html":"ٱلَّذِينَ"},{"type":"word","html":"يُؤْمِنُونَ"},{"type":"word","html":"بِ<tajweed class=ham_wasl>ٱ</tajweed>لْغَيْبِ"},{"type":"word","html":"وَيُقِيمُونَ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed><tajweed class=laam_shamsiyah>ل</tajweed>صَّلَ<tajweed class=slnt>و</tajweed><tajweed class=madda_normal>ٲ</tajweed>ةَ"}]},{"line":5,"type":"text","tokens":[{"type":"word","html":"وَمِ<tajweed class=ghunnah>مّ</tajweed>َا"},{"type":"word","html":"رَزَ<tajweed class=qalaqah>قْ</tajweed>نَ<tajweed class=madda_normal>ـٰ</tajweed>هُمْ"},{"type":"word","html":"يُ<tajweed class=ikhafa>نف</tajweed>ِق<tajweed class=madda_permissible>ُو</tajweed>نَ"},{"type":"ayah_end","html":"٣"},{"type":"word","html":"وَ<tajweed class=ham_wasl>ٱ</tajweed>لَّذِينَ"},{"type":"word","html":"يُؤْمِنُونَ"},{"type":"word","html":"بِم<tajweed class=madda_obligatory>َآ</tajweed>"},{"type":"word","html":"أُ<tajweed class=ikhafa>نز</tajweed>ِلَ"}]},{"line":6,"type":"text","tokens":[{"type":"word","html":"إِلَيْكَ"},{"type":"word","html":"وَم<tajweed class=madda_obligatory>َآ</tajweed>"},{"type":"word","html":"أُ<tajweed class=ikhafa>نز</tajweed>ِلَ"},{"type":"word","html":"مِ<tajweed class=ikhafa>ن</tajweed>"},{"type":"word","html":"<tajweed class=ikhafa>ق</tajweed>َ<tajweed class=qalaqah>بْ</tajweed>لِكَ"},{"type":"word","html":"وَبِ<tajweed class=ham_wasl>ٱ</tajweed>لْأَخِرَةِ"},{"type":"word","html":"هُمْ"},{"type":"word","html":"يُوقِن<tajweed class=madda_permissible>ُو</tajweed>نَ"},{"type":"ayah_end","html":"٤"}]},{"line":7,"type":"text","tokens":[{"type":"word","html":"أُ<tajweed class=slnt>وْ</tajweed>لَ<tajweed class=madda_obligatory>ـٰٓ</tajweed>ئِكَ"},{"type":"word","html":"عَلَىٰ"},{"type":"word","html":"هُ<tajweed class=idgham_ghunnah>دًى</tajweed>"},{"type":"word","html":"<tajweed class=idgham_ghunnah>م</tajweed>ّ<tajweed class=idgham_wo_ghunnah>ِن</tajweed>"},{"type":"word","html":"<tajweed class=idgham_wo_ghunnah>ر</tajweed>َّبِّهِمْ‌ۖ"},{"type":"word","html":"وَأُ<tajweed class=slnt>وْ</tajweed>لَ<tajweed class=madda_obligatory>ـٰٓ</tajweed>ئِكَ"}]},{"line":8,"type":"text","tokens":[{"type":"word","html":"هُمُ"},{"type":"word","html":"<tajweed class=ham_wasl>ٱ</tajweed>لْمُفْلِح<tajweed class=madda_permissible>ُو</tajweed>نَ"},{"type":"ayah_end","html":"٥"}]}];
+
+function renderLines(lines) {
+  var html = '';
+  lines.forEach(function (line) {
+    if (line.type === 'header') {
+      html += '<div class="surah-banner">سُورَةُ ' + line.surah_name_ar + '</div>';
+    } else if (line.type === 'bismillah') {
+      html += '<div class="bismillah">' + line.html + '</div>';
+    } else if (line.type === 'text') {
+      html += '<div class="mushaf-line">';
+      line.tokens.forEach(function (t) {
+        if (t.type === 'word') {
+          html += '<span>' + t.html + '</span>';
+        } else if (t.type === 'ayah_end') {
+          html += '<span class="ayah-end">﴾' + t.html + '﴿</span>';
+        }
+      });
+      html += '</div>';
+    }
+  });
+  return html;
+}
+
+document.getElementById('page1').innerHTML = renderLines(PAGE1_LINES);
+document.getElementById('page2').innerHTML = renderLines(PAGE2_LINES);
+
+var slider = document.getElementById('fontSize');
+var label = document.getElementById('fontSizeLabel');
+function applySize() {
+  var v = slider.value + 'px';
+  document.getElementById('page1').style.fontSize = v;
+  document.getElementById('page2').style.fontSize = v;
+  label.textContent = slider.value + 'px';
+}
+slider.addEventListener('input', applySize);
+applySize();
+</script>
+
+</body>
+</html>

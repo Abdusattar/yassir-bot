@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ПРОТО-МУСХАФ стр 6-7, настоящий V4 (не боевой файл)</title>
+<style>
+  @font-palette-values --V4Light6 { font-family: 'mushaf-v4-p6'; base-palette: 0; }
+  @font-palette-values --V4Light7 { font-family: 'mushaf-v4-p7'; base-palette: 0; }
+  .v4-p6 { font-family: 'mushaf-v4-p6', serif; font-palette: --V4Light6; }
+  .v4-p7 { font-family: 'mushaf-v4-p7', serif; font-palette: --V4Light7; }
+
+  :root {
+    --mushaf-bg-start: #fbf8f0;
+    --mushaf-bg-end: #f4ecd8;
+    --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 45%, #ffffff);
+    --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
+    --muted: #8a8370;
+    --marker-color: #b08d2e;
+    --accent: #1f7a52;
+    --ink: #1a1a1a;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; background:#e9e5d8; color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+
+  #banner { background:#2b2b2b; color:#fff; padding:10px 16px; font-size:12px; line-height:1.5; }
+  #banner b { color:#ffd76a; }
+  #controls {
+    background: var(--chrome-bg); border-bottom: 1px solid var(--chrome-border);
+    padding: 10px 16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    font-size: 13px; color: var(--muted);
+  }
+  #fontSizeLabel { font-weight:600; color:var(--ink); min-width:46px; display:inline-block; }
+  #status { padding: 4px 16px 10px; font-size: 11px; color: var(--muted); }
+
+  .phone-frame {
+    width: 390px; max-width: 100%;
+    margin: 14px auto;
+    background: linear-gradient(180deg, var(--mushaf-bg-start), var(--mushaf-bg-end));
+    border: 1px solid var(--chrome-border); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+  }
+  .proto-page-head {
+    background: var(--chrome-bg); border-bottom: 1px solid var(--chrome-border);
+    padding: 7px 14px; font-size: 11px; color: var(--muted);
+    display:flex; justify-content:space-between;
+  }
+  .proto-page-head b { color: var(--ink); }
+
+  .ayah-text {
+    direction: rtl;
+    line-height: 2.0;
+    width: 100%;
+    padding: 10px 14px 16px;
+  }
+  .mushaf-line {
+    display: flex;
+    flex-wrap: nowrap;
+    /* Проверено на живом quran-stroka (сверил scrollWidth/clientWidth
+       всех 15 строк - ratio ровно 1.000 на каждой) - они ТОЖЕ тянут
+       строку до фиксированной ширины через space-between, никакого
+       "естественного" зазора там нет. Повторяем то же самое здесь. */
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .marker { color: var(--marker-color); padding: 0 2px; }
+  .ayah-end {
+    display: inline-block;
+    color: var(--marker-color);
+    font-size: 0.5em;
+    vertical-align: 0.1em;
+    margin: 0 1px;
+  }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <b>ПРОТО-МУСХАФ стр 6-7, НАСТОЯЩИЙ V4-шрифт</b> - отдельный тестовый файл,
+  боевой мусхаф не менялся.<br>
+  Гипотеза после разбора quran-stroka: они ТОЖЕ используют per-page шрифт
+  (видел загрузку p7.woff2), но НЕ растягивают строку на всю ширину
+  (space-between) - просто естественный небольшой отступ между словами,
+  один фиксированный размер. Проверяю то же самое на нашем родном
+  V4-tajweed шрифте (со встроенной таджвид-раскраской, ничего накладывать
+  сверху не нужно) - строго БЕЗ per-page подгонки (clampFontToFit) и БЕЗ
+  space-between.
+</div>
+
+<div id="controls">
+  Размер шрифта на ОБЕИХ страницах разом:
+  <input type="range" id="fontSize" min="16" max="40" value="26">
+  <span id="fontSizeLabel">26px</span>
+</div>
+<div id="status">Гружу настоящие V4-шрифты страниц 6 и 7 (static-cdn.tarteel.ai)...</div>
+
+<div class="phone-frame">
+  <div class="proto-page-head"><span>Страница 6 (15 строк)</span><span>p6.woff2</span></div>
+  <div class="ayah-text v4-p6" id="page6"></div>
+</div>
+
+<div class="phone-frame">
+  <div class="proto-page-head"><span>Страница 7 (15 строк)</span><span>p7.woff2</span></div>
+  <div class="ayah-text v4-p7" id="page7"></div>
+</div>
+
+<script>
+var PAGE6_LINES = [{"type":"text","tokens":[{"type":"word","code_v4":"ﱁ"},{"type":"word","code_v4":"ﱂ"},{"type":"word","code_v4":"ﱃ"},{"type":"word","code_v4":"ﱄ"},{"type":"word","code_v4":"ﱅ"},{"type":"word","code_v4":"ﱆ"},{"type":"word","code_v4":"ﱇ"},{"type":"word","code_v4":"ﱈ"},{"type":"word","code_v4":"ﱉﱊ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱋ"},{"type":"word","code_v4":"ﱌ"},{"type":"word","code_v4":"ﱍ"},{"type":"word","code_v4":"ﱎ"},{"type":"word","code_v4":"ﱏ"},{"type":"word","code_v4":"ﱐ"},{"type":"word","code_v4":"ﱑ"},{"type":"word","code_v4":"ﱒ"},{"type":"word","code_v4":"ﱓ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱔ"},{"type":"word","code_v4":"ﱕ"},{"type":"word","code_v4":"ﱖ"},{"type":"word","code_v4":"ﱗﱘ"},{"type":"word","code_v4":"ﱙ"},{"type":"word","code_v4":"ﱚ"},{"type":"word","code_v4":"ﱛ"},{"type":"word","code_v4":"ﱜ"},{"type":"word","code_v4":"ﱝ"},{"type":"word","code_v4":"ﱞ"},{"type":"ayah_end","code_v4":"ﱟ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱠ"},{"type":"word","code_v4":"ﱡ"},{"type":"word","code_v4":"ﱢ"},{"type":"word","code_v4":"ﱣ"},{"type":"word","code_v4":"ﱤ"},{"type":"word","code_v4":"ﱥ"},{"type":"word","code_v4":"ﱦ"},{"type":"word","code_v4":"ﱧ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱨ"},{"type":"word","code_v4":"ﱩ"},{"type":"word","code_v4":"ﱪ"},{"type":"word","code_v4":"ﱫ"},{"type":"word","code_v4":"ﱬ"},{"type":"word","code_v4":"ﱭ"},{"type":"word","code_v4":"ﱮ"},{"type":"ayah_end","code_v4":"ﱯ"},{"type":"word","code_v4":"ﱰ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱱ"},{"type":"word","code_v4":"ﱲ"},{"type":"word","code_v4":"ﱳ"},{"type":"word","code_v4":"ﱴ"},{"type":"word","code_v4":"ﱵ"},{"type":"word","code_v4":"ﱶ"},{"type":"word","code_v4":"ﱷﱸ"},{"type":"word","code_v4":"ﱹ"},{"type":"word","code_v4":"ﱺ"},{"type":"word","code_v4":"ﱻ"},{"type":"word","code_v4":"ﱼ"},{"type":"ayah_end","code_v4":"ﱽ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱾ"},{"type":"word","code_v4":"ﱿ"},{"type":"word","code_v4":"ﲀ"},{"type":"word","code_v4":"ﲁﲂ"},{"type":"word","code_v4":"ﲃ"},{"type":"word","code_v4":"ﲄ"},{"type":"word","code_v4":"ﲅ"},{"type":"word","code_v4":"ﲆ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲇ"},{"type":"word","code_v4":"ﲈ"},{"type":"word","code_v4":"ﲉ"},{"type":"word","code_v4":"ﲊ"},{"type":"word","code_v4":"ﲋ"},{"type":"word","code_v4":"ﲌ"},{"type":"word","code_v4":"ﲍ"},{"type":"word","code_v4":"ﲎ"},{"type":"word","code_v4":"ﲏ"},{"type":"word","code_v4":"ﲐ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲑ"},{"type":"word","code_v4":"ﲒ"},{"type":"word","code_v4":"ﲓ"},{"type":"word","code_v4":"ﲔ"},{"type":"ayah_end","code_v4":"ﲕ"},{"type":"word","code_v4":"ﲖ"},{"type":"word","code_v4":"ﲗ"},{"type":"word","code_v4":"ﲘ"},{"type":"word","code_v4":"ﲙ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲚ"},{"type":"word","code_v4":"ﲛ"},{"type":"word","code_v4":"ﲜ"},{"type":"word","code_v4":"ﲝ"},{"type":"word","code_v4":"ﲞ"},{"type":"word","code_v4":"ﲟ"},{"type":"word","code_v4":"ﲠ"},{"type":"word","code_v4":"ﲡ"},{"type":"word","code_v4":"ﲢ"},{"type":"ayah_end","code_v4":"ﲣ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲤ"},{"type":"word","code_v4":"ﲥ"},{"type":"word","code_v4":"ﲦ"},{"type":"word","code_v4":"ﲧ"},{"type":"word","code_v4":"ﲨ"},{"type":"word","code_v4":"ﲩ"},{"type":"word","code_v4":"ﲪ"},{"type":"word","code_v4":"ﲫ"},{"type":"word","code_v4":"ﲬ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲭ"},{"type":"word","code_v4":"ﲮ"},{"type":"word","code_v4":"ﲯ"},{"type":"word","code_v4":"ﲰ"},{"type":"word","code_v4":"ﲱ"},{"type":"word","code_v4":"ﲲ"},{"type":"word","code_v4":"ﲳ"},{"type":"word","code_v4":"ﲴ"},{"type":"word","code_v4":"ﲵ"},{"type":"ayah_end","code_v4":"ﲶ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲷ"},{"type":"word","code_v4":"ﲸ"},{"type":"word","code_v4":"ﲹ"},{"type":"word","code_v4":"ﲺ"},{"type":"word","code_v4":"ﲻ"},{"type":"word","code_v4":"ﲼ"},{"type":"word","code_v4":"ﲽﲾ"},{"type":"word","code_v4":"ﲿ"},{"type":"word","code_v4":"ﳀ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﳁ"},{"type":"word","code_v4":"ﳂ"},{"type":"word","code_v4":"ﳃﳄ"},{"type":"word","code_v4":"ﳅ"},{"type":"word","code_v4":"ﳆ"},{"type":"word","code_v4":"ﳇ"},{"type":"word","code_v4":"ﳈ"},{"type":"word","code_v4":"ﳉ"},{"type":"word","code_v4":"ﳊ"},{"type":"word","code_v4":"ﳋ"},{"type":"ayah_end","code_v4":"ﳌ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﳍ"},{"type":"word","code_v4":"ﳎ"},{"type":"word","code_v4":"ﳏ"},{"type":"word","code_v4":"ﳐ"},{"type":"word","code_v4":"ﳑ"},{"type":"word","code_v4":"ﳒ"},{"type":"word","code_v4":"ﳓﳔ"},{"type":"word","code_v4":"ﳕ"},{"type":"word","code_v4":"ﳖ"},{"type":"word","code_v4":"ﳗ"},{"type":"word","code_v4":"ﳘ"},{"type":"ayah_end","code_v4":"ﳙ"}]}];
+
+var PAGE7_LINES = [{"type":"text","tokens":[{"type":"word","code_v4":"ﱁ"},{"type":"word","code_v4":"ﱂ"},{"type":"word","code_v4":"ﱃ"},{"type":"word","code_v4":"ﱄﱅ"},{"type":"word","code_v4":"ﱆ"},{"type":"word","code_v4":"ﱇ"},{"type":"word","code_v4":"ﱈ"},{"type":"word","code_v4":"ﱉ"},{"type":"word","code_v4":"ﱊ"},{"type":"word","code_v4":"ﱋ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱌ"},{"type":"word","code_v4":"ﱍ"},{"type":"word","code_v4":"ﱎ"},{"type":"word","code_v4":"ﱏ"},{"type":"word","code_v4":"ﱐ"},{"type":"word","code_v4":"ﱑ"},{"type":"word","code_v4":"ﱒ"},{"type":"ayah_end","code_v4":"ﱓ"},{"type":"word","code_v4":"ﱔ"},{"type":"word","code_v4":"ﱕ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱖ"},{"type":"word","code_v4":"ﱗ"},{"type":"word","code_v4":"ﱘ"},{"type":"word","code_v4":"ﱙ"},{"type":"word","code_v4":"ﱚﱛ"},{"type":"word","code_v4":"ﱜ"},{"type":"word","code_v4":"ﱝ"},{"type":"word","code_v4":"ﱞ"},{"type":"ayah_end","code_v4":"ﱟ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱠ"},{"type":"word","code_v4":"ﱡ"},{"type":"word","code_v4":"ﱢ"},{"type":"word","code_v4":"ﱣ"},{"type":"word","code_v4":"ﱤ"},{"type":"word","code_v4":"ﱥ"},{"type":"word","code_v4":"ﱦ"},{"type":"word","code_v4":"ﱧ"},{"type":"word","code_v4":"ﱨ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱩ"},{"type":"word","code_v4":"ﱪ"},{"type":"word","code_v4":"ﱫ"},{"type":"word","code_v4":"ﱬ"},{"type":"ayah_end","code_v4":"ﱭ"},{"type":"word","code_v4":"ﱮ"},{"type":"word","code_v4":"ﱯ"},{"type":"word","code_v4":"ﱰ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱱ"},{"type":"word","code_v4":"ﱲ"},{"type":"word","code_v4":"ﱳ"},{"type":"word","code_v4":"ﱴ"},{"type":"word","code_v4":"ﱵ"},{"type":"word","code_v4":"ﱶ"},{"type":"word","code_v4":"ﱷ"},{"type":"word","code_v4":"ﱸﱹ"},{"type":"word","code_v4":"ﱺ"},{"type":"word","code_v4":"ﱻ"},{"type":"word","code_v4":"ﱼ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﱽ"},{"type":"word","code_v4":"ﱾ"},{"type":"word","code_v4":"ﱿ"},{"type":"word","code_v4":"ﲀ"},{"type":"ayah_end","code_v4":"ﲁ"},{"type":"word","code_v4":"ﲂ"},{"type":"word","code_v4":"ﲃ"},{"type":"word","code_v4":"ﲄ"},{"type":"word","code_v4":"ﲅ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲆ"},{"type":"word","code_v4":"ﲇ"},{"type":"word","code_v4":"ﲈ"},{"type":"word","code_v4":"ﲉ"},{"type":"ayah_end","code_v4":"ﲊ"},{"type":"word","code_v4":"ﲋ"},{"type":"word","code_v4":"ﲌ"},{"type":"word","code_v4":"ﲍ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲎ"},{"type":"word","code_v4":"ﲏ"},{"type":"word","code_v4":"ﲐ"},{"type":"word","code_v4":"ﲑ"},{"type":"ayah_end","code_v4":"ﲒ"},{"type":"marker","code_v4":""},{"type":"word","code_v4":"ﲓﲔ"},{"type":"word","code_v4":"ﲕ"},{"type":"word","code_v4":"ﲖ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲗ"},{"type":"word","code_v4":"ﲘ"},{"type":"word","code_v4":"ﲙ"},{"type":"word","code_v4":"ﲚ"},{"type":"word","code_v4":"ﲛﲜ"},{"type":"word","code_v4":"ﲝ"},{"type":"word","code_v4":"ﲞ"},{"type":"ayah_end","code_v4":"ﲟ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲠ"},{"type":"word","code_v4":"ﲡ"},{"type":"word","code_v4":"ﲢﲣ"},{"type":"word","code_v4":"ﲤ"},{"type":"word","code_v4":"ﲥ"},{"type":"word","code_v4":"ﲦ"},{"type":"word","code_v4":"ﲧ"},{"type":"word","code_v4":"ﲨ"},{"type":"ayah_end","code_v4":"ﲩ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲪ"},{"type":"word","code_v4":"ﲫ"},{"type":"word","code_v4":"ﲬ"},{"type":"word","code_v4":"ﲭ"},{"type":"word","code_v4":"ﲮ"},{"type":"word","code_v4":"ﲯ"},{"type":"word","code_v4":"ﲰ"},{"type":"word","code_v4":"ﲱ"},{"type":"ayah_end","code_v4":"ﲲ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲳ"},{"type":"word","code_v4":"ﲴ"},{"type":"word","code_v4":"ﲵ"},{"type":"word","code_v4":"ﲶ"},{"type":"word","code_v4":"ﲷ"},{"type":"word","code_v4":"ﲸ"},{"type":"word","code_v4":"ﲹ"},{"type":"word","code_v4":"ﲺ"},{"type":"word","code_v4":"ﲻ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﲼ"},{"type":"word","code_v4":"ﲽ"},{"type":"ayah_end","code_v4":"ﲾ"},{"type":"word","code_v4":"ﲿ"},{"type":"word","code_v4":"ﳀ"},{"type":"word","code_v4":"ﳁ"},{"type":"word","code_v4":"ﳂ"},{"type":"word","code_v4":"ﳃ"},{"type":"word","code_v4":"ﳄ"},{"type":"word","code_v4":"ﳅ"},{"type":"word","code_v4":"ﳆ"},{"type":"word","code_v4":"ﳇ"}]},{"type":"text","tokens":[{"type":"word","code_v4":"ﳈ"},{"type":"word","code_v4":"ﳉ"},{"type":"word","code_v4":"ﳊ"},{"type":"word","code_v4":"ﳋ"},{"type":"word","code_v4":"ﳌ"},{"type":"word","code_v4":"ﳍ"},{"type":"word","code_v4":"ﳎ"},{"type":"word","code_v4":"ﳏ"},{"type":"word","code_v4":"ﳐ"},{"type":"word","code_v4":"ﳑ"},{"type":"ayah_end","code_v4":"ﳒ"}]}];
+
+function renderLines(lines) {
+  var html = '';
+  lines.forEach(function (line) {
+    html += '<div class="mushaf-line">';
+    line.tokens.forEach(function (t) {
+      if (t.type === 'word') {
+        html += '<span>' + t.code_v4 + '</span>';
+      } else if (t.type === 'ayah_end') {
+        html += '<span class="ayah-end">' + t.code_v4 + '</span>';
+      } else if (t.type === 'marker') {
+        html += '<span class="marker">۞</span>';
+      }
+    });
+    html += '</div>';
+  });
+  return html;
+}
+
+document.getElementById('page6').innerHTML = renderLines(PAGE6_LINES);
+document.getElementById('page7').innerHTML = renderLines(PAGE7_LINES);
+
+var el6 = document.getElementById('page6');
+var el7 = document.getElementById('page7');
+var slider = document.getElementById('fontSize');
+var label = document.getElementById('fontSizeLabel');
+
+// Тот же алгоритм, что и в proto_p6_p7.html: базовый заведомо большой
+// размер, меряем scrollWidth/clientWidth у ВСЕХ 30 строк (обе страницы),
+// берём худшую (максимальный ratio), финальный размер = базовый / ratio.
+// space-between тянет каждую строку до края колонки - так же, как на
+// живом quran-stroka (проверено).
+var BASE_SIZE = 60;
+var MIN_SIZE = 10;
+function computeFit() {
+  el6.style.fontSize = BASE_SIZE + 'px';
+  el7.style.fontSize = BASE_SIZE + 'px';
+  var lines = document.querySelectorAll('.mushaf-line');
+  var maxRatio = 1, worst = null;
+  lines.forEach(function (l, i) {
+    if (l.clientWidth > 0) {
+      var ratio = l.scrollWidth / l.clientWidth;
+      if (ratio > maxRatio) { maxRatio = ratio; worst = i; }
+    }
+  });
+  var finalSize = Math.max(MIN_SIZE, Math.floor(BASE_SIZE / maxRatio));
+  el6.style.fontSize = finalSize + 'px';
+  el7.style.fontSize = finalSize + 'px';
+  slider.value = finalSize;
+  label.textContent = finalSize + 'px';
+  document.getElementById('status').innerHTML =
+    'Шрифт qcf7 загружен. Самая плотная строка: <b>#' + worst + '</b> (ratio ' +
+    maxRatio.toFixed(3) + ') &nbsp;|&nbsp; Расчётный единый размер: <b>' + finalSize + 'px</b>';
+}
+
+function applySize() {
+  var v = slider.value + 'px';
+  el6.style.fontSize = v;
+  el7.style.fontSize = v;
+  label.textContent = slider.value + 'px';
+}
+slider.addEventListener('input', applySize);
+
+function loadFace(family, url) {
+  var face = new FontFace(family, "url('" + url + "')");
+  return face.load().then(function (loaded) { document.fonts.add(loaded); });
+}
+Promise.all([
+  loadFace('mushaf-v4-p6', 'https://quran-stroka.vercel.app/data/fonts/p6.woff2'),
+  loadFace('mushaf-v4-p7', 'https://quran-stroka.vercel.app/data/fonts/p7.woff2')
+]).then(computeFit).catch(function (e) {
+  document.getElementById('status').textContent = 'Ошибка загрузки шрифта: ' + e.message;
+});
+</script>
+
+</body>
+</html>

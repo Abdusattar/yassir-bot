@@ -27,12 +27,14 @@ import logging
 import time
 from urllib.parse import parse_qsl
 
+import aiohttp
 from aiohttp import web
 
 from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, get_all_groups,
+    get_student_submissions, get_submission_audio, find_user_by_phone,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -715,6 +717,71 @@ async def handle_ustaz_waiting(request, user_id):
     })
 
 
+# Кабинет студента "Сдачи" (04.09.2026, экран из макета 01.09). Показываем
+# последние сдачи: место, статус, разбор устаза. Вердикта "принято/на
+# пересдачу" в базе пока НЕТ - есть только reviewed_at ("устаз отреагировал"),
+# поэтому статуса ровно два. Вердикт - отдельный заход, он меняет контракт с
+# устазами (пункт 11 макета: пока не принято, следующий этап закрыт).
+SUBMISSIONS_LIMIT = 20
+
+# Голос из Telegram отдаём СВОИМ эндпоинтом, а не ссылкой на api.telegram.org:
+# та ссылка содержит токен бота в пути (api.telegram.org/file/bot<TOKEN>/...)
+# и утекла бы в браузер студента вместе с любым скриншотом или логом.
+TELEGRAM_FILE_MAX_BYTES = 25 * 1024 * 1024
+
+
+@with_auth
+async def handle_submissions(request, user_id):
+    """GET - мои сдачи. student_id (users.id) находим по Telegram ID: в этом
+    проекте users.phone - это он и есть (см. память проекта)."""
+    user = find_user_by_phone(user_id)
+    if not user:
+        return web.json_response({"items": [], "today": get_date()})
+    return web.json_response({
+        "items": get_student_submissions(user["id"], SUBMISSIONS_LIMIT),
+        "today": get_date(),
+    })
+
+
+@with_auth
+async def handle_submission_audio(request, user_id):
+    """GET ?id=<сдача>&kind=own|review - звук через нас.
+
+    Владение проверяет сам запрос к базе (get_submission_audio принимает
+    student_id) - чужую сдачу не отдаст даже при подобранном id."""
+    kind = request.query.get("kind", "own")
+    if kind not in ("own", "review"):
+        return web.json_response({"error": "bad_kind"}, status=400)
+    try:
+        submission_id = int(request.query.get("id", ""))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    user = find_user_by_phone(user_id)
+    if not user:
+        return web.json_response({"error": "no_user"}, status=403)
+    file_id = get_submission_audio(submission_id, user["id"], kind)
+    if not file_id:
+        return web.json_response({"error": "not_found"}, status=404)
+
+    async with aiohttp.ClientSession() as session:
+        api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+        async with session.get(f"{api}/getFile", params={"file_id": file_id}) as r:
+            meta = await r.json()
+        path = (meta.get("result") or {}).get("file_path")
+        if not meta.get("ok") or not path:
+            return web.json_response({"error": "no_file"}, status=404)
+        url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{path}"
+        async with session.get(url) as r:
+            if r.status != 200:
+                return web.json_response({"error": "no_file"}, status=404)
+            body = await r.content.read(TELEGRAM_FILE_MAX_BYTES + 1)
+    if len(body) > TELEGRAM_FILE_MAX_BYTES:
+        return web.json_response({"error": "too_big"}, status=413)
+    # Голосовые Telegram - ogg/opus; own-запись студента мы сами перекодируем
+    # в тот же формат при сдаче (core/mufradat_bot.py, transcode_to_ogg).
+    return web.Response(body=body, content_type="audio/ogg")
+
+
 def build_app():
     # client_max_size по умолчанию 1 МБ - голосовая сдача 40+40 (несколько
     # минут записи из браузера) в него не влезает, aiohttp обрывал бы её
@@ -740,6 +807,8 @@ def build_app():
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     app.router.add_get("/api/muf/ustaz/waiting", handle_ustaz_waiting)
+    app.router.add_get("/api/muf/submissions", handle_submissions)
+    app.router.add_get("/api/muf/submissions/audio", handle_submission_audio)
     return app
 
 

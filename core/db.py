@@ -285,6 +285,13 @@ def _run_migrations(c):
     # голосового, и она оставалась висеть в кабинете как непроверенная.
     if "photo_message_id" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN photo_message_id INTEGER")
+    # Кто именно ответил на сдачу (04.09.2026). Раньше разбор сохранялся
+    # ТОЛЬКО от Умар устаза и колонка "кто" была не нужна. Теперь разбор
+    # пишется от любого устаза - студенту в кабинете "Сдачи" нужен ответ
+    # СВОЕГО устаза, - а R&D-выборка Умара остаётся отделяемой по этой
+    # колонке (review_by = CURRICULUM_REVIEWER_ID).
+    if "review_by" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN review_by TEXT")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -1364,19 +1371,68 @@ def mark_voice_reviewed(chat_id, message_id):
         )
 
 
-def save_umar_review(chat_id, message_id, review_type, review_file_id=None, review_text=None):
-    """Stage 0 (R&D таджвида, 23.07.2026): сохраняем сырой реплай ИМЕННО
-    Умар устаза (CURRICULUM_REVIEWER_ID) на голосовую сдачу студента - его
-    коррекции доверенный ground truth (25 лет с Кораном, хафиз, образование
-    по Корану в Университете Медины). Реплаи других админов не пишем -
-    только его. Без автотранскрипции - просто копим сырьё."""
+def save_submission_review(chat_id, message_id, review_type, review_file_id=None,
+                           review_text=None, review_by=None):
+    """Разбор устаза на голосовую сдачу: голосовой реплай или текст.
+
+    ДВЕ ЗАДАЧИ у одних и тех же данных:
+      - Stage 0 (R&D таджвида, 23.07.2026) - сырьё именно от Умар устаза, его
+        коррекции доверенный ground truth (25 лет с Кораном, хафиз,
+        образование по Корану в Университете Медины). Раньше ради этого
+        сохранялись ТОЛЬКО его реплаи;
+      - кабинет студента "Сдачи" (04.09.2026) - студенту нужен ответ СВОЕГО
+        устаза, а он в большинстве групп не Умар.
+    Поэтому пишем от любого устаза, а R&D-выборка отделяется по review_by.
+    Без автотранскрипции - просто копим сырьё, как и раньше."""
     with db() as c:
         c.execute(
-            "UPDATE voice_submissions SET review_type=?, review_file_id=?, review_text=?"
+            "UPDATE voice_submissions SET review_type=?, review_file_id=?, review_text=?,"
+            " review_by=?"
             " WHERE chat_id=? AND (message_id=? OR photo_message_id=?)"
             " AND review_type IS NULL",
-            (review_type, review_file_id, review_text, chat_id, message_id, message_id)
+            (review_type, review_file_id, review_text, review_by,
+             chat_id, message_id, message_id)
         )
+
+
+def get_student_submissions(student_id, limit=20):
+    """Свои сдачи для кабинета студента (04.09.2026, экран "Сдачи" из макета
+    01.09). Отдаём только признаки наличия аудио, не сами file_id: сырой
+    file_id из ответа API не нужен, а звук идёт через свой эндпоинт (см.
+    core/mufradat_api.py, handle_submission_audio).
+
+    Имя устаза берём по review_by (users.phone - это Telegram ID, см.
+    память проекта), LEFT JOIN: у старых разборов колонка пуста."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT vs.id, vs.date, vs.sent_at, vs.reviewed_at,"
+            " vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
+            " vs.file_id IS NOT NULL AS has_audio,"
+            " vs.review_type, vs.review_text,"
+            " vs.review_file_id IS NOT NULL AS has_review_audio,"
+            " g.title AS group_title, ru.name AS review_by_name"
+            " FROM voice_submissions vs"
+            " JOIN groups g ON g.id = vs.group_id"
+            " LEFT JOIN users ru ON ru.phone = vs.review_by"
+            " WHERE vs.student_id=?"
+            " ORDER BY vs.date DESC, vs.id DESC LIMIT ?",
+            (student_id, limit)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_submission_audio(submission_id, student_id, kind):
+    """file_id записи (kind='own') или разбора устаза (kind='review') - ТОЛЬКО
+    если сдача принадлежит этому студенту. Проверка владения здесь, а не в
+    эндпоинте: так её нельзя забыть на новом вызывающем месте."""
+    column = "file_id" if kind == "own" else "review_file_id"
+    with db() as c:
+        row = c.execute(
+            f"SELECT {column} AS fid FROM voice_submissions"
+            " WHERE id=? AND student_id=?",
+            (submission_id, student_id)
+        ).fetchone()
+    return row["fid"] if row else None
 
 
 # Окно кабинета устаза (04.09.2026, решение пользователя): показываем

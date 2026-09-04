@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Сравнение шрифтов, стр. 7 (не боевой файл)</title>
+<style>
+  @font-face {
+    font-family: 'Scheherazade New';
+    src: url('../../assets/fonts/ScheherazadeNew-Regular.ttf') format('truetype');
+    font-display: swap;
+  }
+  @font-palette-values --P7 { font-family: 'v4taj'; base-palette: 0; }
+
+  :root {
+    --bg-start:#fbf8f0; --bg-end:#f4ecd8;
+    --chrome:#f8f5ec; --border:#ddd6c0; --muted:#8a8370; --ink:#1a1a1a;
+    --marker:#b08d2e; --accent:#1f7a52;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0 0 40px; background:#e9e5d8; color:var(--ink);
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+  #banner { background:#2b2b2b; color:#fff; padding:12px 16px; font-size:12px; line-height:1.6; }
+  #banner b { color:#ffd76a; }
+
+  .phone-frame {
+    width:390px; max-width:100%; margin:14px auto;
+    background:linear-gradient(180deg,var(--bg-start),var(--bg-end));
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;
+    box-shadow:0 4px 18px rgba(0,0,0,.12);
+  }
+  .head { background:var(--chrome); border-bottom:1px solid var(--border);
+          padding:8px 12px; font-size:11px; color:var(--muted); }
+  .head b { color:var(--ink); font-size:12px; }
+  .head .meta { display:block; margin-top:3px; }
+
+  .ayah-text { direction:rtl; line-height:2.05; width:100%; padding:10px 8px 16px; }
+  .mushaf-line { display:flex; flex-wrap:nowrap; justify-content:space-between; align-items:baseline; }
+  .mushaf-line > span { flex:0 0 auto; white-space:nowrap; }
+  .measuring .mushaf-line { justify-content:flex-start; }
+
+  .f-v4   { font-family:'v4taj','Scheherazade New',serif; font-palette:--P7; }
+  .f-qcf  { font-family:'qcf7own','Scheherazade New',serif; }
+  .f-text { font-family:'Scheherazade New',serif; }
+
+  .marker { color:var(--marker); font-size:0.45em; vertical-align:0.25em; }
+
+  /* Таджвид через CSS - работает ТОЛЬКО на обычном тексте (вариант Б),
+     потому что теги <tajweed> размечают буквы юникод-текста. На V4/qcf7
+     это невозможно: там одно слово = один PUA-глиф, размечать внутри нечего. */
+  tajweed[class=ham_wasl], tajweed[class=slnt], tajweed[class=laam_shamsiyah],
+  tajweed[class=idgham_mutajanisayn], tajweed[class=idgham_mutaqaribayn] { color:#AAAAAA; }
+  tajweed[class=madda_normal] { color:#537FFF; }
+  tajweed[class=madda_permissible] { color:#4050FF; }
+  tajweed[class=madda_necessary] { color:#000EBC; }
+  tajweed[class=qalaqah] { color:#DD0008; }
+  tajweed[class=madda_obligatory] { color:#2144C1; }
+  tajweed[class=ikhafa_shafawi] { color:#D500B7; }
+  tajweed[class=ikhafa] { color:#9400A8; }
+  tajweed[class=idgham_shafawi] { color:#58B800; }
+  tajweed[class=iqlab] { color:#26BFFD; }
+  tajweed[class=idgham_ghunnah] { color:#169777; }
+  tajweed[class=idgham_wo_ghunnah] { color:#169200; }
+  tajweed[class=ghunnah] { color:#FF7E1E; }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <b>Стр. 7, три варианта рядом.</b> Отдельный файл, боевой мусхаф не тронут.
+  Ширина колонки у всех одинаковая (как на телефоне), размер шрифта у каждого
+  подобран своим максимумом. Смотрите на РАЗМЕР букв и на ПРОБЕЛЫ между словами.
+</div>
+
+<div class="phone-frame">
+  <div class="head"><b>А. Как сейчас на проде — V4 Tajweed</b>
+    <span class="meta" id="m-v4">…</span></div>
+  <div class="ayah-text f-v4" id="p-v4"></div>
+</div>
+
+<div class="phone-frame">
+  <div class="head"><b>Б. Обычный текст + таджвид через CSS (Scheherazade)</b>
+    <span class="meta" id="m-text">…</span></div>
+  <div class="ayah-text f-text" id="p-text"></div>
+</div>
+
+<div class="phone-frame">
+  <div class="head"><b>В. Шрифт quran-stroka (qcf7) — таджвида нет</b>
+    <span class="meta" id="m-qcf">…</span></div>
+  <div class="ayah-text f-qcf" id="p-qcf"></div>
+</div>
+
+<script>
+var AVAIL_NOTE = '';
+function render(el, lines, mode) {
+  var html = '';
+  lines.forEach(function (line) {
+    html += '<div class="mushaf-line">';
+    line.tokens.forEach(function (t) {
+      if (t.type === 'marker') { html += '<span class="marker">۞</span>'; return; }
+      if (mode === 'text') { if (t.html) html += '<span>' + t.html + '</span>'; }
+      else { if (t.code_v4) html += '<span>' + t.code_v4 + '</span>'; }
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+function fit(el, label) {
+  var lines = el.querySelectorAll('.mushaf-line');
+  var avail = el.clientWidth - 16;
+  el.classList.add('measuring');
+  el.style.fontSize = '40px';
+  var ws = [], max = 0;
+  lines.forEach(function (l) { ws.push(l.scrollWidth); if (l.scrollWidth > max) max = l.scrollWidth; });
+  el.classList.remove('measuring');
+  var size = 40 * (avail / max) * 0.985;
+  el.style.fontSize = size.toFixed(1) + 'px';
+  var mn = Math.min.apply(null, ws);
+  var avgFill = Math.round(ws.reduce(function (s, x) { return s + x; }, 0) / ws.length / max * 100);
+  document.getElementById(label).innerHTML =
+    'размер <b>' + size.toFixed(1) + 'px</b> &nbsp;·&nbsp; разброс длин строк <b>'
+    + Math.round((max / mn - 1) * 100) + '%</b> &nbsp;·&nbsp; строка заполнена в среднем на <b>'
+    + avgFill + '%</b> (остальное — пробелы)';
+}
+function loadFace(fam, url) {
+  var f = new FontFace(fam, "url('" + url + "')");
+  return f.load().then(function (l) { document.fonts.add(l); }, function(){});
+}
+
+fetch('/page7.json').then(function (r) { return r.json(); }).then(function (d) {
+  var lines = d.lines.filter(function (l) { return l.type === 'text'; });
+  render(document.getElementById('p-v4'), lines, 'v4');
+  render(document.getElementById('p-text'), lines, 'text');
+  render(document.getElementById('p-qcf'), lines, 'v4');
+  return Promise.all([
+    loadFace('v4taj', d.font_url),
+    loadFace('qcf7own', 'https://quran-stroka.vercel.app/data/fonts/p7.woff2')
+  ]);
+}).then(function () {
+  return document.fonts.ready;
+}).then(function () {
+  fit(document.getElementById('p-v4'), 'm-v4');
+  fit(document.getElementById('p-text'), 'm-text');
+  fit(document.getElementById('p-qcf'), 'm-qcf');
+});
+</script>
+</body>
+</html>

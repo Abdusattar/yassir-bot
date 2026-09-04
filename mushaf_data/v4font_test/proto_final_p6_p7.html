@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ПРОТО-МУСХАФ финал, стр 6-7 (не боевой файл)</title>
+<style>
+  @font-palette-values --P6L { font-family: 'mv4-p6'; base-palette: 0; }
+  @font-palette-values --P7L { font-family: 'mv4-p7'; base-palette: 0; }
+  .v4-p6 { font-family: 'mv4-p6', serif; font-palette: --P6L; }
+  .v4-p7 { font-family: 'mv4-p7', serif; font-palette: --P7L; }
+
+  :root {
+    --mushaf-bg-start: #fbf8f0;
+    --mushaf-bg-end: #f4ecd8;
+    --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 45%, #ffffff);
+    --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
+    --muted: #8a8370; --marker-color: #b08d2e;
+    --accent: #1f7a52; --ink: #1a1a1a;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0 0 40px; background:#e9e5d8; color:var(--ink);
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+
+  #banner { background:#2b2b2b; color:#fff; padding:12px 16px; font-size:12px; line-height:1.6; }
+  #banner b { color:#ffd76a; }
+  #modes { background: var(--chrome-bg); border-bottom:1px solid var(--chrome-border);
+           padding: 12px 16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  #modes button {
+    font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--accent); background: transparent; color: var(--accent);
+  }
+  #modes button.on { background: var(--accent); color: #fff; }
+  #verdict { padding: 10px 16px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+  #verdict b { color: var(--ink); }
+
+  .phone-frame {
+    width: 390px; max-width: 100%; margin: 14px auto;
+    background: linear-gradient(180deg, var(--mushaf-bg-start), var(--mushaf-bg-end));
+    border:1px solid var(--chrome-border); border-radius:14px; overflow:hidden;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+  }
+  .head { background:var(--chrome-bg); border-bottom:1px solid var(--chrome-border);
+          padding:7px 12px; font-size:11px; color:var(--muted); display:flex; justify-content:space-between; }
+  .head b { color: var(--ink); }
+
+  .ayah-text {
+    direction: rtl;
+    line-height: 2.05;
+    width: 100%;
+    /* Боковой padding 8px, не 14px как в проде: каждые 6px по бокам -
+       это ~3% ширины, а значит ~3% размера шрифта на телефоне. */
+    padding: 8px 8px 14px;
+  }
+  .mushaf-line {
+    display: flex; flex-wrap: nowrap;
+    justify-content: space-between; align-items: baseline;
+  }
+  /* flex:0 0 auto ОБЯЗАТЕЛЕН: без него слова сжимаются (flex-shrink:1 по
+     умолчанию), измерение переполнения врёт, и подобранный размер шрифта
+     занижается примерно на 14% - именно этот артефакт держал наш шрифт
+     мельче, чем он мог быть. */
+  .mushaf-line > span { flex: 0 0 auto; white-space: nowrap; }
+  .marker { color: var(--marker-color); padding: 0 2px; }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <b>ПРОТО-МУСХАФ, финал — стр. 6 и 7.</b> Отдельный файл, боевой мусхаф не тронут.<br>
+  Родной шрифт QPC V4 (таджвид зашит в глифы, красить отдельно не нужно).
+  Замерены <b>все 603 страницы</b> мусхафа: самая плотная — стр. 123, медиана — 1830,
+  самая рыхлая — стр. 1.
+</div>
+
+<div id="modes">
+  <button id="btn-uniform">Единый размер на все 604 стр.</button>
+  <button id="btn-perpage" class="on">Точная подгонка под страницу (рекомендую)</button>
+</div>
+<div id="verdict">Гружу шрифты…</div>
+
+<div class="phone-frame">
+  <div class="head"><span>Страница 6</span><span id="s6">—</span></div>
+  <div class="ayah-text v4-p6" id="page6"></div>
+</div>
+
+<div class="phone-frame">
+  <div class="head"><span>Страница 7</span><span id="s7">—</span></div>
+  <div class="ayah-text v4-p7" id="page7"></div>
+</div>
+
+<script>
+// Замер по всем 603 страницам (measure_all_pages.html): натуральная ширина
+// самой длинной строки страницы при шрифте 100px.
+var WIDEST_IN_QURAN = 2373;   // стр. 123 - самая плотная страница мусхафа
+var MEDIAN_PAGE     = 1830;
+
+function renderLines(lines) {
+  var html = '';
+  lines.forEach(function (line) {
+    html += '<div class="mushaf-line">';
+    line.tokens.forEach(function (t) {
+      if (t.type === 'marker') { html += '<span class="marker">۞</span>'; return; }
+      if (t.code_v4) html += '<span>' + t.code_v4 + '</span>';
+    });
+    html += '</div>';
+  });
+  return html;
+}
+
+var el6 = document.getElementById('page6'), el7 = document.getElementById('page7');
+var pages = {};
+
+// Натуральная ширина самой длинной строки страницы при 100px - меряем
+// НАПРЯМУЮ (nowrap, без flex-shrink), а не через scrollWidth/clientWidth
+// растянутого flex-контейнера. Первый способ точен: он в точности
+// воспроизвёл реальный размер шрифта живого quran-stroka.
+function naturalWidth(fam, lines) {
+  var box = document.createElement('div');
+  box.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;white-space:nowrap;'
+    + 'direction:rtl;font-size:100px;font-family:' + fam + ';';
+  var max = 0;
+  lines.forEach(function (line) {
+    box.innerHTML = '';
+    line.tokens.forEach(function (t) {
+      if (!t.code_v4) return;
+      var s = document.createElement('span');
+      s.style.cssText = 'white-space:nowrap;';
+      s.textContent = t.code_v4;
+      box.appendChild(s);
+    });
+    document.body.appendChild(box);
+    max = Math.max(max, box.getBoundingClientRect().width);
+    document.body.removeChild(box);
+  });
+  return max;
+}
+
+function avail(el) {
+  var cs = getComputedStyle(el);
+  return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+}
+
+var SAFETY = 0.985; // лёгкий запас, чтобы строка не упиралась впритык в край
+var mode = 'perpage';
+
+function apply() {
+  var a6 = avail(el6), a7 = avail(el7);
+  var s6, s7, note;
+  if (mode === 'uniform') {
+    // Размер, при котором влезает даже самая плотная страница мусхафа (123-я)
+    s6 = s7 = (Math.min(a6, a7) / WIDEST_IN_QURAN * 100) * SAFETY;
+    note = 'Единый размер посчитан по самой плотной странице всего мусхафа (стр. 123). '
+      + 'Он одинаков на всех 604 страницах — но именно поэтому на обычных страницах '
+      + 'текст не дотягивает до края, и <b>justify раздувает пропуски между словами</b>. '
+      + 'На самой рыхлой странице (стр. 1) в пропуски ушло бы почти 45% ширины строки.';
+  } else {
+    s6 = (a6 / pages.p6.nat * 100) * SAFETY;
+    s7 = (a7 / pages.p7.nat * 100) * SAFETY;
+    note = 'Размер подобран под плотность каждой страницы отдельно — текст дотягивает '
+      + 'до края сам, поэтому <b>пропуски между словами минимальные</b>. Именно так '
+      + 'устроен quran-stroka: проверено на живом сайте, у них стр. 4/6/7/100 → 35.4px, '
+      + 'а стр. 300/500 → 44.8px. Единого размера у них нет.';
+  }
+  el6.style.fontSize = s6.toFixed(1) + 'px';
+  el7.style.fontSize = s7.toFixed(1) + 'px';
+  document.getElementById('s6').innerHTML = '<b>' + s6.toFixed(1) + 'px</b>';
+  document.getElementById('s7').innerHTML = '<b>' + s7.toFixed(1) + 'px</b>';
+
+  var fillLabel = function (a, nat, size) {
+    return Math.round(nat * size / 100 / a * 100) + '%';
+  };
+  document.getElementById('verdict').innerHTML = note
+    + '<br><br>Текстом заполнено: стр. 6 — <b>' + fillLabel(a6, pages.p6.nat, s6)
+    + '</b>, стр. 7 — <b>' + fillLabel(a7, pages.p7.nat, s7)
+    + '</b> ширины строки (остальное уходит в пропуски между словами).';
+
+  document.getElementById('btn-uniform').classList.toggle('on', mode === 'uniform');
+  document.getElementById('btn-perpage').classList.toggle('on', mode === 'perpage');
+}
+
+document.getElementById('btn-uniform').onclick = function () { mode = 'uniform'; apply(); };
+document.getElementById('btn-perpage').onclick = function () { mode = 'perpage'; apply(); };
+
+function loadFace(fam, url) {
+  var f = new FontFace(fam, "url('" + url + "')");
+  return f.load().then(function (l) { document.fonts.add(l); });
+}
+
+Promise.all([
+  fetch('/page6.json').then(function (r) { return r.json(); }),
+  fetch('/page7.json').then(function (r) { return r.json(); })
+]).then(function (d) {
+  pages.p6 = { data: d[0] };
+  pages.p7 = { data: d[1] };
+  el6.innerHTML = renderLines(d[0].lines);
+  el7.innerHTML = renderLines(d[1].lines);
+  return Promise.all([
+    loadFace('mv4-p6', d[0].font_url),
+    loadFace('mv4-p7', d[1].font_url)
+  ]);
+}).then(function () {
+  pages.p6.nat = naturalWidth("'mv4-p6'", pages.p6.data.lines.filter(function (l) { return l.type === 'text'; }));
+  pages.p7.nat = naturalWidth("'mv4-p7'", pages.p7.data.lines.filter(function (l) { return l.type === 'text'; }));
+  apply();
+  window.addEventListener('resize', apply);
+}).catch(function (e) {
+  document.getElementById('verdict').textContent = 'Ошибка: ' + e.message;
+});
+</script>
+</body>
+</html>

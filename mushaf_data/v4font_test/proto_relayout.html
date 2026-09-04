@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Пересчёт раскладки строк (не боевой файл)</title>
+<style>
+  @font-face { font-family:'Scheherazade New';
+    src:url('../../assets/fonts/ScheherazadeNew-Regular.ttf') format('truetype'); font-display:swap; }
+
+  :root { --bg-start:#fbf8f0; --bg-end:#f4ecd8; --chrome:#f8f5ec; --border:#ddd6c0;
+          --muted:#8a8370; --ink:#1a1a1a; --marker:#b08d2e; --ok:#1f7a52; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:0 0 60px; background:#e9e5d8; color:var(--ink);
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+  #banner { background:#2b2b2b; color:#fff; padding:12px 16px; font-size:12px; line-height:1.6; }
+  #banner b { color:#ffd76a; }
+  #summary { background:#fff; border-bottom:1px solid var(--border); padding:12px 16px;
+             font-size:12px; line-height:1.7; }
+  #summary table { border-collapse:collapse; margin-top:6px; }
+  #summary td, #summary th { border:1px solid var(--border); padding:4px 10px; text-align:left; }
+  #summary th { background:var(--chrome); font-weight:600; }
+  .better { color:var(--ok); font-weight:600; }
+
+  .pair { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:18px 0; }
+  .phone-frame { width:390px; max-width:100%;
+    background:linear-gradient(180deg,var(--bg-start),var(--bg-end));
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;
+    box-shadow:0 4px 18px rgba(0,0,0,.12); }
+  .head { background:var(--chrome); border-bottom:1px solid var(--border);
+          padding:8px 12px; font-size:11px; color:var(--muted); }
+  .head b { color:var(--ink); font-size:12px; }
+  .head .meta { display:block; margin-top:3px; }
+
+  .ayah-text { direction:rtl; line-height:2.05; width:100%; padding:10px 8px 16px; }
+  .mushaf-line { display:flex; flex-wrap:nowrap; justify-content:space-between; align-items:baseline; }
+  .mushaf-line > span { flex:0 0 auto; white-space:nowrap; }
+  .measuring .mushaf-line { justify-content:flex-start; }
+  .surah-banner { display:block; text-align:center; font-size:0.7em; color:var(--marker);
+                  margin:.3em 0 .5em; padding-bottom:.15em; border-bottom:1px solid var(--border); }
+  .bismillah { display:block; text-align:center; margin:0 0 .4em; font-family:'Scheherazade New',serif; }
+  .marker { color:var(--marker); font-size:0.45em; vertical-align:0.25em; }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <b>Пересчёт построчной раскладки.</b> Отдельный файл, боевой мусхаф не тронут.<br>
+  Слева — как сейчас на проде. Справа — та же страница, тот же наш шрифт V4 Tajweed
+  и те же глифы, но точки переноса строк вычислены по ширинам глифов
+  (число строк, состав и порядок слов, границы страницы — не меняются).
+</div>
+<div id="summary">Считаю…</div>
+<div id="pages"></div>
+
+<script>
+// Первые страницы + самые плотные во всём мусхафе (по промеру всех 603).
+var PAGES = [1, 2, 3, 6, 7, 123, 414, 207, 246];
+var AVAIL = 374 - 16;   // колонка телефона минус боковые padding
+
+function loadFace(fam, url) {
+  var f = new FontFace(fam, "url('" + url + "')");
+  return f.load().then(function (l) { document.fonts.add(l); });
+}
+
+// Ширины отдельных элементов при 100px, тем же шрифтом страницы
+function measureEach(fam, items) {
+  var probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;white-space:nowrap;'
+    + "direction:rtl;font-size:100px;font-family:'" + fam + "','Scheherazade New',serif;";
+  document.body.appendChild(probe);
+  var out = items.map(function (it) {
+    probe.textContent = it.glyph;
+    // маркер рисуется мелко (0.45em) — учитываем это в его вкладе в ширину
+    return probe.getBoundingClientRect().width * (it.type === 'marker' ? 0.45 : 1);
+  });
+  document.body.removeChild(probe);
+  return out;
+}
+
+// Разбить последовательность на РОВНО K непрерывных строк, минимизируя
+// отклонение ширины строки от средней. Слово не рвётся — границы по словам.
+function splitLines(w, K) {
+  var N = w.length, pre = [0];
+  for (var i = 0; i < N; i++) pre.push(pre[i] + w[i]);
+  var target = pre[N] / K, INF = Infinity;
+  var dp = [], from = [];
+  for (var k = 0; k <= K; k++) { dp.push(new Array(N + 1).fill(INF)); from.push(new Array(N + 1).fill(-1)); }
+  dp[0][0] = 0;
+  for (var k = 1; k <= K; k++) {
+    for (var i = k; i <= N; i++) {
+      for (var j = k - 1; j < i; j++) {
+        if (dp[k - 1][j] === INF) continue;
+        var d = (pre[i] - pre[j]) - target;
+        var c = dp[k - 1][j] + d * d;
+        if (c < dp[k][i]) { dp[k][i] = c; from[k][i] = j; }
+      }
+    }
+  }
+  var cuts = [], i2 = N;
+  for (var k = K; k >= 1; k--) { var j = from[k][i2]; cuts.unshift([j, i2]); i2 = j; }
+  return cuts;
+}
+
+function tokenHtml(t) {
+  if (t.type === 'marker') return '<span class="marker">۞</span>';
+  return '<span>' + t.glyph + '</span>';
+}
+
+function renderRows(rows, meta) {
+  var html = '';
+  var textIdx = 0;
+  meta.forEach(function (m) {
+    if (m.type === 'header') { html += '<div class="surah-banner">سُورَةُ ' + m.surah_name_ar + '</div>'; return; }
+    if (m.type === 'bismillah') { html += '<div class="bismillah">' + (m.html || '') + '</div>'; return; }
+    var row = rows[textIdx++] || [];
+    html += '<div class="mushaf-line">' + row.map(tokenHtml).join('') + '</div>';
+  });
+  return html;
+}
+
+function fit(el) {
+  var lines = el.querySelectorAll('.mushaf-line');
+  if (!lines.length) return null;
+  el.classList.add('measuring');
+  el.style.fontSize = '40px';
+  var ws = [];
+  lines.forEach(function (l) { ws.push(l.scrollWidth); });
+  el.classList.remove('measuring');
+  var mx = Math.max.apply(null, ws), mn = Math.min.apply(null, ws);
+  var size = 40 * (AVAIL / mx) * 0.985;
+  el.style.fontSize = size.toFixed(1) + 'px';
+  return {
+    size: size,
+    spread: Math.round((mx / mn - 1) * 100),
+    fill: Math.round(ws.reduce(function (s, x) { return s + x; }, 0) / ws.length / mx * 100)
+  };
+}
+
+var rowsOut = [];
+
+async function doPage(p) {
+  var d = await fetch('/page' + p + '.json').then(function (r) { return r.json(); });
+  var fam = 'mv4p' + p;
+  await loadFace(fam, d.font_url);
+  await document.fonts.ready;
+
+  // meta строк в исходном порядке + плоская последовательность элементов
+  var meta = [], seq = [], current = [];
+  var rowsNow = [];
+  d.lines.forEach(function (l) {
+    if (l.type === 'text') {
+      meta.push({ type: 'text' });
+      var row = [];
+      l.tokens.forEach(function (t) {
+        if (t.type === 'marker') { var it = { glyph: '۞', type: 'marker' }; seq.push(it); row.push(it); return; }
+        if (!t.code_v4) return;
+        var it2 = { glyph: t.code_v4, type: t.type };
+        seq.push(it2); row.push(it2);
+      });
+      rowsNow.push(row);
+    } else {
+      meta.push({ type: l.type, surah_name_ar: l.surah_name_ar, html: l.html });
+    }
+  });
+
+  var K = rowsNow.length;
+  var wrap = document.createElement('div');
+  wrap.className = 'pair';
+
+  function frame(title, rows, id) {
+    var f = document.createElement('div');
+    f.className = 'phone-frame';
+    f.innerHTML = '<div class="head"><b>' + title + '</b><span class="meta" id="' + id + '">…</span></div>'
+      + '<div class="ayah-text" id="' + id + '-t"></div>';
+    return f;
+  }
+  var idNow = 'p' + p + '-now', idNew = 'p' + p + '-new';
+  wrap.appendChild(frame('Стр. ' + p + ' — как сейчас', rowsNow, idNow));
+  wrap.appendChild(frame('Стр. ' + p + ' — пересчитанная раскладка', null, idNew));
+  document.getElementById('pages').appendChild(wrap);
+
+  var elNow = document.getElementById(idNow + '-t');
+  var elNew = document.getElementById(idNew + '-t');
+  elNow.style.fontFamily = "'" + fam + "','Scheherazade New',serif";
+  elNew.style.fontFamily = "'" + fam + "','Scheherazade New',serif";
+  elNow.innerHTML = renderRows(rowsNow, meta);
+
+  // пересчёт
+  var w = measureEach(fam, seq);
+  var cuts = splitLines(w, K);
+  var rowsNew = cuts.map(function (c) { return seq.slice(c[0], c[1]); });
+  elNew.innerHTML = renderRows(rowsNew, meta);
+
+  var a = fit(elNow), b = fit(elNew);
+  document.getElementById(idNow).innerHTML = 'размер <b>' + a.size.toFixed(1) + 'px</b> · разброс <b>'
+    + a.spread + '%</b> · заполнено <b>' + a.fill + '%</b>';
+  document.getElementById(idNew).innerHTML = 'размер <b>' + b.size.toFixed(1) + 'px</b> · разброс <b>'
+    + b.spread + '%</b> · заполнено <b>' + b.fill + '%</b>';
+
+  // сколько строк реально изменилось
+  var changed = 0;
+  for (var i = 0; i < K; i++) {
+    var s1 = (rowsNow[i] || []).map(function (t) { return t.glyph; }).join('');
+    var s2 = (rowsNew[i] || []).map(function (t) { return t.glyph; }).join('');
+    if (s1 !== s2) changed++;
+  }
+  rowsOut.push({ page: p, K: K, a: a, b: b, changed: changed });
+}
+
+(async function () {
+  for (const p of PAGES) { try { await doPage(p); } catch (e) { console.log('page ' + p + ': ' + e.message); } }
+  var html = '<b>Итог.</b> Число строк, состав и порядок слов, границы страниц — не менялись; '
+    + 'переставлены только точки переноса строк.<table><tr><th>Стр.</th><th>Строк</th>'
+    + '<th>Размер было → стало</th><th>Разброс было → стало</th>'
+    + '<th>Заполнено было → стало</th><th>Строк изменилось</th></tr>';
+  rowsOut.forEach(function (r) {
+    html += '<tr><td>' + r.page + '</td><td>' + r.K + '</td>'
+      + '<td>' + r.a.size.toFixed(1) + ' → <span class="better">' + r.b.size.toFixed(1) + 'px</span></td>'
+      + '<td>' + r.a.spread + '% → <span class="better">' + r.b.spread + '%</span></td>'
+      + '<td>' + r.a.fill + '% → <span class="better">' + r.b.fill + '%</span></td>'
+      + '<td>' + r.changed + ' из ' + r.K + '</td></tr>';
+  });
+  html += '</table>';
+  document.getElementById('summary').innerHTML = html;
+})();
+</script>
+</body>
+</html>

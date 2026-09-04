@@ -1140,6 +1140,74 @@
   .trainer-info, .trainer-session { font-size: 13px; color: var(--muted); }
   .trainer-score { font-size: 13px; color: var(--muted); }
 
+  /* Кабинет студента "Сдачи" (04.09.2026) - делит каркас с кабинетом
+     устаза ниже: топбар + прокручиваемое тело, список сверху вниз. */
+  #subs {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  #subs-topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    direction: ltr; flex: 0 0 auto;
+  }
+  #subs-topbar button {
+    background: none; border: none; color: var(--accent);
+    font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
+    font-family: inherit;
+  }
+  #subs-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px 28px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  .sub-row {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .sub-row .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .sub-row .place { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+  .sub-row .meta { font-size: 12.5px; color: var(--muted); }
+  /* Статус - закрашенная пилюля, а не цветной текст: состояние сдачи должно
+     считываться пятном (тот же принцип, что у бейджа в тренажёре). */
+  .sub-pill {
+    font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .sub-pill.wait {
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+    color: var(--marker-color);
+  }
+  .sub-pill.done { background: var(--accent-soft); color: var(--accent); }
+  .sub-review {
+    font-size: 13px; color: var(--ink);
+    background: var(--accent-soft); border-radius: 9px; padding: 8px 10px;
+  }
+  .sub-review b { font-weight: 600; }
+  .sub-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sub-actions button {
+    flex: 1 1 auto; min-width: 120px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 9px 10px;
+    font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer;
+  }
+  .sub-actions button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  }
+  .sub-actions button:disabled { opacity: .5; cursor: default; }
+  .subs-empty { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; }
+
   /* Кабинет устаза (03.09.2026) - тот же экранный каркас, что у #trainer
      (топбар + прокручиваемое тело), список читается сверху вниз, не
      центрирован - это не сообщение "пока пусто", а рабочий список. */
@@ -1395,6 +1463,14 @@
     <span class="icon-badge">🌱</span>
     <div><div class="label" data-i18n="dash_trainer">Тренажёр</div><div class="sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</div></div>
   </div>
+  <!-- Своя третья дверь студента (04.09.2026, экран "Сдачи" из макета
+       01.09): свои сдачи, ответ устаза и пересдача. Видна всем - у кого
+       сдач ещё нет, увидит пустой список с объяснением, а не отсутствие
+       двери (иначе непонятно, куда потом смотреть). -->
+  <div class="dash-card" id="dash-subs" tabindex="0" role="button">
+    <span class="icon-badge">🎙</span>
+    <div><div class="label" data-i18n="dash_subs">Сдачи</div><div class="sub" data-i18n="dash_subs_sub">Мои записи и ответ устаза</div></div>
+  </div>
   <!-- 4-я дверь, только у устаза (03.09.2026, пункт 13 старого макета
        40+40) - роль узнаём из heartbeat, дверь скрыта, пока ответ не
        пришёл (нет мигания "было-стало" при открытии). Красный счётчик -
@@ -1626,6 +1702,14 @@
      по-прежнему идёт реплаем в группе. "Студенты"/"Проверено" (пункт 14)
      и гейт "пересдача блокирует этап" (пункт 11) намеренно не здесь -
      отложены отдельно (см. лог сессии). -->
+<div id="subs">
+  <div id="subs-topbar">
+    <button id="subs-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span data-i18n="subs_title">Сдачи</span>
+  </div>
+  <div id="subs-body"></div>
+</div>
+
 <div id="ustaz">
   <div id="ustaz-topbar">
     <button id="ustaz-back" data-i18n="back_dashboard">← Дашборд</button>
@@ -1657,6 +1741,21 @@
       dash_trainer: 'Тренажёр',
       dash_trainer_sub: 'Муфрадат — учи слова Корана',
       dash_ustaz: 'Устаз',
+      dash_subs: 'Сдачи',
+      dash_subs_sub: 'Мои записи и ответ устаза',
+      subs_title: 'Сдачи',
+      subs_empty: 'Здесь появятся твои сдачи 40+40 — записи, ответ устаза и пересдача 🤲',
+      subs_loading: 'Загрузка…',
+      subs_wait: 'на проверке',
+      subs_done: 'проверено',
+      subs_my_record: '▶ Моя запись',
+      subs_review_audio: '▶ Разбор устаза',
+      subs_retake: '🎙 Пересдать',
+      subs_review_from: 'Ответил %N%',
+      subs_review_voice: 'голосовой разбор',
+      subs_playing: '⏸ Стоп',
+      subs_audio_failed: 'Не удалось проиграть запись',
+      subs_retake_hint: 'Пересдаётся ровно то, что сдавал: та же строчка, половина или страница.',
       dash_ustaz_sub: 'Сдачи на проверке',
       ustaz_title: 'Устаз',
       ustaz_empty: 'Пока никто не ждёт проверки 🤲',
@@ -2108,6 +2207,12 @@
   // пользователя), даже если в прошлый раз ушли со "Смысла"/"Мои слова".
   document.getElementById('dash-mushaf').addEventListener('click', function () { openMushaf('page'); });
   document.getElementById('dash-trainer').addEventListener('click', openTrainer);
+  document.getElementById('dash-subs').addEventListener('click', openSubs);
+  document.getElementById('subs-back').addEventListener('click', function () {
+    subsStopAudio();
+    document.getElementById('subs').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'flex';
+  });
   document.getElementById('dash-ustaz').addEventListener('click', openUstaz);
   document.getElementById('ustaz-back').addEventListener('click', function () {
     document.getElementById('ustaz').style.display = 'none';
@@ -3006,6 +3111,17 @@
   document.getElementById('hifz-big-listen-btn').addEventListener('click', hifzListenToggle);
 
   function hifzExit() {
+    // Выход из режима во время пересдачи (см. subsRetake) обязан вернуть
+    // указатель на место, где студент был до неё, и снять сам признак
+    // пересдачи - иначе следующая ОБЫЧНАЯ сдача не сдвинула бы указатель.
+    if (hifzRetakeMode) {
+      hifzRetakeMode = false;
+      if (hifzRetakeSaved) {
+        hifz.line = hifzRetakeSaved.line;
+        hifz.stage = hifzRetakeSaved.stage;
+        hifzRetakeSaved = null;
+      }
+    }
     hifz.on = false; hifz.picking = false; hifz.unit = 'line';
     hifzListenStop();
     document.getElementById('hifz-big').classList.remove('visible');
@@ -3365,6 +3481,13 @@
     }).then(function (res) {
       if (res.ok && res.data.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        // Пересдача (см. subsRetake): та же единица уходит устазу заново, но
+        // указатель "где я" не двигается и повторы не спрашиваются - студент
+        // не проходит место второй раз, он его переcдаёт.
+        if (hifzRetakeMode) {
+          setTimeout(function () { hifzRecClose(); hifzRetakeFinish(); }, 1200);
+          return;
+        }
         if (hifz.stage === 1) {
           // Строка закрывается ОДНОЙ сдачей - указатель сам идёт дальше,
           // как и раньше. Стрелок для этого нет - методика без возврата.
@@ -3834,6 +3957,175 @@
   function ustazFormatSince(iso) {
     if (!iso || iso.length < 16) return '';
     return iso.slice(8, 10) + '.' + iso.slice(5, 7) + ' ' + iso.slice(11, 16);
+  }
+
+  /* ─── Кабинет студента "Сдачи" (04.09.2026) ────────────────────────────
+     Экран из макета 01.09: свои сдачи, ответ устаза, пересдача. Вердикта
+     "принято / на пересдачу" в базе пока нет - есть только "устаз
+     отреагировал", поэтому статуса ровно два. Вердикт - отдельный заход,
+     он меняет контракт с устазами (пункт 11 макета: пока не принято,
+     следующий этап закрыт). */
+  var subsAudio = new Audio();
+  var subsPlayingKey = null;
+
+  function subsStopAudio() {
+    try { subsAudio.pause(); } catch (e) {}
+    if (subsAudio.src && subsAudio.src.indexOf('blob:') === 0) URL.revokeObjectURL(subsAudio.src);
+    subsAudio.removeAttribute('src');
+    subsPlayingKey = null;
+  }
+
+  // Звук тянем fetch'ем с заголовком авторизации и играем из blob, а НЕ
+  // ставим ссылку прямо в <audio src>: заголовок initData туда не
+  // приложить, а тащить его в query-строке - светить в логах и истории.
+  function subsPlay(id, kind, btn) {
+    var key = id + ':' + kind;
+    if (subsPlayingKey === key) { subsStopAudio(); subsRenderButtons(); return; }
+    subsStopAudio();
+    var label = btn.textContent;
+    btn.disabled = true;
+    fetch(apiBase() + '/submissions/audio?id=' + id + '&kind=' + kind, {
+      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('audio');
+      return r.blob();
+    }).then(function (blob) {
+      subsAudio.src = URL.createObjectURL(blob);
+      subsPlayingKey = key;
+      btn.disabled = false;
+      subsRenderButtons();
+      return subsAudio.play();
+    }).catch(function () {
+      btn.disabled = false;
+      btn.textContent = T('subs_audio_failed');
+      setTimeout(function () { btn.textContent = label; }, 2000);
+    });
+  }
+
+  subsAudio.addEventListener('ended', function () { subsPlayingKey = null; subsRenderButtons(); });
+
+  // Подписи кнопок воспроизведения зависят от того, что играет прямо сейчас -
+  // перерисовываем только их, не весь список (иначе теряется прокрутка).
+  function subsRenderButtons() {
+    var body = document.getElementById('subs-body');
+    Array.prototype.forEach.call(body.querySelectorAll('[data-play]'), function (b) {
+      var key = b.getAttribute('data-play');
+      var kind = key.split(':')[1];
+      b.textContent = subsPlayingKey === key
+        ? T('subs_playing')
+        : (kind === 'own' ? T('subs_my_record') : T('subs_review_audio'));
+    });
+  }
+
+  function subsPlace(item) {
+    if (item.hifz_page == null) return T('ustaz_no_place');
+    if (item.hifz_stage === 2) return T('ustaz_place_half', { P: item.hifz_page });
+    if (item.hifz_stage === 3) return T('ustaz_place_page', { P: item.hifz_page });
+    return T('ustaz_place', { P: item.hifz_page, L: (item.hifz_line || 0) + 1 });
+  }
+
+  function subsRow(item, today) {
+    var done = !!item.reviewed_at;
+    var html = '<div class="sub-row">' +
+      '<div class="top"><span class="place">' + subsPlace(item) + '</span>' +
+      '<span class="sub-pill ' + (done ? 'done' : 'wait') + '">' +
+      T(done ? 'subs_done' : 'subs_wait') + '</span></div>' +
+      '<div class="meta">' + ustazWhen(item, today) +
+      (item.group_title ? ' · ' + ustazEsc(item.group_title) : '') + '</div>';
+    if (item.review_type === 'text' && item.review_text) {
+      html += '<div class="sub-review">' +
+        (item.review_by_name ? '<b>' + ustazEsc(item.review_by_name) + ':</b> ' : '') +
+        ustazEsc(item.review_text) + '</div>';
+    } else if (item.review_type === 'voice' && item.has_review_audio) {
+      html += '<div class="sub-review">' +
+        (item.review_by_name
+          ? T('subs_review_from', { N: ustazEsc(item.review_by_name) })
+          : T('subs_review_voice')) + '</div>';
+    }
+    html += '<div class="sub-actions">';
+    if (item.has_audio) {
+      html += '<button data-play="' + item.id + ':own">' + T('subs_my_record') + '</button>';
+    }
+    if (item.has_review_audio) {
+      html += '<button data-play="' + item.id + ':review">' + T('subs_review_audio') + '</button>';
+    }
+    if (item.hifz_page != null) {
+      html += '<button class="primary" data-retake="' + item.id + '">' + T('subs_retake') + '</button>';
+    }
+    return html + '</div></div>';
+  }
+
+  // Пересдача: открываем заучивание РОВНО на том месте, что сдавали, и
+  // помечаем сессию как пересдачу. Указатель "где я" при этом не двигается
+  // ни локально, ни на сервере (см. hifzRetakeMode в hifzRecSend) - иначе
+  // пересдача старой строчки отматывала бы прогресс назад.
+  var hifzRetakeMode = false;
+  var hifzRetakeSaved = null;
+
+  function subsRetake(item) {
+    subsStopAudio();
+    hifzRetakeSaved = { line: hifz.line, stage: hifz.stage, on: hifz.on };
+    hifzRetakeMode = true;
+    hifz.on = true;
+    hifz.picking = false;
+    hifz.stage = item.hifz_stage || 1;
+    hifz.line = item.hifz_line || 0;
+    document.getElementById('subs').style.display = 'none';
+    openMushaf('page');
+    if (currentPage !== item.hifz_page) {
+      loadPage(item.hifz_page);   // renderPage сама вызовет hifzApply/hifzHead
+    } else {
+      hifzApply();
+      hifzHead();
+    }
+  }
+
+  // Возврат к обычной сессии после пересдачи - место и этап, на которых
+  // студент был до неё.
+  function hifzRetakeFinish() {
+    if (!hifzRetakeMode) return;
+    hifzRetakeMode = false;
+    if (hifzRetakeSaved) {
+      hifz.line = hifzRetakeSaved.line;
+      hifz.stage = hifzRetakeSaved.stage;
+      hifz.on = hifzRetakeSaved.on;
+      hifzRetakeSaved = null;
+    }
+    hifzApply();
+    hifzHead();
+  }
+
+  function openSubs() {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('subs').style.display = 'flex';
+    var body = document.getElementById('subs-body');
+    body.innerHTML = '<div class="subs-empty">' + T('subs_loading') + '</div>';
+    apiCall('/submissions').then(function (res) {
+      var items = (res.data && res.data.items) || [];
+      if (!items.length) {
+        body.innerHTML = '<div class="subs-empty">' + T('subs_empty') + '</div>';
+        return;
+      }
+      var today = (res.data && res.data.today) || '';
+      body.innerHTML = items.map(function (it) { return subsRow(it, today); }).join('') +
+        '<div class="subs-empty" style="margin-top:6px;font-size:12.5px">' +
+        T('subs_retake_hint') + '</div>';
+      Array.prototype.forEach.call(body.querySelectorAll('[data-play]'), function (b) {
+        b.addEventListener('click', function () {
+          var parts = b.getAttribute('data-play').split(':');
+          subsPlay(parts[0], parts[1], b);
+        });
+      });
+      Array.prototype.forEach.call(body.querySelectorAll('[data-retake]'), function (b) {
+        b.addEventListener('click', function () {
+          var id = parseInt(b.getAttribute('data-retake'), 10);
+          var item = items.filter(function (x) { return x.id === id; })[0];
+          if (item) subsRetake(item);
+        });
+      });
+    }).catch(function () {
+      body.innerHTML = '<div class="subs-empty">' + T('subs_empty') + '</div>';
+    });
   }
 
   // Подпись времени сдачи: "сегодня 09:14" / "вчера 21:03" / "02.09 19:22".
