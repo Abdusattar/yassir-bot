@@ -89,3 +89,31 @@ def test_place_empty_for_voice_sent_straight_to_group(test_db):
     row = db.get_pending_voice_reviews([group["id"]])[0]
 
     assert row["hifz_page"] is None
+
+
+# ── Дыры в отметке «проверено» (04.09.2026) ───────────────────────────────
+
+def test_reaction_on_the_picture_closes_submission(test_db):
+    """Сдача из приложения — два сообщения: картинка со строчкой и голосовое
+    реплаем на неё. Устаз часто ставит смайлик на картинку (она сверху, на
+    ней и видно, что проверять) — сдача обязана закрыться."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    db.save_voice_submission(sid, group["id"], CHAT, 42, _days_ago(0),
+                             hifz_page=6, hifz_line=7, hifz_stage=1,
+                             photo_message_id=41)
+
+    db.mark_voice_reviewed(CHAT, 41)
+
+    assert db.count_pending_voice_reviews([group["id"]]) == 0
+
+
+def test_reaction_on_the_voice_still_closes_submission(test_db):
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    db.save_voice_submission(sid, group["id"], CHAT, 42, _days_ago(0),
+                             photo_message_id=41)
+
+    db.mark_voice_reviewed(CHAT, 42)
+
+    assert db.count_pending_voice_reviews([group["id"]]) == 0

@@ -307,8 +307,21 @@ async def main():
                     r_user = mr.get("user") or {}
                     r_user_id = str(r_user.get("id", "")) if r_user else ""
                     r_message_id = mr.get("message_id")
-                    if r_chat_id and r_user_id and r_message_id:
-                        asyncio.create_task(handle_reaction(r_chat_id, r_user_id, r_message_id))
+                    # Анонимный админ (04.09.2026): включивший в правах
+                    # "Remain anonymous" реагирует ОТ ИМЕНИ ГРУППЫ - Telegram
+                    # шлёт actor_chat вместо user, и такая реакция раньше
+                    # молча пропадала, а сдача висела непроверенной.
+                    # Доверяем только когда actor_chat - САМА ЭТА ГРУППА: так
+                    # может лишь её админ. Реакцию от чужого канала (человек
+                    # может реагировать и от имени своего канала) не пускаем.
+                    anon_admin = (not r_user_id
+                                  and str((mr.get("actor_chat") or {}).get("id", "")) == r_chat_id
+                                  and bool(r_chat_id))
+                    if r_chat_id and r_message_id and (r_user_id or anon_admin):
+                        asyncio.create_task(
+                            handle_reaction(r_chat_id, r_user_id, r_message_id,
+                                            anon_admin=anon_admin)
+                        )
                     continue
 
                 msg = upd.get("message")

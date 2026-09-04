@@ -399,7 +399,8 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     # показать, ЧТО именно проверять, а из подписи в Telegram это не достать.
     save_voice_submission(user["id"], group["id"], group["chat_id"],
                           voice_msg_id, get_date(), file_id,
-                          hifz_page=page, hifz_line=line, hifz_stage=stage)
+                          hifz_page=page, hifz_line=line, hifz_stage=stage,
+                          photo_message_id=photo_msg_id)
     if credited:
         save_report(user["id"], group["id"], get_date(), {"m": True})
     return {"ok": True, "credited": credited, "place": place}

@@ -278,6 +278,13 @@ def _run_migrations(c):
     for col in ("hifz_page", "hifz_line", "hifz_stage"):
         if col not in vscols:
             c.execute(f"ALTER TABLE voice_submissions ADD COLUMN {col} INTEGER")
+    # Картинка со строчкой, которую сдают (04.09.2026). Сдача из приложения -
+    # ДВА сообщения: сначала картинка, следом голосовое реплаем на неё. Устаз
+    # видит наверху именно картинку (на ней и написано, что проверять) и
+    # ставит смайлик часто на неё - а закрывалась сдача только по id
+    # голосового, и она оставалась висеть в кабинете как непроверенная.
+    if "photo_message_id" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN photo_message_id INTEGER")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -1328,7 +1335,8 @@ def get_today_report(uid, group_id=None):
 
 
 def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_id=None,
-                          hifz_page=None, hifz_line=None, hifz_stage=None):
+                          hifz_page=None, hifz_line=None, hifz_stage=None,
+                          photo_message_id=None):
     """hifz_* (04.09.2026) - место сдачи 40+40: страница, строка (0-based, как
     на фронтенде) и этап. Есть только у сдач из приложения; у голосового,
     присланного прямо в группу, места нет и быть не может."""
@@ -1336,19 +1344,23 @@ def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_
         c.execute(
             "INSERT OR IGNORE INTO voice_submissions"
             "(student_id,group_id,chat_id,message_id,date,sent_at,file_id,"
-            "hifz_page,hifz_line,hifz_stage)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?)",
+            "hifz_page,hifz_line,hifz_stage,photo_message_id)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
             (student_id, group_id, chat_id, message_id, date, get_now().isoformat(), file_id,
-             hifz_page, hifz_line, hifz_stage)
+             hifz_page, hifz_line, hifz_stage, photo_message_id)
         )
 
 
 def mark_voice_reviewed(chat_id, message_id):
+    """message_id - ЛИБО голосовое, ЛИБО картинка со строчкой (04.09.2026):
+    сдача из приложения уходит двумя сообщениями, и реакция устаза одинаково
+    законна на любом из них."""
     with db() as c:
         c.execute(
             "UPDATE voice_submissions SET reviewed_at=?"
-            " WHERE chat_id=? AND message_id=? AND reviewed_at IS NULL",
-            (get_now().isoformat(), chat_id, message_id)
+            " WHERE chat_id=? AND (message_id=? OR photo_message_id=?)"
+            " AND reviewed_at IS NULL",
+            (get_now().isoformat(), chat_id, message_id, message_id)
         )
 
 
@@ -1361,8 +1373,9 @@ def save_umar_review(chat_id, message_id, review_type, review_file_id=None, revi
     with db() as c:
         c.execute(
             "UPDATE voice_submissions SET review_type=?, review_file_id=?, review_text=?"
-            " WHERE chat_id=? AND message_id=? AND review_type IS NULL",
-            (review_type, review_file_id, review_text, chat_id, message_id)
+            " WHERE chat_id=? AND (message_id=? OR photo_message_id=?)"
+            " AND review_type IS NULL",
+            (review_type, review_file_id, review_text, chat_id, message_id, message_id)
         )
 
 

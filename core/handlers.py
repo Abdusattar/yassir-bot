@@ -762,12 +762,18 @@ async def _verify_and_reply(chat_id, text, group_title, phone, group_id, name, c
         log.error("verify error: %s", e)
 
 
-async def handle_reaction(chat_id, user_id, message_id):
-    """Устаз поставил Telegram-реакцию (эмодзи-тап) на сообщение — тоже считаем проверкой."""
+async def handle_reaction(chat_id, user_id, message_id, anon_admin=False):
+    """Устаз поставил Telegram-реакцию (эмодзи-тап) на сообщение — тоже считаем проверкой.
+
+    anon_admin (04.09.2026) — реакция пришла ОТ ИМЕНИ САМОЙ группы: так
+    реагирует администратор с включённым «Remain anonymous». Кто именно из
+    админов — Telegram не сообщает, и здесь это не важно: проверку закрывает
+    любой устаз группы. Условие «от имени именно этой группы» проверено на
+    входе (bot.py), поэтому чужой канал сюда не попадает."""
     group = get_group(chat_id)
     if group:
         phone = extract_phone(user_id)
-        if is_group_admin(phone, group["id"]):
+        if anon_admin or is_group_admin(phone, group["id"]):
             mark_voice_reviewed(chat_id, message_id)
         return
     # Личка устаза — реакция на черновик части учебной программы (нахв/таджвид).
