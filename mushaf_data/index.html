@@ -1303,9 +1303,15 @@
      тапом по вкладке. Полоса липкая: у устаза с тремя группами и у
      супер-админа с восемнадцатью она нужна и на середине списка. */
   .ustaz-groups {
-    position: sticky; top: -14px; z-index: 5;
-    margin: -14px -16px 0; padding: 10px 16px 8px;
-    background: linear-gradient(180deg, var(--dash-bg-start) 70%, transparent);
+    /* Фон ПЛОТНЫЙ, не градиент (04.09.2026, поймано пользователем: строки
+       студентов просвечивали сквозь полосу и её было почти не видно).
+       Липкая полоса поверх прокручиваемого списка обязана быть
+       непрозрачной, иначе под ней читаются два слоя текста разом. */
+    position: sticky; top: 0; z-index: 5;
+    margin: -14px -16px 4px; padding: 10px 16px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .06);
     display: flex; gap: 8px;
     overflow-x: auto; -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
