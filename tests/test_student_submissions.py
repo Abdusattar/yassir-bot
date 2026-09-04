@@ -124,3 +124,83 @@ def test_api_refuses_foreign_audio(test_db, monkeypatch):
     status, _ = _call(app, "/api/muf/submissions/audio?id=%d&kind=own" % sub_id, "777002")
 
     assert status == 404
+
+
+class _FakeContent:
+    """Ровно тот баг, что был живым 04.09.2026: .content.read(n) при n>0
+    отдаёт только первый пришедший чанк, а не n байт - запись обрывалась
+    на первых секундах ("play, потом стоп"). Сама read() (без .content) на
+    ClientResponse обязана читать до EOF - на это и завязан регресс-тест."""
+
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def read(self, n=-1):
+        return self._chunks[0]
+
+
+class _FakeResp:
+    def __init__(self, json_data=None, status=200, chunks=None):
+        self._json = json_data
+        self.status = status
+        self.content = _FakeContent(chunks or [b""])
+        self._body = b"".join(chunks or [b""])
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def json(self):
+        return self._json
+
+    async def read(self):
+        return self._body
+
+
+class _FakeSession:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    def get(self, url, params=None):
+        if "getFile" in url:
+            return _FakeResp(json_data={"ok": True, "result": {"file_path": "voice/f.oga"}})
+        return _FakeResp(status=200, chunks=self._chunks)
+
+
+def test_audio_is_not_truncated_to_the_first_network_chunk(test_db, monkeypatch):
+    """Живой баг 04.09.2026: студент жаловался, что запись "играет 2-3
+    секунды и всё" - на деле сервер отдавал только первый пришедший от
+    Telegram чанк (~16 КБ из ~450 КБ), а не файл целиком. Причина была в
+    r.content.read(n) - он не гарантирует n байт, только "что пришло".
+    Разгоняем фейковый ответ на несколько чанков, как реальная сеть."""
+    app = _setup(monkeypatch)
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    db.save_voice_submission(sid, group["id"], CHAT, 10, db.get_date(), file_id="own")
+    sub_id = db.get_student_submissions(sid)[0]["id"]
+    chunks = [b"a" * 16093, b"b" * 400000, b"c" * 36464]
+    monkeypatch.setattr(api.aiohttp, "ClientSession", lambda: _FakeSession(chunks))
+
+    async def run():
+        from aiohttp.test_utils import TestClient, TestServer
+        client = TestClient(TestServer(app()))
+        await client.start_server()
+        try:
+            resp = await client.get(
+                "/api/muf/submissions/audio?id=%d&kind=own" % sub_id,
+                headers={"X-Telegram-Init-Data": "777001"})
+            return resp.status, await resp.read()
+        finally:
+            await client.close()
+    status, body = asyncio.run(run())
+
+    assert status == 200
+    assert len(body) == sum(len(c) for c in chunks)

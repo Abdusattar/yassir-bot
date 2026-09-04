@@ -853,7 +853,10 @@ async def _telegram_audio_response(file_id):
         async with session.get(url) as r:
             if r.status != 200:
                 return web.json_response({"error": "no_file"}, status=404)
-            body = await r.content.read(TELEGRAM_FILE_MAX_BYTES + 1)
+            # r.content.read(n) с n>0 отдаёт первый пришедший чанк, а не n байт -
+            # запись обрывалась на первых секундах (04.09.2026, живой баг:
+            # "плей и стоп"). r.read() читает до EOF гарантированно.
+            body = await r.read()
     if len(body) > TELEGRAM_FILE_MAX_BYTES:
         return web.json_response({"error": "too_big"}, status=413)
     return web.Response(body=body, content_type="audio/ogg")
