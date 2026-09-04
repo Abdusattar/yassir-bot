@@ -270,6 +270,14 @@ def _run_migrations(c):
         c.execute("ALTER TABLE voice_submissions ADD COLUMN review_file_id TEXT")
     if "review_text" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN review_text TEXT")
+    # Место сдачи 40+40 (04.09.2026): без него кабинет устаза показывает
+    # только "кто и когда", а проверять нужно КОНКРЕТНУЮ строчку. Раньше
+    # место уходило лишь подписью в Telegram и в базе не оставалось.
+    # Заполняется у сдач ИЗ ПРИЛОЖЕНИЯ (core/mufradat_bot.py), у голосовых,
+    # присланных прямо в группу, остаётся пустым - там места и нет.
+    for col in ("hifz_page", "hifz_line", "hifz_stage"):
+        if col not in vscols:
+            c.execute(f"ALTER TABLE voice_submissions ADD COLUMN {col} INTEGER")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -1319,13 +1327,19 @@ def get_today_report(uid, group_id=None):
     return result
 
 
-def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_id=None):
+def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_id=None,
+                          hifz_page=None, hifz_line=None, hifz_stage=None):
+    """hifz_* (04.09.2026) - место сдачи 40+40: страница, строка (0-based, как
+    на фронтенде) и этап. Есть только у сдач из приложения; у голосового,
+    присланного прямо в группу, места нет и быть не может."""
     with db() as c:
         c.execute(
             "INSERT OR IGNORE INTO voice_submissions"
-            "(student_id,group_id,chat_id,message_id,date,sent_at,file_id)"
-            " VALUES(?,?,?,?,?,?,?)",
-            (student_id, group_id, chat_id, message_id, date, get_now().isoformat(), file_id)
+            "(student_id,group_id,chat_id,message_id,date,sent_at,file_id,"
+            "hifz_page,hifz_line,hifz_stage)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (student_id, group_id, chat_id, message_id, date, get_now().isoformat(), file_id,
+             hifz_page, hifz_line, hifz_stage)
         )
 
 
@@ -1352,27 +1366,94 @@ def save_umar_review(chat_id, message_id, review_type, review_file_id=None, revi
         )
 
 
-def get_pending_voice_reviews(group_ids):
+# Окно кабинета устаза (04.09.2026, решение пользователя): показываем
+# непроверенное за последние 3 дня - сегодня, вчера, позавчера. Более
+# старое не пропадает, но живёт за одной свёрнутой строкой.
+#
+# Зачем окно: reviewed_at проставляется ТОЛЬКО когда устаз отвечает реплаем
+# на голосовое в группе. Где так не отвечают (подготовительная), непроверенное
+# копится с самого старта - на 04.09.2026 это 141 сдача у одного устаза и 289
+# у другого. Такой счётчик не означает долг за сегодня и читается как шум,
+# а красный счётчик на двери в этом проекте всегда означает долг.
+USTAZ_WINDOW_DAYS = 3
+
+
+def _pending_reviews_sql(group_ids, recent):
+    """recent=True - внутри окна, False - хвост старше окна. Граница одна на
+    оба запроса, чтобы сумма показанного и свёрнутого сходилась ровно."""
+    since = (get_now().date() - timedelta(days=USTAZ_WINDOW_DAYS - 1)).isoformat()
+    placeholders = ",".join("?" * len(group_ids))
+    cmp_op = ">=" if recent else "<"
+    return (
+        f" FROM voice_submissions vs"
+        f" JOIN users u ON u.id = vs.student_id"
+        f" JOIN groups g ON g.id = vs.group_id"
+        f" WHERE vs.group_id IN ({placeholders}) AND vs.reviewed_at IS NULL"
+        f" AND vs.date {cmp_op} ?",
+        (*group_ids, since),
+    )
+
+
+def get_pending_voice_reviews(group_ids, recent=True):
     """Голосовые сдачи без реплая устаза, по заданным group_id сразу -
     вход в кабинет устаза (03.09.2026), пункт 13 старого макета режима
     заучивания (logs/terminal/2026-09-01.md). Только чтение: сам приём/
     отклонение сдачи всё ещё идёт реплаем в группе Telegram, как раньше -
     гейт "пересдача блокирует этап" (пункт 11 того же макета) откладывался
-    отдельно, это не он."""
+    отдельно, это не он.
+
+    recent=True - окно последних USTAZ_WINDOW_DAYS дней (то, что показывается
+    сразу), recent=False - хвост старше окна (раскрывается тапом).
+
+    Свежие сверху (04.09.2026): очередь читается как лента "что пришло", а
+    не как архив - устазу нужнее вчерашняя сдача, чем позавчерашняя."""
     if not group_ids:
         return []
+    where, params = _pending_reviews_sql(group_ids, recent)
     with db() as c:
-        placeholders = ",".join("?" * len(group_ids))
         rows = c.execute(
-            f"SELECT vs.sent_at, u.name AS student_name, g.title AS group_title"
-            f" FROM voice_submissions vs"
-            f" JOIN users u ON u.id = vs.student_id"
-            f" JOIN groups g ON g.id = vs.group_id"
-            f" WHERE vs.group_id IN ({placeholders}) AND vs.reviewed_at IS NULL"
-            f" ORDER BY vs.sent_at",
-            group_ids
+            "SELECT vs.sent_at, vs.date, vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
+            " vs.group_id, u.name AS student_name, g.title AS group_title"
+            # По date, а не только по sent_at: sent_at появился ALTER-ом
+            # позже самой таблицы, у старых строк он пуст.
+            + where + " ORDER BY vs.date DESC, vs.sent_at DESC, vs.id DESC",
+            params
         ).fetchall()
-    return [dict(r) for r in rows]
+    # "Сколько ждёт" считаем ЗДЕСЬ, а не в браузере: sent_at записан в
+    # бишкекском времени без смещения, и вычитать из него время устройства
+    # устаза - та же грабля, на которой уже обжигались со score_events
+    # (у телефона может быть другой часовой пояс). Сервер - единственное
+    # место, где "сейчас" и "тогда" заведомо в одной шкале.
+    now = get_now()
+    out = []
+    for r in rows:
+        item = dict(r)
+        item["waited_min"] = _minutes_since(now, item["sent_at"])
+        out.append(item)
+    return out
+
+
+def _minutes_since(now, sent_at):
+    """None, если время сдачи не записано (старые строки до 03.09.2026)."""
+    if not sent_at:
+        return None
+    try:
+        sent = datetime.fromisoformat(sent_at)
+    except ValueError:
+        return None
+    if sent.tzinfo is None:
+        sent = now.tzinfo.localize(sent) if hasattr(now.tzinfo, "localize") else sent.replace(tzinfo=now.tzinfo)
+    return max(0, int((now - sent).total_seconds() // 60))
+
+
+def count_pending_voice_reviews(group_ids, recent=True):
+    """Столько же, сколько вернул бы get_pending_voice_reviews, но без самих
+    строк - для счётчика на двери и для свёрнутого хвоста."""
+    if not group_ids:
+        return 0
+    where, params = _pending_reviews_sql(group_ids, recent)
+    with db() as c:
+        return c.execute("SELECT COUNT(*)" + where, params).fetchone()[0]
 
 
 def get_voice_review_stats(group_id, date):

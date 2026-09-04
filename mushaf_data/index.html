@@ -1180,6 +1180,34 @@
   }
   .ustaz-row .name { font-size: 14.5px; font-weight: 600; color: var(--ink); }
   .ustaz-row .meta { font-size: 12.5px; color: var(--muted); }
+  /* "Ждёт" краснеет само после суток (04.09.2026, макет 01.09): срочность
+     должна считываться пятном, а не вычитанием дат в уме. */
+  .ustaz-row .meta b.late { color: var(--no); font-weight: 600; }
+  /* Заголовок группы внутри списка - устаз ведёт несколько групп (у Умар
+     устаза их три), и "кто ждёт" без "где" читается плохо. */
+  .ustaz-group-title {
+    font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted);
+    margin: 6px 2px -2px;
+  }
+  .ustaz-groups {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .ustaz-groups .g {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; font-size: 13.5px; color: var(--ink);
+    border-top: 1px solid var(--card-border); cursor: pointer;
+  }
+  .ustaz-groups .g:first-child { border-top: none; }
+  .ustaz-groups .g.on { background: var(--accent-soft); font-weight: 600; }
+  .ustaz-groups .g .n { font-size: 12.5px; color: var(--muted); }
+  /* Хвост старше окна - одна строка, разворачивается тапом. Прятать совсем
+     нельзя (там может лежать неразобранное), пугать сотней строк - тоже. */
+  .ustaz-older {
+    text-align: center; font-size: 13px; color: var(--accent);
+    padding: 10px; cursor: pointer;
+  }
 
   /* Бейдж фидбека - закрашенная пилюля, не просто цветной текст (25.08 ->
      29.08.2026, "высший класс дизайнера": верный/неверный ответ должен
@@ -1627,6 +1655,21 @@
       ustaz_empty: 'Пока никто не ждёт проверки 🤲',
       ustaz_loading: 'Загрузка…',
       ustaz_waiting_since: 'ждёт с %N%',
+      ustaz_my_groups: 'Мои группы',
+      ustaz_all_groups: 'Все группы',
+      ustaz_window_empty: 'За последние дни никто не ждёт проверки 🤲',
+      ustaz_waits: 'ждёт %N%',
+      ustaz_older: 'Ещё %N% старше — показать',
+      ustaz_older_title: 'Старше последних дней',
+      ustaz_no_place: 'голосовая сдача',
+      ustaz_place: 'стр. %P%, строчка %L%',
+      ustaz_place_half: 'стр. %P%, половина листа',
+      ustaz_place_page: 'стр. %P% целиком',
+      ustaz_today: 'сегодня',
+      ustaz_yesterday: 'вчера',
+      ustaz_hours: '%N% ч',
+      ustaz_days: '%N% дн',
+      ustaz_minutes: '%N% мин',
       back_dashboard: '← Дашборд',
       tab_mywords: '⭐ Мои слова',
       surah_list_title: 'Суры',
@@ -3784,34 +3827,140 @@
     return iso.slice(8, 10) + '.' + iso.slice(5, 7) + ' ' + iso.slice(11, 16);
   }
 
+  // Подпись времени сдачи: "сегодня 09:14" / "вчера 21:03" / "02.09 19:22".
+  // Сегодняшнюю дату берём У СЕРВЕРА (поле today) - у телефона устаза может
+  // быть свой часовой пояс, а sent_at записан в бишкекском времени.
+  function ustazWhen(item, today) {
+    var full = ustazFormatSince(item.sent_at);
+    var hhmm = full.slice(-5);
+    if (!item.date) return full;
+    if (item.date === today) return T('ustaz_today') + ' ' + hhmm;
+    var y = new Date(today + 'T00:00:00');
+    y.setDate(y.getDate() - 1);
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var yStr = y.getFullYear() + '-' + pad(y.getMonth() + 1) + '-' + pad(y.getDate());
+    if (item.date === yStr) return T('ustaz_yesterday') + ' ' + hhmm;
+    return full;
+  }
+
+  // "ждёт 14 ч". Минуты считает СЕРВЕР (waited_min) - см. _minutes_since в
+  // core/db.py, там же почему не в браузере.
+  function ustazWaited(min) {
+    if (min == null) return '';
+    if (min < 60) return T('ustaz_waits', { N: T('ustaz_minutes', { N: min }) });
+    if (min < 60 * 24) return T('ustaz_waits', { N: T('ustaz_hours', { N: Math.floor(min / 60) }) });
+    return T('ustaz_waits', { N: T('ustaz_days', { N: Math.floor(min / (60 * 24)) }) });
+  }
+
+  // Что именно читал студент. Есть только у сдач ИЗ ПРИЛОЖЕНИЯ (место пишется
+  // в voice_submissions с 04.09.2026) - у голосового, присланного прямо в
+  // группу, места нет и не было.
+  function ustazPlace(item) {
+    if (item.hifz_page == null) return T('ustaz_no_place');
+    if (item.hifz_stage === 2) return T('ustaz_place_half', { P: item.hifz_page });
+    if (item.hifz_stage === 3) return T('ustaz_place_page', { P: item.hifz_page });
+    return T('ustaz_place', { P: item.hifz_page, L: (item.hifz_line || 0) + 1 });
+  }
+
+  // Имя студента и название группы задаёт не наш код (Telegram-профиль,
+  // название чата) - в отличие от остального текста в кабинете.
+  function ustazEsc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function ustazRow(item, today, withGroup) {
+    var waited = ustazWaited(item.waited_min);
+    var late = item.waited_min != null && item.waited_min >= 60 * 24;
+    return '<div class="ustaz-row"><div class="name">' + ustazEsc(item.student_name) + '</div>' +
+      '<div class="meta">' + ustazPlace(item) +
+      (withGroup ? ' · ' + ustazEsc(item.group_title) : '') + '</div>' +
+      '<div class="meta">' + ustazWhen(item, today) +
+      (waited ? ' · <b' + (late ? ' class="late"' : '') + '>' + waited + '</b>' : '') +
+      '</div></div>';
+  }
+
+  // Фильтр по группе: null - все. Переключается тапом по строке группы,
+  // повторный тап снимает фильтр (тот же жест, что выбор суры в мусхафе -
+  // тап по названию, без отдельной кнопки "сбросить").
+  var ustazGroupFilter = null;
+
+  function ustazRenderList(data) {
+    var body = document.getElementById('ustaz-body');
+    var today = data.today || '';
+    var groups = data.groups || [];
+    var all = data.items || [];
+    var items = all.filter(function (it) {
+      return ustazGroupFilter === null || it.group_id === ustazGroupFilter;
+    });
+    var html = '';
+    if (groups.length > 1) {
+      html += '<div class="ustaz-group-title">' + T('ustaz_my_groups') + '</div>';
+      html += '<div class="ustaz-groups">' +
+        '<div class="g' + (ustazGroupFilter === null ? ' on' : '') + '" data-gid="">' +
+        '<span>' + T('ustaz_all_groups') + '</span><span class="n">' + all.length + '</span></div>' +
+        groups.map(function (g) {
+          return '<div class="g' + (ustazGroupFilter === g.id ? ' on' : '') +
+            '" data-gid="' + g.id + '"><span>' + ustazEsc(g.title) + '</span>' +
+            '<span class="n">' + g.waiting + '</span></div>';
+        }).join('') + '</div>';
+    }
+    if (!items.length) {
+      html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
+    } else {
+      html += items.map(function (it) {
+        return ustazRow(it, today, groups.length > 1 && ustazGroupFilter === null);
+      }).join('');
+    }
+    if (data.older) {
+      html += '<div class="ustaz-older" id="ustaz-older">' +
+        T('ustaz_older', { N: data.older }) + '</div>';
+    }
+    body.innerHTML = html;
+
+    Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
+      el.addEventListener('click', function () {
+        var gid = el.getAttribute('data-gid');
+        var next = gid === '' ? null : parseInt(gid, 10);
+        ustazGroupFilter = (next === ustazGroupFilter) ? null : next;
+        ustazRenderList(data);
+      });
+    });
+    var olderEl = document.getElementById('ustaz-older');
+    if (olderEl) olderEl.addEventListener('click', function () { ustazLoadOlder(data); });
+  }
+
+  // Хвост тянем ОТДЕЛЬНЫМ запросом и дописываем под окном, не заменяя его:
+  // старое не должно вытеснять то, что ждёт прямо сейчас. И не тянем его
+  // на каждое открытие кабинета - там могут быть сотни строк.
+  function ustazLoadOlder(data) {
+    var olderEl = document.getElementById('ustaz-older');
+    if (olderEl) olderEl.textContent = T('ustaz_loading');
+    apiCall('/ustaz/waiting?older=1').then(function (res) {
+      var items = (res.data && res.data.items) || [];
+      var el = document.getElementById('ustaz-older');
+      if (!el) return;
+      el.outerHTML = '<div class="ustaz-group-title">' + T('ustaz_older_title') + '</div>' +
+        items.map(function (it) { return ustazRow(it, data.today || '', true); }).join('');
+    }).catch(function () {
+      var el = document.getElementById('ustaz-older');
+      if (el) el.textContent = T('ustaz_older', { N: data.older });
+    });
+  }
+
   function openUstaz() {
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('ustaz').style.display = 'flex';
     var body = document.getElementById('ustaz-body');
     body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
+    ustazGroupFilter = null;
     apiCall('/ustaz/waiting').then(function (res) {
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401 || res.status === 403 || !res.data) {
         body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_empty') + '</div>';
         return;
       }
-      var items = (res.data && res.data.items) || [];
-      if (!items.length) {
-        body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_empty') + '</div>';
-        return;
-      }
-      // Экранируем: имя студента и название группы задаёт не наш код
-      // (Telegram-профиль/название чата) - в отличие от остального
-      // текста в этой функции.
-      var esc = function (s) {
-        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-      };
-      body.innerHTML = items.map(function (it) {
-        return '<div class="ustaz-row"><div class="name">' + esc(it.student_name) + '</div>' +
-          '<div class="meta">' + esc(it.group_title) + ' · ' +
-          T('ustaz_waiting_since', { N: ustazFormatSince(it.sent_at) }) + '</div></div>';
-      }).join('');
+      ustazRenderList(res.data);
     }).catch(function () {
       body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_empty') + '</div>';
     });

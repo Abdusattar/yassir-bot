@@ -30,7 +30,10 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import TELEGRAM_TOKEN
-from core.db import get_learning_group, get_admin_groups, get_pending_voice_reviews
+from core.db import (
+    get_learning_group, get_admin_groups, get_pending_voice_reviews,
+    count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date,
+)
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
@@ -636,11 +639,14 @@ async def handle_heartbeat(request, user_id):
     счётчик на ней, без отдельного запроса на каждое открытие."""
     _last_seen[user_id] = time.time()
     admin_groups = get_admin_groups(user_id)
-    waiting = get_pending_voice_reviews([g["id"] for g in admin_groups]) if admin_groups else []
+    # Счётчик считаем ПО ОКНУ (04.09.2026), не по всей истории: красный
+    # счётчик на двери в этом проекте всегда означает долг, а хвост
+    # непроверенного за месяцы долгом за сегодня не является.
+    waiting = count_pending_voice_reviews([g["id"] for g in admin_groups]) if admin_groups else 0
     return web.json_response({
         "online": _online_count(),
         "is_ustaz": bool(admin_groups),
-        "waiting_count": len(waiting),
+        "waiting_count": waiting,
     })
 
 
@@ -655,8 +661,30 @@ async def handle_ustaz_waiting(request, user_id):
     admin_groups = get_admin_groups(user_id)
     if not admin_groups:
         return web.json_response({"error": "not_ustaz"}, status=403)
-    items = get_pending_voice_reviews([g["id"] for g in admin_groups])
-    return web.json_response({"items": items})
+    group_ids = [g["id"] for g in admin_groups]
+    # ?older=1 - раскрыть свёрнутый хвост (всё, что старше окна). Отдельным
+    # запросом, а не одним списком: у устаза таких сдач могут быть сотни, и
+    # тянуть их на каждое открытие кабинета незачем.
+    older = request.query.get("older") == "1"
+    items = get_pending_voice_reviews(group_ids, recent=not older)
+    if older:
+        return web.json_response({"items": items, "older": 0, "groups": []})
+    # Группы отдаём всегда - устаз ведёт несколько (Умар устаз: три), и
+    # кабинету надо показать, где именно скопилось.
+    groups = [
+        {"id": g["id"], "title": g["title"],
+         "waiting": count_pending_voice_reviews([g["id"]])}
+        for g in admin_groups
+    ]
+    return web.json_response({
+        "items": items,
+        "groups": groups,
+        "older": count_pending_voice_reviews(group_ids, recent=False),
+        "window_days": USTAZ_WINDOW_DAYS,
+        # Сегодняшняя дата СЕРВЕРА (Бишкек) - фронтенд по ней подписывает
+        # "сегодня"/"вчера", не спрашивая часовой пояс устройства.
+        "today": get_date(),
+    })
 
 
 def build_app():
