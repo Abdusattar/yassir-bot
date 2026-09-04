@@ -536,9 +536,25 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None):
     (решение пользователя, "подтягивать сразу, вне закладки"). Дистракторы
     (неверные варианты) всё равно строятся из words - они не обязаны быть
     с той же страницы, что и цель, это просто похожие по форме вопроса
-    вложения."""
-    target = pick_question_word(starred_words, progress_by_id) if starred_words \
-        else pick_question_word(words, progress_by_id)
+    вложения.
+
+    Если в starred_words подходящей цели нет, вопрос всё равно задаётся - из
+    обычного пула (04.09.2026, см. комментарий у отката ниже). None означает
+    ровно одно: пуст сам ОСНОВНОЙ пул - только тогда транспортам можно
+    показывать "Сдвинь страницу дальше"."""
+    target = pick_question_word(starred_words, progress_by_id) if starred_words else None
+    if target is None:
+        # Откат на обычный пул (04.09.2026, жалоба студента: "слова на
+        # закладке закончились" на 15-й странице, где пул за 1000 слов).
+        # Звёздная квота (каждый STARRED_QUESTION_QUOTA-й вопрос) не имеет
+        # права объявить исчерпанной ВСЮ закладку: подходящей цели в "Моих
+        # словах" может не оказаться в любой момент - все выучены, либо все
+        # отсеяны фильтрами pick_question_word (частый перевод, пояснение в
+        # скобках, отдых RECHECK_AFTER_DAYS). Раньше в этом случае возвращался
+        # None, и оба транспорта (чат core/mufradat_bot.py, веб
+        # core/mufradat_api.py) показывали "Сдвинь страницу дальше" - при
+        # полном основном пуле.
+        target = pick_question_word(words, progress_by_id)
     if target is None:
         return None
 
