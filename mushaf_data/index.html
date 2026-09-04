@@ -4231,10 +4231,21 @@
     }
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
+    } else if (groups.length > 1) {
+      // РАЗБИВКА ПО ГРУППАМ (04.09.2026, вопрос пользователя): одним общим
+      // списком студенты разных групп сливаются в кашу - устазу с тремя
+      // группами и супер-админу нужно видеть, чья это сдача, не вчитываясь
+      // в каждую строку. Порядок групп сохраняем тот же, что в списке
+      // сверху: свои первыми.
+      groups.forEach(function (g) {
+        var rows = items.filter(function (it) { return it.group_id === g.id; });
+        if (!rows.length) return;
+        html += '<div class="ustaz-group-title">' + ustazEsc(g.title) +
+          ' · <b style="color:var(--no)">' + rows.length + '</b></div>' +
+          rows.map(function (it) { return ustazRow(it, today, false); }).join('');
+      });
     } else {
-      html += items.map(function (it) {
-        return ustazRow(it, today, groups.length > 1 && ustazGroupFilter === null);
-      }).join('');
+      html += items.map(function (it) { return ustazRow(it, today, false); }).join('');
     }
     if (data.older) {
       html += '<div class="ustaz-older" id="ustaz-older">' +
