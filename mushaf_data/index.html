@@ -3361,9 +3361,14 @@
     });
   }
 
+  function hifzRecRelease() {
+    if (rec.stream) { rec.stream.getTracks().forEach(function (t) { t.stop(); }); rec.stream = null; }
+  }
+
   function hifzRecReset() {
     if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
-    if (rec.stream) { rec.stream.getTracks().forEach(function (t) { t.stop(); }); rec.stream = null; }
+    // Микрофон здесь НЕ отпускаем: hifzRecReset зовётся и при "перезаписать",
+    // а повторный захват - это повторный вопрос студенту.
     if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
     rec.mr = null; rec.chunks = []; rec.blob = null;
     var a = document.getElementById('hifz-rec-audio');
@@ -3381,6 +3386,7 @@
 
   function hifzRecClose() {
     hifzRecReset();
+    hifzRecRelease();   // панель закрыта - микрофон отпущен, индикатор гаснет
     document.getElementById('hifz-rec').classList.remove('visible');
   }
 
@@ -3409,13 +3415,37 @@
     el.textContent = Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
 
+  /* Разрешение на микрофон спрашивается ОДИН раз за открытие панели
+     записи (04.09.2026, жалоба студента: "каждый раз спрашивает").
+     Причина была в том, что после каждой записи мы глушили дорожку
+     (track.stop()), и следующий getUserMedia заводил захват заново - а
+     WebView Telegram на это заново переспрашивает. Теперь поток живёт,
+     пока панель открыта: "перезаписать" больше не вызывает вопроса.
+     Закрыли панель - отпускаем микрофон совсем (держать его открытым в
+     фоне нельзя: телефон покажет, что приложение слушает, и это будет
+     выглядеть ровно так, как не должно выглядеть приложение о Коране).
+
+     Между ЗАПУСКАМИ приложения вопрос всё равно будет: разрешение
+     принадлежит WebView Telegram, у Mini Apps нет API, чтобы его
+     запомнить. На Android Telegram спрашивает системное разрешение
+     один раз на себя, дальше вопрос внутри WebView; на iOS WKWebView
+     переспрашивает при каждом новом запуске приложения. */
+  function hifzRecStream() {
+    if (rec.stream && rec.stream.getTracks().some(function (t) { return t.readyState === 'live'; })) {
+      return Promise.resolve(rec.stream);
+    }
+    return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      rec.stream = stream;
+      return stream;
+    });
+  }
+
   function hifzRecStart() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_no_mic');
       return;
     }
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-      rec.stream = stream;
+    hifzRecStream().then(function (stream) {
       rec.chunks = [];
       // Формат не навязываем: Chrome/Android даёт webm/opus, Safari/iOS —
       // mp4/aac. Оба приводит к ogg сервер (ffmpeg), Telegram принимает
@@ -3430,7 +3460,9 @@
       rec.mr.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
       rec.mr.onstop = function () {
         rec.blob = new Blob(rec.chunks, { type: rec.chunks[0] ? rec.chunks[0].type : 'audio/webm' });
-        if (rec.stream) { rec.stream.getTracks().forEach(function (t) { t.stop(); }); rec.stream = null; }
+        // Дорожку здесь НЕ глушим (см. hifzRecStream): иначе "перезаписать"
+        // снова вызовет вопрос про микрофон. Микрофон отпускается при
+        // закрытии панели.
         if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
         rec.url = URL.createObjectURL(rec.blob);
         var a = document.getElementById('hifz-rec-audio');
