@@ -1140,6 +1140,44 @@
   .trainer-info, .trainer-session { font-size: 13px; color: var(--muted); }
   .trainer-score { font-size: 13px; color: var(--muted); }
 
+  /* Слово с ошибкой (04.09.2026). Подложкой, а не подчёркиванием: под
+     арабской вязью с огласовками линия лезет на знаки и читается как часть
+     письма. Один и тот же вид у устаза (пока отмечает) и у студента (когда
+     смотрит, что отметили) - это должна быть буквально одна картинка. */
+  .mushaf-line > span.err {
+    background: color-mix(in srgb, var(--no) 20%, transparent);
+    border-radius: 4px;
+  }
+  /* Нижняя полоса проверки у устаза - вместо студенческой (Крупно/Сдать). */
+  #review-foot {
+    display: none;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px 14px;
+    background: var(--chrome-bg, var(--card-bg));
+    border-top: 1px solid var(--card-border);
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #app.review #review-foot { display: flex; }
+  #app.review #hifz-foot { display: none !important; }
+  #review-foot .row { display: flex; gap: 8px; }
+  #review-foot button {
+    flex: 1 1 auto;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 10px;
+    font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer;
+  }
+  #review-foot button.ok {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  }
+  #review-foot button.no {
+    background: var(--no); border-color: var(--no); color: #fff; font-weight: 600;
+  }
+  #review-foot button:disabled { opacity: .5; cursor: default; }
+  #review-foot .hint { font-size: 12px; color: var(--muted); text-align: center; }
+
   /* Кабинет студента "Сдачи" (04.09.2026) - делит каркас с кабинетом
      устаза ниже: топбар + прокручиваемое тело, список сверху вниз. */
   #subs {
@@ -1190,6 +1228,7 @@
     color: var(--marker-color);
   }
   .sub-pill.done { background: var(--accent-soft); color: var(--accent); }
+  .sub-pill.retake { background: var(--no-soft); color: var(--no); }
   .sub-review {
     font-size: 13px; color: var(--ink);
     background: var(--accent-soft); border-radius: 9px; padding: 8px 10px;
@@ -1604,6 +1643,20 @@
   <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
        метод 40+40 не предусматривает "проскочить единицу, не сдав её".
        Поправить место можно всегда - "поправить" в шапке. -->
+  <!-- Проверка сдачи устазом (04.09.2026): та же страница мусхафа, что
+       видит студент, но снизу - вердикт. Тап по слову отмечает ошибку. -->
+  <div id="review-foot">
+    <div class="hint" id="review-hint"></div>
+    <div class="row">
+      <button id="review-play">▶ Прослушать сдачу</button>
+      <button id="review-comment">🎙 Замечание</button>
+    </div>
+    <div class="row">
+      <button id="review-accept" class="ok">✅ Принято</button>
+      <button id="review-retake" class="no">↺ На пересдачу</button>
+    </div>
+  </div>
+
   <div id="hifz-foot">
     <button id="hifz-big-btn">Крупно</button>
     <!-- Прослушать Хусари (Muallim) — вкл/выкл, играет ТЕКУЩУЮ единицу
@@ -1755,6 +1808,18 @@
       subs_review_voice: 'голосовой разбор',
       subs_playing: '⏸ Стоп',
       subs_audio_failed: 'Не удалось проиграть запись',
+      review_tap_words: 'Тапни по словам, где были ошибки',
+      review_marked: 'Отмечено слов: %N%',
+      review_saving: 'Сохраняем…',
+      review_done_ok: 'Принято ✅',
+      review_done_retake: 'Отправлено на пересдачу',
+      review_failed: 'Не получилось — попробуй ещё раз',
+      review_play: '▶ Прослушать сдачу',
+      review_stop: '⏸ Стоп',
+      subs_verdict_ok: 'принято',
+      subs_verdict_retake: 'на пересдачу',
+      subs_marked_words: 'Отмечено слов: %N%',
+      hifz_retake_pending: 'Сначала пересдай: %P%',
       subs_retake_hint: 'Пересдаётся ровно то, что сдавал: та же строчка, половина или страница.',
       dash_ustaz_sub: 'Сдачи на проверке',
       ustaz_title: 'Устаз',
@@ -2460,6 +2525,11 @@
     var reveal = function () {
       document.getElementById('ayah-text').innerHTML = html;
       if (typeof hifzApply === 'function') hifzApply();
+      // Пометки слов рисуем ЗДЕСЬ, когда страница реально отрисована, а не
+      // по таймеру после loadPage: страница приходит с сервера, и угадывать
+      // задержку - тот же класс гонки, что уже ловили со шрифтом (27.08).
+      if (typeof review !== 'undefined' && review.on) reviewAfterRender();
+      else if (pendingErrorMarks) { applyErrorMarks(pendingErrorMarks); pendingErrorMarks = null; }
       // document.fonts.ready, не сразу clampFontToFit() - у loadV4Font()
       // .load() резолвится, как только байты шрифта скачаны и распаршены,
       // но браузеру ещё нужно применить его к УЖЕ ВСТАВЛЕННОМУ тексту
@@ -2504,6 +2574,19 @@
     }, 1800);
   }
   function showWordPopup(el) {
+    // В режиме проверки тап по слову - это ПОМЕТКА ОШИБКИ, а не перевод:
+    // устаз здесь не читает, а отмечает (04.09.2026).
+    if (review.on) {
+      var row = el.parentNode;
+      var line = parseInt(row.getAttribute('data-line'), 10);
+      var idx = Array.prototype.indexOf.call(row.children, el);
+      if (isNaN(line) || idx < 0) return;
+      var key = reviewKey(line, idx);
+      review.words[key] = !review.words[key];
+      el.classList.toggle('err', !!review.words[key]);
+      reviewHint();
+      return;
+    }
     var text = el.getAttribute('data-tr');
     if (text) showPopupMessage(el, text);
   }
@@ -3111,6 +3194,9 @@
   document.getElementById('hifz-big-listen-btn').addEventListener('click', hifzListenToggle);
 
   function hifzExit() {
+    // Проверка сдачи закрывается своей дорогой - обратно в кабинет устаза,
+    // а не в обычное чтение (04.09.2026).
+    if (review.on) { reviewClose(); return; }
     // Выход из режима во время пересдачи (см. subsRetake) обязан вернуть
     // указатель на место, где студент был до неё, и снять сам признак
     // пересдачи - иначе следующая ОБЫЧНАЯ сдача не сдвинула бы указатель.
@@ -3536,8 +3622,13 @@
         hifzProgressOpen();
         return;
       }
+      // Гейт пересдачи (04.09.2026): сервер не принял сдачу другой единицы,
+      // пока не принята пересдача. Называем место прямо - иначе отказ
+      // читается как поломка.
+      var err = res.data && res.data.error;
       document.getElementById('hifz-rec-hint').textContent =
-        res.data && res.data.error === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
+        err === 'retake_pending' ? T('hifz_retake_pending', { P: res.data.place || '' })
+        : (err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed'));
       hifzRecButtons('done');
     }).catch(function () {
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');
@@ -3564,7 +3655,7 @@
     else if (id === 'hifz-rec-again') { hifzRecReset();
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
       hifzRecButtons('idle'); }
-    else if (id === 'hifz-rec-send') hifzRecSend();
+    else if (id === 'hifz-rec-send') { if (reviewCommentMode) reviewCommentSend(); else hifzRecSend(); }
   });
   document.getElementById('hifz-rec-close').addEventListener('click', hifzRecClose);
 
@@ -4058,10 +4149,19 @@
 
   function subsRow(item, today) {
     var done = !!item.reviewed_at;
+    // Вердикт устаза важнее факта "отреагировал": принято - это закрытая
+    // дорога, пересдача - работа, которая держит студента на месте.
+    var pill = item.verdict === 'accepted'
+      ? ['done', T('subs_verdict_ok')]
+      : (item.verdict === 'retake'
+        ? ['retake', T('subs_verdict_retake')]
+        : [done ? 'done' : 'wait', T(done ? 'subs_done' : 'subs_wait')]);
+    var marks = [];
+    try { marks = JSON.parse(item.error_words || '[]'); } catch (e) { marks = []; }
     var html = '<div class="sub-row">' +
       '<div class="top"><span class="place">' + subsPlace(item) + '</span>' +
-      '<span class="sub-pill ' + (done ? 'done' : 'wait') + '">' +
-      T(done ? 'subs_done' : 'subs_wait') + '</span></div>' +
+      '<span class="sub-pill ' + pill[0] + '">' + pill[1] + '</span></div>' +
+      (marks.length ? '<div class="meta">' + T('subs_marked_words', { N: marks.length }) + '</div>' : '') +
       '<div class="meta">' + ustazWhen(item, today) +
       (item.group_title ? ' · ' + ustazEsc(item.group_title) : '') + '</div>';
     if (item.review_type === 'text' && item.review_text) {
@@ -4096,6 +4196,10 @@
 
   function subsRetake(item) {
     subsStopAudio();
+    // Слова, отмеченные устазом, студент должен увидеть НА СТРАНИЦЕ - ради
+    // этого пересдача и открывается прямо здесь, а не отдельным списком.
+    try { pendingErrorMarks = JSON.parse(item.error_words || '[]'); }
+    catch (e) { pendingErrorMarks = null; }
     hifzRetakeSaved = { line: hifz.line, stage: hifz.stage, on: hifz.on };
     hifzRetakeMode = true;
     hifz.on = true;
@@ -4160,6 +4264,203 @@
     });
   }
 
+  /* ─── Проверка сдачи устазом (04.09.2026) ──────────────────────────────
+     Экран ureview из макета 01.09. Устаз слушает сдачу, тапает по словам с
+     ошибками и ставит вердикт. Страница мусхафа - ТА ЖЕ, что видит студент:
+     подсветку единицы даёт та же машинерия заучивания (hifz.line/stage), а
+     пометки слов рисуются одним и тем же классом .err у обоих. Это условие
+     из макета: у устаза и студента должна быть буквально одна картинка.
+
+     Слово адресуем как (номер строки на странице, позиция span в строке) -
+     вёрстка построчная и детерминированная, адрес переживает перерисовку.
+
+     Гейт "пока не принято - дальше хода нет" живёт на СЕРВЕРЕ (см.
+     submit_hifz_recording): интерфейс можно перезагрузить, сдачу - нет. */
+  var review = { on: false, sub: null, words: {}, saved: null };
+  // Пометки, которые надо показать студенту, как только страница отрисуется
+  // (см. reveal в renderPage).
+  var pendingErrorMarks = null;
+  var reviewAudio = new Audio();
+  var reviewPlaying = false;
+
+  function reviewKey(line, word) { return line + ':' + word; }
+
+  function reviewMarkedList() {
+    return Object.keys(review.words).filter(function (k) { return review.words[k]; })
+      .map(function (k) {
+        var p = k.split(':');
+        return { line: parseInt(p[0], 10), word: parseInt(p[1], 10) };
+      });
+  }
+
+  // Рисуем пометки на уже отрисованной странице. Одна функция и для устаза
+  // (он их ставит), и для студента (он их смотрит) - расхождению взяться
+  // неоткуда.
+  function applyErrorMarks(marks) {
+    var rows = document.querySelectorAll('#ayah-text .mushaf-line');
+    Array.prototype.forEach.call(rows, function (row) {
+      Array.prototype.forEach.call(row.children, function (sp) { sp.classList.remove('err'); });
+    });
+    (marks || []).forEach(function (m) {
+      var row = document.querySelector('#ayah-text .mushaf-line[data-line="' + m.line + '"]');
+      if (row && row.children[m.word]) row.children[m.word].classList.add('err');
+    });
+  }
+
+  function reviewHint() {
+    var n = reviewMarkedList().length;
+    document.getElementById('review-hint').textContent =
+      n ? T('review_marked', { N: n }) : T('review_tap_words');
+  }
+
+  function reviewStopAudio() {
+    try { reviewAudio.pause(); } catch (e) {}
+    if (reviewAudio.src && reviewAudio.src.indexOf('blob:') === 0) URL.revokeObjectURL(reviewAudio.src);
+    reviewAudio.removeAttribute('src');
+    reviewPlaying = false;
+    document.getElementById('review-play').textContent = T('review_play');
+  }
+
+  reviewAudio.addEventListener('ended', reviewStopAudio);
+
+  function reviewPlay() {
+    if (reviewPlaying) { reviewStopAudio(); return; }
+    var btn = document.getElementById('review-play');
+    btn.disabled = true;
+    fetch(apiBase() + '/ustaz/audio?id=' + review.sub.id + '&kind=own', {
+      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('audio');
+      return r.blob();
+    }).then(function (blob) {
+      reviewAudio.src = URL.createObjectURL(blob);
+      reviewPlaying = true;
+      btn.disabled = false;
+      btn.textContent = T('review_stop');
+      return reviewAudio.play();
+    }).catch(function () {
+      btn.disabled = false;
+      btn.textContent = T('review_failed');
+      setTimeout(function () { btn.textContent = T('review_play'); }, 2000);
+    });
+  }
+
+  function reviewOpen(submissionId) {
+    apiCall('/ustaz/submission?id=' + submissionId).then(function (res) {
+      if (!res.data || res.status !== 200) return;
+      var sub = res.data;
+      if (sub.hifz_page == null) return;   // старая сдача без места - проверять нечего
+      review.on = true;
+      review.sub = sub;
+      review.words = {};
+      (sub.error_words || []).forEach(function (m) { review.words[reviewKey(m.line, m.word)] = true; });
+      // Прежнее состояние заучивания устаза - он и сам студент, его место
+      // не должно съехать от того, что он кого-то проверил.
+      review.saved = { on: hifz.on, line: hifz.line, stage: hifz.stage, picking: hifz.picking };
+      hifz.on = true;
+      hifz.picking = false;
+      hifz.stage = sub.hifz_stage || 1;
+      hifz.line = sub.hifz_line || 0;
+      document.getElementById('ustaz').style.display = 'none';
+      openMushaf('page');
+      document.getElementById('app').classList.add('review');
+      if (currentPage !== sub.hifz_page) {
+        loadPage(sub.hifz_page);      // reveal() сама позовёт reviewAfterRender
+      } else {
+        hifzApply(); hifzHead(); reviewAfterRender();
+      }
+    });
+  }
+
+  function reviewAfterRender() {
+    if (!review.on) return;
+    applyErrorMarks(reviewMarkedList());
+    reviewHint();
+    var where = document.getElementById('hifz-where');
+    var sub = document.getElementById('hifz-sub');
+    if (where) where.textContent = review.sub.student_name;
+    if (sub) sub.textContent = review.sub.group_title || '';
+  }
+
+  function reviewClose() {
+    reviewStopAudio();
+    review.on = false;
+    document.getElementById('app').classList.remove('review');
+    applyErrorMarks([]);
+    if (review.saved) {
+      hifz.on = review.saved.on;
+      hifz.line = review.saved.line;
+      hifz.stage = review.saved.stage;
+      hifz.picking = review.saved.picking;
+      review.saved = null;
+    }
+    hifzApply();
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('ustaz').style.display = 'flex';
+    openUstaz();
+  }
+
+  function reviewVerdict(verdict) {
+    var hint = document.getElementById('review-hint');
+    hint.textContent = T('review_saving');
+    apiCall('/ustaz/verdict', {
+      method: 'POST',
+      body: { id: review.sub.id, verdict: verdict, words: reviewMarkedList() }
+    }).then(function (res) {
+      if (res.data && res.data.ok) {
+        hint.textContent = T(verdict === 'accepted' ? 'review_done_ok' : 'review_done_retake');
+        setTimeout(reviewClose, 900);
+        return;
+      }
+      hint.textContent = T('review_failed');
+    }).catch(function () { hint.textContent = T('review_failed'); });
+  }
+
+  // Замечание голосом пишем той же панелью, что и сдачу у студента - у устаза
+  // нет отдельного "своего" рекордера, и учить его второму интерфейсу незачем.
+  var reviewCommentMode = false;
+
+  function reviewComment() {
+    reviewStopAudio();
+    reviewCommentMode = true;
+    hifzRecReset();
+    document.getElementById('hifz-rec-place').textContent = review.sub.student_name;
+    document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
+    hifzRecButtons('idle');
+    document.getElementById('hifz-rec').classList.add('visible');
+  }
+
+  function reviewCommentSend() {
+    if (!rec.blob) return;
+    hifzRecButtons('sending');
+    document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
+    var fd = new FormData();
+    fd.append('audio', rec.blob, 'rec');
+    fd.append('id', String(review.sub.id));
+    fetch(apiBase() + '/ustaz/comment', {
+      method: 'POST',
+      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' },
+      body: fd
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok) {
+        document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        reviewCommentMode = false;
+        setTimeout(hifzRecClose, 1000);
+        return;
+      }
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');
+      hifzRecButtons('done');
+    }).catch(function () {
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');
+      hifzRecButtons('done');
+    });
+  }
+
+  document.getElementById('review-play').addEventListener('click', reviewPlay);
+  document.getElementById('review-comment').addEventListener('click', reviewComment);
+  document.getElementById('review-accept').addEventListener('click', function () { reviewVerdict('accepted'); });
+  document.getElementById('review-retake').addEventListener('click', function () { reviewVerdict('retake'); });
+
   // Подпись времени сдачи: "сегодня 09:14" / "вчера 21:03" / "02.09 19:22".
   // Сегодняшнюю дату берём У СЕРВЕРА (поле today) - у телефона устаза может
   // быть свой часовой пояс, а sent_at записан в бишкекском времени.
@@ -4206,7 +4507,11 @@
   function ustazRow(item, today, withGroup) {
     var waited = ustazWaited(item.waited_min);
     var late = item.waited_min != null && item.waited_min >= 60 * 24;
-    return '<div class="ustaz-row"><div class="name">' + ustazEsc(item.student_name) + '</div>' +
+    // Сдачу из приложения можно открыть на проверку (место известно). У
+    // голосового, присланного прямо в группу, места нет - открывать нечего,
+    // такая строка остаётся просто напоминанием.
+    var open = item.id && item.hifz_page != null ? ' data-review="' + item.id + '"' : '';
+    return '<div class="ustaz-row"' + open + '><div class="name">' + ustazEsc(item.student_name) + '</div>' +
       '<div class="meta">' + ustazPlace(item) +
       (withGroup ? ' · ' + ustazEsc(item.group_title) : '') + '</div>' +
       '<div class="meta">' + ustazWhen(item, today) +
@@ -4291,6 +4596,12 @@
         var next = gid === '' ? null : parseInt(gid, 10);
         ustazGroupFilter = (next === ustazGroupFilter) ? null : next;
         ustazRenderList(data);
+      });
+    });
+    Array.prototype.forEach.call(body.querySelectorAll('[data-review]'), function (el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function () {
+        reviewOpen(parseInt(el.getAttribute('data-review'), 10));
       });
     });
     var olderEl = document.getElementById('ustaz-older');

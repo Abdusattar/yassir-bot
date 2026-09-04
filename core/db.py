@@ -1,3 +1,4 @@
+import json
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -292,6 +293,15 @@ def _run_migrations(c):
     # колонке (review_by = CURRICULUM_REVIEWER_ID).
     if "review_by" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN review_by TEXT")
+    # Вердикт устаза (04.09.2026): принято / на пересдачу. До этого была
+    # только отметка reviewed_at ("устаз отреагировал") без исхода, и
+    # студент не знал, зачтено ли. error_words - помеченные устазом слова,
+    # JSON-список позиций [{"line": n, "word": i}]: слово адресуем как
+    # (строка на странице, позиция слова в строке), вёрстка у нас построчная
+    # и такой адрес переживает и смену шрифта, и перерисовку.
+    for col in ("verdict", "verdict_at", "verdict_by", "error_words"):
+        if col not in vscols:
+            c.execute(f"ALTER TABLE voice_submissions ADD COLUMN {col} TEXT")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -1372,7 +1382,7 @@ def mark_voice_reviewed(chat_id, message_id):
 
 
 def save_submission_review(chat_id, message_id, review_type, review_file_id=None,
-                           review_text=None, review_by=None):
+                           review_text=None, review_by=None, overwrite=False):
     """Разбор устаза на голосовую сдачу: голосовой реплай или текст.
 
     ДВЕ ЗАДАЧИ у одних и тех же данных:
@@ -1383,13 +1393,19 @@ def save_submission_review(chat_id, message_id, review_type, review_file_id=None
       - кабинет студента "Сдачи" (04.09.2026) - студенту нужен ответ СВОЕГО
         устаза, а он в большинстве групп не Умар.
     Поэтому пишем от любого устаза, а R&D-выборка отделяется по review_by.
-    Без автотранскрипции - просто копим сырьё, как и раньше."""
+    Без автотранскрипции - просто копим сырьё, как и раньше.
+
+    overwrite (04.09.2026) - для замечания, записанного в кабинете устаза:
+    оно заведомо свежее прежнего разбора и должно его заменить. Реплаи из
+    группы по-прежнему не затирают первый разбор (overwrite=False): там
+    подряд идут и обсуждение, и уточнения, а первым приходит именно
+    разбор."""
     with db() as c:
         c.execute(
             "UPDATE voice_submissions SET review_type=?, review_file_id=?, review_text=?,"
             " review_by=?"
             " WHERE chat_id=? AND (message_id=? OR photo_message_id=?)"
-            " AND review_type IS NULL",
+            + ("" if overwrite else " AND review_type IS NULL"),
             (review_type, review_file_id, review_text, review_by,
              chat_id, message_id, message_id)
         )
@@ -1410,6 +1426,7 @@ def get_student_submissions(student_id, limit=20):
             " vs.file_id IS NOT NULL AS has_audio,"
             " vs.review_type, vs.review_text,"
             " vs.review_file_id IS NOT NULL AS has_review_audio,"
+            " vs.verdict, vs.verdict_at, vs.error_words,"
             " g.title AS group_title, ru.name AS review_by_name"
             " FROM voice_submissions vs"
             " JOIN groups g ON g.id = vs.group_id"
@@ -1419,6 +1436,74 @@ def get_student_submissions(student_id, limit=20):
             (student_id, limit)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+VERDICT_ACCEPTED = "accepted"
+VERDICT_RETAKE = "retake"
+
+
+def get_submission(submission_id):
+    """Одна сдача целиком - для экрана проверки у устаза. Права проверяет
+    вызывающий (кабинет знает группы устаза), здесь только чтение."""
+    with db() as c:
+        row = c.execute(
+            "SELECT vs.*, u.name AS student_name, g.title AS group_title,"
+            " g.chat_id AS group_chat_id, u.phone AS student_phone"
+            " FROM voice_submissions vs"
+            " JOIN users u ON u.id = vs.student_id"
+            " JOIN groups g ON g.id = vs.group_id"
+            " WHERE vs.id=?",
+            (submission_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def set_submission_verdict(submission_id, verdict, verdict_by, error_words=None):
+    """Вердикт устаза. Заодно закрывает сдачу как проверенную: вердикт - это
+    и есть проверка, отдельной отметки реакцией больше ждать нечего.
+
+    error_words - список позиций слов, сериализуем в JSON тут же, чтобы
+    формат хранения знало ровно одно место."""
+    with db() as c:
+        c.execute(
+            "UPDATE voice_submissions SET verdict=?, verdict_at=?, verdict_by=?,"
+            " error_words=?, reviewed_at=COALESCE(reviewed_at, ?)"
+            " WHERE id=?",
+            (verdict, get_now().isoformat(), verdict_by,
+             json.dumps(error_words or [], ensure_ascii=False),
+             get_now().isoformat(), submission_id)
+        )
+
+
+def get_blocking_retake(student_id, group_id):
+    """Непринятая пересдача студента - та, из-за которой он стоит на месте
+    (гейт, решение пользователя 04.09.2026: "не пересдал - следующий этап
+    закрыт", строка -> полстраницы -> страница -> строка следующей страницы).
+
+    Блокирует ТОЛЬКО вердикт retake. "Ещё не проверено" не блокирует: иначе
+    забывчивость устаза останавливала бы студента насовсем, а методика про
+    закрытую дорогу, а не про наказание.
+
+    Снимается любой ПОЗЖЕ принятой сдачей той же единицы - именно её студент
+    и пересдаёт."""
+    with db() as c:
+        row = c.execute(
+            "SELECT * FROM voice_submissions"
+            " WHERE student_id=? AND group_id=? AND verdict=?"
+            " ORDER BY verdict_at DESC LIMIT 1",
+            (student_id, group_id, VERDICT_RETAKE)
+        ).fetchone()
+        if not row:
+            return None
+        accepted = c.execute(
+            "SELECT 1 FROM voice_submissions"
+            " WHERE student_id=? AND group_id=? AND verdict=?"
+            " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
+            " AND verdict_at > ? LIMIT 1",
+            (student_id, group_id, VERDICT_ACCEPTED,
+             row["hifz_page"], row["hifz_line"], row["hifz_stage"], row["verdict_at"])
+        ).fetchone()
+    return None if accepted else dict(row)
 
 
 def get_submission_audio(submission_id, student_id, kind):
@@ -1481,7 +1566,7 @@ def get_pending_voice_reviews(group_ids, recent=True):
     where, params = _pending_reviews_sql(group_ids, recent)
     with db() as c:
         rows = c.execute(
-            "SELECT vs.sent_at, vs.date, vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
+            "SELECT vs.id, vs.sent_at, vs.date, vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
             " vs.group_id, u.name AS student_name, g.title AS group_title"
             # По date, а не только по sent_at: sent_at появился ALTER-ом
             # позже самой таблицы, у старых строк он пуст.

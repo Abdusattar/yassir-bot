@@ -33,7 +33,9 @@ import re
 from core.content import SHORT_TASKS
 from core.db import (
     find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
-    get_today_report, save_voice_submission,
+    get_today_report, save_voice_submission, get_blocking_retake, get_submission,
+    set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
+    VERDICT_RETAKE,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -365,6 +367,22 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     if not user:
         return {"ok": False, "error": "no_user"}
 
+    # Гейт пересдачи (04.09.2026, решение пользователя): пока устаз вернул
+    # единицу на пересдачу и не принял её заново, вперёд хода нет - строка,
+    # половина, страница идут строго по порядку. Проверяем ЗДЕСЬ, на сервере,
+    # а не в интерфейсе: локальное состояние можно перезагрузить, сдачу -
+    # нет. Пересдать саму эту единицу можно всегда, для того гейт и стоит.
+    blocking = get_blocking_retake(user["id"], group["id"])
+    if blocking and (blocking["hifz_page"], blocking["hifz_line"], blocking["hifz_stage"]) \
+            != (page, line, stage):
+        return {
+            "ok": False, "error": "retake_pending",
+            "place": _hifz_place(blocking["hifz_page"], blocking["hifz_line"],
+                                 blocking["hifz_stage"], page_lines),
+            "retake": {"page": blocking["hifz_page"], "line": blocking["hifz_line"],
+                       "stage": blocking["hifz_stage"]},
+        }
+
     ogg = await transcode_to_ogg(audio_bytes)
     if not ogg:
         return {"ok": False, "error": "bad_audio"}
@@ -404,6 +422,75 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     if credited:
         save_report(user["id"], group["id"], get_date(), {"m": True})
     return {"ok": True, "credited": credited, "place": place}
+
+
+async def _notify_student(sub, text):
+    """Извещение о вердикте идёт И в группу реплаем на саму сдачу, И в личку
+    (решение пользователя 04.09.2026). В группе - потому что там вся жизнь
+    сдачи и видно, что работа идёт; в личку - потому что в группе сообщение
+    легко пролистать. Личка только тем, кто открывал бота (get_dm_ok):
+    иначе Telegram вернёт ошибку, а студент всё равно ничего не получит."""
+    await send_message(sub["group_chat_id"], text,
+                       reply_to_message_id=sub["message_id"])
+    if get_dm_ok(sub["student_id"]):
+        await send_message(sub["student_phone"], text)
+
+
+async def submit_ustaz_verdict(ustaz_id, submission_id, verdict, words=None):
+    """Вердикт устаза по сдаче. Права проверяет вызывающий (кабинет знает
+    группы устаза), здесь - сама запись и извещение студента."""
+    sub = get_submission(submission_id)
+    if not sub:
+        return {"ok": False, "error": "not_found"}
+    if verdict not in (VERDICT_ACCEPTED, VERDICT_RETAKE):
+        return {"ok": False, "error": "bad_verdict"}
+
+    set_submission_verdict(submission_id, verdict, ustaz_id, words)
+    place = _hifz_place(sub["hifz_page"], sub["hifz_line"] or 0, sub["hifz_stage"] or 1) \
+        if sub["hifz_page"] is not None else ""
+    marked = len(words or [])
+    if verdict == VERDICT_ACCEPTED:
+        text = f"{sub['student_name']}, принято ✅"
+        if place:
+            text += f" — {place}"
+    else:
+        text = f"{sub['student_name']}, нужно пересдать"
+        if place:
+            text += f" — {place}"
+        if marked:
+            text += f"\nОтмечено слов: {marked} — они подсвечены в приложении"
+        text += "\nПослушай замечание устаза и начитай заново 🤲"
+    await _notify_student(sub, text)
+    return {"ok": True, "verdict": verdict, "place": place}
+
+
+async def send_ustaz_comment(ustaz_id, submission_id, audio_bytes):
+    """Голосовое замечание, записанное ПРЯМО В КАБИНЕТЕ (04.09.2026). Уходит
+    реплаем на сдачу в группу - привычный путь не расходится с новым, устаз в
+    группе видит то же, что и раньше, - и сохраняется в самой сдаче, чтобы
+    студент слушал его в приложении.
+
+    Доступно и при "принято" (уточнение пользователя): похвала и уточнение
+    тоже нужны, вердикт этому не мешает."""
+    sub = get_submission(submission_id)
+    if not sub:
+        return {"ok": False, "error": "not_found"}
+    ogg = await transcode_to_ogg(audio_bytes)
+    if not ogg:
+        return {"ok": False, "error": "bad_audio"}
+    res = await send_voice_bytes(
+        sub["group_chat_id"], ogg,
+        caption=f"Замечание устаза — {sub['student_name']}",
+        reply_to_message_id=sub["message_id"]
+    )
+    if not (res and res.get("ok")):
+        return {"ok": False, "error": "send_failed"}
+    file_id = (res["result"].get("voice") or {}).get("file_id")
+    # Пишем разбор в САМУ сдачу (по её message_id), а не в новое сообщение -
+    # студент открывает сдачу и слышит замечание рядом с ней.
+    save_submission_review(sub["chat_id"], sub["message_id"], "voice",
+                           review_file_id=file_id, review_by=ustaz_id, overwrite=True)
+    return {"ok": True}
 
 
 async def handle_stale_answer_tap(user_id, chat_id):

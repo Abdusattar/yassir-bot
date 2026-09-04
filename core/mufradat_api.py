@@ -35,6 +35,7 @@ from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, get_all_groups,
     get_student_submissions, get_submission_audio, find_user_by_phone,
+    get_submission, VERDICT_ACCEPTED, VERDICT_RETAKE,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -44,6 +45,7 @@ from core.mufradat import (
     get_starred_question_pool, _is_junk,
 )
 from core.mufradat_bot import (
+    submit_ustaz_verdict, send_ustaz_comment,
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
     submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES,
@@ -717,6 +719,128 @@ async def handle_ustaz_waiting(request, user_id):
     })
 
 
+def _ustaz_submission(user_id, submission_id):
+    """Сдача, которую этому устазу МОЖНО проверять: она из его группы, либо
+    он супер-админ (он подхватывает там, где устаз группы не успел - решение
+    пользователя 04.09.2026). Возвращает None, если нельзя."""
+    sub = get_submission(submission_id)
+    if not sub:
+        return None
+    visible, _own, _is_super = _visible_ustaz_groups(user_id)
+    return sub if sub["group_id"] in [g["id"] for g in visible] else None
+
+
+async def _telegram_audio_response(file_id):
+    """Общая часть отдачи звука из Telegram - см. handle_submission_audio,
+    почему через нас, а не ссылкой."""
+    async with aiohttp.ClientSession() as session:
+        api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+        async with session.get(f"{api}/getFile", params={"file_id": file_id}) as r:
+            meta = await r.json()
+        path = (meta.get("result") or {}).get("file_path")
+        if not meta.get("ok") or not path:
+            return web.json_response({"error": "no_file"}, status=404)
+        url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{path}"
+        async with session.get(url) as r:
+            if r.status != 200:
+                return web.json_response({"error": "no_file"}, status=404)
+            body = await r.content.read(TELEGRAM_FILE_MAX_BYTES + 1)
+    if len(body) > TELEGRAM_FILE_MAX_BYTES:
+        return web.json_response({"error": "too_big"}, status=413)
+    return web.Response(body=body, content_type="audio/ogg")
+
+
+@with_auth
+async def handle_ustaz_submission(request, user_id):
+    """GET ?id= - одна сдача для экрана проверки: место, студент, что уже
+    отмечено и какой вердикт стоял раньше (устаз может передумать)."""
+    try:
+        sub = _ustaz_submission(user_id, int(request.query.get("id", "")))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    if not sub:
+        return web.json_response({"error": "forbidden"}, status=403)
+    return web.json_response({
+        "id": sub["id"],
+        "student_name": sub["student_name"],
+        "group_title": sub["group_title"],
+        "date": sub["date"], "sent_at": sub["sent_at"],
+        "hifz_page": sub["hifz_page"], "hifz_line": sub["hifz_line"],
+        "hifz_stage": sub["hifz_stage"],
+        "has_audio": bool(sub["file_id"]),
+        "has_review_audio": bool(sub["review_file_id"]),
+        "verdict": sub["verdict"],
+        "error_words": json.loads(sub["error_words"] or "[]"),
+    })
+
+
+@with_auth
+async def handle_ustaz_audio(request, user_id):
+    """GET ?id=&kind=own|review - запись студента или прежнее замечание."""
+    kind = request.query.get("kind", "own")
+    if kind not in ("own", "review"):
+        return web.json_response({"error": "bad_kind"}, status=400)
+    try:
+        sub = _ustaz_submission(user_id, int(request.query.get("id", "")))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    if not sub:
+        return web.json_response({"error": "forbidden"}, status=403)
+    file_id = sub["file_id"] if kind == "own" else sub["review_file_id"]
+    if not file_id:
+        return web.json_response({"error": "not_found"}, status=404)
+    return await _telegram_audio_response(file_id)
+
+
+@with_auth
+async def handle_ustaz_verdict(request, user_id):
+    """POST {id, verdict: accepted|retake, words: [{line, word}]}."""
+    body = await request.json()
+    verdict = body.get("verdict")
+    if verdict not in (VERDICT_ACCEPTED, VERDICT_RETAKE):
+        return web.json_response({"error": "bad_verdict"}, status=400)
+    try:
+        sub = _ustaz_submission(user_id, int(body.get("id")))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "bad_id"}, status=400)
+    if not sub:
+        return web.json_response({"error": "forbidden"}, status=403)
+    words = body.get("words") or []
+    if not isinstance(words, list) or len(words) > 200:
+        return web.json_response({"error": "bad_words"}, status=400)
+    clean = [
+        {"line": int(w.get("line", 0)), "word": int(w.get("word", 0))}
+        for w in words if isinstance(w, dict)
+    ]
+    return web.json_response(await submit_ustaz_verdict(user_id, sub["id"], verdict, clean))
+
+
+@with_auth
+async def handle_ustaz_comment(request, user_id):
+    """POST multipart (audio) ?id= - голосовое замечание из кабинета."""
+    reader = await request.multipart()
+    audio, submission_id = None, None
+    while True:
+        part = await reader.next()
+        if part is None:
+            break
+        if part.name == "audio":
+            audio = await part.read(decode=False)
+            if len(audio) > HIFZ_MAX_UPLOAD_BYTES:
+                return web.json_response({"error": "too_big"}, status=413)
+        elif part.name == "id":
+            submission_id = (await part.text()).strip()
+    if not audio or not submission_id:
+        return web.json_response({"error": "bad_request"}, status=400)
+    try:
+        sub = _ustaz_submission(user_id, int(submission_id))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    if not sub:
+        return web.json_response({"error": "forbidden"}, status=403)
+    return web.json_response(await send_ustaz_comment(user_id, sub["id"], audio))
+
+
 # Кабинет студента "Сдачи" (04.09.2026, экран из макета 01.09). Показываем
 # последние сдачи: место, статус, разбор устаза. Вердикта "принято/на
 # пересдачу" в базе пока НЕТ - есть только reviewed_at ("устаз отреагировал"),
@@ -762,24 +886,9 @@ async def handle_submission_audio(request, user_id):
     file_id = get_submission_audio(submission_id, user["id"], kind)
     if not file_id:
         return web.json_response({"error": "not_found"}, status=404)
-
-    async with aiohttp.ClientSession() as session:
-        api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-        async with session.get(f"{api}/getFile", params={"file_id": file_id}) as r:
-            meta = await r.json()
-        path = (meta.get("result") or {}).get("file_path")
-        if not meta.get("ok") or not path:
-            return web.json_response({"error": "no_file"}, status=404)
-        url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{path}"
-        async with session.get(url) as r:
-            if r.status != 200:
-                return web.json_response({"error": "no_file"}, status=404)
-            body = await r.content.read(TELEGRAM_FILE_MAX_BYTES + 1)
-    if len(body) > TELEGRAM_FILE_MAX_BYTES:
-        return web.json_response({"error": "too_big"}, status=413)
     # Голосовые Telegram - ogg/opus; own-запись студента мы сами перекодируем
     # в тот же формат при сдаче (core/mufradat_bot.py, transcode_to_ogg).
-    return web.Response(body=body, content_type="audio/ogg")
+    return await _telegram_audio_response(file_id)
 
 
 def build_app():
@@ -807,6 +916,10 @@ def build_app():
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     app.router.add_get("/api/muf/ustaz/waiting", handle_ustaz_waiting)
+    app.router.add_get("/api/muf/ustaz/submission", handle_ustaz_submission)
+    app.router.add_get("/api/muf/ustaz/audio", handle_ustaz_audio)
+    app.router.add_post("/api/muf/ustaz/verdict", handle_ustaz_verdict)
+    app.router.add_post("/api/muf/ustaz/comment", handle_ustaz_comment)
     app.router.add_get("/api/muf/submissions", handle_submissions)
     app.router.add_get("/api/muf/submissions/audio", handle_submission_audio)
     return app
