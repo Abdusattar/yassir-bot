@@ -4350,6 +4350,35 @@
     }).catch(function () {});
   }
 
+  // Окно + свёрнутый хвост (04.09.2026, жалоба: плоский список из 20 записей
+  // плюс календарь довеском внизу читался "все дни скопом"). Тот же приём,
+  // что уже принят у устаза в очереди - то же слово ("ещё N старше"), тот же
+  // жест (тап разворачивает). Данные уже все на руках (SUBMISSIONS_LIMIT=20,
+  // это не сотни строк устаза) - делим на клиенте, второй запрос не нужен.
+  var SUBS_WINDOW_DAYS = 3;
+
+  function subsDateAdd(iso, days) {
+    var d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function subsBindRows(container, items) {
+    Array.prototype.forEach.call(container.querySelectorAll('[data-play]'), function (b) {
+      b.addEventListener('click', function () {
+        var parts = b.getAttribute('data-play').split(':');
+        subsPlay(parts[0], parts[1], b);
+      });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll('[data-retake]'), function (b) {
+      b.addEventListener('click', function () {
+        var id = parseInt(b.getAttribute('data-retake'), 10);
+        var item = items.filter(function (x) { return x.id === id; })[0];
+        if (item) subsRetake(item);
+      });
+    });
+  }
+
   function openSubs() {
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('subs').style.display = 'flex';
@@ -4362,24 +4391,35 @@
         return;
       }
       var today = (res.data && res.data.today) || '';
-      body.innerHTML = items.map(function (it) { return subsRow(it, today); }).join('') +
-        '<div class="subs-empty" style="margin-top:6px;font-size:12.5px">' +
-        T('subs_retake_hint') + '</div>' +
-        '<div id="subs-month"></div>';
+      // Календарь - наверх, сразу под рукой, а не довеском после всего
+      // списка (была ровно эта жалоба).
+      var cutoff = subsDateAdd(today, -(SUBS_WINDOW_DAYS - 1));
+      var recent = items.filter(function (it) { return it.date >= cutoff; });
+      var older = items.filter(function (it) { return it.date < cutoff; });
+      var html = '<div id="subs-month"></div>' +
+        '<div id="subs-recent-rows">' +
+        recent.map(function (it) { return subsRow(it, today); }).join('') +
+        '</div>';
+      if (older.length) {
+        html += '<div class="ustaz-older" id="subs-older">' +
+          T('ustaz_older', { N: older.length }) + '</div>';
+      }
+      html += '<div class="subs-empty" style="margin-top:6px;font-size:12.5px">' +
+        T('subs_retake_hint') + '</div>';
+      body.innerHTML = html;
       subsLoadMonth();
-      Array.prototype.forEach.call(body.querySelectorAll('[data-play]'), function (b) {
-        b.addEventListener('click', function () {
-          var parts = b.getAttribute('data-play').split(':');
-          subsPlay(parts[0], parts[1], b);
+      subsBindRows(document.getElementById('subs-recent-rows'), items);
+      var olderEl = document.getElementById('subs-older');
+      if (olderEl) {
+        // Хвост уже в памяти - разворачиваем на месте, без похода на сервер.
+        olderEl.addEventListener('click', function () {
+          olderEl.outerHTML = '<div class="ustaz-group-title">' + T('ustaz_older_title') + '</div>' +
+            '<div id="subs-older-rows">' +
+            older.map(function (it) { return subsRow(it, today); }).join('') +
+            '</div>';
+          subsBindRows(document.getElementById('subs-older-rows'), items);
         });
-      });
-      Array.prototype.forEach.call(body.querySelectorAll('[data-retake]'), function (b) {
-        b.addEventListener('click', function () {
-          var id = parseInt(b.getAttribute('data-retake'), 10);
-          var item = items.filter(function (x) { return x.id === id; })[0];
-          if (item) subsRetake(item);
-        });
-      });
+      }
     }).catch(function () {
       body.innerHTML = '<div class="subs-empty">' + T('subs_empty') + '</div>';
     });
