@@ -2140,6 +2140,50 @@
                                   // не раздувался на всю ширину десктопа
   var MUSHAF_FIT_SAFETY = 0.985;  // чтобы строка не упиралась в край впритык
 
+  // Самопроверка после подгонки (04.09.2026). Жалоба: на iPhone 15 каждая
+  // строка срезалась слева (в RTL это КОНЕЦ строки - слово не дочитывалось),
+  // на Pixel 7 та же страница влезала целиком.
+  //
+  // Причина класса: размер считается ОДНИМ пересчётом по пропорции (ширина
+  // при базе 40px -> линейное масштабирование). Пропорция верна только если
+  // движок отрисует текст ровно с той же относительной шириной - а разные
+  // движки (WebKit против Blink) шейпят один и тот же шрифт чуть по-разному,
+  // плюс замер может попасть в кадр, когда контейнер ещё не той ширины
+  // (WebView Telegram на iOS доводит вьюпорт после старта). Лишнее молча
+  // срезает overflow-x: hidden у #page-wrap (он там не просто так - см. фикс
+  // "страница уезжала вбок при свайпе на iPhone", 99f3de6).
+  //
+  // Ветку "если Safari/iOS" сознательно НЕ делаем (решение пользователя
+  // 04.09.2026): она угадывает движок, а завтра появится следующий. Вместо
+  // этого спрашиваем сам браузер, влезло ли: scrollWidth строки больше её
+  // clientWidth - значит не влезло, ужимаем и спрашиваем снова.
+  //
+  // Шаг ужимки НЕ вслепую: берём ровно ту долю, которой не хватает
+  // (avail/scrollWidth), но не больше 1% за проход - "по чуть-чуть", чтобы
+  // при кривом единичном замере не обвалить размер целиком. У кого всё и так
+  // влезает (Pixel), цикл выходит на первой же проверке, не отняв ни
+  // процента - в этом весь смысл проверки вместо общего запаса побольше.
+  var MUSHAF_VERIFY_STEPS = 20;      // 20 x 1% - хватает и на грубый промах замера
+  var MUSHAF_VERIFY_MAX_STEP = 0.99; // не больше 1% за один проход
+  var MUSHAF_VERIFY_SAFETY = 0.998;  // чтобы не встать ровно в край и не зациклиться
+  // Допуск 1px: scrollWidth/clientWidth - целые, субпиксельная разница в них
+  // не видна и на глаз тоже (реальный срез был в десятки пикселей).
+  var MUSHAF_VERIFY_TOLERANCE = 1;
+
+  // Худшее отношение "нужно / есть" среди строк. <= 1 - всё влезло.
+  function mushafWorstOverflowRatio(lines) {
+    var worst = 1;
+    for (var i = 0; i < lines.length; i++) {
+      var w = lines[i].clientWidth;
+      if (!w) continue;
+      if (lines[i].scrollWidth > w + MUSHAF_VERIFY_TOLERANCE) {
+        var ratio = lines[i].scrollWidth / w;
+        if (ratio > worst) worst = ratio;
+      }
+    }
+    return worst;
+  }
+
   function clampFontToFit() {
     var el = document.getElementById('ayah-text');
     var lines = el.querySelectorAll('.mushaf-line');
@@ -2161,6 +2205,18 @@
     var fitted = MUSHAF_MEASURE_BASE * (avail / maxW) * MUSHAF_FIT_SAFETY;
     fitted = Math.min(MUSHAF_MAX_FONT_SIZE, Math.max(MUSHAF_MIN_FONT_SIZE, fitted));
     el.style.fontSize = fitted.toFixed(1) + 'px';
+
+    // Самопроверка (см. MUSHAF_VERIFY_* выше). Меряем УЖЕ ОТРИСОВАННЫЕ
+    // строки как есть, без .measuring: нас интересует не натуральная ширина
+    // слов, а факт "вылезло за край или нет" при боевом justify.
+    for (var step = 0; step < MUSHAF_VERIFY_STEPS; step++) {
+      if (fitted <= MUSHAF_MIN_FONT_SIZE) break;
+      var over = mushafWorstOverflowRatio(lines);
+      if (over <= 1) break;
+      var shrink = Math.max(MUSHAF_VERIFY_MAX_STEP, (1 / over) * MUSHAF_VERIFY_SAFETY);
+      fitted = Math.max(MUSHAF_MIN_FONT_SIZE, fitted * shrink);
+      el.style.fontSize = fitted.toFixed(1) + 'px';
+    }
   }
 
   // Шрифт QPC V4 Tajweed - свой файл НА КАЖДУЮ страницу (604 разных
