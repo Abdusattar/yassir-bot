@@ -1297,17 +1297,33 @@
     text-transform: uppercase; color: var(--muted);
     margin: 6px 2px -2px;
   }
+  /* Группы - ОДНА строка вкладок, а не список один под другим (04.09.2026,
+     вопрос пользователя: "я что должен вниз скроллить, пока не дойду до
+     другой группы?"). Показывается очередь ровно одной группы, переключение
+     тапом по вкладке. Полоса липкая: у устаза с тремя группами и у
+     супер-админа с восемнадцатью она нужна и на середине списка. */
   .ustaz-groups {
-    background: var(--card-bg); border: 1px solid var(--card-border);
-    border-radius: 12px; overflow: hidden;
+    position: sticky; top: -14px; z-index: 5;
+    margin: -14px -16px 0; padding: 10px 16px 8px;
+    background: linear-gradient(180deg, var(--dash-bg-start) 70%, transparent);
+    display: flex; gap: 8px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .ustaz-groups::-webkit-scrollbar { display: none; }
   .ustaz-groups .g {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 14px; font-size: 13.5px; color: var(--ink);
-    border-top: 1px solid var(--card-border); cursor: pointer;
+    flex: 0 0 auto;
+    display: flex; align-items: baseline; gap: 6px;
+    padding: 7px 12px; font-size: 13px; color: var(--ink);
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 999px; cursor: pointer; white-space: nowrap;
   }
-  .ustaz-groups .g:first-child { border-top: none; }
-  .ustaz-groups .g.on { background: var(--accent-soft); font-weight: 600; }
+  .ustaz-groups .g.on {
+    background: var(--accent-soft); border-color: var(--accent); font-weight: 600;
+  }
+  /* Чужая группа у супер-админа - пунктирной рамкой. Он там тоже проверяет
+     (подхватывает за устазом), поэтому не приглушаем, а просто отличаем. */
+  .ustaz-groups .g.foreign { border-style: dashed; }
   /* Число непроверенных - КРАСНЫМ (04.09.2026, решение пользователя:
      "чтобы устазы сразу видели"). Тот же язык, что и счётчик на двери:
      красное пятно = долг. Ноль не красим - долга нет, красить нечего. */
@@ -1826,10 +1842,6 @@
       ustaz_empty: 'Пока никто не ждёт проверки 🤲',
       ustaz_loading: 'Загрузка…',
       ustaz_waiting_since: 'ждёт с %N%',
-      ustaz_my_groups: 'Мои группы',
-      ustaz_other_groups: 'Остальные группы',
-      ustaz_more_old: 'ещё %N%',
-      ustaz_all_groups: 'Все группы',
       ustaz_window_empty: 'За последние дни никто не ждёт проверки 🤲',
       ustaz_waits: 'ждёт %N%',
       ustaz_older: 'Ещё %N% старше — показать',
@@ -4524,26 +4536,29 @@
   // тап по названию, без отдельной кнопки "сбросить").
   var ustazGroupFilter = null;
 
-  // Блок списка групп. withAll - добавить строку "Все группы" сверху (она
-  // же снимает фильтр); число справа красное, потому что означает долг.
-  function ustazGroupBlock(title, groups, withAll, allCount) {
-    if (!groups.length) return '';
-    var count = function (n, older) {
-      return '<span class="n' + (n ? '' : ' zero') + '">' + n +
-        (older ? ' <small>· ' + T('ustaz_more_old', { N: older }) + '</small>' : '') +
-        '</span>';
-    };
-    var rows = groups.map(function (g) {
+  // Полоса вкладок: своя группа первой, число ждущих красным (это долг).
+  // Ноль не красим - красить нечего.
+  function ustazGroupTabs(groups) {
+    if (groups.length < 2) return '';
+    return '<div class="ustaz-groups">' + groups.map(function (g) {
       return '<div class="g' + (ustazGroupFilter === g.id ? ' on' : '') +
+        (g.mine === false ? ' foreign' : '') +
         '" data-gid="' + g.id + '"><span>' + ustazEsc(g.title) + '</span>' +
-        count(g.waiting, g.older) + '</div>';
-    }).join('');
-    var head = withAll
-      ? '<div class="g' + (ustazGroupFilter === null ? ' on' : '') + '" data-gid="">' +
-        '<span>' + T('ustaz_all_groups') + '</span>' + count(allCount, 0) + '</div>'
-      : '';
-    return '<div class="ustaz-group-title">' + title + '</div>' +
-      '<div class="ustaz-groups">' + head + rows + '</div>';
+        '<span class="n' + (g.waiting ? '' : ' zero') + '">' + g.waiting + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  // Какая группа открыта по умолчанию: та, где ждут дольше всего дел, а из
+  // равных - своя. Открывать пустую группу первой значило бы прятать работу.
+  function ustazDefaultGroup(groups) {
+    var best = null;
+    groups.forEach(function (g) {
+      if (!best) { best = g; return; }
+      var better = g.waiting > best.waiting ||
+        (g.waiting === best.waiting && g.mine !== false && best.mine === false);
+      if (better) best = g;
+    });
+    return best ? best.id : null;
   }
 
   function ustazRenderList(data) {
@@ -4554,47 +4569,29 @@
     var items = all.filter(function (it) {
       return ustazGroupFilter === null || it.group_id === ustazGroupFilter;
     });
-    var mine = groups.filter(function (g) { return g.mine !== false; });
-    var other = groups.filter(function (g) { return g.mine === false; });
-    var html = '';
-    if (groups.length) {
-      // "Все группы" сверху нужна только когда своих групп больше одной -
-      // иначе она дублирует единственную строку под собой.
-      html += ustazGroupBlock(T('ustaz_my_groups'), mine, mine.length > 1, all.length);
-      // Супер-админ видит и остальные группы: он не только контролирует
-      // устазов, но и сам проверяет там, где устаз группы не успел - значит
-      // это работа, а не просмотр (решение пользователя 04.09.2026).
-      if (other.length) html += ustazGroupBlock(T('ustaz_other_groups'), other, false, 0);
+    // Открыта ВСЕГДА одна группа - вертикальную простыню из всех групп
+    // подряд листать некому (04.09.2026).
+    if (ustazGroupFilter === null && groups.length) {
+      ustazGroupFilter = ustazDefaultGroup(groups);
     }
+    var current = groups.filter(function (g) { return g.id === ustazGroupFilter; })[0] || null;
+    var html = ustazGroupTabs(groups);
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
-    } else if (groups.length > 1) {
-      // РАЗБИВКА ПО ГРУППАМ (04.09.2026, вопрос пользователя): одним общим
-      // списком студенты разных групп сливаются в кашу - устазу с тремя
-      // группами и супер-админу нужно видеть, чья это сдача, не вчитываясь
-      // в каждую строку. Порядок групп сохраняем тот же, что в списке
-      // сверху: свои первыми.
-      groups.forEach(function (g) {
-        var rows = items.filter(function (it) { return it.group_id === g.id; });
-        if (!rows.length) return;
-        html += '<div class="ustaz-group-title">' + ustazEsc(g.title) +
-          ' · <b style="color:var(--no)">' + rows.length + '</b></div>' +
-          rows.map(function (it) { return ustazRow(it, today, false); }).join('');
-      });
     } else {
       html += items.map(function (it) { return ustazRow(it, today, false); }).join('');
     }
-    if (data.older) {
+    var olderCount = current ? current.older : data.older;
+    if (olderCount) {
       html += '<div class="ustaz-older" id="ustaz-older">' +
-        T('ustaz_older', { N: data.older }) + '</div>';
+        T('ustaz_older', { N: olderCount }) + '</div>';
     }
     body.innerHTML = html;
 
     Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
       el.addEventListener('click', function () {
-        var gid = el.getAttribute('data-gid');
-        var next = gid === '' ? null : parseInt(gid, 10);
-        ustazGroupFilter = (next === ustazGroupFilter) ? null : next;
+        ustazGroupFilter = parseInt(el.getAttribute('data-gid'), 10);
+        document.getElementById('ustaz-body').scrollTop = 0;
         ustazRenderList(data);
       });
     });
@@ -4615,7 +4612,9 @@
     var olderEl = document.getElementById('ustaz-older');
     if (olderEl) olderEl.textContent = T('ustaz_loading');
     apiCall('/ustaz/waiting?older=1').then(function (res) {
-      var items = (res.data && res.data.items) || [];
+      var items = ((res.data && res.data.items) || []).filter(function (it) {
+        return ustazGroupFilter === null || it.group_id === ustazGroupFilter;
+      });
       var el = document.getElementById('ustaz-older');
       if (!el) return;
       el.outerHTML = '<div class="ustaz-group-title">' + T('ustaz_older_title') + '</div>' +
@@ -4631,7 +4630,7 @@
     document.getElementById('ustaz').style.display = 'flex';
     var body = document.getElementById('ustaz-body');
     body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
-    ustazGroupFilter = null;
+    ustazGroupFilter = null;   // выберется по данным, см. ustazDefaultGroup
     apiCall('/ustaz/waiting').then(function (res) {
       if (res.status === 401 || res.status === 403 || !res.data) {
         body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_empty') + '</div>';
