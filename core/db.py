@@ -1485,12 +1485,17 @@ def get_blocking_retake(student_id, group_id):
     закрытую дорогу, а не про наказание.
 
     Снимается любой ПОЗЖЕ принятой сдачей той же единицы - именно её студент
-    и пересдаёт."""
+    и пересдаёт. "Позже" сверяем по id, не по verdict_at: два вердикта подряд
+    (пересдал - тут же приняли) могут получить одинаковый до микросекунды
+    verdict_at при грубом разрешении системных часов, и строгое ">" тогда не
+    находило только что принятую пересдачу - гейт не снимался (поймано
+    04.09.2026 в тестах). id растёт строго по каждой новой сдаче того же
+    места и таких совпадений не знает."""
     with db() as c:
         row = c.execute(
             "SELECT * FROM voice_submissions"
             " WHERE student_id=? AND group_id=? AND verdict=?"
-            " ORDER BY verdict_at DESC LIMIT 1",
+            " ORDER BY verdict_at DESC, id DESC LIMIT 1",
             (student_id, group_id, VERDICT_RETAKE)
         ).fetchone()
         if not row:
@@ -1499,9 +1504,9 @@ def get_blocking_retake(student_id, group_id):
             "SELECT 1 FROM voice_submissions"
             " WHERE student_id=? AND group_id=? AND verdict=?"
             " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
-            " AND verdict_at > ? LIMIT 1",
+            " AND id > ? LIMIT 1",
             (student_id, group_id, VERDICT_ACCEPTED,
-             row["hifz_page"], row["hifz_line"], row["hifz_stage"], row["verdict_at"])
+             row["hifz_page"], row["hifz_line"], row["hifz_stage"], row["id"])
         ).fetchone()
     return None if accepted else dict(row)
 

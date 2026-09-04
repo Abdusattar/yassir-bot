@@ -55,6 +55,25 @@ def test_accepted_retake_unblocks(test_db):
     assert db.get_blocking_retake(sid, group["id"]) is None
 
 
+def test_accepted_retake_unblocks_even_with_same_verdict_at(test_db, monkeypatch):
+    """Живой баг 04.09.2026: пересдал - тут же приняли, и оба вердикта
+    попали в одну и ту же миллисекунду verdict_at (грубое разрешение
+    системных часов). Строгое "verdict_at > ..." тогда не находило только
+    что принятую пересдачу - гейт не снимался. Замораживаем время явно,
+    чтобы совпадение было не везением теста, а гарантией."""
+    frozen = db.get_now()
+    monkeypatch.setattr(db, "get_now", lambda: frozen)
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    first = _submission(sid, group, 1, 6, 7, 1)
+    db.set_submission_verdict(first, db.VERDICT_RETAKE, "888002")
+
+    second = _submission(sid, group, 2, 6, 7, 1)
+    db.set_submission_verdict(second, db.VERDICT_ACCEPTED, "888002")
+
+    assert db.get_blocking_retake(sid, group["id"]) is None
+
+
 def test_unchecked_submission_never_blocks(test_db):
     """Молчание устаза не должно останавливать студента."""
     group = _group()
