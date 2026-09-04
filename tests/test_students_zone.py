@@ -126,3 +126,61 @@ def test_single_student_days_show_which_tasks(test_db, monkeypatch):
 
     assert data["name"] == "Сатар"
     assert sorted(data["days"][today]) == ["m", "t"]
+
+
+# ── Зона «Проверено» и свой месяц студенту (04.09.2026) ────────────────────
+
+def test_reviewed_zone_lists_verdicts_with_who_judged(test_db, monkeypatch):
+    app = _setup(monkeypatch)
+    group = _group()
+    db.add_group_admin(group["id"], "888002")
+    db.add_student("Устаз группы", group["id"], phone="888002")
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    db.save_voice_submission(sid, group["id"], CHAT, 1, db.get_date(),
+                             file_id="f1", hifz_page=6, hifz_line=7, hifz_stage=1)
+    sub_id = db.get_student_submissions(sid)[0]["id"]
+    db.set_submission_verdict(sub_id, db.VERDICT_ACCEPTED, "888002")
+
+    status, data = _call(app, "/api/muf/ustaz/reviewed?group=%d" % group["id"], "888002")
+
+    assert status == 200
+    assert data["items"][0]["student_name"] == "Сатар"
+    assert data["items"][0]["verdict"] == "accepted"
+    assert data["items"][0]["verdict_by_name"] == "Устаз группы"
+
+
+def test_reviewed_zone_requires_ustaz_role(test_db, monkeypatch):
+    app = _setup(monkeypatch)
+    group = _group()
+    db.add_student("Сатар", group["id"], phone="777001")
+
+    status, _ = _call(app, "/api/muf/ustaz/reviewed?group=%d" % group["id"], "777001")
+
+    assert status == 403
+
+
+def test_my_month_matches_ustaz_view_of_the_same_student(test_db, monkeypatch):
+    """Условие макета: у устаза и студента должна быть одна картина."""
+    app = _setup(monkeypatch)
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    today = db.get_date()
+    db.save_report(sid, group["id"], today, {"m": True, "r": True})
+
+    status, mine = _call(app, "/api/muf/month", "777001")
+    ustaz_days = db.get_student_month_days(sid, group["id"])
+
+    assert status == 200
+    assert mine["days"] == ustaz_days
+    assert mine["threshold"] == transfers.PRO_INACTIVE_DAYS
+    assert mine["group_title"] == "N-1"
+
+
+def test_my_month_without_group_is_empty_not_error(test_db, monkeypatch):
+    """Ни в одной учебной группе - пустой месяц, не ошибка."""
+    app = _setup(monkeypatch)
+
+    status, data = _call(app, "/api/muf/month", "999999")
+
+    assert status == 200
+    assert data["days"] == {}

@@ -1349,16 +1349,21 @@
      другой группы?"). Показывается очередь ровно одной группы, переключение
      тапом по вкладке. Полоса липкая: у устаза с тремя группами и у
      супер-админа с восемнадцатью она нужна и на середине списка. */
-  .ustaz-groups {
-    /* Фон ПЛОТНЫЙ, не градиент (04.09.2026, поймано пользователем: строки
-       студентов просвечивали сквозь полосу и её было почти не видно).
-       Липкая полоса поверх прокручиваемого списка обязана быть
-       непрозрачной, иначе под ней читаются два слоя текста разом. */
+  /* Шапка кабинета: зоны и группы ОДНИМ липким блоком (04.09.2026).
+     Раньше липкой была только полоса групп, и со своим отрицательным верхним
+     отступом (он гасил падинг тела, пока она шла первой) она уезжала под
+     появившийся бар зон и срезалась - поймано пользователем на скриншоте.
+     Один блок отменяет саму возможность такого наложения.
+     Фон плотный: сквозь полупрозрачную полосу читались два слоя текста. */
+  .ustaz-head {
     position: sticky; top: 0; z-index: 5;
-    margin: -14px -16px 4px; padding: 10px 16px;
+    margin: -14px -16px 6px; padding: 10px 16px 8px;
     background: var(--card-bg);
     border-bottom: 1px solid var(--card-border);
     box-shadow: 0 4px 10px rgba(0, 0, 0, .06);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .ustaz-groups {
     display: flex; gap: 8px;
     overflow-x: auto; -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -1897,6 +1902,13 @@
       ustaz_waiting_since: 'ждёт с %N%',
       ustaz_zone_queue: 'Ждут',
       ustaz_zone_students: 'Студенты',
+      ustaz_zone_done: 'Проверено',
+      ustaz_done_empty: 'Здесь появится то, что уже разобрано',
+      ustaz_by: 'разобрал %N%',
+      subs_month_title: 'Мой месяц',
+      subs_month_misses: 'пропусков %N% из %M%',
+      subs_month_misses_no_limit: 'пропусков %N%',
+      subs_month_legend: 'Чем светлее день, тем меньше сдано',
       ustaz_students_empty: 'В этой группе пока нет активных студентов',
       ustaz_misses: 'пропусков %N% из %M%',
       ustaz_misses_no_limit: 'пропусков %N%',
@@ -4305,6 +4317,39 @@
     hifzHead();
   }
 
+  /* Свой месяц в "Сдачах" (04.09.2026) - ТОТ ЖЕ календарь и тот же счёт
+     пропусков, что видит устаз в зоне "Студенты". Условие макета: у обоих
+     одна картина, иначе разговор "ты пропускал" снова становится спором.
+     Порог назван прямо - он не должен жить только в голове у бота. */
+  function subsCalendarHTML(d) {
+    var info = stuMonthInfo(d.month, d.today);
+    var first = new Date(info.year, info.month - 1, 1).getDay();
+    var lead = (first + 6) % 7;
+    var cells = '';
+    for (var i = 0; i < lead; i++) cells += '<div class="c empty"></div>';
+    for (var day = 1; day <= info.days; day++) {
+      var tasks = (d.days || {})[stuDayKey(d.month, day)] || [];
+      var cls = day > info.today ? 'future' : (tasks.length ? 'd' + Math.min(3, tasks.length) : '');
+      cells += '<div class="c ' + cls + '">' + day + '</div>';
+    }
+    var miss = d.threshold
+      ? T('subs_month_misses', { N: d.missed, M: d.threshold })
+      : T('subs_month_misses_no_limit', { N: d.missed });
+    return '<div class="ustaz-group-title" style="margin-top:12px">' +
+      T('subs_month_title') + (d.group_title ? ' · ' + ustazEsc(d.group_title) : '') +
+      '</div><div class="stu-cal">' + cells + '</div>' +
+      '<div class="stu-legend">' + miss + ' · ' + T('subs_month_legend') + '</div>';
+  }
+
+  function subsLoadMonth() {
+    var box = document.getElementById('subs-month');
+    if (!box) return;
+    apiCall('/month').then(function (res) {
+      if (!res.data || !res.data.days) return;
+      box.innerHTML = subsCalendarHTML(res.data);
+    }).catch(function () {});
+  }
+
   function openSubs() {
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('subs').style.display = 'flex';
@@ -4319,7 +4364,9 @@
       var today = (res.data && res.data.today) || '';
       body.innerHTML = items.map(function (it) { return subsRow(it, today); }).join('') +
         '<div class="subs-empty" style="margin-top:6px;font-size:12.5px">' +
-        T('subs_retake_hint') + '</div>';
+        T('subs_retake_hint') + '</div>' +
+        '<div id="subs-month"></div>';
+      subsLoadMonth();
       Array.prototype.forEach.call(body.querySelectorAll('[data-play]'), function (b) {
         b.addEventListener('click', function () {
           var parts = b.getAttribute('data-play').split(':');
@@ -4637,7 +4684,7 @@
       ustazGroupFilter = ustazDefaultGroup(groups);
     }
     var current = groups.filter(function (g) { return g.id === ustazGroupFilter; })[0] || null;
-    var html = ustazZones() + ustazGroupTabs(groups);
+    var html = '<div class="ustaz-head">' + ustazZones() + ustazGroupTabs(groups) + '</div>';
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
     } else {
@@ -4706,7 +4753,9 @@
       '<button data-zone="queue"' + (ustazZone === 'queue' ? ' class="on"' : '') + '>' +
       T('ustaz_zone_queue') + '</button>' +
       '<button data-zone="students"' + (ustazZone === 'students' ? ' class="on"' : '') + '>' +
-      T('ustaz_zone_students') + '</button></div>';
+      T('ustaz_zone_students') + '</button>' +
+      '<button data-zone="done"' + (ustazZone === 'done' ? ' class="on"' : '') + '>' +
+      T('ustaz_zone_done') + '</button></div>';
   }
 
   function ustazBindZones(body) {
@@ -4714,7 +4763,9 @@
       b.addEventListener('click', function () {
         ustazZone = b.getAttribute('data-zone');
         body.scrollTop = 0;
-        if (ustazZone === 'queue') openUstaz(); else openStudents();
+        if (ustazZone === 'queue') openUstaz();
+        else if (ustazZone === 'done') openReviewed();
+        else openStudents();
       });
     });
   }
@@ -4756,6 +4807,64 @@
     return T('ustaz_misses', { N: st.missed, M: threshold });
   }
 
+  /* Зона "Проверено" (04.09.2026, макет 01.09) - что уже разобрано, свежее
+     сверху, с вердиктом и с тем, КТО его поставил: в группе проверяет и её
+     устаз, и подхвативший супер-админ, и это ровно тот вопрос, ради которого
+     зона нужна. Группа берётся та же, что выбрана в "Студентах" - один
+     выбор на весь кабинет, а не три разных. */
+  function openReviewed() {
+    ustazZone = 'done';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('ustaz').style.display = 'flex';
+    var body = document.getElementById('ustaz-body');
+    body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
+    var groupsReady = stuGroups
+      ? Promise.resolve({ data: { groups: stuGroups } })
+      : apiCall('/ustaz/groups');
+    groupsReady.then(function (res) {
+      stuGroups = (res.data && res.data.groups) || [];
+      if (!stuGroupId && stuGroups.length) stuGroupId = stuGroups[0].id;
+      return apiCall('/ustaz/reviewed?group=' + stuGroupId);
+    }).then(function (res) {
+      var items = (res.data && res.data.items) || [];
+      var today = (res.data && res.data.today) || '';
+      var html = '<div class="ustaz-head">' + ustazZones() + stuGroupTabs() + '</div>';
+      if (!items.length) {
+        html += '<div class="ustaz-empty">' + T('ustaz_done_empty') + '</div>';
+      } else {
+        var lastDate = null;
+        items.forEach(function (it) {
+          if (it.date !== lastDate) {
+            lastDate = it.date;
+            html += '<div class="ustaz-group-title">' +
+              ustazWhen({ date: it.date, sent_at: it.reviewed_at }, today) + '</div>';
+          }
+          var pill = it.verdict === 'accepted'
+            ? ['done', T('subs_verdict_ok')]
+            : (it.verdict === 'retake' ? ['retake', T('subs_verdict_retake')]
+              : ['wait', T('subs_done')]);
+          html += '<div class="sub-row"><div class="top">' +
+            '<span class="place">' + ustazEsc(it.student_name) + '</span>' +
+            '<span class="sub-pill ' + pill[0] + '">' + pill[1] + '</span></div>' +
+            '<div class="meta">' + ustazPlace(it) +
+            (it.verdict_by_name ? ' · ' + T('ustaz_by', { N: ustazEsc(it.verdict_by_name) }) : '') +
+            '</div></div>';
+        });
+      }
+      body.innerHTML = html;
+      ustazBindZones(body);
+      Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
+        el.addEventListener('click', function () {
+          stuGroupId = parseInt(el.getAttribute('data-gid'), 10);
+          body.scrollTop = 0;
+          openReviewed();
+        });
+      });
+    }).catch(function () {
+      body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_done_empty') + '</div>';
+    });
+  }
+
   function openStudents() {
     ustazZone = 'students';
     document.getElementById('dashboard').style.display = 'none';
@@ -4768,8 +4877,8 @@
     load.then(function (res) {
       stuGroups = (res.data && res.data.groups) || [];
       if (!stuGroups.length) {
-        body.innerHTML = ustazZones() + '<div class="ustaz-empty">' +
-          T('ustaz_students_empty') + '</div>';
+        body.innerHTML = '<div class="ustaz-head">' + ustazZones() + '</div>' +
+          '<div class="ustaz-empty">' + T('ustaz_students_empty') + '</div>';
         ustazBindZones(body);
         return;
       }
@@ -4789,7 +4898,7 @@
     var body = document.getElementById('ustaz-body');
     var data = stuData || {};
     var students = data.students || [];
-    var html = ustazZones() + stuGroupTabs();
+    var html = '<div class="ustaz-head">' + ustazZones() + stuGroupTabs() + '</div>';
     if (!students.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_students_empty') + '</div>';
     } else {
@@ -4846,8 +4955,9 @@
       for (var dd = 1; dd <= info.today; dd++) {
         if (!((d.days || {})[stuDayKey(d.month, dd)] || []).length) missed++;
       }
-      body.innerHTML = '<div class="ustaz-zones"><button class="on" id="stu-back">' +
-        T('ustaz_student_back') + '</button></div>' +
+      body.innerHTML = '<div class="ustaz-head"><div class="ustaz-zones">' +
+        '<button class="on" id="stu-back">' + T('ustaz_student_back') + '</button>' +
+        '</div></div>' +
         '<div class="ustaz-group-title">' + ustazEsc(d.name) + '</div>' +
         '<div class="stu-cal">' + cells + '</div>' +
         '<div class="stu-legend">' +

@@ -1506,6 +1506,31 @@ def get_blocking_retake(student_id, group_id):
     return None if accepted else dict(row)
 
 
+def get_reviewed_submissions(group_ids, limit=50):
+    """Зона "Проверено" кабинета устаза (04.09.2026, макет 01.09): что уже
+    разобрано, свежее сверху. Показываем и вердикт, и того, кто его поставил -
+    в группе может проверять и устаз группы, и подхвативший супер-админ, и
+    "кто разобрал" это ровно тот вопрос, ради которого зона и нужна."""
+    if not group_ids:
+        return []
+    placeholders = ",".join("?" * len(group_ids))
+    with db() as c:
+        rows = c.execute(
+            f"SELECT vs.id, vs.date, vs.reviewed_at, vs.verdict, vs.verdict_at,"
+            f" vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.group_id,"
+            f" u.name AS student_name, g.title AS group_title,"
+            f" ru.name AS verdict_by_name"
+            f" FROM voice_submissions vs"
+            f" JOIN users u ON u.id = vs.student_id"
+            f" JOIN groups g ON g.id = vs.group_id"
+            f" LEFT JOIN users ru ON ru.phone = vs.verdict_by"
+            f" WHERE vs.group_id IN ({placeholders}) AND vs.reviewed_at IS NOT NULL"
+            f" ORDER BY vs.reviewed_at DESC LIMIT ?",
+            (*group_ids, limit)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_submission_audio(submission_id, student_id, kind):
     """file_id записи (kind='own') или разбора устаза (kind='review') - ТОЛЬКО
     если сдача принадлежит этому студенту. Проверка владения здесь, а не в

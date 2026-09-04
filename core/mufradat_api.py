@@ -37,7 +37,8 @@ from core.db import (
     get_student_submissions, get_submission_audio, find_user_by_phone,
     get_submission, VERDICT_ACCEPTED, VERDICT_RETAKE,
     get_group_month_progress, get_student_month_days, group_miss_threshold,
-    get_group_by_id, get_students,
+    get_group_by_id, get_students, get_reviewed_submissions,
+    get_skip_count_month_detail,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -747,6 +748,41 @@ async def handle_ustaz_groups(request, user_id):
 
 
 @with_auth
+async def handle_ustaz_reviewed(request, user_id):
+    """GET ?group= - что уже разобрано в этой группе, свежее сверху."""
+    if not _is_ustaz(user_id):
+        return web.json_response({"error": "not_ustaz"}, status=403)
+    try:
+        group_id = int(request.query.get("group", ""))
+    except ValueError:
+        return web.json_response({"error": "bad_group"}, status=400)
+    return web.json_response({
+        "items": get_reviewed_submissions([group_id]),
+        "today": get_date(),
+    })
+
+
+@with_auth
+async def handle_my_month(request, user_id):
+    """GET - свой месяц по дням для календаря в "Сдачах". Тот же расчёт, что
+    видит устаз в зоне "Студенты": у обоих должна быть одна картина, иначе
+    разговор "ты пропускал" снова превращается в спор."""
+    user = find_user_by_phone(user_id)
+    group = get_learning_group(user_id, include_prep=True)
+    if not user or not group:
+        return web.json_response({"days": {}, "month": get_date()[:7], "today": get_date()})
+    detail = get_skip_count_month_detail(user["id"], group["id"]) or {}
+    return web.json_response({
+        "days": get_student_month_days(user["id"], group["id"], request.query.get("month")),
+        "threshold": group_miss_threshold(group["group_type"]),
+        "missed": detail.get("missed", 0),
+        "group_title": group["title"],
+        "month": request.query.get("month") or get_date()[:7],
+        "today": get_date(),
+    })
+
+
+@with_auth
 async def handle_ustaz_students(request, user_id):
     """GET ?group=&month=YYYY-MM - успеваемость группы за месяц."""
     if not _is_ustaz(user_id):
@@ -990,6 +1026,8 @@ def build_app():
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     app.router.add_get("/api/muf/ustaz/waiting", handle_ustaz_waiting)
     app.router.add_get("/api/muf/ustaz/groups", handle_ustaz_groups)
+    app.router.add_get("/api/muf/ustaz/reviewed", handle_ustaz_reviewed)
+    app.router.add_get("/api/muf/month", handle_my_month)
     app.router.add_get("/api/muf/ustaz/students", handle_ustaz_students)
     app.router.add_get("/api/muf/ustaz/student", handle_ustaz_student)
     app.router.add_get("/api/muf/ustaz/submission", handle_ustaz_submission)
