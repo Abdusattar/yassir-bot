@@ -1201,7 +1201,14 @@
   }
   .ustaz-groups .g:first-child { border-top: none; }
   .ustaz-groups .g.on { background: var(--accent-soft); font-weight: 600; }
-  .ustaz-groups .g .n { font-size: 12.5px; color: var(--muted); }
+  /* Число непроверенных - КРАСНЫМ (04.09.2026, решение пользователя:
+     "чтобы устазы сразу видели"). Тот же язык, что и счётчик на двери:
+     красное пятно = долг. Ноль не красим - долга нет, красить нечего. */
+  .ustaz-groups .g .n { font-size: 12.5px; color: var(--no); font-weight: 700; }
+  .ustaz-groups .g .n.zero { color: var(--muted); font-weight: 400; }
+  /* Хвост старше окна - приглушённой добавкой к красному числу, чтобы
+     "10 · ещё 131" не читалось как 141 сегодняшних. */
+  .ustaz-groups .g .n small { color: var(--muted); font-weight: 400; }
   /* Хвост старше окна - одна строка, разворачивается тапом. Прятать совсем
      нельзя (там может лежать неразобранное), пугать сотней строк - тоже. */
   .ustaz-older {
@@ -1656,6 +1663,8 @@
       ustaz_loading: 'Загрузка…',
       ustaz_waiting_since: 'ждёт с %N%',
       ustaz_my_groups: 'Мои группы',
+      ustaz_other_groups: 'Остальные группы',
+      ustaz_more_old: 'ещё %N%',
       ustaz_all_groups: 'Все группы',
       ustaz_window_empty: 'За последние дни никто не ждёт проверки 🤲',
       ustaz_waits: 'ждёт %N%',
@@ -3886,6 +3895,28 @@
   // тап по названию, без отдельной кнопки "сбросить").
   var ustazGroupFilter = null;
 
+  // Блок списка групп. withAll - добавить строку "Все группы" сверху (она
+  // же снимает фильтр); число справа красное, потому что означает долг.
+  function ustazGroupBlock(title, groups, withAll, allCount) {
+    if (!groups.length) return '';
+    var count = function (n, older) {
+      return '<span class="n' + (n ? '' : ' zero') + '">' + n +
+        (older ? ' <small>· ' + T('ustaz_more_old', { N: older }) + '</small>' : '') +
+        '</span>';
+    };
+    var rows = groups.map(function (g) {
+      return '<div class="g' + (ustazGroupFilter === g.id ? ' on' : '') +
+        '" data-gid="' + g.id + '"><span>' + ustazEsc(g.title) + '</span>' +
+        count(g.waiting, g.older) + '</div>';
+    }).join('');
+    var head = withAll
+      ? '<div class="g' + (ustazGroupFilter === null ? ' on' : '') + '" data-gid="">' +
+        '<span>' + T('ustaz_all_groups') + '</span>' + count(allCount, 0) + '</div>'
+      : '';
+    return '<div class="ustaz-group-title">' + title + '</div>' +
+      '<div class="ustaz-groups">' + head + rows + '</div>';
+  }
+
   function ustazRenderList(data) {
     var body = document.getElementById('ustaz-body');
     var today = data.today || '';
@@ -3894,17 +3925,17 @@
     var items = all.filter(function (it) {
       return ustazGroupFilter === null || it.group_id === ustazGroupFilter;
     });
+    var mine = groups.filter(function (g) { return g.mine !== false; });
+    var other = groups.filter(function (g) { return g.mine === false; });
     var html = '';
-    if (groups.length > 1) {
-      html += '<div class="ustaz-group-title">' + T('ustaz_my_groups') + '</div>';
-      html += '<div class="ustaz-groups">' +
-        '<div class="g' + (ustazGroupFilter === null ? ' on' : '') + '" data-gid="">' +
-        '<span>' + T('ustaz_all_groups') + '</span><span class="n">' + all.length + '</span></div>' +
-        groups.map(function (g) {
-          return '<div class="g' + (ustazGroupFilter === g.id ? ' on' : '') +
-            '" data-gid="' + g.id + '"><span>' + ustazEsc(g.title) + '</span>' +
-            '<span class="n">' + g.waiting + '</span></div>';
-        }).join('') + '</div>';
+    if (groups.length) {
+      // "Все группы" сверху нужна только когда своих групп больше одной -
+      // иначе она дублирует единственную строку под собой.
+      html += ustazGroupBlock(T('ustaz_my_groups'), mine, mine.length > 1, all.length);
+      // Супер-админ видит и остальные группы: он не только контролирует
+      // устазов, но и сам проверяет там, где устаз группы не успел - значит
+      // это работа, а не просмотр (решение пользователя 04.09.2026).
+      if (other.length) html += ustazGroupBlock(T('ustaz_other_groups'), other, false, 0);
     }
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';

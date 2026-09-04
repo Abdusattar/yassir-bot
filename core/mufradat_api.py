@@ -29,10 +29,10 @@ from urllib.parse import parse_qsl
 
 from aiohttp import web
 
-from config import TELEGRAM_TOKEN
+from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
-    count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date,
+    count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, get_all_groups,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -642,12 +642,37 @@ async def handle_heartbeat(request, user_id):
     # Счётчик считаем ПО ОКНУ (04.09.2026), не по всей истории: красный
     # счётчик на двери в этом проекте всегда означает долг, а хвост
     # непроверенного за месяцы долгом за сегодня не является.
-    waiting = count_pending_voice_reviews([g["id"] for g in admin_groups]) if admin_groups else 0
+    # Счётчик на двери (04.09.2026, решение пользователя): у устаза группы -
+    # его группы, у супер-админа - ВСЕ. Супер-админ и правда проверяет чужие
+    # группы, когда устаз группы не успел (Умар устаз так и делает), значит
+    # для него общий долг - это его долг, а не чужая статистика.
+    #
+    # Права на приём отдельно давать не пришлось: is_group_admin
+    # (core/handlers.py) уже возвращает True супер-админу в ЛЮБОЙ группе,
+    # поэтому его реплай/реакция закрывают сдачу где угодно.
+    counted = [g["id"] for g in _visible_ustaz_groups(user_id)[0]]
     return web.json_response({
         "online": _online_count(),
-        "is_ustaz": bool(admin_groups),
-        "waiting_count": waiting,
+        # Дверь видна и супер-админу без единой роли устаза: иначе, сняв с
+        # себя роль в подготовительной, он терял кабинет целиком.
+        "is_ustaz": bool(admin_groups) or user_id in SUPER_ADMIN_IDS,
+        "waiting_count": count_pending_voice_reviews(counted),
     })
+
+
+def _visible_ustaz_groups(user_id):
+    """(группы, id своих, супер-админ ли). Устаз видит свои группы;
+    супер-админ - ВСЕ активные, свои первыми: он и контролирует устазов, и
+    сам проверяет там, где устаз группы не успел (решение пользователя
+    04.09.2026). Поэтому "чужая" группа для него не просмотр, а работа -
+    приём сдачи там ему и так разрешён (is_group_admin в core/handlers.py)."""
+    admin_groups = get_admin_groups(user_id)
+    is_super = user_id in SUPER_ADMIN_IDS
+    own_ids = [g["id"] for g in admin_groups]
+    visible = list(admin_groups)
+    if is_super:
+        visible += [g for g in get_all_groups() if g["id"] not in own_ids]
+    return visible, own_ids, is_super
 
 
 @with_auth
@@ -658,10 +683,10 @@ async def handle_ustaz_waiting(request, user_id):
     реплаем в группе Telegram, кабинет здесь ничего не решает - гейт
     "пересдача блокирует этап" (пункт 11 макета) отложен отдельно, до
     согласования с Умар устазом."""
-    admin_groups = get_admin_groups(user_id)
-    if not admin_groups:
+    visible, own_ids, is_super = _visible_ustaz_groups(user_id)
+    if not visible and not is_super:
         return web.json_response({"error": "not_ustaz"}, status=403)
-    group_ids = [g["id"] for g in admin_groups]
+    group_ids = [g["id"] for g in visible]
     # ?older=1 - раскрыть свёрнутый хвост (всё, что старше окна). Отдельным
     # запросом, а не одним списком: у устаза таких сдач могут быть сотни, и
     # тянуть их на каждое открытие кабинета незачем.
@@ -673,8 +698,10 @@ async def handle_ustaz_waiting(request, user_id):
     # кабинету надо показать, где именно скопилось.
     groups = [
         {"id": g["id"], "title": g["title"],
-         "waiting": count_pending_voice_reviews([g["id"]])}
-        for g in admin_groups
+         "waiting": count_pending_voice_reviews([g["id"]]),
+         "older": count_pending_voice_reviews([g["id"]], recent=False),
+         "mine": g["id"] in own_ids}
+        for g in visible
     ]
     return web.json_response({
         "items": items,
@@ -684,6 +711,7 @@ async def handle_ustaz_waiting(request, user_id):
         # Сегодняшняя дата СЕРВЕРА (Бишкек) - фронтенд по ней подписывает
         # "сегодня"/"вчера", не спрашивая часовой пояс устройства.
         "today": get_date(),
+        "is_super": is_super,
     })
 
 
