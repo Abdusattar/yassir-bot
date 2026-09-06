@@ -14,7 +14,7 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL, MUFRADAT_API_PORT
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer, is_any_group_admin
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer, is_any_group_admin, update_group_chat_id
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
@@ -333,6 +333,21 @@ async def main():
 
                 chat_id = str(chat.get("id", ""))
                 sender = str(frm.get("id", ""))
+
+                # Группа стала супергруппой (06.09.2026). Telegram присылает
+                # это служебное сообщение в СТАРЫЙ чат, и с этого момента у
+                # группы новый chat_id - старый мёртв. Без перехвата группа
+                # молча отваливается: бот перестаёт её узнавать, а значит нет
+                # ни отчётов, ни проверок, ни кика, и никто не понимает почему.
+                # Переносим id сразу, пока сообщение на руках: искать новый
+                # id потом будет уже нечем.
+                migrate_to = msg.get("migrate_to_chat_id")
+                if migrate_to:
+                    new_id = str(migrate_to)
+                    if get_group(chat_id):
+                        update_group_chat_id(chat_id, new_id)
+                        log.warning("group migrated to supergroup: %s -> %s", chat_id, new_id)
+                    continue
 
                 sender_name = (frm.get("first_name", "") or "").strip()
                 if frm.get("last_name"):

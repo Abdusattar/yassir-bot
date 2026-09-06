@@ -1846,6 +1846,24 @@ def _active_dates(uid, limit=400):
     return {r["date"] for r in rows}
 
 
+def update_group_chat_id(old_chat_id, new_chat_id):
+    """Группа стала супергруппой - у неё сменился chat_id (06.09.2026).
+
+    Переносим id на месте, НЕ создавая новую группу: у старой висят студенты,
+    отчёты, сдачи и роли устазов, и завести рядом вторую значило бы разорвать
+    группу пополам. Telegram сообщает новый id ровно один раз, служебным
+    сообщением в старый чат (см. bot.py, migrate_to_chat_id).
+
+    Если строка с новым id уже есть (сообщение пришло дважды - Telegram так
+    умеет), ничего не делаем: перенос уже состоялся."""
+    with db() as c:
+        exists = c.execute("SELECT 1 FROM groups WHERE chat_id=?", (new_chat_id,)).fetchone()
+        if exists:
+            return False
+        c.execute("UPDATE groups SET chat_id=? WHERE chat_id=?", (new_chat_id, old_chat_id))
+    return True
+
+
 def get_joined_date(uid, group_id):
     """Публичная обёртка над _group_joined_date: экрану «Сдачи» она нужна,
     чтобы посчитать срок подготовительной (см. core/prep.py prep_progress)."""
