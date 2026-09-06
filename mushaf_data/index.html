@@ -2717,12 +2717,45 @@
   // смене страницы, не нужно перевешивать на каждое слово заново.
   var wordPopup = document.getElementById('word-popup');
   var popupHideTimer = null;
+  /* Попап центрируется по слову (translate(-50%,-100%)), поэтому у края
+     экрана половина его уезжала за границу и перевод обрезался - в арабском
+     это происходит постоянно, ведь конец строки здесь ЛЕВЫЙ край
+     (06.09.2026, поймано пользователем на скриншоте). Прижимаем к экрану:
+     стрелки-указателя у попапа нет, так что сдвиг вбок ничего не ломает - он
+     просто перестаёт быть ровно по центру слова.
+
+     Сверху та же беда на первой строке: там показываем попап ПОД словом. */
+  var POPUP_MARGIN = 8;
+
   function showPopupMessage(el, text) {
     wordPopup.textContent = text;
-    var rect = el.getBoundingClientRect();
-    wordPopup.style.left = (rect.left + rect.width / 2) + 'px';
-    wordPopup.style.top = (rect.top - 8) + 'px';
+    wordPopup.style.transform = 'translate(-50%, -100%)';
     wordPopup.classList.add('visible');
+
+    // Мерить ОБЯЗАТЕЛЬНО на нулевой позиции: ширина у position:fixed
+    // считается "сколько влезет от left до края экрана", и на прошлой
+    // позиции у самого края попап меряется узким (текст переносится). По
+    // такой ширине клампинг промахивается - ровно так первая версия этого
+    // фикса всё ещё выпускала попап за экран на первой строке.
+    wordPopup.style.left = '0px';
+    var rect = el.getBoundingClientRect();
+    var pop = wordPopup.getBoundingClientRect();
+    var half = pop.width / 2;
+    var center = rect.left + rect.width / 2;
+    var maxCenter = window.innerWidth - half - POPUP_MARGIN;
+    var minCenter = half + POPUP_MARGIN;
+    // Если попап шире экрана, minCenter окажется больше maxCenter - тогда
+    // важнее не обрезать начало текста, поэтому побеждает левый край.
+    center = Math.min(Math.max(center, minCenter), Math.max(maxCenter, minCenter));
+
+    var top = rect.top - POPUP_MARGIN;
+    if (top - pop.height < POPUP_MARGIN) {
+      top = rect.bottom + POPUP_MARGIN;
+      wordPopup.style.transform = 'translate(-50%, 0)';
+    }
+
+    wordPopup.style.left = center + 'px';
+    wordPopup.style.top = top + 'px';
     clearTimeout(popupHideTimer);
     popupHideTimer = setTimeout(function () {
       wordPopup.classList.remove('visible');
