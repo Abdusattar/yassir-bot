@@ -1422,32 +1422,60 @@
     box-shadow: 0 4px 10px rgba(0, 0, 0, .06);
     display: flex; flex-direction: column; gap: 8px;
   }
+  /* Выбор группы СПИСКОМ по тапу, а не полосой чипов (07.09.2026).
+     У супер-админа групп 17: полоса показывала 3-4, до дальней уходило
+     пять свайпов. Но хуже свайпов было то, что числа долгов есть только у
+     видимых чипов - пока листаешь, не знаешь, где скопилось. А скопилось
+     очень неравномерно (334 старых у одной группы против нуля у другой).
+     Список показывает все группы с числами разом. */
+  .ustaz-picker {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px; border-radius: 11px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent-soft);
+    color: var(--accent); font-size: 14px; font-weight: 600;
+  }
+  .ustaz-picker .caret { font-size: 10px; opacity: .75; }
+  /* Абсолютный, а не в потоке: иначе раскрытый список растягивал бы липкую
+     шапку на пол-экрана. .ustaz-head позиционирован (sticky), поэтому он и
+     есть точка отсчёта. */
   .ustaz-groups {
-    display: flex; gap: 8px;
-    overflow-x: auto; -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .ustaz-groups::-webkit-scrollbar { display: none; }
-  .ustaz-groups .g {
-    flex: 0 0 auto;
-    display: flex; align-items: baseline; gap: 6px;
-    padding: 7px 12px; font-size: 13px; color: var(--ink);
+    display: none;
+    position: absolute; left: 16px; right: 16px; top: 100%;
+    z-index: 8; max-height: 60vh; overflow-y: auto;
     background: var(--card-bg); border: 1px solid var(--card-border);
-    border-radius: 999px; cursor: pointer; white-space: nowrap;
+    border-radius: 12px; box-shadow: var(--shadow-md);
   }
-  .ustaz-groups .g.on {
-    background: var(--accent-soft); border-color: var(--accent); font-weight: 600;
+  .ustaz-groups.open { display: block; }
+  .ustaz-groups .g {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 12px; font-size: 14px; color: var(--ink);
+    border-top: 1px solid var(--card-border); cursor: pointer;
   }
-  /* Чужая группа у супер-админа - пунктирной рамкой. Он там тоже проверяет
-     (подхватывает за устазом), поэтому не приглушаем, а просто отличаем. */
-  .ustaz-groups .g.foreign { border-style: dashed; }
+  .ustaz-groups .g:first-child { border-top: none; }
+  .ustaz-groups .g.on { background: var(--accent-soft); font-weight: 600; }
+  .ustaz-groups .g .t { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .ustaz-groups .g .t span {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* Своя группа - подписью, а не пунктиром: в списке рамку не видно. */
+  .ustaz-groups .g .mine {
+    flex: none; font-size: 10px; font-weight: 700; padding: 2px 6px;
+    border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  }
+  .ustaz-groups .hd {
+    font-size: 11px; color: var(--muted); font-weight: 600;
+    padding: 8px 12px 4px; letter-spacing: .04em;
+  }
   /* Число непроверенных - КРАСНЫМ (04.09.2026, решение пользователя:
      "чтобы устазы сразу видели"). Тот же язык, что и счётчик на двери:
      красное пятно = долг. Ноль не красим - долга нет, красить нечего. */
-  .ustaz-groups .g .n { font-size: 12.5px; color: var(--no); font-weight: 700; }
+  .ustaz-groups .g .n {
+    flex: none; font-size: 13px; color: var(--no); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
   .ustaz-groups .g .n.zero { color: var(--muted); font-weight: 400; }
   /* Хвост старше окна - приглушённой добавкой к красному числу, чтобы
-     "10 · ещё 131" не читалось как 141 сегодняшних. */
+     "10 · 131" не читалось как 141 сегодняшних. */
   .ustaz-groups .g .n small { color: var(--muted); font-weight: 400; }
   /* Хвост старше окна - одна строка, разворачивается тапом. Прятать совсем
      нельзя (там может лежать неразобранное), пугать сотней строк - тоже. */
@@ -1989,6 +2017,11 @@
       ustaz_waits: 'ждёт %N%',
       ustaz_older: 'Ещё %N% старше — показать',
       ustaz_older_title: 'Старше последних дней',
+      ustaz_group_mine: 'моя',
+      ustaz_groups_mine: 'СВОИ ГРУППЫ',
+      ustaz_groups_rest: 'ОСТАЛЬНЫЕ',
+      ustaz_groups_rest_by_debt: 'ОСТАЛЬНЫЕ — СНАЧАЛА ГДЕ БОЛЬШЕ ЖДУТ',
+      ustaz_group_waiting: 'ждут %N%',
       ustaz_no_place: 'голосовая сдача',
       ustaz_src_app: 'через апп',
       ustaz_src_audio: 'через группу',
@@ -5121,14 +5154,53 @@
 
   // Полоса вкладок: своя группа первой, число ждущих красным (это долг).
   // Ноль не красим - красить нечего.
+  /* Кнопка с текущей группой + список всех по тапу (07.09.2026).
+
+     Порядок: СВОИ группы сверху (устаз отвечает за них), дальше остальные по
+     числу ждущих - пустые тонут сами. Раньше порядок задавал сервер, а полоса
+     показывала первые три-четыре; теперь виден весь список, и сортировка
+     стала важнее: она отвечает на вопрос "куда идти в первую очередь".
+
+     withCounts: в зонах "Студенты" и "Проверено" чисел нет - /ustaz/groups их
+     не считает, а выдумывать нули значило бы соврать про долг. */
+  function ustazGroupListHTML(groups, currentId, withCounts) {
+    if (!groups || groups.length < 2) return '';
+    var mine = groups.filter(function (g) { return g.mine !== false; });
+    var rest = groups.filter(function (g) { return g.mine === false; });
+    if (withCounts) {
+      rest.sort(function (a, b) { return (b.waiting || 0) - (a.waiting || 0); });
+    }
+    var cur = groups.filter(function (g) { return g.id === currentId; })[0] || groups[0];
+
+    function row(g) {
+      var n = withCounts
+        ? '<span class="n' + (g.waiting ? '' : ' zero') + '">' + g.waiting +
+          (g.older ? ' <small>· ' + g.older + '</small>' : '') + '</span>'
+        : '';
+      return '<div class="g' + (g.id === currentId ? ' on' : '') + '" data-gid="' + g.id + '">' +
+        '<div class="t"><span>' + ustazEsc(g.title) + '</span>' +
+        (g.mine !== false ? '<span class="mine">' + T('ustaz_group_mine') + '</span>' : '') +
+        '</div>' + n + '</div>';
+    }
+
+    var list = '';
+    if (mine.length && rest.length) {
+      list += '<div class="hd">' + T('ustaz_groups_mine') + '</div>' + mine.map(row).join('') +
+        '<div class="hd">' + T(withCounts ? 'ustaz_groups_rest_by_debt' : 'ustaz_groups_rest') +
+        '</div>' + rest.map(row).join('');
+    } else {
+      list += groups.map(row).join('');
+    }
+
+    var label = ustazEsc(cur.title) +
+      (withCounts && cur.waiting ? ' · ' + T('ustaz_group_waiting', { N: cur.waiting }) : '');
+    return '<div class="ustaz-picker" id="ustaz-picker"><span>' + label + '</span>' +
+      '<span class="caret">▼</span></div>' +
+      '<div class="ustaz-groups" id="ustaz-group-list">' + list + '</div>';
+  }
+
   function ustazGroupTabs(groups) {
-    if (groups.length < 2) return '';
-    return '<div class="ustaz-groups">' + groups.map(function (g) {
-      return '<div class="g' + (ustazGroupFilter === g.id ? ' on' : '') +
-        (g.mine === false ? ' foreign' : '') +
-        '" data-gid="' + g.id + '"><span>' + ustazEsc(g.title) + '</span>' +
-        '<span class="n' + (g.waiting ? '' : ' zero') + '">' + g.waiting + '</span></div>';
-    }).join('') + '</div>';
+    return ustazGroupListHTML(groups, ustazGroupFilter, true);
   }
 
   // Какая группа открыта по умолчанию: та, где ждут дольше всего дел, а из
@@ -5237,7 +5309,27 @@
       T('ustaz_zone_done') + '</button></div>';
   }
 
+  // Раскрытие списка групп. Вешаем здесь, а не в каждом месте отрисовки:
+  // ustazBindZones зовётся из всех трёх зон, и список одинаков во всех.
+  function ustazBindPicker(body) {
+    var btn = body.querySelector('#ustaz-picker');
+    var list = body.querySelector('#ustaz-group-list');
+    if (!btn || !list) return;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      list.classList.toggle('open');
+    });
+    // Тап мимо списка закрывает его - привычное поведение выпадающих меню,
+    // как у выбора языка на дашборде.
+    document.addEventListener('click', function (e) {
+      if (list.classList.contains('open') && !list.contains(e.target)) {
+        list.classList.remove('open');
+      }
+    });
+  }
+
   function ustazBindZones(body) {
+    ustazBindPicker(body);
     Array.prototype.forEach.call(body.querySelectorAll('.ustaz-zones button'), function (b) {
       b.addEventListener('click', function () {
         ustazZone = b.getAttribute('data-zone');
@@ -5250,12 +5342,7 @@
   }
 
   function stuGroupTabs() {
-    if (!stuGroups || stuGroups.length < 2) return '';
-    return '<div class="ustaz-groups">' + stuGroups.map(function (g) {
-      return '<div class="g' + (g.id === stuGroupId ? ' on' : '') +
-        (g.mine ? '' : ' foreign') + '" data-gid="' + g.id + '">' +
-        '<span>' + ustazEsc(g.title) + '</span></div>';
-    }).join('') + '</div>';
+    return ustazGroupListHTML(stuGroups, stuGroupId, false);
   }
 
   // Сколько дней в месяце и какой день сегодня - чтобы будущие дни не
