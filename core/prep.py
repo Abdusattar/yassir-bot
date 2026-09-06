@@ -113,10 +113,18 @@ def prep_progress(uid, group_id):
     days_done = count_report_days_since(uid, group_id, joined)
     deadline = datetime.strptime(joined, "%Y-%m-%d").date() + \
         timedelta(days=PREP_DAYS + days_done)
+    # Сколько заданий делают день ПОЛНЫМ - берём из самой группы, а не
+    # константой: у групп разные наборы (tasks), и написать студенту "все
+    # 3", когда у него их 4, значит соврать про правило (06.09.2026,
+    # замечание пользователя: должно быть читаемо, что +1 день даёт только
+    # сдача всех заданий, а не любая одна).
+    group = get_group_by_id(group_id)
+    tasks = (group["tasks"] if group and group["tasks"] else "m,r,t")
     return {
         "days_done": days_done,
         "min_days": PREP_MIN_DAYS,
         "deadline": deadline.isoformat(),
+        "tasks_count": len([t for t in tasks.split(",") if t.strip()]),
     }
 
 

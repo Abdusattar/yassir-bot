@@ -1314,6 +1314,35 @@
   .stu-strip i.d2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
   .stu-strip i.d3 { background: var(--accent); }
   .stu-strip i.future { background: var(--card-border); opacity: .5; }
+  /* Сгоревший слот запаса (вариант В, 06.09.2026). Красный здесь уместен -
+     это и правда долг: потраченный пропуск назад не возвращается. Приглушён
+     до 42%, чтобы полоска запаса не кричала громче самих сдач. */
+  .stu-strip i.burn { background: color-mix(in srgb, var(--no) 42%, transparent); }
+  .subs-month-tap { font-size: 11px; color: var(--accent); text-align: center; margin-top: 3px; }
+  /* Правило подготовительной - НЕ мелким серым в общем ряду подписей
+     (06.09.2026, замечание пользователя: это важная заметка, её должно быть
+     видно). Акцентом на мягкой подложке, а не красным: это условие
+     прохождения, а не выговор. */
+  .subs-note {
+    font-size: 12.5px; line-height: 1.4; text-align: center;
+    color: var(--accent); background: var(--accent-soft);
+    border-radius: 9px; padding: 7px 10px; margin-top: 6px;
+  }
+  /* Баннер "нет связи" (06.09.2026). Внизу и поверх всего: он должен быть
+     виден на любом экране, где бы человека ни застал обрыв. */
+  #offline-bar {
+    position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 999;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 10px 12px;
+    box-shadow: 0 6px 20px rgba(30, 25, 10, 0.14);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 13px; color: var(--ink);
+  }
+  #offline-bar button {
+    flex: none; border: 0; border-radius: 9px; padding: 8px 13px;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
   .stu-legend { font-size: 11.5px; color: var(--muted); text-align: center; }
   /* Календарь одного студента - тот же, что потом увидит он сам. */
   .stu-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
@@ -1929,6 +1958,13 @@
       // Подготовительная: считают не пропуски, а набранные полные дни к сроку.
       subs_prep_days: 'полных дней %N% из %M%',
       subs_prep_deadline: 'срок до %D%',
+      subs_prep_full_day_one: 'срок двигает только полный день — %N% задание за сутки',
+      subs_prep_full_day_few: 'срок двигает только полный день — все %N% задания за сутки',
+      subs_prep_full_day_many: 'срок двигает только полный день — все %N% заданий за сутки',
+      subs_month_left: 'осталось %N%',
+      offline_text: 'Нет связи с сервером',
+      offline_retry: 'Попробовать снова',
+      subs_month_open: 'нажми — месяц по дням',
       subs_month_legend: 'Чем светлее день, тем меньше сдано',
       ustaz_students_empty: 'В этой группе пока нет активных студентов',
       ustaz_misses: 'пропусков %N% из %M%',
@@ -4170,7 +4206,38 @@
     }
     return fetch(apiBase() + path, init).then(function (r) {
       return r.json().then(function (data) { return { status: r.status, data: data }; });
+    }).catch(function () {
+      /* Связь оборвалась ЛИБО сервер отдал не-JSON (502 во время
+         перезапуска бота - реальный случай 06.09.2026: женский бот
+         поднимался пару секунд, и кто открыл приложение в эту секунду,
+         остался с вечной "Загрузкой").
+
+         Раньше промис здесь просто умирал: .catch не было ни тут, ни в
+         вызывающих местах, колбэк не вызывался, экран замирал навсегда и
+         не оживал даже когда сеть возвращалась - человеку приходилось
+         закрывать приложение и открывать заново, не понимая почему.
+
+         Теперь любой сбой - это ВИДИМОЕ состояние с кнопкой, а не тишина.
+         Не бросаем исключение дальше: вызывающий код получит offline:true
+         и пустые данные, а баннер уже показан. */
+      showOffline();
+      return { status: 0, data: null, offline: true };
     });
+  }
+
+  // Один баннер на всё приложение: пять упавших запросов не должны дать
+  // пять полосок. Кнопка перезагружает Mini App - то же, что человек делает
+  // руками, закрывая и открывая приложение, только в один тап.
+  function showOffline() {
+    if (document.getElementById('offline-bar')) return;
+    var bar = document.createElement('div');
+    bar.id = 'offline-bar';
+    bar.innerHTML = '<span>' + T('offline_text') + '</span>' +
+      '<button type="button">' + T('offline_retry') + '</button>';
+    bar.querySelector('button').addEventListener('click', function () {
+      location.reload();
+    });
+    document.body.appendChild(bar);
   }
 
   // Проверка 401 в одном месте - initData может протухнуть (сутки, см.
@@ -4178,6 +4245,10 @@
   // тренажёра, каждый вызов эндпоинта должен на это отреагировать одинаково.
   function withAuthCheck(promise, cb) {
     promise.then(function (res) {
+      // Связи нет - баннер с кнопкой уже показан в apiCall. Тянуть колбэк
+      // с пустыми данными нельзя: тренажёр отрисуется сломанным поверх
+      // честного "нет связи".
+      if (res.offline) return;
       if (res.status === 401) {
         document.getElementById('trainer-body').innerHTML =
           '<div class="trainer-msg">' + T('session_expired') + '</div>';
@@ -4374,45 +4445,78 @@
       '<div class="stu-legend">' + miss + ' · ' + T('subs_month_legend') + '</div>';
   }
 
-  /* Месяц черточками, БЕЗ тапа (04.09.2026, уточнение пользователя: "если
-     аккуратное и совсем мало места - можно всегда показывать"). Две строки
-     вместо календаря на пол-экрана, и сдачи снова первое, что видно.
+  /* Вариант В (06.09.2026, выбор пользователя): ДВЕ строки черточек.
 
-     Черточек ровно столько, сколько дней месяца УЖЕ прошло: пропуски и
-     перевод в Тадаббур считаются от 1-го числа (get_skip_count_month_detail,
-     core/transfers.py), поэтому полоска растёт так же, как растёт счёт, - а
-     скользящее окно "последние N дней" здесь расходилось бы с числом в
-     строке выше, и это был бы ровно тот двойной счёт, который на этом экране
-     запрещён.
+     Верхняя - ритм по дням месяца, ровно тот же компонент, что видит устаз
+     в "Студентах" (у обоих одна картина - условие макета). Читает массивы
+     заданий из /month, а не счётчики: у устаза и студента разные источники
+     (get_group_month_progress отдаёт число, get_student_month_days - список
+     заданий за день), поэтому своя функция, а не переиспользование stuStrip.
 
-     Порог группы (10 pro / 20 relaxed) живёт в ЧИСЛЕ, а не в ширине полоски:
-     полоска отвечает "в какие дни", число - "сколько и до чего". */
-  function subsRecentStripHTML(d) {
+     Нижняя - запас группы: черточек ровно столько, сколько пропусков даёт
+     группа (10 pro / 20 relaxed), сгоревшие - слева. Это и есть тот
+     "механизм", который просили показать: сколько пропустил из десяти.
+
+     Обе от 1-го числа: пропуски и перевод в Тадаббур считаются от начала
+     месяца (get_skip_count_month_detail, core/transfers.py). Скользящее
+     окно "последние N дней" разошлось бы с числом в подписи - двойной счёт
+     на этом экране запрещён. */
+  function subsDaysStripHTML(d) {
     var info = stuMonthInfo(d.month, d.today);
     var out = '';
-    for (var day = 1; day <= info.today; day++) {
+    for (var day = 1; day <= info.days; day++) {
       var n = ((d.days || {})[stuDayKey(d.month, day)] || []).length;
-      out += '<i class="' + (n ? 'd' + Math.min(3, n) : '') + '"></i>';
+      var cls = day > info.today ? 'future' : (n ? 'd' + Math.min(3, n) : '');
+      out += '<i class="' + cls + '"></i>';
     }
     return '<div class="stu-strip">' + out + '</div>';
   }
 
+  // Запас: сгоревшие слоты слева, свободные справа. Больше порога не рисуем -
+  // у кого пропусков больше, чем даёт группа, полоска просто сгорела целиком,
+  // а лишние черточки соврали бы про размер запаса.
+  function subsBudgetStripHTML(used, total, cls) {
+    var burned = Math.max(0, Math.min(used, total));
+    var out = '';
+    for (var i = 0; i < total; i++) out += '<i class="' + (i < burned ? cls : '') + '"></i>';
+    return '<div class="stu-strip" style="margin-top:4px">' + out + '</div>';
+  }
+
   function subsMonthSummaryHTML(d) {
     // Подготовительная (06.09.2026): там отчисляют не за пропуски, а за
-    // недобор полных дней к сроку (core/prep.py). Показываем то самое
-    // число, по которому решение и принимается, - и оно же подсказывает,
-    // что делать: добрать полные дни, а не "поменьше пропускать".
-    var line;
+    // недобор полных дней к сроку (core/prep.py). И запас там не сгорает, а
+    // набирается - поэтому нижняя полоска заполняется акцентом, а не красным.
+    var line, budget, note = '';
     if (d.prep) {
       line = T('subs_prep_days', { N: d.prep.days_done, M: d.prep.min_days }) +
         ' · ' + T('subs_prep_deadline', { D: subsShortDate(d.prep.deadline) });
+      budget = subsBudgetStripHTML(d.prep.days_done, d.prep.min_days, 'd3');
+      // Правило "полного дня" называем прямо (06.09.2026): иначе студент
+      // видит "3 из 5" и думает, что засчитывается любое одно задание.
+      var nt = d.prep.tasks_count || 3;
+      note = '<div class="subs-note">' +
+        T(ruPluralKey('subs_prep_full_day', nt), { N: nt }) + '</div>';
+    } else if (d.threshold) {
+      line = T('subs_month_misses', { N: d.missed, M: d.threshold }) +
+        ' · ' + T('subs_month_left', { N: Math.max(0, d.threshold - d.missed) });
+      budget = subsBudgetStripHTML(d.missed, d.threshold, 'burn');
     } else {
-      line = d.threshold
-        ? T('subs_month_misses', { N: d.missed, M: d.threshold })
-        : T('subs_month_misses_no_limit', { N: d.missed });
+      line = T('subs_month_misses_no_limit', { N: d.missed });
+      budget = '';
     }
-    return subsRecentStripHTML(d) +
-      '<div class="stu-legend" style="margin-top:4px">' + line + '</div>';
+    return subsDaysStripHTML(d) + budget +
+      '<div class="stu-legend" style="margin-top:5px">' + line + '</div>' + note +
+      '<div class="subs-month-tap">' + T('subs_month_open') + '</div>';
+  }
+
+  // "3 задания", но "5 заданий" - подставлять число в одну строку нельзя,
+  // русский требует согласования. Ключи различаются суффиксом, а не текст
+  // собирается в коде: перевод на ky/uz потом ляжет в те же ключи.
+  function ruPluralKey(base, n) {
+    var d10 = n % 10, d100 = n % 100;
+    if (d10 === 1 && d100 !== 11) return base + '_one';
+    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return base + '_few';
+    return base + '_many';
   }
 
   function subsShortDate(iso) {
@@ -4429,6 +4533,15 @@
       // нечего, а не "пропусков undefined".
       if (!d || d.group_title == null) return;
       box.innerHTML = subsMonthSummaryHTML(d);
+      // Тап проваливает в месяц по дням - тот же жест и тот же календарь,
+      // что у устаза в "Студентах". Полоски при этом никуда не деваются:
+      // сворачивать их обратно незачем, они и так две строки.
+      box.style.cursor = 'pointer';
+      box.addEventListener('click', function () {
+        if (box.getAttribute('data-open') === '1') return;
+        box.setAttribute('data-open', '1');
+        box.insertAdjacentHTML('beforeend', subsCalendarHTML(d));
+      });
     }).catch(function () {});
   }
 
