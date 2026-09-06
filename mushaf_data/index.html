@@ -2040,6 +2040,8 @@
       hifz_rec_hint_idle: 'Прочитай вслух то, что заучивал',
       hifz_rec_hint_rec: 'Идёт запись — нажми «Стоп», когда закончишь',
       hifz_rec_hint_done: 'Послушай себя. Всё хорошо — отправляй устазу',
+      hifz_rec_hint_left: 'Осталось %N% мин записи',
+      hifz_rec_hint_limit: 'Достигнут предел 30 минут — запись остановлена. Отправь эту часть, остальное запиши отдельно',
       hifz_rec_hint_sending: 'Отправляю…',
       hifz_rec_no_mic: 'Не получилось включить микрофон. Разреши доступ в настройках Telegram',
       hifz_rec_sent: 'Отправлено устазу в группу 🤲',
@@ -3561,7 +3563,21 @@
      Картинку рисуем ЗДЕСЬ, на canvas: настоящий шрифт V4 (свой на каждую
      страницу) есть только у клиента, на сервере рендер пословный и другим
      шрифтом — устаз увидел бы не то, что видел студент. */
-  var HIFZ_REC_MAX_MS = 10 * 60 * 1000;
+  /* Предел записи. Было 10 минут - и в него РЕАЛЬНО упирались: замер сдач
+     06.09.2026 показал пять записей ровно по 599.8-600.3 сек, один студент
+     (Рауф) налетел трижды. Читает дольше десяти минут - запись обрывалась на
+     полуслове, а устазу приходила неполная сдача.
+
+     30 минут упираются в 7 МБ при нашем битрейте (замерено: 4.05 КБ/сек), а
+     предел загрузки на сервере - 20 МБ (HIFZ_MAX_UPLOAD_BYTES), так что
+     техническое ограничение тут не десять минут и никогда им не было.
+
+     Совсем без предела нельзя: забытая включённой запись копит чанки в
+     памяти телефона, пока он не начнёт задыхаться. */
+  var HIFZ_REC_MAX_MS = 30 * 60 * 1000;
+  // За сколько до предела предупредить. Молчаливый обрыв - это потерянная
+  // работа: студент дочитывает, не зная, что его уже не пишут.
+  var HIFZ_REC_WARN_MS = 2 * 60 * 1000;
   var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null };
 
   function hifzSubmitLines() {
@@ -3810,17 +3826,29 @@
         var a = document.getElementById('hifz-rec-audio');
         a.src = rec.url; a.style.display = '';
         document.getElementById('hifz-rec-timer').classList.remove('rec');
-        document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_done');
+        // Если запись остановил предел, а не студент - сказать прямо. Иначе
+        // он видит "всё хорошо, отправляй" и не догадывается, что его
+        // оборвали на полуслове.
+        document.getElementById('hifz-rec-hint').textContent =
+          T(rec.hitLimit ? 'hifz_rec_hint_limit' : 'hifz_rec_hint_done');
         hifzRecButtons('done');
       };
       rec.mr.start();
       rec.t0 = Date.now();
       rec.accMs = 0;
       rec.paused = false;
+      rec.hitLimit = false;
       rec.tick = setInterval(function () {
         hifzRecTimer();
         // Лимит - по реально записанному, без учёта пауз.
-        if (hifzRecElapsed() > HIFZ_REC_MAX_MS) hifzRecStop();
+        var left = HIFZ_REC_MAX_MS - hifzRecElapsed();
+        if (left <= 0) {
+          rec.hitLimit = true;   // onstop скажет об этом прямо, а не "готово"
+          hifzRecStop();
+        } else if (left <= HIFZ_REC_WARN_MS && !rec.paused) {
+          document.getElementById('hifz-rec-hint').textContent =
+            T('hifz_rec_hint_left', { N: Math.ceil(left / 60000) });
+        }
       }, 500);
       document.getElementById('hifz-rec-timer').classList.add('rec');
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');

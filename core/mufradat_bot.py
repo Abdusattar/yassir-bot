@@ -288,7 +288,11 @@ async def credit_revision_task(user_id):
 
 
 HIFZ_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-_FFMPEG_TIMEOUT = 60
+# 60 секунд не хватало (замерено на сервере 06.09.2026): полная перекодировка
+# 30-минутной записи занимает 58.3 сек - впритык. Это путь Safari/iOS, где
+# вход mp4/aac и перекодировка неизбежна. Chrome-путь теперь идёт
+# перепаковкой за ~3 сек (см. transcode_to_ogg).
+_FFMPEG_TIMEOUT = 180
 
 
 async def transcode_to_ogg(audio_bytes):
@@ -299,12 +303,25 @@ async def transcode_to_ogg(audio_bytes):
 
     Возвращает None, если ffmpeg недоступен или запись битая - вызывающий
     код тогда отвечает студенту ошибкой, а не шлёт в группу мусор."""
+    # Chrome/Android пишет УЖЕ в opus - его достаточно переложить в ogg, не
+    # трогая звук. Это ~3 сек на 30 минут против 58 сек полной перекодировки
+    # (замерено на сервере 06.09.2026), то есть разница между "работает" и
+    # "падает по таймауту". Safari/iOS даёт mp4/aac - там copy не сработает,
+    # и мы честно перекодируем вторым заходом.
+    out = await _run_ffmpeg(["-c:a", "copy"], audio_bytes)
+    if out:
+        return out
+    return await _run_ffmpeg(
+        ["-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000"], audio_bytes)
+
+
+async def _run_ffmpeg(codec_args, audio_bytes):
+    """Один прогон ffmpeg с заданными аргументами кодека. None - не вышло
+    (вызывающий решает, пробовать ли иначе)."""
     try:
         proc = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "error",
-            "-i", "pipe:0",
-            "-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000",
-            "-f", "ogg", "pipe:1",
+            "-i", "pipe:0", *codec_args, "-f", "ogg", "pipe:1",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -316,10 +333,10 @@ async def transcode_to_ogg(audio_bytes):
         out, err = await asyncio.wait_for(proc.communicate(audio_bytes), timeout=_FFMPEG_TIMEOUT)
     except asyncio.TimeoutError:
         proc.kill()
-        log.error("ffmpeg не уложился в %s сек", _FFMPEG_TIMEOUT)
+        log.error("ffmpeg не уложился в %s сек (%s)", _FFMPEG_TIMEOUT, codec_args)
         return None
     if proc.returncode != 0 or not out:
-        log.error("ffmpeg вернул %s: %s", proc.returncode, (err or b"")[:400])
+        log.info("ffmpeg %s вернул %s: %s", codec_args, proc.returncode, (err or b"")[:200])
         return None
     return out
 

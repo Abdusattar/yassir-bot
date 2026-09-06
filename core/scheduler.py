@@ -266,6 +266,17 @@ async def ustaz_waiting_digest():
 # человек, а отчёт нужен именно Абдусаттару, независимо от профиля.
 _VERIFY_REPORT_ADMIN_ID = "272581710"
 
+# ПАУЗА с 06.09.2026 по просьбе пользователя: отчёт приходил ему каждый день,
+# а нужды в ежедневном контроле качества ИИ-проверки больше нет. Выключен
+# именно ОТЧЁТ - сама проверка работ студентов (_verify_and_reply в
+# core/handlers.py) работает как работала: она адресована студентам в группах,
+# а не ему, и её молчаливое отключение изменило бы то, что они получают.
+#
+# Лог проверок (verify_log) продолжает писаться - он ничего не шлёт, но по
+# нему можно будет собрать отчёт за любой прошедший день, когда снова
+# понадобится. Вернуть: поставить True.
+VERIFY_REPORT_ENABLED = False
+
 _CHECK_LABELS = [
     ("tajweed", "таджвид"),
     ("mufradat", "муфрадат"),
@@ -1752,7 +1763,8 @@ async def scheduler():
                     await maybe_run("publish_curriculum_parts", publish_curriculum_parts)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
-                await maybe_run("verify_quality_report", verify_quality_report)
+                if VERIFY_REPORT_ENABLED:
+                    await maybe_run("verify_quality_report", verify_quality_report)
             elif h == 20 and m == 30:
                 await maybe_run("skip_warnings", skip_warnings)
             elif h == 21 and m == 0:
