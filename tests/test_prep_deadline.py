@@ -90,3 +90,33 @@ def test_three_full_days_fails_at_17(test_db, monkeypatch):
     asyncio.run(prep.check_prep_students())
 
     assert db.find_by_phone("d3", g["id"]) is None  # дедлайн истёк, кикнут
+
+
+def test_elapsed_does_not_depend_on_machine_timezone(test_db, monkeypatch):
+    """Срок считается в БИШКЕКСКОЙ шкале, а не в поясе машины (06.09.2026).
+
+    Было `julianday('now','localtime')`: localtime — это пояс сервера (UTC),
+    а joined_date записан бишкекскими датами. Вычитание из разных шкал
+    расходилось на 6 часов — дедлайн срабатывал позже срока, а этот файл
+    падал в CI в зависимости от времени суток запуска.
+
+    Здесь «сейчас» задано жёстко, поэтому elapsed обязан быть ровно тем, что
+    следует из дат, на любой машине. Тест снова покраснеет, если кто-то
+    вернёт localtime.
+    """
+    from datetime import datetime
+    import pytz
+
+    g = _setup_prep_group("-100891")
+    sid = db.add_student("ЧасовойПояс", g["id"], phone="d4")
+    with db.db() as c:
+        c.execute("UPDATE user_groups SET joined_date=? WHERE user_id=? AND group_id=?",
+                   ("2026-08-24", sid, g["id"]))
+
+    tz = pytz.timezone(db.TZ)
+    frozen = tz.localize(datetime(2026, 9, 7, 0, 30, 0))   # 14 дней и полчаса
+    monkeypatch.setattr(db, "get_now", lambda: frozen)
+
+    row = [r for r in db.get_prep_students_active() if r["phone"] == "d4"][0]
+
+    assert 14.0 <= row["elapsed"] < 14.1, row["elapsed"]

@@ -2309,18 +2309,29 @@ def set_group_invite_link(group_id, link):
 
 
 def get_prep_students_active():
-    """Все активные студенты prep-групп (проверка идёт по каждому ежедневно)."""
+    """Все активные студенты prep-групп (проверка идёт по каждому ежедневно).
+
+    "Сейчас" передаём СВОЁ, бишкекское, а не берём julianday('now','localtime')
+    (06.09.2026). localtime - это пояс МАШИНЫ, а сервер и CI живут в UTC, тогда
+    как joined_date записан бишкекскими датами. Вычитание из разных шкал давало
+    расхождение в 6 часов: дедлайн подготовительной срабатывал позже срока, а
+    тесты падали в зависимости от времени суток запуска. Та же грабля, что была
+    со score_events - "сейчас" и "тогда" обязаны быть в одной шкале.
+
+    Строку отдаём без смещения (naive): julianday тогда трактует и её, и
+    joined_date одинаково, и обе оказываются в бишкекской шкале."""
+    now_local = get_now().strftime("%Y-%m-%d %H:%M:%S")
     with db() as c:
         return c.execute("""
             SELECT u.id, u.name, u.phone, g.id as group_id, g.chat_id, g.title,
                    g.fallback_chat_id, ug.joined_date,
-                   julianday('now','localtime') - julianday(ug.joined_date) as elapsed
+                   julianday(?) - julianday(ug.joined_date) as elapsed
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
             JOIN groups g ON ug.group_id=g.id
             WHERE ug.role='student' AND ug.active=1
               AND g.group_type='prep'
-        """).fetchall()
+        """, (now_local,)).fetchall()
 
 
 def count_report_days_since(uid, group_id, since_date):
