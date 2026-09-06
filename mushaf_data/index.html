@@ -1332,8 +1332,26 @@
     border-radius: 12px; padding: 12px 14px;
     display: flex; flex-direction: column; gap: 3px;
   }
-  .ustaz-row .name { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+  .ustaz-row .name {
+    font-size: 14.5px; font-weight: 600; color: var(--ink);
+    /* flex-start, а не center: у длинного имени в две строки метка иначе
+       повисает по середине столбиком - выравниваем по первой строке. */
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  }
   .ustaz-row .meta { font-size: 12.5px; color: var(--muted); }
+  /* Откуда пришла сдача (06.09.2026, просьба пользователя). Из приложения -
+     есть лист со строчками и место: такую устаз открывает и разбирает по
+     словам, это заметно быстрее. Голосовым в группу - только звук, открывать
+     нечего. Разницу должно быть видно ДО тапа, иначе устаз тыкает наугад и
+     половина строк просто не отзывается. */
+  .sub-pill.app { background: var(--accent-soft); color: var(--accent); }
+  /* Нейтральный серый, НЕ красный: сдать голосовым в группу - не провинность,
+     так сдаёт пока большинство. Красное пятно в этом приложении означает долг
+     (счётчик на двери, просрочка), и вешать его на способ сдачи нельзя. */
+  .sub-pill.audio {
+    background: color-mix(in srgb, var(--muted) 14%, transparent);
+    color: var(--muted);
+  }
   /* "Ждёт" краснеет само после суток (04.09.2026, макет 01.09): срочность
      должна считываться пятном, а не вычитанием дат в уме. */
   .ustaz-row .meta b.late { color: var(--no); font-weight: 600; }
@@ -1909,7 +1927,6 @@
       subs_month_misses: 'пропусков %N% из %M%',
       subs_month_misses_no_limit: 'пропусков %N%',
       subs_month_legend: 'Чем светлее день, тем меньше сдано',
-      subs_month_open: 'открыть месяц',
       ustaz_students_empty: 'В этой группе пока нет активных студентов',
       ustaz_misses: 'пропусков %N% из %M%',
       ustaz_misses_no_limit: 'пропусков %N%',
@@ -1922,6 +1939,8 @@
       ustaz_older: 'Ещё %N% старше — показать',
       ustaz_older_title: 'Старше последних дней',
       ustaz_no_place: 'голосовая сдача',
+      ustaz_src_app: 'лист + аудио',
+      ustaz_src_audio: 'только аудио',
       ustaz_place: 'стр. %P%, строчка %L%',
       ustaz_place_half: 'стр. %P%, половина листа',
       ustaz_place_page: 'стр. %P% целиком',
@@ -4352,16 +4371,35 @@
       '<div class="stu-legend">' + miss + ' · ' + T('subs_month_legend') + '</div>';
   }
 
-  // Одной строкой, разворачивается тапом (04.09.2026, жалоба: полный
-  // календарь наверху экрана оттеснял вниз сами сдачи - а они здесь главное).
-  // Тот же приём и тот же класс, что у "ещё N старше" в очереди устаза -
-  // студент уже видел этот жест там, учить второму незачем.
+  /* Месяц черточками, БЕЗ тапа (04.09.2026, уточнение пользователя: "если
+     аккуратное и совсем мало места - можно всегда показывать"). Две строки
+     вместо календаря на пол-экрана, и сдачи снова первое, что видно.
+
+     Черточек ровно столько, сколько дней месяца УЖЕ прошло: пропуски и
+     перевод в Тадаббур считаются от 1-го числа (get_skip_count_month_detail,
+     core/transfers.py), поэтому полоска растёт так же, как растёт счёт, - а
+     скользящее окно "последние N дней" здесь расходилось бы с числом в
+     строке выше, и это был бы ровно тот двойной счёт, который на этом экране
+     запрещён.
+
+     Порог группы (10 pro / 20 relaxed) живёт в ЧИСЛЕ, а не в ширине полоски:
+     полоска отвечает "в какие дни", число - "сколько и до чего". */
+  function subsRecentStripHTML(d) {
+    var info = stuMonthInfo(d.month, d.today);
+    var out = '';
+    for (var day = 1; day <= info.today; day++) {
+      var n = ((d.days || {})[stuDayKey(d.month, day)] || []).length;
+      out += '<i class="' + (n ? 'd' + Math.min(3, n) : '') + '"></i>';
+    }
+    return '<div class="stu-strip">' + out + '</div>';
+  }
+
   function subsMonthSummaryHTML(d) {
     var miss = d.threshold
       ? T('subs_month_misses', { N: d.missed, M: d.threshold })
       : T('subs_month_misses_no_limit', { N: d.missed });
-    return '<div class="ustaz-older" id="subs-month-summary">' +
-      miss + ' — ' + T('subs_month_open') + '</div>';
+    return subsRecentStripHTML(d) +
+      '<div class="stu-legend" style="margin-top:4px">' + miss + '</div>';
   }
 
   function subsLoadMonth() {
@@ -4370,13 +4408,10 @@
     apiCall('/month').then(function (res) {
       var d = res.data;
       // group_title есть только когда у студента вообще есть учебная группа
-      // (см. handle_my_month) - без неё "days" приходит пустым {} и открывать
+      // (см. handle_my_month) - без неё "days" приходит пустым {} и показывать
       // нечего, а не "пропусков undefined".
       if (!d || d.group_title == null) return;
       box.innerHTML = subsMonthSummaryHTML(d);
-      document.getElementById('subs-month-summary').addEventListener('click', function () {
-        box.innerHTML = subsCalendarHTML(d);
-      });
     }).catch(function () {});
   }
 
@@ -4745,8 +4780,14 @@
     // Сдачу из приложения можно открыть на проверку (место известно). У
     // голосового, присланного прямо в группу, места нет - открывать нечего,
     // такая строка остаётся просто напоминанием.
-    var open = item.id && item.hifz_page != null ? ' data-review="' + item.id + '"' : '';
-    return '<div class="ustaz-row"' + open + '><div class="name">' + ustazEsc(item.student_name) + '</div>' +
+    var fromApp = item.hifz_page != null;
+    var open = item.id && fromApp ? ' data-review="' + item.id + '"' : '';
+    // Метка источника рядом с именем: акцентная у сдач из приложения (их и
+    // можно открыть на разбор), приглушённая у голосовых из группы.
+    var src = '<span class="sub-pill ' + (fromApp ? 'app' : 'audio') + '">' +
+      T(fromApp ? 'ustaz_src_app' : 'ustaz_src_audio') + '</span>';
+    return '<div class="ustaz-row"' + open + '><div class="name">' +
+      '<span>' + ustazEsc(item.student_name) + '</span>' + src + '</div>' +
       '<div class="meta">' + ustazPlace(item) +
       (withGroup ? ' · ' + ustazEsc(item.group_title) : '') + '</div>' +
       '<div class="meta">' + ustazTimeOnly(item.sent_at) +
