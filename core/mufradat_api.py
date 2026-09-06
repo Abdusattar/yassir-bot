@@ -61,6 +61,7 @@ from core.mushaf_words import (
     check_new_words_for_line,
 )
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
+from core.prep import prep_progress
 
 log = logging.getLogger(__name__)
 
@@ -772,14 +773,20 @@ async def handle_my_month(request, user_id):
     if not user or not group:
         return web.json_response({"days": {}, "month": get_date()[:7], "today": get_date()})
     detail = get_skip_count_month_detail(user["id"], group["id"]) or {}
-    return web.json_response({
+    payload = {
         "days": get_student_month_days(user["id"], group["id"], request.query.get("month")),
         "threshold": group_miss_threshold(group["group_type"]),
         "missed": detail.get("missed", 0),
         "group_title": group["title"],
         "month": request.query.get("month") or get_date()[:7],
         "today": get_date(),
-    })
+    }
+    # У подготовительной правило другое (см. core/prep.py): не «сколько
+    # пропустил до перевода», а «сколько полных дней набрал до срока».
+    # Показываем именно его - по нему студента реально и отчисляют.
+    if group["group_type"] == "prep":
+        payload["prep"] = prep_progress(user["id"], group["id"])
+    return web.json_response(payload)
 
 
 @with_auth

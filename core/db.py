@@ -1846,6 +1846,12 @@ def _active_dates(uid, limit=400):
     return {r["date"] for r in rows}
 
 
+def get_joined_date(uid, group_id):
+    """Публичная обёртка над _group_joined_date: экрану «Сдачи» она нужна,
+    чтобы посчитать срок подготовительной (см. core/prep.py prep_progress)."""
+    return _group_joined_date(uid, group_id)
+
+
 def _group_joined_date(uid, group_id):
     """Дата (пере)активации студента в конкретной группе — граница отсчёта пропусков."""
     with db() as c:

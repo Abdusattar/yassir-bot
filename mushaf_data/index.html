@@ -1926,6 +1926,9 @@
       subs_month_title: 'Мой месяц',
       subs_month_misses: 'пропусков %N% из %M%',
       subs_month_misses_no_limit: 'пропусков %N%',
+      // Подготовительная: считают не пропуски, а набранные полные дни к сроку.
+      subs_prep_days: 'полных дней %N% из %M%',
+      subs_prep_deadline: 'срок до %D%',
       subs_month_legend: 'Чем светлее день, тем меньше сдано',
       ustaz_students_empty: 'В этой группе пока нет активных студентов',
       ustaz_misses: 'пропусков %N% из %M%',
@@ -4395,11 +4398,25 @@
   }
 
   function subsMonthSummaryHTML(d) {
-    var miss = d.threshold
-      ? T('subs_month_misses', { N: d.missed, M: d.threshold })
-      : T('subs_month_misses_no_limit', { N: d.missed });
+    // Подготовительная (06.09.2026): там отчисляют не за пропуски, а за
+    // недобор полных дней к сроку (core/prep.py). Показываем то самое
+    // число, по которому решение и принимается, - и оно же подсказывает,
+    // что делать: добрать полные дни, а не "поменьше пропускать".
+    var line;
+    if (d.prep) {
+      line = T('subs_prep_days', { N: d.prep.days_done, M: d.prep.min_days }) +
+        ' · ' + T('subs_prep_deadline', { D: subsShortDate(d.prep.deadline) });
+    } else {
+      line = d.threshold
+        ? T('subs_month_misses', { N: d.missed, M: d.threshold })
+        : T('subs_month_misses_no_limit', { N: d.missed });
+    }
     return subsRecentStripHTML(d) +
-      '<div class="stu-legend" style="margin-top:4px">' + miss + '</div>';
+      '<div class="stu-legend" style="margin-top:4px">' + line + '</div>';
+  }
+
+  function subsShortDate(iso) {
+    return iso && iso.length >= 10 ? iso.slice(8, 10) + '.' + iso.slice(5, 7) : '';
   }
 
   function subsLoadMonth() {

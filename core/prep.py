@@ -36,12 +36,13 @@
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import IS_FEMALE, SUPER_ADMIN_IDS
 from core.db import (
     db, get_prep_students_active, count_report_days_since, add_bonus,
+    get_joined_date,
     get_tadabbur_group, add_student, find_by_phone, deactivate_student,
     clear_pending_prep_return, prep_days_done, get_regular_group_sizes,
     get_best_group_for_transfer, get_group_by_title, get_dm_ok_by_phone,
@@ -87,6 +88,36 @@ _PREP_JUZ_KNOWN_TARGET_TITLE = "N-1"
 # самому пользователю (Абдусаттар), не Умару и не всем супер-админам
 # (решение пользователя 24.07.2026).
 _LATE_ALERT_ADMIN_ID = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else ""
+
+
+def prep_progress(uid, group_id):
+    """Что показать студенту подготовительной на его экране «Сдачи»
+    (06.09.2026): сколько ПОЛНЫХ дней уже сдано и до какого числа надо
+    набрать PREP_MIN_DAYS.
+
+    Это ровно то правило, по которому его реально отчисляют - см.
+    check_prep_students ниже: дедлайн это PREP_DAYS от вступления ПЛЮС
+    каждый уже сданный полный день. Считаем здесь той же функцией
+    (count_report_days_since), а не своей копией: два разных счёта на
+    экране и в проверке - это обман студента.
+
+    Порог пропусков (group_miss_threshold) для prep не подходит: там
+    считают пропуски до перевода в Тадаббур, а здесь - набранные дни до
+    срока. Числа разной природы, показывать «пропусков N из 14» было бы
+    неправдой.
+
+    None, если даты вступления нет (студент не в этой группе)."""
+    joined = get_joined_date(uid, group_id)
+    if not joined:
+        return None
+    days_done = count_report_days_since(uid, group_id, joined)
+    deadline = datetime.strptime(joined, "%Y-%m-%d").date() + \
+        timedelta(days=PREP_DAYS + days_done)
+    return {
+        "days_done": days_done,
+        "min_days": PREP_MIN_DAYS,
+        "deadline": deadline.isoformat(),
+    }
 
 
 async def check_prep_students():

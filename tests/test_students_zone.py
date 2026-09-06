@@ -7,9 +7,11 @@
 """
 
 import asyncio
+from datetime import datetime, timedelta
 
 import core.db as db
 import core.mufradat_api as api
+import core.prep as prep
 import core.transfers as transfers
 
 
@@ -184,3 +186,44 @@ def test_my_month_without_group_is_empty_not_error(test_db, monkeypatch):
 
     assert status == 200
     assert data["days"] == {}
+
+
+# ── Подготовительная: своё правило, а не пропуски (06.09.2026) ─────────────
+
+def test_prep_student_sees_days_to_deadline_not_misses(test_db, monkeypatch):
+    """У prep отчисляют не за пропуски, а за недобор ПОЛНЫХ дней к сроку
+    (core/prep.py). Экран обязан показывать то же число и тот же срок, по
+    которым принимается решение, иначе студент готовится не к тому."""
+    app = _setup(monkeypatch)
+    group = _group("-100333010", "Yassir подготовительная", "prep")
+    sid = db.add_student("Сатар", group["id"], phone="777010")
+    joined = db.get_joined_date(sid, group["id"])
+    # Один ПОЛНЫЙ день (все обязательные задания группы) - он же продлевает срок.
+    db.save_report(sid, group["id"], db.get_date(), {"m": True, "r": True, "t": True})
+
+    status, data = _call(app, "/api/muf/month", "777010")
+
+    assert status == 200
+    assert data["prep"]["min_days"] == prep.PREP_MIN_DAYS
+    # Именно 1, а не "столько же, сколько вернёт та же функция": сверка с
+    # самой собой прошла бы и на нуле.
+    assert data["prep"]["days_done"] == 1
+    assert data["prep"]["days_done"] == db.count_report_days_since(sid, group["id"], joined)
+    # Срок ровно тот, по которому кикает check_prep_students: PREP_DAYS от
+    # вступления плюс каждый уже сданный полный день.
+    expected = datetime.strptime(joined, "%Y-%m-%d").date() + timedelta(
+        days=prep.PREP_DAYS + data["prep"]["days_done"])
+    assert data["prep"]["deadline"] == expected.isoformat()
+
+
+def test_regular_group_has_no_prep_block(test_db, monkeypatch):
+    """В pro/relaxed правило прежнее - блока prep быть не должно, иначе
+    экран покажет студенту чужой срок."""
+    app = _setup(monkeypatch)
+    group = _group()
+    db.add_student("Сатар", group["id"], phone="777011")
+
+    _status, data = _call(app, "/api/muf/month", "777011")
+
+    assert "prep" not in data
+    assert data["threshold"] == transfers.PRO_INACTIVE_DAYS
