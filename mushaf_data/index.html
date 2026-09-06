@@ -1990,8 +1990,8 @@
       ustaz_older: 'Ещё %N% старше — показать',
       ustaz_older_title: 'Старше последних дней',
       ustaz_no_place: 'голосовая сдача',
-      ustaz_src_app: 'лист + аудио',
-      ustaz_src_audio: 'только аудио',
+      ustaz_src_app: 'через апп',
+      ustaz_src_audio: 'через группу',
       ustaz_place: 'стр. %P%, строчка %L%',
       ustaz_place_half: 'стр. %P%, половина листа',
       ustaz_place_page: 'стр. %P% целиком',
@@ -5009,6 +5009,22 @@
   // "Проверено". items уже отсортированы сервером так, что одна дата идёт
   // подряд (не вперемешку) - группировка просто склеивает соседние строки
   // с одинаковым dateOf(it), пересортировки не требуется.
+  /* Внутри дня сначала сдачи из приложения, потом голосовые из группы
+     (06.09.2026, просьба пользователя). Смысл ровно тот, что он назвал:
+     у сдачи из приложения есть лист со строчками и место, её устаз
+     открывает и разбирает по словам - это быстро. Голосовое из группы
+     открывать нечего, это просто напоминание. Разложенные вперемешку, они
+     заставляли устаза тыкать наугад.
+
+     Сортируем ПО ДАТЕ первым ключом, иначе разъедется группировка по дням
+     (ustazDaySections склеивает соседние строки одной даты). */
+  function ustazSortBySource(items) {
+    return items.slice().sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.hifz_page != null ? 0 : 1) - (b.hifz_page != null ? 0 : 1);
+    });
+  }
+
   function ustazDaySections(items, today, dateOf, renderRow) {
     var days = [];
     items.forEach(function (it) {
@@ -5118,7 +5134,8 @@
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
     } else {
-      html += ustazDaySections(items, today, function (it) { return it.date; },
+      html += ustazDaySections(ustazSortBySource(items), today,
+        function (it) { return it.date; },
         function (it) { return ustazRow(it, today, false); });
     }
     var olderCount = current ? current.older : data.older;
@@ -5160,7 +5177,8 @@
       if (!el) return;
       // Заголовки дня сами делят хвост на понятные куски - отдельный
       // "Старше последних дней" сверху был бы лишней строкой над ними.
-      el.outerHTML = ustazDaySections(items, data.today || '', function (it) { return it.date; },
+      el.outerHTML = ustazDaySections(ustazSortBySource(items), data.today || '',
+        function (it) { return it.date; },
         function (it) { return ustazRow(it, data.today || '', true); });
     }).catch(function () {
       var el = document.getElementById('ustaz-older');
