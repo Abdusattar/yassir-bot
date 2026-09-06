@@ -1484,13 +1484,20 @@ def get_blocking_retake(student_id, group_id):
     забывчивость устаза останавливала бы студента насовсем, а методика про
     закрытую дорогу, а не про наказание.
 
-    Снимается любой ПОЗЖЕ принятой сдачей той же единицы - именно её студент
-    и пересдаёт. "Позже" сверяем по id, не по verdict_at: два вердикта подряд
-    (пересдал - тут же приняли) могут получить одинаковый до микросекунды
-    verdict_at при грубом разрешении системных часов, и строгое ">" тогда не
-    находило только что принятую пересдачу - гейт не снимался (поймано
-    04.09.2026 в тестах). id растёт строго по каждой новой сдаче того же
-    места и таких совпадений не знает."""
+    Снимается САМИМ ФАКТОМ пересдачи, а не её приёмом (решение пользователя
+    07.09.2026: "студентам важна стабильность сдач, ожидать и
+    останавливаться — это ломать ритм").
+
+    Раньше гейт держался до вердикта "принято". Но непроверенных сдач больше
+    полутора тысяч, и разбирают их неровно: студент, честно перечитавший в
+    тот же вечер, мог стоять днями — не по своей вине и не имея возможности
+    что-либо сделать. Устаз всё равно посмотрит новую запись и, если снова
+    плохо, вернёт её обратно.
+
+    Засчитываем только сдачу, отправленную ПОСЛЕ вердикта (sent_at >
+    verdict_at) и той же единицы. Одного id мало: устаз может пометить на
+    пересдачу старую сдачу, когда более новая по тому же месту уже лежит, -
+    по id гейт снялся бы мгновенно, хотя студент на замечание не ответил."""
     with db() as c:
         row = c.execute(
             "SELECT * FROM voice_submissions"
@@ -1500,15 +1507,16 @@ def get_blocking_retake(student_id, group_id):
         ).fetchone()
         if not row:
             return None
-        accepted = c.execute(
+        redone = c.execute(
             "SELECT 1 FROM voice_submissions"
-            " WHERE student_id=? AND group_id=? AND verdict=?"
+            " WHERE student_id=? AND group_id=?"
             " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
-            " AND id > ? LIMIT 1",
-            (student_id, group_id, VERDICT_ACCEPTED,
-             row["hifz_page"], row["hifz_line"], row["hifz_stage"], row["id"])
+            " AND id > ? AND sent_at > ? LIMIT 1",
+            (student_id, group_id,
+             row["hifz_page"], row["hifz_line"], row["hifz_stage"],
+             row["id"], row["verdict_at"] or "")
         ).fetchone()
-    return None if accepted else dict(row)
+    return None if redone else dict(row)
 
 
 def get_reviewed_submissions(group_ids, limit=50):

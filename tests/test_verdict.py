@@ -5,6 +5,10 @@
     страница → строка следующей страницы);
   - блокирует ТОЛЬКО вердикт retake. «Ещё не проверено» не блокирует, иначе
     забывчивость устаза останавливает студента насовсем;
+
+Уточнения 07.09.2026:
+  - гейт снимает САМА пересдача, а не её приём: ожидание ломает ритм сдач;
+  - вердикт «на пересдачу» не принимается без голосового разбора.
   - извещение о вердикте идёт и в группу реплаем, и в личку;
   - голосовое замечание можно записать и при «принято».
 """
@@ -28,6 +32,13 @@ def _submission(sid, group, msg_id, page, line, stage):
                              file_id="f%d" % msg_id,
                              hifz_page=page, hifz_line=line, hifz_stage=stage)
     return db.get_student_submissions(sid)[0]["id"]
+
+
+def _with_comment(sid, msg_id):
+    """Голосовой разбор на сдачу. С 07.09.2026 без него вердикт «на
+    пересдачу» не принимается — см. submit_ustaz_verdict."""
+    db.save_submission_review(CHAT, msg_id, "voice", review_file_id="rev%d" % msg_id,
+                              review_by="888002")
 
 
 def test_retake_blocks_other_units(test_db):
@@ -55,23 +66,59 @@ def test_accepted_retake_unblocks(test_db):
     assert db.get_blocking_retake(sid, group["id"]) is None
 
 
-def test_accepted_retake_unblocks_even_with_same_verdict_at(test_db, monkeypatch):
-    """Живой баг 04.09.2026: пересдал - тут же приняли, и оба вердикта
-    попали в одну и ту же миллисекунду verdict_at (грубое разрешение
-    системных часов). Строгое "verdict_at > ..." тогда не находило только
-    что принятую пересдачу - гейт не снимался. Замораживаем время явно,
-    чтобы совпадение было не везением теста, а гарантией."""
-    frozen = db.get_now()
-    monkeypatch.setattr(db, "get_now", lambda: frozen)
+def test_resubmission_alone_unblocks(test_db):
+    """Решение пользователя 07.09.2026: гейт снимает САМА пересдача, а не её
+    приём. Непроверенных сдач больше полутора тысяч, и студент, честно
+    перечитавший в тот же вечер, иначе стоял бы днями не по своей вине —
+    «ожидать и останавливаться это ломать ритм»."""
     group = _group()
     sid = db.add_student("Сатар", group["id"], phone="777001")
     first = _submission(sid, group, 1, 6, 7, 1)
     db.set_submission_verdict(first, db.VERDICT_RETAKE, "888002")
+    assert db.get_blocking_retake(sid, group["id"]) is not None
 
-    second = _submission(sid, group, 2, 6, 7, 1)
-    db.set_submission_verdict(second, db.VERDICT_ACCEPTED, "888002")
+    _submission(sid, group, 2, 6, 7, 1)          # пересдал, вердикта ещё нет
 
     assert db.get_blocking_retake(sid, group["id"]) is None
+
+
+def test_older_submission_of_same_unit_does_not_unblock(test_db):
+    """Тонкость: устаз может пометить на пересдачу СТАРУЮ сдачу, когда по
+    тому же месту уже лежит более новая. По одному id гейт снялся бы сразу,
+    хотя студент на замечание не отвечал. Поэтому засчитываем только сдачу,
+    отправленную ПОСЛЕ вердикта."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    first = _submission(sid, group, 1, 6, 7, 1)
+    _submission(sid, group, 2, 6, 7, 1)          # новее, но ДО вердикта
+    db.set_submission_verdict(first, db.VERDICT_RETAKE, "888002")
+
+    assert db.get_blocking_retake(sid, group["id"]) is not None
+
+
+def test_retake_verdict_requires_voice_comment(test_db, monkeypatch):
+    """Решение пользователя 07.09.2026: вернуть работу, не сказав почему, —
+    значит оставить студента в тупике. Пометки слов при этом добровольны."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    sub_id = _submission(sid, group, 1, 6, 7, 1)
+
+    async def fake_send_message(chat_id, text, reply_to_message_id=None):
+        return None
+    monkeypatch.setattr(bot, "send_message", fake_send_message)
+
+    refused = asyncio.run(bot.submit_ustaz_verdict("888002", sub_id, db.VERDICT_RETAKE))
+    assert refused["ok"] is False
+    assert refused["error"] == "needs_comment"
+    assert db.get_blocking_retake(sid, group["id"]) is None   # вердикт не записан
+
+    # «Принято» без разбора по-прежнему можно — там объяснять нечего.
+    ok = asyncio.run(bot.submit_ustaz_verdict("888002", sub_id, db.VERDICT_ACCEPTED))
+    assert ok["ok"] is True
+
+    _with_comment(sid, 1)
+    again = asyncio.run(bot.submit_ustaz_verdict("888002", sub_id, db.VERDICT_RETAKE))
+    assert again["ok"] is True
 
 
 def test_unchecked_submission_never_blocks(test_db):
@@ -151,6 +198,7 @@ def test_verdict_notifies_group_and_dm(test_db, monkeypatch):
     group = _group()
     sid = db.add_student("Сатар", group["id"], phone="777001")
     sub_id = _submission(sid, group, 1, 6, 7, 1)
+    _with_comment(sid, 1)          # без разбора пересдача не уйдёт
     db.mark_dm_ok(sid)
     sent = []
 

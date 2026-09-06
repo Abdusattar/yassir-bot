@@ -462,6 +462,18 @@ async def submit_ustaz_verdict(ustaz_id, submission_id, verdict, words=None):
     if verdict not in (VERDICT_ACCEPTED, VERDICT_RETAKE):
         return {"ok": False, "error": "bad_verdict"}
 
+    # На пересдачу - только с голосовым разбором (07.09.2026, решение
+    # пользователя). Вернуть работу, не сказав почему, значит оставить
+    # студента в тупике: он знает, что не принято, и не знает, что править.
+    # Пометки слов остаются делом добровольным - они дополняют голос, а не
+    # заменяют его.
+    #
+    # Проверяем ЗДЕСЬ, а не только в кнопке: интерфейс можно открыть старой
+    # версией страницы, а правило должно держаться в одном месте. Голосовой
+    # реплай в группе тоже засчитывается - он пишется в ту же колонку.
+    if verdict == VERDICT_RETAKE and not sub["review_file_id"]:
+        return {"ok": False, "error": "needs_comment"}
+
     set_submission_verdict(submission_id, verdict, ustaz_id, words)
     place = _hifz_place(sub["hifz_page"], sub["hifz_line"] or 0, sub["hifz_stage"] or 1) \
         if sub["hifz_page"] is not None else ""

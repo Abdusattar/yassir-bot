@@ -1257,6 +1257,28 @@
     background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
   }
   .sub-actions button:disabled { opacity: .5; cursor: default; }
+  /* Блок «нужно пересдать» - единственное на экране, что требует действия
+     (07.09.2026). Красная рамка здесь уместна: это и правда долг студента, в
+     отличие от «на проверке», который долг устаза. */
+  .subs-todo {
+    border: 1px solid var(--no); border-radius: 12px;
+    overflow: hidden; margin-bottom: 10px;
+  }
+  .subs-todo .hd {
+    background: color-mix(in srgb, var(--no) 12%, transparent);
+    color: var(--no); font-size: 12.5px; font-weight: 700; padding: 8px 11px;
+  }
+  .subs-todo .body { background: var(--card-bg); padding: 10px 11px; }
+  .subs-todo .body .sub-row { border: none; padding: 0; margin: 0; }
+  .subs-todo-hint {
+    font-size: 12px; color: var(--ink); background: var(--marker-soft, #f5edd8);
+    border-radius: 8px; padding: 7px 9px; margin-top: 8px;
+  }
+  .subs-quiet {
+    font-size: 12px; color: var(--muted); text-align: center;
+    padding: 8px; border: 1px dashed var(--card-border);
+    border-radius: 10px; margin-bottom: 10px;
+  }
   .subs-empty { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; }
 
   /* Кабинет устаза (03.09.2026) - тот же экранный каркас, что у #trainer
@@ -1965,6 +1987,12 @@
       subs_my_record: '▶ Моя запись',
       subs_review_audio: '▶ Разбор устаза',
       subs_retake: '🎙 Пересдать',
+      subs_redo: 'Перезаписать',
+      subs_open_place: '📖 Открыть это место',
+      subs_open_place_marks: '📖 Открыть это место · с пометками',
+      subs_todo_title: 'НУЖНО ПЕРЕСДАТЬ — %N%',
+      subs_todo_hint: 'Послушай замечание и начитай заново. Отправишь — пойдёшь дальше, устаз посмотрит потом.',
+      subs_waiting_quiet: 'на проверке %N% — ждёт устаза, от тебя ничего не нужно',
       subs_review_from: 'Ответил %N%',
       subs_review_voice: 'голосовой разбор',
       subs_playing: '⏸ Стоп',
@@ -1975,6 +2003,7 @@
       review_done_ok: 'Принято ✅',
       review_done_retake: 'Отправлено на пересдачу',
       review_failed: 'Не получилось — попробуй ещё раз',
+      review_need_comment: 'Сначала запиши замечание — без него пересдача не уйдёт',
       review_play: '▶ Прослушать сдачу',
       review_stop: '⏸ Стоп',
       subs_verdict_ok: 'принято',
@@ -4576,10 +4605,45 @@
     if (item.has_review_audio) {
       html += '<button data-play="' + item.id + ':review">' + T('subs_review_audio') + '</button>';
     }
-    if (item.hifz_page != null) {
-      html += '<button class="primary" data-retake="' + item.id + '">' + T('subs_retake') + '</button>';
+    /* «Перезаписать» - обычной кнопкой и только пока не принято (07.09.2026).
+       Раньше здесь стояла зелёная «Пересдать» на КАЖДОЙ строке, включая
+       принятые: обязательная пересдача и добровольная перезапись выглядели
+       одинаково, и главное действие экрана оказывалось на строках, где делать
+       нечего. Обязательная теперь живёт отдельным блоком наверху. */
+    if (item.hifz_page != null && item.verdict !== 'accepted') {
+      html += '<button data-retake="' + item.id + '">' + T('subs_redo') + '</button>';
     }
-    return html + '</div></div>';
+    html += '</div>';
+    /* «Открыть это место» - посмотреть страницу, ничего не запуская
+       (07.09.2026, вопрос пользователя: устаз мог отметить слова или
+       наговорить разбор и при этом ПРИНЯТЬ работу - студенту всё равно надо
+       это увидеть). Появляется при любом разборе, в том числе когда есть
+       только голос: слушать замечание, глядя на ту самую строку, - совсем
+       не то же, что на слух. Нет разбора - нет кнопки, открывать нечего. */
+    if (item.hifz_page != null && (marks.length || item.has_review_audio)) {
+      html += '<div class="sub-actions" style="margin-top:6px">' +
+        '<button style="flex:1" data-look="' + item.id + '">' +
+        T(marks.length ? 'subs_open_place_marks' : 'subs_open_place') + '</button></div>';
+    }
+    return html + '</div>';
+  }
+
+  /* Посмотреть место сдачи, НИЧЕГО не запуская (07.09.2026). До этого
+     единственная дорога к подсвеченной странице шла через «Пересдать», а она
+     включает режим заучивания и ведёт на запись - то есть посмотреть, что
+     отметил устаз при вердикте «принято», можно было только сделав вид, что
+     идёшь пересдавать. Неправильное действие ради правильной цели.
+
+     Пометки рисует renderPage по pendingErrorMarks (см. reveal) - режим
+     заучивания для этого не нужен. */
+  function subsLook(item) {
+    subsStopAudio();
+    try { pendingErrorMarks = JSON.parse(item.error_words || '[]'); }
+    catch (e) { pendingErrorMarks = null; }
+    document.getElementById('subs').style.display = 'none';
+    openMushaf('page');
+    if (currentPage !== item.hifz_page) loadPage(item.hifz_page);
+    else if (pendingErrorMarks) { applyErrorMarks(pendingErrorMarks); pendingErrorMarks = null; }
   }
 
   // Пересдача: открываем заучивание РОВНО на том месте, что сдавали, и
@@ -4777,6 +4841,13 @@
         if (item) subsRetake(item);
       });
     });
+    Array.prototype.forEach.call(container.querySelectorAll('[data-look]'), function (b) {
+      b.addEventListener('click', function () {
+        var id = parseInt(b.getAttribute('data-look'), 10);
+        var item = items.filter(function (x) { return x.id === id; })[0];
+        if (item) subsLook(item);
+      });
+    });
   }
 
   function openSubs() {
@@ -4794,9 +4865,34 @@
       // Календарь - наверх, сразу под рукой, а не довеском после всего
       // списка (была ровно эта жалоба).
       var cutoff = subsDateAdd(today, -(SUBS_WINDOW_DAYS - 1));
-      var recent = items.filter(function (it) { return it.date >= cutoff; });
-      var older = items.filter(function (it) { return it.date < cutoff; });
-      var html = '<div id="subs-month"></div>' +
+      // Сдачи из блока «нужно пересдать» в ленте не повторяем - одна и та же
+      // строка дважды на экране читается как две разные работы.
+      var feed = items.filter(function (it) { return it.verdict !== 'retake'; });
+      var recent = feed.filter(function (it) { return it.date >= cutoff; });
+      var older = feed.filter(function (it) { return it.date < cutoff; });
+      /* Сверху - только то, что просит устаз (07.09.2026). У активного
+         студента сдач больше сотни, из них половина «ждёт проверки» - но это
+         очередь УСТАЗА, а не задача студента: он своё сдал. Экран должен
+         отвечать на один вопрос - надо ли мне что-то сделать сейчас.
+
+         Блок, а не вкладка: пусто - и его нет вовсе, ноль места. Вкладка же
+         существует всегда и заставляет в неё заглядывать, чтобы убедиться,
+         что там пусто. */
+      var todo = items.filter(function (it) { return it.verdict === 'retake'; });
+      var waiting = items.filter(function (it) { return !it.reviewed_at; }).length;
+      var html = '';
+      if (todo.length) {
+        html += '<div class="subs-todo"><div class="hd">' +
+          T('subs_todo_title', { N: todo.length }) + '</div><div class="body" id="subs-todo-rows">' +
+          todo.map(function (it) { return subsRow(it, today); }).join('') +
+          '<div class="subs-todo-hint">' + T('subs_todo_hint') + '</div></div></div>';
+      }
+      // «На проверке» - тихой строкой, без красного: у студента их бывает по
+      // сотне, и счётчик долга здесь читался бы как «у меня что-то не так».
+      if (waiting) {
+        html += '<div class="subs-quiet">' + T('subs_waiting_quiet', { N: waiting }) + '</div>';
+      }
+      html += '<div id="subs-month"></div>' +
         '<div id="subs-recent-rows">' +
         recent.map(function (it) { return subsRow(it, today); }).join('') +
         '</div>';
@@ -4809,6 +4905,8 @@
       body.innerHTML = html;
       subsLoadMonth();
       subsBindRows(document.getElementById('subs-recent-rows'), items);
+      var todoBox = document.getElementById('subs-todo-rows');
+      if (todoBox) subsBindRows(todoBox, items);
       var olderEl = document.getElementById('subs-older');
       if (olderEl) {
         // Хвост уже в памяти - разворачиваем на месте, без похода на сервер.
@@ -4963,6 +5061,17 @@
 
   function reviewVerdict(verdict) {
     var hint = document.getElementById('review-hint');
+    /* Пересдача без голосового разбора не уходит (правило пользователя
+       07.09.2026): вернуть работу, не сказав почему, значит оставить
+       студента в тупике. Но НЕ отказываем в последний момент - ведём
+       записывать замечание, к которому устаз и так шёл, просто на шаг
+       раньше. Сервер проверяет то же самое отдельно: страницу можно
+       открыть старой версией. */
+    if (verdict === 'retake' && !(review.sub && review.sub.has_review_audio)) {
+      hint.textContent = T('review_need_comment');
+      reviewComment();
+      return;
+    }
     hint.textContent = T('review_saving');
     apiCall('/ustaz/verdict', {
       method: 'POST',
@@ -4971,6 +5080,11 @@
       if (res.data && res.data.ok) {
         hint.textContent = T(verdict === 'accepted' ? 'review_done_ok' : 'review_done_retake');
         setTimeout(reviewClose, 900);
+        return;
+      }
+      if (res.data && res.data.error === 'needs_comment') {
+        hint.textContent = T('review_need_comment');
+        reviewComment();
         return;
       }
       hint.textContent = T('review_failed');
@@ -5006,6 +5120,8 @@
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        // Разбор записан - теперь «На пересдачу» пройдёт.
+        if (review.sub) review.sub.has_review_audio = true;
         reviewCommentMode = false;
         setTimeout(hifzRecClose, 1000);
         return;
