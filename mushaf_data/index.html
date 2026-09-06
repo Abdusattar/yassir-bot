@@ -354,10 +354,19 @@
      Порядок из макета: записал → ПРОСЛУШАЛ СЕБЯ → отправил / перезаписал /
      удалил. Пока не отправил — сдачи не существует, поэтому «Удалить»
      просто закрывает окно, ничего не спрашивая на сервере. */
+  /* Нижняя шторка, а НЕ модалка на весь экран (06.09.2026, жалоба: панель
+     записи закрывала нижние строки, и прочитать их было нельзя). Раньше
+     здесь были inset:0 и затемнение — то есть прозрачная сверху, но
+     перехватывающая все касания плёнка поверх страницы: мусхаф под ней не
+     скроллился, хотя #page-wrap скроллиться умеет. Студент при этом должен
+     ЧИТАТЬ страницу вслух — закрывать её модалкой прямо во время чтения
+     противоречит самой задаче.
+
+     Теперь панель занимает только низ, страница остаётся живой, а место
+     под шторкой ей добирает padding-bottom (см. hifzRecPad). */
   #hifz-rec {
-    display: none; position: fixed; inset: 0; z-index: 60;
-    align-items: flex-end; justify-content: center;
-    background: rgba(0, 0, 0, .45); direction: ltr;
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    justify-content: center; direction: ltr;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   #hifz-rec.visible { display: flex; }
@@ -365,6 +374,9 @@
     width: 100%; max-width: 520px; box-sizing: border-box;
     background: var(--chrome-bg); border-radius: 16px 16px 0 0;
     padding: 16px 16px 22px; text-align: center;
+    /* Затемнения больше нет, поэтому границу шторки держит тень - иначе
+       она сливалась бы с бумагой мусхафа. */
+    box-shadow: 0 -6px 24px rgba(30, 25, 10, .18);
   }
   #hifz-rec .card { position: relative; }
   #hifz-rec-close {
@@ -2020,6 +2032,9 @@
       hifz_submit: '🎙 Сдать',
       hifz_rec_start: 'Записать',
       hifz_rec_stop: 'Стоп',
+      hifz_rec_pause: 'Пауза',
+      hifz_rec_resume: 'Продолжить',
+      hifz_rec_hint_paused: 'Пауза — нажми «Продолжить», запись пойдёт дальше',
       hifz_rec_again: 'Перезаписать',
       hifz_rec_send: 'Отправить',
       hifz_rec_hint_idle: 'Прочитай вслух то, что заучивал',
@@ -3645,6 +3660,7 @@
     // а повторный захват - это повторный вопрос студенту.
     if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
     rec.mr = null; rec.chunks = []; rec.blob = null;
+    rec.accMs = 0; rec.paused = false;
     var a = document.getElementById('hifz-rec-audio');
     a.pause(); a.removeAttribute('src'); a.style.display = 'none';
     document.getElementById('hifz-rec-timer').classList.remove('rec');
@@ -3662,14 +3678,39 @@
     hifzRecReset();
     hifzRecRelease();   // панель закрыта - микрофон отпущен, индикатор гаснет
     document.getElementById('hifz-rec').classList.remove('visible');
+    hifzRecPad();
+  }
+
+  /* Шторка перекрывает низ страницы, поэтому отдаём мусхафу ровно столько
+     места снизу, сколько она занимает - тогда последние строки можно
+     доскроллить и прочитать (06.09.2026). Высоту берём измерением, а не
+     константой: карточка меняет рост по состоянию (в "готово" в ней
+     появляется плеер), и любое зашитое число разъехалось бы. */
+  function hifzRecPad() {
+    var wrap = document.getElementById('page-wrap');
+    if (!wrap) return;
+    var panel = document.getElementById('hifz-rec');
+    var card = panel.querySelector('.card');
+    var open = panel.classList.contains('visible');
+    wrap.style.paddingBottom = open ? (card.offsetHeight + 12) + 'px' : '';
   }
 
   function hifzRecButtons(state) {
     var box = document.getElementById('hifz-rec-actions');
     box.innerHTML = '';
+    // Пауза - для длинных сдач: минуту читать без единой заминки трудно, а
+    // раньше выбор был "терпи или начинай заново" (06.09.2026, просьба
+    // пользователя). MediaRecorder умеет pause/resume не везде - там, где
+    // не умеет, кнопки просто нет, вместо неработающей.
+    var canPause = rec.mr && typeof rec.mr.pause === 'function';
+    var recRow = [];
+    if (canPause) {
+      recRow.push(['hifz-rec-pause', rec.paused ? 'hifz_rec_resume' : 'hifz_rec_pause', false]);
+    }
+    recRow.push(['hifz-rec-stop', 'hifz_rec_stop', true]);
     var defs = {
       idle:   [['hifz-rec-go', 'hifz_rec_start', true]],
-      rec:    [['hifz-rec-stop', 'hifz_rec_stop', true]],
+      rec:    recRow,
       done:   [['hifz-rec-again', 'hifz_rec_again', false],
                ['hifz-rec-send', 'hifz_rec_send', true]],
       sending: []
@@ -3681,12 +3722,39 @@
       if (d[2]) b.className = 'primary';
       box.appendChild(b);
     });
+    hifzRecPad();   // высота карточки поменялась вместе с кнопками
+  }
+
+  // Длительность СЧИТАЕТСЯ БЕЗ пауз: на таймере должно стоять столько,
+  // сколько реально записано, иначе он врёт и студенту, и лимиту записи.
+  function hifzRecElapsed() {
+    return rec.accMs + (rec.paused ? 0 : Date.now() - rec.t0);
   }
 
   function hifzRecTimer() {
     var el = document.getElementById('hifz-rec-timer');
-    var s = Math.floor((Date.now() - rec.t0) / 1000);
+    var s = Math.floor(hifzRecElapsed() / 1000);
     el.textContent = Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+  }
+
+  function hifzRecPause() {
+    if (!rec.mr || typeof rec.mr.pause !== 'function') return;
+    if (rec.paused) {
+      rec.t0 = Date.now();
+      rec.paused = false;
+      rec.mr.resume();
+      document.getElementById('hifz-rec-timer').classList.add('rec');
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');
+    } else {
+      rec.accMs = hifzRecElapsed();
+      rec.paused = true;
+      rec.mr.pause();
+      // Красный на таймере означает "идёт запись" - на паузе он гаснет,
+      // иначе непонятно, пишется сейчас или нет.
+      document.getElementById('hifz-rec-timer').classList.remove('rec');
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_paused');
+    }
+    hifzRecButtons('rec');   // перерисовать надпись на кнопке
   }
 
   /* Разрешение на микрофон спрашивается ОДИН раз за открытие панели
@@ -3747,9 +3815,12 @@
       };
       rec.mr.start();
       rec.t0 = Date.now();
+      rec.accMs = 0;
+      rec.paused = false;
       rec.tick = setInterval(function () {
         hifzRecTimer();
-        if (Date.now() - rec.t0 > HIFZ_REC_MAX_MS) hifzRecStop();
+        // Лимит - по реально записанному, без учёта пауз.
+        if (hifzRecElapsed() > HIFZ_REC_MAX_MS) hifzRecStop();
       }, 500);
       document.getElementById('hifz-rec-timer').classList.add('rec');
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');
@@ -3833,12 +3904,14 @@
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
     hifzRecButtons('idle');
     document.getElementById('hifz-rec').classList.add('visible');
+    hifzRecPad();
   });
 
   // Один слушатель на всю панель: кнопки пересобираются под состояние.
   document.getElementById('hifz-rec-actions').addEventListener('click', function (e) {
     var id = e.target && e.target.id;
     if (id === 'hifz-rec-go') hifzRecStart();
+    else if (id === 'hifz-rec-pause') hifzRecPause();
     else if (id === 'hifz-rec-stop') hifzRecStop();
     else if (id === 'hifz-rec-again') { hifzRecReset();
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
@@ -4817,6 +4890,7 @@
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
     hifzRecButtons('idle');
     document.getElementById('hifz-rec').classList.add('visible');
+    hifzRecPad();
   }
 
   function reviewCommentSend() {
