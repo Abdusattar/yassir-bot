@@ -40,7 +40,7 @@ from core.db import (
     get_group_month_progress, get_student_month_days, group_miss_threshold,
     get_group_by_id, get_students, get_reviewed_submissions,
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
-    is_retake_answered,
+    is_retake_answered, get_group_tasks, get_today_report,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -732,6 +732,29 @@ async def handle_heartbeat(request, user_id):
     })
 
 
+def _my_day(user):
+    """Задания своей группы и что из них уже сдано СЕГОДНЯ (07.09.2026,
+    решение пользователя). Список заданий берём у группы, а не фиксируем
+    тройкой: у кого-то стоит m,r,t, у кого-то с таджвидом и нахвом - экран
+    обязан показывать ровно то, что спрашивают с этого студента.
+
+    Отметки те же, что считает серию и штрафы (score_events за день по
+    subcategory) - отдельного счёта тут нет и быть не должно, иначе экран
+    начнёт расходиться с реальностью."""
+    if not user:
+        return None
+    group = get_learning_group(user["phone"])
+    if not group:
+        return None
+    done = get_today_report(user["id"], group["id"]) or {}
+    tasks = [{"k": k, "done": bool(done.get(k))} for k in get_group_tasks(group)]
+    return {
+        "tasks": tasks,
+        "done": sum(1 for t in tasks if t["done"]),
+        "total": len(tasks),
+    }
+
+
 def _dashboard_facts(user_id):
     user = find_user_by_phone(user_id)
     subs = get_submission_counts(user["id"]) if user else {"waiting": 0, "retake": 0}
@@ -742,6 +765,7 @@ def _dashboard_facts(user_id):
             "target": DAILY_WORDS_FOR_TASK_CREDIT,
         },
         "subs": subs,
+        "day": _my_day(user),
     }
 
 

@@ -1149,6 +1149,37 @@
   #dash-pulse .p-dots i.on { background: var(--accent); }
   #dash-pulse .p-foot { justify-content: space-between; }
 
+  /* «Мой день» (07.09.2026, решение пользователя). Дыхание сверху говорит,
+     что сделал ДЖАМААТ; эта полоса - что осталось мне самому. Отметок
+     столько, сколько заданий у моей группы (groups.tasks): у кого-то три, у
+     кого-то с таджвидом и нахвом. Пятая отметка переносится на вторую
+     строку - полоса растёт вниз, ничего не жмётся.
+
+     Сделанное - тоном «принято» (--ok), несделанное - обычной рамкой: это
+     не долг и не укор, просто ещё не сегодня. */
+  #my-day {
+    display: none; flex-direction: column; gap: 8px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 14px; box-shadow: var(--shadow-sm);
+    padding: 11px 13px 12px; margin-bottom: 12px; direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #my-day.on { display: flex; }
+  #my-day .cap { font-size: 12px; color: var(--muted); letter-spacing: .02em; }
+  #my-day .cap b { color: var(--ink); font-weight: 700; }
+  #my-day .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  #my-day .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 999px; padding: 5px 11px 5px 9px;
+    font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em;
+    border: 1px solid var(--card-border); color: var(--muted);
+    background: transparent;
+  }
+  #my-day .chip.on {
+    border-color: transparent; background: var(--ok-soft); color: var(--ok);
+  }
+  #my-day .chip i { font-style: normal; font-size: 12px; width: 11px; text-align: center; }
+
   /* Двери (07.09.2026, новый стиль). Были четыре одинаковые плитки с
      цветными эмодзи - четыре равных пятна, между которыми глазу не за что
      зацепиться, и ни одна не говорила, что у неё внутри. Стало: один список,
@@ -1939,6 +1970,10 @@
       <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
     </div>
   </div>
+  <div id="my-day">
+    <span class="cap" id="my-day-cap"></span>
+    <span class="chips" id="my-day-chips"></span>
+  </div>
   <div id="dash-doors">
   <div class="dash-row" id="dash-mushaf" tabindex="0" role="button">
     <span class="mark">۩</span>
@@ -2473,6 +2508,14 @@
       tab_trainer_full: '🌱 Тренажёр',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Мои слова',
       online_now_n: 'сейчас в онлайне учатся %N%',
+      my_day: 'мой день',
+      my_day_of: '%N% из %M%',
+      task_m: 'Заучивание',
+      task_r: 'Повторение',
+      task_t: 'Слова',
+      task_j: 'Таджвид',
+      task_n: 'Нахв',
+      task_h: 'Хадис',
       dash_words_today: '%N% из %M% слов сегодня',
       dash_subs_waiting: 'на проверке %N%',
       dash_subs_retake: 'пересдать %N%',
@@ -2795,7 +2838,27 @@
      первый день; «стр. 15, половина листа» отвечает на вопрос, где он стоит,
      каждый раз. Пока факта нет (новичок ещё не заходил в заучивание), остаётся
      прежнее описание - пустая строка была бы хуже. */
+  // Названия заданий - те же короткие слова, что в группе (core/content.py:
+  // SHORT_TASKS). Незнакомый код показываем как есть: лучше буква, чем
+  // пропавшая отметка.
+  function dayTaskName(k) {
+    return T('task_' + k) || k;
+  }
+
+  function dashDay(day) {
+    var box = document.getElementById('my-day');
+    if (!day || !day.total) { box.classList.remove('on'); return; }
+    document.getElementById('my-day-cap').innerHTML =
+      T('my_day') + ' &middot; <b>' + T('my_day_of', { N: day.done, M: day.total }) + '</b>';
+    document.getElementById('my-day-chips').innerHTML = day.tasks.map(function (t) {
+      return '<span class="chip' + (t.done ? ' on' : '') + '"><i>' +
+        (t.done ? '\u2713' : '\u25cb') + '</i>' + dayTaskName(t.k) + '</span>';
+    }).join('');
+    box.classList.add('on');
+  }
+
   function dashFacts(f) {
+    dashDay(f.day);
     var mush = document.getElementById('dash-mushaf-sub');
     if (f.hifz && f.hifz.page) {
       var st = f.hifz.stage, page = f.hifz.page;
