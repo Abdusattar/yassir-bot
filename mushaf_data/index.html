@@ -2304,6 +2304,7 @@
       review_need_comment: 'Сначала запиши замечание — без него пересдача не уйдёт',
       review_play: '▶ Прослушать сдачу',
       review_play_mine: '▶ Мой разбор',
+      review_frozen: 'Студент уже пересдал — новая запись ждёт разбора в «Ждут»',
       review_stop: '⏸ Стоп',
       review_back10: '↺ 10 сек',
       subs_verdict_ok: 'принято',
@@ -6172,6 +6173,15 @@
   }
 
   function reviewHint() {
+    // Пересданную работу больше не переразбирают (07.09.2026, решение
+    // пользователя): вердикт по ней заново закрыл бы гейт перед студентом,
+    // который на замечание уже ответил, а новое замечание переписало бы то,
+    // которое он послушал. Смотреть - можно, менять - нет; сервер это
+    // правило держит сам (core/db.py:is_retake_answered).
+    if (review.sub && review.sub.redone) {
+      document.getElementById('review-hint').textContent = T('review_frozen');
+      return;
+    }
     var n = reviewMarkedList().length;
     document.getElementById('review-hint').textContent =
       n ? T('review_marked', { N: n }) : T('review_tap_words');
@@ -6255,6 +6265,10 @@
 
   function reviewAfterRender() {
     if (!review.on) return;
+    var frozen = !!(review.sub && review.sub.redone);
+    ['review-accept', 'review-retake', 'review-comment'].forEach(function (id) {
+      document.getElementById(id).style.display = frozen ? 'none' : '';
+    });
     var mine = document.getElementById('review-mine');
     mine.style.display = review.sub && review.sub.has_review_audio ? '' : 'none';
     mine.textContent = T('review_play_mine');

@@ -298,3 +298,50 @@ def test_own_ustaz_sees_submission_with_marks(test_db, monkeypatch):
     assert data["student_name"] == "Сатар"
     assert data["error_words"] == [{"line": 7, "word": 2}]
     assert data["verdict"] == "retake"
+
+
+def test_пересданную_работу_не_переразбирают(test_db):
+    """07.09.2026, решение пользователя «если студент пересдал, то да»:
+    старую сдачу с вердиктом retake, на которую студент уже ответил новой
+    записью, устаз больше не переразбирает. Повторный вердикт пересчитал бы
+    verdict_after_id на свежую запись — и гейт закрылся бы заново перед тем,
+    кто на замечание ответил."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    first = _submission(sid, group, 1, 6, 7, 1)
+    _with_comment(sid, 1)
+    db.set_submission_verdict(first, db.VERDICT_RETAKE, "888002", [{"line": 7, "word": 2}])
+
+    _submission(sid, group, 2, 6, 7, 1)          # студент пересдал
+
+    assert db.is_retake_answered(db.get_submission(first)) is True
+    res = asyncio.run(bot.submit_ustaz_verdict("888002", first, db.VERDICT_RETAKE))
+    assert res["ok"] is False and res["error"] == "already_redone"
+    # Гейт остался снятым - пересдача студента в силе.
+    assert db.get_blocking_retake(sid, group["id"]) is None
+
+
+def test_пока_студент_не_ответил_разбор_можно_переделать(test_db):
+    """Спохватился до ответа студента — правит свободно: тот ещё не начинал."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    sub_id = _submission(sid, group, 1, 6, 7, 1)
+    _with_comment(sid, 1)
+    db.set_submission_verdict(sub_id, db.VERDICT_RETAKE, "888002")
+
+    assert db.is_retake_answered(db.get_submission(sub_id)) is False
+    res = asyncio.run(bot.submit_ustaz_verdict("888002", sub_id, db.VERDICT_ACCEPTED))
+    assert res["ok"] is True
+    assert db.get_blocking_retake(sid, group["id"]) is None
+
+
+def test_принятую_работу_заморозка_не_трогает(test_db):
+    """Заморозка про долг, а не про любую старую сдачу: у «принято» гейта
+    нет, и переставить вердикт устаз по-прежнему может."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    sub_id = _submission(sid, group, 1, 6, 7, 1)
+    db.set_submission_verdict(sub_id, db.VERDICT_ACCEPTED, "888002")
+    _submission(sid, group, 2, 6, 7, 1)
+
+    assert db.is_retake_answered(db.get_submission(sub_id)) is False

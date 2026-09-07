@@ -40,6 +40,7 @@ from core.db import (
     get_group_month_progress, get_student_month_days, group_miss_threshold,
     get_group_by_id, get_students, get_reviewed_submissions,
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
+    is_retake_answered,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -965,6 +966,9 @@ async def handle_ustaz_submission(request, user_id):
         "has_audio": bool(sub["file_id"]),
         "has_review_audio": bool(sub["review_file_id"]),
         "verdict": sub["verdict"],
+        # Пересдано - экран показывает разбор, но не даёт его переделать
+        # (07.09.2026, см. core/db.py:is_retake_answered).
+        "redone": is_retake_answered(sub),
         "error_words": json.loads(sub["error_words"] or "[]"),
     })
 

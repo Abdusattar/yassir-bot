@@ -144,6 +144,21 @@ def add_starred_word(user_id, surah, ayah, position, arabic_html, translation):
         # add_starred_word_by_progress_key, найден по вопросу пользователя
         # "а мы точно ничего не потеряли?").
         arabic_html = _merge_tail_arabic(conn, surah, ayah, position, arabic_html)
+        # Перевод берём ИЗ СЛОВАРЯ, а не тот, что прислала страница чтения
+        # (07.09.2026, живой баг: в "Моих словах" оказалось узбекское "куфр
+        # келтиради" на слове يَكْفُرُ 2:99 - студент читал страницу с
+        # переключённым языком, и в снимок ушёл показанный ему перевод).
+        # Снимок обязан быть на _LANGUAGE: на другие языки список
+        # переводится при чтении (см. list_starred_words), и для этого нужна
+        # общая точка отсчёта. Нет строки в словаре - остаётся присланное:
+        # пустой перевод в списке хуже неточного.
+        row = conn.execute(
+            "SELECT translation FROM mufradat_words WHERE surah_number=? "
+            "AND ayah_number=? AND position=? AND language=?",
+            (surah, ayah, position, _LANGUAGE)
+        ).fetchone()
+        if row and row[0] and row[0].strip() and row[0].strip() != "*":
+            translation = row[0]
         conn.execute(
             "INSERT OR IGNORE INTO mushaf_starred_words "
             "(user_id, surah, ayah, position, arabic_html, translation, added_at, progress_key, source) "
@@ -307,11 +322,15 @@ def list_starred_words(user_id, language=_LANGUAGE):
 
     Перевод берётся НА ЯЗЫКЕ СТУДЕНТА в момент чтения списка, а не тот,
     что лежит в таблице (30.08.2026, живой баг: студент переключился на
-    кыргызский, а "Мои слова" остались русскими). В mushaf_starred_words
-    перевод - снимок момента добавления, всегда русский: и страница чтения,
-    и add_starred_word_by_progress_key работают с _LANGUAGE="ru". Хранить
-    по копии на каждый язык незачем - mufradat_words и так покрывает все
-    языки, ключ (surah, ayah, position) общий.
+    кыргызский, а "Мои слова" остались русскими). Хранить по копии на каждый
+    язык незачем - mufradat_words и так покрывает все языки, ключ
+    (surah, ayah, position) общий.
+
+    Из словаря берём и русский тоже (07.09.2026): снимок в таблице считался
+    заведомо русским, но страница чтения присылала тот перевод, который
+    ВИДЕЛ студент, - у читавшего с переключённым языком в список попадало
+    "куфр келтиради". Запись этого больше не допускает (см.
+    add_starred_word), а уже лежащие строки чинятся сами при показе.
 
     Нет перевода на целевом языке (кыргызский и узбекский готовы пока на
     джуз 1) - остаётся русский из таблицы: пустая строка в списке для
@@ -324,7 +343,7 @@ def list_starred_words(user_id, language=_LANGUAGE):
             (user_id,)
         ).fetchall()
         localized = {}
-        if language != _LANGUAGE and rows:
+        if rows:
             localized = _translations_for(
                 conn, [(r[0], r[1], r[2]) for r in rows], language
             )

@@ -35,7 +35,7 @@ from core.db import (
     find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
     get_today_report, save_voice_submission, get_blocking_retake, get_submission,
     set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
-    VERDICT_RETAKE,
+    VERDICT_RETAKE, is_retake_answered,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -474,6 +474,12 @@ async def submit_ustaz_verdict(ustaz_id, submission_id, verdict, words=None):
     if verdict == VERDICT_RETAKE and not sub["review_file_id"]:
         return {"ok": False, "error": "needs_comment"}
 
+    # Студент уже пересдал - эта запись отработана (07.09.2026). Повторный
+    # вердикт по ней заново закрыл бы гейт перед тем, кто на замечание уже
+    # ответил (см. is_retake_answered). Разбирать надо новую запись.
+    if is_retake_answered(sub):
+        return {"ok": False, "error": "already_redone"}
+
     set_submission_verdict(submission_id, verdict, ustaz_id, words)
     place = _hifz_place(sub["hifz_page"], sub["hifz_line"] or 0, sub["hifz_stage"] or 1) \
         if sub["hifz_page"] is not None else ""
@@ -504,6 +510,11 @@ async def send_ustaz_comment(ustaz_id, submission_id, audio_bytes):
     sub = get_submission(submission_id)
     if not sub:
         return {"ok": False, "error": "not_found"}
+    # То же правило, что у вердикта: новое замечание на уже пересданную
+    # работу переписало бы то, которое студент послушал и по которому
+    # начитал заново.
+    if is_retake_answered(sub):
+        return {"ok": False, "error": "already_redone"}
     ogg = await transcode_to_ogg(audio_bytes)
     if not ogg:
         return {"ok": False, "error": "bad_audio"}

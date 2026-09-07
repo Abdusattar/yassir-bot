@@ -1644,6 +1644,34 @@ def get_blocking_retake(student_id, group_id):
     return None if redone else dict(row)
 
 
+def is_retake_answered(submission):
+    """Студент уже ответил на эту пересдачу новой записью того же места.
+
+    То же правило, что снимает гейт (см. get_blocking_retake): считаем всё,
+    что пришло ПОСЛЕ verdict_after_id - последней сдачи этой единицы на
+    момент вердикта.
+
+    Зачем отдельная функция (07.09.2026, решение пользователя "если студент
+    пересдал, то да"): такую сдачу больше нельзя переразбирать. Повторный
+    вердикт по ней пересчитал бы verdict_after_id на самую свежую запись - и
+    гейт закрылся бы заново перед студентом, который на замечание уже
+    ответил. А новое голосовое замечание переписало бы то, которое студент
+    уже послушал. Разбирать надо новую запись, она лежит в "Ждут"."""
+    if submission is None or submission["verdict"] != VERDICT_RETAKE:
+        return False
+    with db() as c:
+        row = c.execute(
+            "SELECT 1 FROM voice_submissions"
+            " WHERE student_id=? AND group_id=?"
+            " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
+            " AND id > ? LIMIT 1",
+            (submission["student_id"], submission["group_id"],
+             submission["hifz_page"], submission["hifz_line"], submission["hifz_stage"],
+             submission["verdict_after_id"] or submission["id"])
+        ).fetchone()
+    return row is not None
+
+
 def get_reviewed_submissions(group_ids, limit=50):
     """Зона "Проверено" кабинета устаза (04.09.2026, макет 01.09): что уже
     разобрано, свежее сверху. Показываем и вердикт, и того, кто его поставил -
