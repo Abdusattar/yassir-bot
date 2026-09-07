@@ -2437,7 +2437,7 @@
       pulse_running: 'день ещё идёт',
       pulse_peak: 'плотнее всего в %H%:00',
       pulse_best: 'рекорд джамаата',
-      pulse_record: 'рекорд %N%',
+      pulse_record: 'рекорд %D% · %N%',
     },
     ky: {
       dash_mushaf: 'Мусхаф',
@@ -2790,8 +2790,11 @@
   var pulse = {
     data: null, view: 0, today: 0, dots: [], ghost: [], shape: null,
     ripples: [], floats: [], queue: [], shown: 0, count: 0, tally: null,
-    raf: 0, last: 0, slide: 1, from: 0, best: 0
+    raf: 0, last: 0, slide: 1, from: 0, best: 0,
+    // Разгон: день собирается на глазах, а не появляется готовым.
+    intro: 0, introDur: 0, introAt: 0, introWord: 0
   };
+  var PULSE_INTRO_GAP = 20000;    // не повторять разгон чаще раза в 20 секунд
   var PULSE_KINDS = ['m', 'r', 't', 'other', 'review'];
 
   function pulseColor(kind) {
@@ -2887,6 +2890,7 @@
     pulseGhost(yday ? yday.people : 0);
     pulseLabels();
     document.getElementById('dash-pulse').style.display = 'flex';
+    if (!prev) pulseIntroStart();       // первое открытие приложения
     pulseStart();
   }
 
@@ -2948,6 +2952,39 @@
       el.className = k === pulse.view ? 'on' : '';
     });
   }
+
+  /* Разгон при открытии (07.09.2026, решение пользователя). Экран не
+     появляется готовым: счётчик отсчитывает от нуля до сегодняшнего числа,
+     сердце зажигается точка за точкой, волна прочерчивается слева до текущего
+     часа, а по дороге всплывают названия действий - «заучил», «повторил»,
+     «слова». За пару секунд человек видит не просто число, а из чего оно
+     сложилось.
+
+     Темп считаем от величины числа, а не берём фиксированным: 20 действий за
+     три секунды - это скучное ожидание, 500 за две - мельтешение, которое глаз
+     не ловит. Корень сглаживает разницу: 20 → 1.7 с, 180 → 2.6 с, 600 → 3.2 с.
+     Подписи в любом случае идут ровно три штуки и держатся дольше, чем длится
+     их появление, - читать успеваешь. */
+  function pulseIntroMs(n) {
+    return Math.max(1500, Math.min(3200, 1300 + Math.sqrt(Math.max(0, n)) * 95));
+  }
+  function pulseIntroStart() {
+    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (!pulse.data || (pulse.introAt && now - pulse.introAt < PULSE_INTRO_GAP)) return;
+    pulse.intro = now;
+    pulse.introAt = now;
+    pulse.introDur = pulseIntroMs(pulse.count);
+    pulse.introWord = 0;
+    pulse.queue = [];               // очередь реальных событий подождёт
+    pulse.floats = [];
+    pulse.ripples = [];
+    pulse.dots.forEach(function (d) { d.warm = 0; d.v = 0; });
+    pulse.shown = 0;
+    pulseStart();
+  }
+  // Быстро в начале, мягко в конце - так это читается как вдох, а не как
+  // равномерный счётчик пробега.
+  function pulseEase(x) { return 1 - Math.pow(1 - x, 3); }
 
   function pulseGo(i) {
     var days = (pulse.data || {}).days || [];
@@ -3013,8 +3050,51 @@
       return [cx + pulse.shape[i][0] * sc, cy - pulse.shape[i][1] * sc];
     }
 
+    if (pulse.intro) {
+      var introP = Math.min(1, (now - pulse.intro) / pulse.introDur);
+      var e = pulseEase(introP);
+      var want = Math.round(((pulse.data.today || {}).people || 0) * e);
+      var warm = 0;
+      pulse.dots.forEach(function (d) { if (d.warm) warm++; });
+      var guard = 0;
+      while (warm < want && guard++ < 3000) {
+        var wi = Math.floor(Math.random() * pulse.dots.length);
+        if (pulse.dots[wi].warm) continue;
+        pulse.dots[wi].warm = 1;
+        pulse.dots[wi].k = PULSE_KINDS[Math.floor(Math.random() * 3)];
+        pulse.dots[wi].v = 0.85;        // свежая точка вспыхивает и оседает
+        warm++;
+      }
+      pulse.shown = Math.round(pulse.count * e);
+      var base = pulse.data.today || {};
+      PULSE_KINDS.forEach(function (k) {
+        pulse.tally[k] = Math.round((base[k] || 0) * e);
+      });
+      // Три подписи за разгон, на 22 / 50 / 78 процентах пути: реже, чем
+      // моргает глаз, и каждая успевает дожить до конца.
+      var STOPS = [0.22, 0.50, 0.78], KINDS3 = ['m', 'r', 't'];
+      if (pulse.introWord < STOPS.length && introP >= STOPS[pulse.introWord]) {
+        var kd = KINDS3[pulse.introWord];
+        pulse.introWord++;
+        var li = Math.floor(Math.random() * pulse.dots.length);
+        pulse.dots[li].warm = 1; pulse.dots[li].k = kd; pulse.dots[li].v = 1;
+        pulse.floats.push({ i: li, dy: 8, k: kd, n: pulseWord(kd), life: 1 });
+        pulse.ripples.push({ i: li, r: 0, k: kd });
+        if (pulse.floats.length > 2) pulse.floats.shift();
+      }
+      pulseHead();
+      if (introP >= 1) {
+        pulse.intro = 0;
+        // Финальный щелчок: число доехало до сегодняшнего и подмигнуло.
+        var cntEl = document.getElementById('pulse-count');
+        cntEl.classList.add('hit');
+        setTimeout(function () { cntEl.classList.remove('hit'); }, 300);
+      }
+    }
+
     // Очередь реальных событий: по одному раз в несколько кадров.
-    if (pulse.queue.length && now - pulse.last > (PULSE_REFRESH_MS / (pulse.queue.length + 4))) {
+    if (!pulse.intro && pulse.queue.length
+        && now - pulse.last > (PULSE_REFRESH_MS / (pulse.queue.length + 4))) {
       pulse.last = now;
       var kind = pulse.queue.shift();
       var idx = Math.floor(Math.random() * pulse.dots.length);
@@ -3036,7 +3116,10 @@
     pulse.dots.forEach(function (d) { d.v *= 0.985; });
     pulse.ripples.forEach(function (rp) { rp.r += 0.7; });
     pulse.ripples = pulse.ripples.filter(function (rp) { return rp.r < 22; });
-    pulse.floats.forEach(function (fl) { fl.life -= 0.013; fl.dy += 0.3; });
+    pulse.floats.forEach(function (fl) {
+      fl.life -= pulse.intro ? 0.007 : 0.013;   // в разгоне слово живёт дольше
+      fl.dy += 0.3;
+    });
     pulse.floats = pulse.floats.filter(function (fl) { return fl.life > 0; });
 
     pulse.ripples.forEach(function (rp) {
@@ -3126,6 +3209,11 @@
     var gold = cs.getPropertyValue('--marker-color').trim();
     var row = days[pulse.view], prevRow = days[pulse.view - 1];
     var upto = pulse.view === pulse.today ? Math.min(23, hour) : 23;
+    if (pulse.intro && pulse.view === pulse.today) {
+      // Линия дня прочерчивается слева направо ровно до текущего часа.
+      upto = Math.max(1, Math.round(upto * pulseEase(
+        Math.min(1, (now - pulse.intro) / pulse.introDur))));
+    }
 
     if (prevRow && pulse.view - 1 !== pulse.best)
       stroke(pointsOf(prevRow), muted, 0.35, 1);
@@ -3136,8 +3224,12 @@
       ctx.fillStyle = gold; ctx.globalAlpha = 0.9;
       ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(T('pulse_record', { N: pulseSum(days[pulse.best]) }),
-                   Math.min(w - 30, Math.max(30, bp[ph][0])), bp[ph][1] - 5);
+      var bd = (days[pulse.best].date || '');
+      ctx.fillText(T('pulse_record', {
+        D: bd.slice(8) + '.' + bd.slice(5, 7),
+        N: pulseSum(days[pulse.best])
+      }),
+                   Math.min(w - 52, Math.max(52, bp[ph][0])), bp[ph][1] - 5);
       ctx.textAlign = 'left'; ctx.globalAlpha = 1;
     }
 
@@ -3207,7 +3299,7 @@
       if (Math.abs(dx) > 30) pulseGo(pulse.view + (dx < 0 ? 1 : -1));
     }, { passive: true });
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { pulseStart(); pulseLoad(); }
+      if (!document.hidden) { pulseStart(); pulseLoad(); pulseIntroStart(); }
     });
     setTimeout(pulseLoad, 0);
     setInterval(pulseLoad, PULSE_REFRESH_MS);
@@ -3260,11 +3352,13 @@
     subsStopAudio();
     document.getElementById('subs').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
+    if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
   document.getElementById('dash-ustaz').addEventListener('click', openUstaz);
   document.getElementById('ustaz-back').addEventListener('click', function () {
     document.getElementById('ustaz').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
+    if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
   document.getElementById('tab-trainer').addEventListener('click', openTrainer);
   document.getElementById('trainer-tab-mywords').addEventListener('click', function () { openMushaf('mywords', 'trainer'); });
@@ -3279,6 +3373,7 @@
   document.getElementById('mushaf-back').addEventListener('click', function () {
     document.getElementById('app').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
+    if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
 
   function escapeAttr(s) {
@@ -6657,6 +6752,7 @@
   document.getElementById('trainer-back').addEventListener('click', function () {
     document.getElementById('trainer').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
+    if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
 
   // Название дивизиона приходит с сервера готовой РУССКОЙ строкой (она же
@@ -6812,6 +6908,7 @@
       document.getElementById('tr-dashboard').addEventListener('click', function () {
         document.getElementById('trainer').style.display = 'none';
         document.getElementById('dashboard').style.display = 'flex';
+    if (typeof pulseIntroStart === 'function') pulseIntroStart();
       });
     });
   }
