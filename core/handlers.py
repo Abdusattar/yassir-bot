@@ -1189,10 +1189,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not group or not is_group_admin(phone, group["id"]):
             return
         from core.tg import send_message_with_url_button, pin_message
-        from config import MUSHAF_URL, PROFILE
+        from config import MUSHAF_URL, MUSHAF_APP_LINK, PROFILE
+        # Прямая ссылка приложения, если заведена (см. MUSHAF_APP_LINK): она
+        # открывает Mini App с авторизацией прямо из группы. Ссылка на сайт -
+        # запасной вариант: страница откроется, но студента не узнает.
         resp = await send_message_with_url_button(
             chat_id, "📖 YassirApp — Мусхаф с таджвидом и переводом", "YassirApp",
-            f"{MUSHAF_URL}?bot={PROFILE}"
+            MUSHAF_APP_LINK or f"{MUSHAF_URL}?bot={PROFILE}"
         )
         msg_id = (resp or {}).get("result", {}).get("message_id")
         if msg_id:

@@ -32,8 +32,17 @@ REQUIRE_PREP_FOR_NEW_STUDENTS = os.getenv("REQUIRE_PREP_FOR_NEW_STUDENTS", "true
 # Quran Academy Digital Quran API (пословный перевод для тренажёра муфрадата)
 QURAN_ACADEMY_ACCESS_TOKEN = os.getenv("QURAN_ACADEMY_ACCESS_TOKEN", "")
 
-# Мусхаф Mini App (28.08.2026) - свой GCP-сервер, nginx, домен No-IP
-MUSHAF_URL = os.getenv("MUSHAF_URL", "https://yassir.ddns.net/")
+# Мусхаф Mini App (28.08.2026) - свой GCP-сервер, nginx; с 07.09.2026 свой
+# домен yassirilm.com (Турция резала ddns.net по SNI, см. wiki/infrastructure.md)
+MUSHAF_URL = os.getenv("MUSHAF_URL", "https://yassirilm.com/")
+
+# Прямая ссылка на Mini App (07.09.2026): t.me/<бот>/<короткое имя>.
+# В ГРУППАХ web_app-кнопка запрещена платформой, а обычная ссылка на сайт
+# открывает страницу БЕЗ подписи Telegram - приложение не узнаёт студента и
+# работать не может. Прямая ссылка приложения этого ограничения не имеет:
+# открывается настоящим Mini App с авторизацией из любого чата. Пусто -
+# откатываемся на прежний адрес сайта, чтобы кнопка не пропала совсем.
+MUSHAF_APP_LINK = os.getenv("MUSHAF_APP_LINK", "")
 
 # Тренажёр муфрадата в вебе (29.08.2026) - HTTP API живёт в ТОМ ЖЕ процессе,
 # что и getUpdates-цикл (asyncio-задача, см. bot.py). Мужской и женский бот -
