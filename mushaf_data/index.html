@@ -953,11 +953,18 @@
     -webkit-overflow-scrolling: touch;
     background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
+  /* Шапка одной строкой: название, «онлайн», справа язык и тема. Кнопки
+     раньше висели абсолютно в углу - при центрированном экране это работало,
+     но теперь дыхание начинается сразу под заголовком, и кнопки садились
+     прямо на его карточку (07.09.2026). В потоке они честно занимают своё
+     место и отступ до карточки виден. */
   #dash-head {
-    display: flex; align-items: baseline; gap: 10px;
-    padding-right: 96px;          /* место под кнопки языка и темы */
-    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px; min-height: 38px;
     direction: ltr;
+  }
+  #dash-head #dash-online {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   /* Переключатель темы (30.08.2026) - абсолютное позиционирование, не
      flex-элемент строки - физические left/right не зависят от dir="rtl"
@@ -967,14 +974,14 @@
      Язык меняют один раз, поэтому ему не место на рабочих экранах; здесь
      же он находится там, где студент и так ищет настройки. */
   #dash-settings {
-    position: absolute; top: 16px; right: 16px;
+    margin-left: auto; flex: 0 0 auto;
     display: flex; align-items: center; gap: 8px;
   }
   #btn-theme-toggle, #btn-lang-toggle {
     position: static;
     background: var(--card-bg); border: 1px solid var(--card-border);
     box-shadow: var(--shadow-sm); border-radius: 50%;
-    width: 40px; height: 40px;
+    width: 36px; height: 36px;
     font-size: 18px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
@@ -992,7 +999,7 @@
      Не отдельный экран и не модалка по центру: панель выезжает прямо под
      кнопкой, дашборд остаётся на виду (решение пользователя). */
   #lang-menu {
-    position: absolute; top: 64px; right: 16px;
+    position: absolute; top: 60px; right: 16px;
     z-index: 70;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -1859,11 +1866,6 @@
 </head>
 <body>
 <div id="dashboard">
-  <div id="dash-settings">
-    <button id="btn-lang-toggle" title="Тил / Язык" aria-haspopup="true"
-            aria-expanded="false">RU</button>
-    <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
-  </div>
   <div id="lang-menu" role="menu" aria-labelledby="btn-lang-toggle">
     <button class="lang-opt" data-lang="ru" role="menuitem">
       <span>Русский</span><span class="check">✓</span></button>
@@ -1872,7 +1874,14 @@
     <button class="lang-opt" data-lang="uz" role="menuitem">
       <span>Ўзбекча</span><span class="check">✓</span></button>
   </div>
-  <div id="dash-head"><h1>YassirApp</h1><span id="dash-online"></span></div>
+  <div id="dash-head">
+    <h1>YassirApp</h1><span id="dash-online"></span>
+    <div id="dash-settings">
+      <button id="btn-lang-toggle" title="Тил / Язык" aria-haspopup="true"
+              aria-expanded="false">RU</button>
+      <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
+    </div>
+  </div>
   <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
        в скрипте. Пустой каркас: наполняется после ответа /pulse. -->
   <div id="dash-pulse">
