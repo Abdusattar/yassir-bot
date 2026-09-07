@@ -1086,12 +1086,31 @@
     gap: 3px;
   }
   #dash-pulse .p-count { display: flex; align-items: baseline; gap: 7px; }
+  /* Число живое: по цифрам медленно проходит волна света - от чернил к
+     акценту и обратно (07.09.2026, просьба пользователя «пусть переливается»).
+     Градиент по тексту, а не мигание прозрачностью: цифры остаются читаемыми
+     всё время. При «щелчке» (пришло событие) перелив уступает место сплошному
+     акценту - иначе вспышка не читалась бы на фоне волны. */
   #dash-pulse .p-count b {
-    font-size: 25px; font-weight: 700; color: var(--ink);
+    font-size: 25px; font-weight: 700;
     letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
-    transition: color .25s;
+    background: linear-gradient(100deg,
+      var(--ink) 18%, var(--accent) 42%, var(--ink) 66%);
+    background-size: 240% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: pulse-shine 5s linear infinite;
   }
-  #dash-pulse .p-count b.hit { color: var(--accent); }
+  @keyframes pulse-shine {
+    from { background-position: 130% 0; }
+    to { background-position: -30% 0; }
+  }
+  #dash-pulse .p-count b.hit {
+    background: none; color: var(--accent); animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #dash-pulse .p-count b { background: none; color: var(--ink); animation: none; }
+  }
   #dash-pulse .p-count span { font-size: 12px; color: var(--muted); }
   #dash-pulse .p-split {
     display: flex; flex-wrap: wrap; gap: 3px 10px;
@@ -2236,6 +2255,7 @@
       subs_retake: '🎙 Пересдать',
       subs_redo: 'Перезаписать',
       subs_retake_do: 'Пересдать',
+      subs_series_n: '%N% подряд',
       subs_review_view: 'Посмотреть разбор',
       look_from: '%N% — замечание',
       look_from_ustaz: 'Замечание устаза',
@@ -2424,14 +2444,14 @@
       online_now_n: 'сейчас в онлайне учатся %N%',
       dash_words_today: '%N% из %M% слов сегодня',
       dash_subs_waiting: 'на проверке %N%',
-      dash_subs_retake: 'нужно пересдать %N%',
+      dash_subs_retake: 'пересдать %N%',
       pulse_today: 'сегодня',
       pulse_yesterday: 'вчера',
       pulse_hifz: 'заучил',
       pulse_rep: 'повторил',
       pulse_word: 'слова',
       pulse_ustaz: 'разобрал',
-      pulse_sub: '%A% сегодня',
+      pulse_sub: '%A% джамаата сегодня · к %H%:00',
       pulse_quiet: 'тихо · последнее действие %T% назад',
       pulse_day_sum: '%A% · %P%',
       pulse_running: 'день ещё идёт',
@@ -3007,8 +3027,10 @@
               : pulseNum(Math.round(q / 60), 'час', 'часа', 'часов');
       sub.textContent = T('pulse_quiet', { T: txt });
     } else {
+      var hh = d.hour == null ? '' : (d.hour < 10 ? '0' : '') + d.hour;
       sub.textContent = T('pulse_sub', {
-        A: pulsePlural(pulse.shown, 'действие', 'действия', 'действий')
+        A: pulsePlural(pulse.shown, 'действие', 'действия', 'действий'),
+        H: hh
       });
     }
     document.getElementById('pulse-count').textContent = pulse.shown;
@@ -5475,6 +5497,13 @@
       '<span class="sub-pill ' + pill[0] + '">' + pill[1] + '</span></div>' +
       (marks.length ? '<div class="meta">' + T('subs_marked_words', { N: marks.length }) + '</div>' : '') +
       '<div class="meta">' + ustazWhen(item, today) +
+      (item.series_count > 1
+        ? '–' + ustazTimeOnly(item.sent_last) + ' · ' +
+          T('subs_series_n', {
+            N: item.series_count + ' ' +
+               pulsePlural(item.series_count, 'запись', 'записи', 'записей')
+          })
+        : '') +
       (item.group_title ? ' · ' + ustazEsc(item.group_title) : '') + '</div>';
     if (item.review_type === 'text' && item.review_text) {
       html += '<div class="sub-review">' +

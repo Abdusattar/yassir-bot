@@ -208,20 +208,29 @@ def test_audio_is_not_truncated_to_the_first_network_chunk(test_db, monkeypatch)
 
 
 def test_submission_counts_feed_the_dashboard_door(test_db):
-    """Дверь «Сдачи» показывает два числа: очередь устаза и свой долг."""
+    """Дверь «Сдачи» показывает два числа: очередь устаза и свой долг.
+
+    Сдачи разнесены по времени намеренно: подряд отправленные голосовые
+    считаются одной сдачей (см. merge_submission_series), а здесь проверяются
+    именно два разных захода."""
     group = _group()
     sid = db.add_student("Сатар", group["id"], phone="777001")
     today = db.get_date()
     db.save_voice_submission(sid, group["id"], CHAT, 10, today, file_id="a")
     db.save_voice_submission(sid, group["id"], CHAT, 11, today, file_id="b")
+    with db.db() as c:
+        c.execute("UPDATE voice_submissions SET sent_at=? WHERE message_id=10",
+                  ("%sT08:00:00+06:00" % today,))
+        c.execute("UPDATE voice_submissions SET sent_at=? WHERE message_id=11",
+                  ("%sT21:00:00+06:00" % today,))
     db.mark_voice_reviewed(CHAT, 11)
     with db.db() as c:
         c.execute("UPDATE voice_submissions SET verdict='retake' WHERE message_id=11")
 
     counts = db.get_submission_counts(sid)
 
-    assert counts["waiting"] == 1        # первая ещё ждёт устаза
-    assert counts["retake"] == 1         # вторую попросили пересдать
+    assert counts["waiting"] == 1        # утренняя ещё ждёт устаза
+    assert counts["retake"] == 1         # вечернюю попросили пересдать
 
 
 def test_submission_counts_are_zero_for_a_newcomer(test_db):
@@ -229,3 +238,71 @@ def test_submission_counts_are_zero_for_a_newcomer(test_db):
     sid = db.add_student("Новичок", group["id"], phone="777009")
 
     assert db.get_submission_counts(sid) == {"waiting": 0, "retake": 0}
+
+
+def test_voice_series_in_a_group_is_one_submission(test_db):
+    """Сдавая 40+40 голосом, студент режет запись на куски. Устаз отвечает
+    один раз — и раньше одна часть была «проверена», а три висели «на
+    проверке» вечно."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    today = db.get_date()
+    for n, minute in enumerate(("10:23", "10:28", "10:31"), start=1):
+        db.save_voice_submission(sid, group["id"], CHAT, n, today, file_id="v%d" % n)
+        with db.db() as c:
+            c.execute("UPDATE voice_submissions SET sent_at=? WHERE message_id=?",
+                      ("%sT%s:00+06:00" % (today, minute), n))
+    db.mark_voice_reviewed(CHAT, 1)          # ответил на первую часть
+
+    merged = db.merge_submission_series(db.get_student_submissions(sid))
+
+    assert len(merged) == 1
+    assert merged[0]["series_count"] == 3
+    assert merged[0]["reviewed_at"]          # ответ закрывает всю серию
+    assert db.get_submission_counts(sid)["waiting"] == 0
+
+
+def test_a_pause_starts_a_new_submission(test_db):
+    """Полчаса тишины — это уже другая сдача, а не продолжение прежней."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    today = db.get_date()
+    for n, hhmm in ((1, "10:00"), (2, "18:40")):
+        db.save_voice_submission(sid, group["id"], CHAT, n, today, file_id="v%d" % n)
+        with db.db() as c:
+            c.execute("UPDATE voice_submissions SET sent_at=? WHERE message_id=?",
+                      ("%sT%s:00+06:00" % (today, hhmm), n))
+
+    merged = db.merge_submission_series(db.get_student_submissions(sid))
+
+    assert len(merged) == 2
+    assert db.get_submission_counts(sid)["waiting"] == 2
+
+
+def test_app_submissions_are_never_merged(test_db):
+    """У сдачи из приложения своё место на листе, разбор и пересдача —
+    склеить две такие значило бы потерять разбор."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    today = db.get_date()
+    db.save_voice_submission(sid, group["id"], CHAT, 1, today, file_id="a",
+                             hifz_page=15, hifz_line=3, hifz_stage=1)
+    db.save_voice_submission(sid, group["id"], CHAT, 2, today, file_id="b",
+                             hifz_page=15, hifz_line=4, hifz_stage=1)
+
+    merged = db.merge_submission_series(db.get_student_submissions(sid))
+
+    assert len(merged) == 2
+
+
+def test_retake_debt_survives_the_week_window(test_db):
+    """Долг не истекает по сроку: пересдачу считаем за всю историю, даже
+    если сама сдача давно вышла из недельного окна экрана."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    db.save_voice_submission(sid, group["id"], CHAT, 1, db.get_date(), file_id="a")
+    with db.db() as c:
+        c.execute("UPDATE voice_submissions SET verdict='retake',"
+                  " date=date('now','-40 day') WHERE message_id=1")
+
+    assert db.get_submission_counts(sid)["retake"] == 1

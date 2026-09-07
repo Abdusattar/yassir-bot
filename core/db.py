@@ -1447,20 +1447,102 @@ def get_student_submissions(student_id, limit=20):
     return [dict(r) for r in rows]
 
 
+SERIES_WINDOW_MINUTES = 30
+
+
+def merge_submission_series(rows):
+    """Склеивает подряд идущие голосовые в группе в ОДНУ сдачу (07.09.2026).
+
+    Сдавая 40+40 голосом в группу, студент почти всегда режет запись на куски:
+    за 30 дней 3371 запись сложилась всего в 2116 «моментов». Устаз реагирует
+    один раз, на какой-то один кусок, — и в приложении получалось, что одна
+    часть «проверена», а три висят «на проверке» вечно (383 такие серии). Для
+    студента это выглядит как гора несданной работы, которой нет.
+
+    Склеиваем только сдачи ИЗ ГРУППЫ (hifz_page пуст): у сдачи из приложения
+    есть место на листе, разбор устаза и своя пересдача — слепить две такие
+    значило бы потерять разбор. Окно — полчаса между соседними записями.
+
+    rows идут от новых к старым (см. get_student_submissions), внутри серии
+    порядок сохраняем. Реакция на любую часть закрывает всю серию.
+    """
+    from datetime import datetime
+
+    def moment(row):
+        try:
+            return datetime.fromisoformat(row["sent_at"])
+        except (TypeError, ValueError):
+            return None
+
+    out, series = [], []
+
+    def flush():
+        if not series:
+            return
+        if len(series) == 1:
+            out.append(dict(series[0]))
+            series.clear()
+            return
+        # Основой берём ту часть, на которую устаз ответил: в ней и разбор, и
+        # вердикт. Если ответа нет — самую свежую.
+        base = next((r for r in series if r.get("reviewed_at")), series[0])
+        merged = dict(base)
+        merged["series_count"] = len(series)
+        merged["series_ids"] = [r["id"] for r in series]
+        merged["sent_at"] = series[-1]["sent_at"]      # начало серии
+        merged["sent_last"] = series[0]["sent_at"]     # её конец
+        merged["has_audio"] = 1 if any(r.get("has_audio") for r in series) else 0
+        out.append(merged)
+        series.clear()
+
+    prev = None
+    for row in rows:
+        row = dict(row)
+        joinable = row.get("hifz_page") is None
+        if prev is not None and joinable and prev.get("hifz_page") is None                 and row.get("group_title") == prev.get("group_title"):
+            t_new, t_prev = moment(row), moment(prev)
+            if t_new and t_prev and 0 <= (t_prev - t_new).total_seconds() <= SERIES_WINDOW_MINUTES * 60:
+                series.append(row)
+                prev = row
+                continue
+        flush()
+        series.append(row)
+        prev = row
+    flush()
+    return out
+
+
+SUBMISSIONS_WINDOW_DAYS = 7
+
+
 def get_submission_counts(student_id):
     """Две цифры для двери «Сдачи» на дашборде (07.09.2026): сколько ждёт
-    устаза и сколько просит пересдачи. Отдельным COUNT, а не длиной списка:
-    дверь показывается на каждом открытии главного экрана, а сдач у активного
-    студента бывает под сотню — тянуть их все ради двух чисел незачем."""
+    устаза и сколько просит пересдачи.
+
+    Считаем ПО СЕРИЯМ и за ту же неделю, что показывает экран (07.09.2026):
+    раньше дверь брала всю историю поштучно и показывала «на проверке 21», где
+    двадцать одна запись — это семь настоящих сдач, разрезанных на куски, плюс
+    хвост, до которого устаз уже не вернётся. Цифра на двери и список внутри
+    должны говорить одно и то же.
+
+    Пересдачи — исключение: их берём за всю историю. Долг не истекает по
+    сроку, и спрятать его через неделю значило бы потерять работу студента."""
+    since = (get_now().date() - timedelta(days=SUBMISSIONS_WINDOW_DAYS - 1)).isoformat()
     with db() as c:
-        row = c.execute(
-            "SELECT"
-            "  SUM(CASE WHEN reviewed_at IS NULL THEN 1 ELSE 0 END) AS waiting,"
-            "  SUM(CASE WHEN verdict='retake' THEN 1 ELSE 0 END) AS retake"
-            " FROM voice_submissions WHERE student_id=?",
+        rows = c.execute(
+            "SELECT vs.id, vs.sent_at, vs.reviewed_at, vs.hifz_page, g.title AS group_title"
+            " FROM voice_submissions vs JOIN groups g ON g.id = vs.group_id"
+            " WHERE vs.student_id=? AND vs.date >= ?"
+            " ORDER BY vs.date DESC, vs.id DESC",
+            (student_id, since)
+        ).fetchall()
+        retake = c.execute(
+            "SELECT COUNT(*) AS n FROM voice_submissions"
+            " WHERE student_id=? AND verdict='retake'",
             (student_id,)
-        ).fetchone()
-    return {"waiting": (row["waiting"] or 0), "retake": (row["retake"] or 0)}
+        ).fetchone()["n"]
+    waiting = sum(1 for r in merge_submission_series(rows) if not r["reviewed_at"])
+    return {"waiting": waiting, "retake": retake or 0}
 
 
 VERDICT_ACCEPTED = "accepted"

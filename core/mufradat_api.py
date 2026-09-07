@@ -38,7 +38,7 @@ from core.db import (
     get_submission, VERDICT_ACCEPTED, VERDICT_RETAKE,
     get_group_month_progress, get_student_month_days, group_miss_threshold,
     get_group_by_id, get_students, get_reviewed_submissions,
-    get_skip_count_month_detail, get_submission_counts,
+    get_skip_count_month_detail, get_submission_counts, merge_submission_series,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -1012,10 +1012,10 @@ async def handle_submissions(request, user_id):
     user = find_user_by_phone(user_id)
     if not user:
         return web.json_response({"items": [], "today": get_date()})
-    return web.json_response({
-        "items": get_student_submissions(user["id"], SUBMISSIONS_LIMIT),
-        "today": get_date(),
-    })
+    # Серия голосовых, отправленных подряд в группу, - одна сдача, а не пять
+    # (07.09.2026, см. merge_submission_series).
+    items = merge_submission_series(get_student_submissions(user["id"], SUBMISSIONS_LIMIT))
+    return web.json_response({"items": items, "today": get_date()})
 
 
 @with_auth
