@@ -351,6 +351,11 @@
     font-size: 15px; line-height: 1; cursor: pointer; padding: 4px 6px;
     font-family: inherit;
   }
+  /* Подписанный возврат виднее крестика и говорит, КУДА уводит. */
+  #hifz-close.back {
+    color: var(--accent); font-size: 13.5px; font-weight: 600;
+    white-space: nowrap;
+  }
   /* ─── Сдача 40+40: запись прямо в приложении (02.09.2026) ────────────
      Порядок из макета: записал → ПРОСЛУШАЛ СЕБЯ → отправил / перезаписал /
      удалил. Пока не отправил — сдачи не существует, поэтому «Удалить»
@@ -1935,7 +1940,7 @@
        двери (иначе непонятно, куда потом смотреть). -->
   <div class="dash-row" id="dash-subs" tabindex="0" role="button">
     <span class="mark">◴</span>
-    <span class="text"><span class="label" data-i18n="dash_subs">Сдачи</span><span class="sub" id="dash-subs-sub" data-i18n="dash_subs_sub">Мои записи и ответ устаза</span></span>
+    <span class="text"><span class="label" data-i18n="dash_subs">Заучивания</span><span class="sub" id="dash-subs-sub" data-i18n="dash_subs_sub">Мои записи и ответ устаза</span></span>
     <span class="go" id="dash-subs-go">&rsaquo;</span>
     <span class="badge" id="dash-subs-count" style="display:none"></span>
   </div>
@@ -2208,7 +2213,7 @@
 <div id="subs">
   <div id="subs-topbar">
     <button id="subs-back" data-i18n="back_dashboard">← Дашборд</button>
-    <span data-i18n="subs_title">Сдачи</span>
+    <span data-i18n="subs_title">Заучивания</span>
   </div>
   <div id="subs-body"></div>
 </div>
@@ -2244,13 +2249,13 @@
       dash_trainer: 'Тренажёр',
       dash_trainer_sub: 'Муфрадат — учи слова Корана',
       dash_ustaz: 'Устаз',
-      dash_subs: 'Сдачи',
+      dash_subs: 'Заучивания',
       dash_subs_sub: 'Мои записи и ответ устаза',
-      subs_title: 'Сдачи',
+      subs_title: 'Заучивания',
       subs_empty: 'Здесь появятся твои сдачи 40+40 — записи, ответ устаза и пересдача 🤲',
       subs_loading: 'Загрузка…',
       subs_wait: 'на проверке',
-      subs_done: 'проверено',
+      subs_done: 'сдано',
       subs_my_record: '▶ Моя запись',
       subs_retake: '🎙 Пересдать',
       subs_redo: 'Перезаписать',
@@ -2261,6 +2266,7 @@
       look_from_ustaz: 'Замечание устаза',
       look_no_audio: 'Устаз отметил слова без голосового разбора',
       look_failed: 'Не удалось проиграть запись',
+      look_back: '‹ Заучивания',
       look_back10: '↺ 10 сек назад',
       look_retake: '🎙 Пересдать',
       look_sub: 'разбор устаза',
@@ -4190,6 +4196,14 @@
     var where = document.getElementById('hifz-where');
     var sub = document.getElementById('hifz-sub');
     var fix = document.getElementById('hifz-fix');
+    /* Выход подписывается по режиму (07.09.2026, жалоба: «с разбора должна
+       быть кнопочка назад, а то внизу другие кнопки»). Голый ✕ читается как
+       «закрыть мусхаф», а не «вернуться в свои сдачи», - внизу же стоят
+       «10 сек назад» и «Пересдать», и дороги обратно человек не видел.
+       Ставим здесь, а не в lookOpen: hifzHead зовётся при каждой
+       перерисовке и на всех выходах из разбора (в том числе через
+       пересдачу), значит подпись сама возвращается к ✕. */
+    var close = document.getElementById('hifz-close');
     /* Шапка принадлежит РОЛИ, а не режиму (07.09.2026). У проверки своя:
        имя студента и группа. Раньше их вписывал reviewAfterRender поверх
        студенческой строки - и любой следующий hifzHead() (а его зовёт
@@ -4198,6 +4212,8 @@
        ЕГО СОБСТВЕННОЕ место заучивания, а следующий тап по строке чужой
        сдачи сохранял бы его себе (hifzPickDone -> hifzSave -> POST /hifz). */
     if (typeof review !== 'undefined' && review.on && review.sub) {
+      close.textContent = '✕';
+      close.classList.remove('back');
       where.textContent = review.sub.student_name || '';
       sub.textContent = review.sub.group_title || '';
       fix.style.display = 'none';
@@ -4206,11 +4222,15 @@
     // Разбор: место называем так же, как в списке сдач, - студент должен
     // видеть, ЧТО он сдавал, а не только где на листе горит подсветка.
     if (typeof look !== 'undefined' && look.on && look.item) {
+      close.textContent = T('look_back');
+      close.classList.add('back');
       where.textContent = subsPlace(look.item);
       sub.textContent = T('look_sub');
       fix.style.display = 'none';
       return;
     }
+    close.textContent = '✕';
+    close.classList.remove('back');
     if (hifz.picking) {
       // Шапка спрашивает ровно про ту единицу, что выбрана внизу — «укажи
       // этап» нигде не пишем, вопрос всегда конкретный (02.09.2026).
