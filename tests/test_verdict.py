@@ -121,6 +121,30 @@ def test_retake_verdict_requires_voice_comment(test_db, monkeypatch):
     assert again["ok"] is True
 
 
+def test_gate_does_not_depend_on_clock_resolution(test_db, monkeypatch):
+    """Гейт сравнивал sent_at с verdict_at, а часы дают соседним записям
+    ОДИНАКОВУЮ метку (на Windows шаг ~15 мс — test_accepted_retake_unblocks
+    падал в 40% запусков, 07.09.2026). Здесь время заморожено: при любой
+    зернистости часов пересдача обязана сниматься, а старая сдача — нет."""
+    from datetime import datetime
+    import pytz
+    frozen = datetime(2026, 9, 7, 10, 0, 0, tzinfo=pytz.timezone(db.TZ))
+    monkeypatch.setattr(db, "get_now", lambda: frozen)
+
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    first = _submission(sid, group, 1, 6, 7, 1)
+    db.set_submission_verdict(first, db.VERDICT_RETAKE, "888002")
+    _submission(sid, group, 2, 6, 7, 1)          # пересдал — гейт снят
+    assert db.get_blocking_retake(sid, group["id"]) is None
+
+    other = db.add_student("Другой", group["id"], phone="777002")
+    a = _submission(other, group, 3, 6, 7, 1)
+    _submission(other, group, 4, 6, 7, 1)        # обе ДО вердикта
+    db.set_submission_verdict(a, db.VERDICT_RETAKE, "888002")
+    assert db.get_blocking_retake(other, group["id"]) is not None
+
+
 def test_unchecked_submission_never_blocks(test_db):
     """Молчание устаза не должно останавливать студента."""
     group = _group()

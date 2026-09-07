@@ -302,6 +302,15 @@ def _run_migrations(c):
     for col in ("verdict", "verdict_at", "verdict_by", "error_words"):
         if col not in vscols:
             c.execute(f"ALTER TABLE voice_submissions ADD COLUMN {col} TEXT")
+    # Отметка "какая сдача этой единицы была последней в момент вердикта"
+    # (07.09.2026). Гейт снимает сама пересдача, и отличать её от сдачи,
+    # лежавшей ЕЩЁ ДО замечания, раньше пробовали по времени
+    # (sent_at > verdict_at). Это неверно: часы дают одинаковую метку двум
+    # соседним записям (на Windows шаг ~15 мс, тест падал в 40% запусков),
+    # и тогда гейт снимался или держался случайно. id монотонен и от часов
+    # не зависит - сравниваем по нему.
+    if "verdict_after_id" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN verdict_after_id INTEGER")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -1465,12 +1474,27 @@ def set_submission_verdict(submission_id, verdict, verdict_by, error_words=None)
     error_words - список позиций слов, сериализуем в JSON тут же, чтобы
     формат хранения знало ровно одно место."""
     with db() as c:
+        # Запоминаем последнюю сдачу этой же единицы на момент вердикта: всё,
+        # что придёт ПОСЛЕ неё, и будет ответом студента на замечание. См.
+        # verdict_after_id в init() - по времени это отличить не выходит.
+        row = c.execute("SELECT * FROM voice_submissions WHERE id=?",
+                        (submission_id,)).fetchone()
+        after_id = submission_id
+        if row is not None:
+            newest = c.execute(
+                "SELECT MAX(id) AS m FROM voice_submissions"
+                " WHERE student_id=? AND group_id=?"
+                " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?",
+                (row["student_id"], row["group_id"],
+                 row["hifz_page"], row["hifz_line"], row["hifz_stage"])
+            ).fetchone()
+            after_id = newest["m"] or submission_id
         c.execute(
             "UPDATE voice_submissions SET verdict=?, verdict_at=?, verdict_by=?,"
-            " error_words=?, reviewed_at=COALESCE(reviewed_at, ?)"
+            " error_words=?, verdict_after_id=?, reviewed_at=COALESCE(reviewed_at, ?)"
             " WHERE id=?",
             (verdict, get_now().isoformat(), verdict_by,
-             json.dumps(error_words or [], ensure_ascii=False),
+             json.dumps(error_words or [], ensure_ascii=False), after_id,
              get_now().isoformat(), submission_id)
         )
 
@@ -1494,10 +1518,13 @@ def get_blocking_retake(student_id, group_id):
     что-либо сделать. Устаз всё равно посмотрит новую запись и, если снова
     плохо, вернёт её обратно.
 
-    Засчитываем только сдачу, отправленную ПОСЛЕ вердикта (sent_at >
-    verdict_at) и той же единицы. Одного id мало: устаз может пометить на
-    пересдачу старую сдачу, когда более новая по тому же месту уже лежит, -
-    по id гейт снялся бы мгновенно, хотя студент на замечание не ответил."""
+    Засчитываем только сдачу той же единицы, пришедшую ПОСЛЕ вердикта. Одного
+    id самой сдачи мало: устаз может пометить на пересдачу старую запись,
+    когда более новая по тому же месту уже лежит, - гейт снялся бы мгновенно,
+    хотя студент на замечание не ответил. Поэтому в момент вердикта
+    запоминаем последнюю сдачу этой единицы (verdict_after_id) и сравниваем с
+    ней. По времени (sent_at > verdict_at) это делать нельзя: часы дают
+    одинаковую метку двум соседним записям."""
     with db() as c:
         row = c.execute(
             "SELECT * FROM voice_submissions"
@@ -1511,10 +1538,10 @@ def get_blocking_retake(student_id, group_id):
             "SELECT 1 FROM voice_submissions"
             " WHERE student_id=? AND group_id=?"
             " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
-            " AND id > ? AND sent_at > ? LIMIT 1",
+            " AND id > ? LIMIT 1",
             (student_id, group_id,
              row["hifz_page"], row["hifz_line"], row["hifz_stage"],
-             row["id"], row["verdict_at"] or "")
+             row["verdict_after_id"] or row["id"])
         ).fetchone()
     return None if redone else dict(row)
 
