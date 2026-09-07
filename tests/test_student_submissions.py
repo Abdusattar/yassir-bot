@@ -205,3 +205,27 @@ def test_audio_is_not_truncated_to_the_first_network_chunk(test_db, monkeypatch)
 
     assert status == 200
     assert len(body) == sum(len(c) for c in chunks)
+
+
+def test_submission_counts_feed_the_dashboard_door(test_db):
+    """Дверь «Сдачи» показывает два числа: очередь устаза и свой долг."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    today = db.get_date()
+    db.save_voice_submission(sid, group["id"], CHAT, 10, today, file_id="a")
+    db.save_voice_submission(sid, group["id"], CHAT, 11, today, file_id="b")
+    db.mark_voice_reviewed(CHAT, 11)
+    with db.db() as c:
+        c.execute("UPDATE voice_submissions SET verdict='retake' WHERE message_id=11")
+
+    counts = db.get_submission_counts(sid)
+
+    assert counts["waiting"] == 1        # первая ещё ждёт устаза
+    assert counts["retake"] == 1         # вторую попросили пересдать
+
+
+def test_submission_counts_are_zero_for_a_newcomer(test_db):
+    group = _group()
+    sid = db.add_student("Новичок", group["id"], phone="777009")
+
+    assert db.get_submission_counts(sid) == {"waiting": 0, "retake": 0}

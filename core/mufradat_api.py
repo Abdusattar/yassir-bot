@@ -38,7 +38,7 @@ from core.db import (
     get_submission, VERDICT_ACCEPTED, VERDICT_RETAKE,
     get_group_month_progress, get_student_month_days, group_miss_threshold,
     get_group_by_id, get_students, get_reviewed_submissions,
-    get_skip_count_month_detail,
+    get_skip_count_month_detail, get_submission_counts,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -666,7 +666,25 @@ async def handle_heartbeat(request, user_id):
         # себя роль в подготовительной, он терял кабинет целиком.
         "is_ustaz": bool(admin_groups) or user_id in SUPER_ADMIN_IDS,
         "waiting_count": count_pending_voice_reviews(counted),
+        # Факты для дверей дашборда (07.09.2026): раздел должен сам говорить,
+        # что там внутри — на какой странице стоишь, сколько слов сделал,
+        # сколько сдач ждёт устаза. Едут этим же ответом, а не тремя новыми
+        # запросами: heartbeat и так ходит каждые 20 секунд.
+        "facts": _dashboard_facts(user_id),
     })
+
+
+def _dashboard_facts(user_id):
+    user = find_user_by_phone(user_id)
+    subs = get_submission_counts(user["id"]) if user else {"waiting": 0, "retake": 0}
+    return {
+        "hifz": get_hifz_pointer(user_id),
+        "words": {
+            "done": get_daily_answered_count(user_id),
+            "target": DAILY_WORDS_FOR_TASK_CREDIT,
+        },
+        "subs": subs,
+    }
 
 
 def _visible_ustaz_groups(user_id):

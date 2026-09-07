@@ -155,7 +155,8 @@
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  button:focus-visible, .dash-card:focus-visible, .trainer-opt:focus-visible {
+  button:focus-visible, .dash-card:focus-visible, .dash-row:focus-visible,
+  .trainer-opt:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
@@ -936,16 +937,27 @@
      при открытии. Мусхаф и Тренажёр оба переключают вид внутри этой же
      страницы (см. openTrainer/dash-mushaf в скрипте ниже) - карточки
      визуально равноправны, никакая не "главнее" другой. */
+  /* Экран собран сверху вниз, а не по центру (07.09.2026). Пока дверей было
+     три, центрирование выглядело опрятно; с дыханием джамаата наверху оно
+     начало гулять - блок то выше, то ниже в зависимости от того, показана ли
+     дверь устаза. Теперь порядок постоянный: заголовок, дыхание, двери. */
   #dashboard {
     position: relative;
     display: flex;
     flex-direction: column;
     height: 100%;
-    justify-content: center;
-    align-items: center;
-    gap: 16px;
-    padding: 24px;
+    align-items: stretch;
+    gap: 0;
+    padding: 18px 16px 24px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  #dash-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding-right: 96px;          /* место под кнопки языка и темы */
+    margin-bottom: 10px;
+    direction: ltr;
   }
   /* Переключатель темы (30.08.2026) - абсолютное позиционирование, не
      flex-элемент строки - физические left/right не зависят от dir="rtl"
@@ -1021,11 +1033,11 @@
   .lang-opt.active .check { opacity: 1; }
   #dashboard h1 {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 21px;
+    font-size: 22px;
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     color: var(--ink);
-    margin: 0 0 10px;
+    margin: 0;
   }
   /* "Сейчас онлайн" (30.08.2026) - ненавязчивая строка над карточками, не
      бейдж на конкретной карточке (не должна выглядеть как реклама одного
@@ -1105,6 +1117,60 @@
   }
   #dash-pulse .p-dots i.on { background: var(--accent); }
   #dash-pulse .p-foot { justify-content: space-between; }
+
+  /* Двери (07.09.2026, новый стиль). Были четыре одинаковые плитки с
+     цветными эмодзи - четыре равных пятна, между которыми глазу не за что
+     зацепиться, и ни одна не говорила, что у неё внутри. Стало: один список,
+     строки с разделителями, знак одного веса и цвета слева, а справа - факт
+     («стр. 15, половина листа», «12 из 40 слов»). Раздел сам сообщает своё
+     состояние, и экран отвечает на вопрос «что мне сделать сейчас».
+
+     Знаки взяты из самого мусхафа, а не из набора эмодзи: ۩ - знак сажды,
+     ن - буква нун, ◴ - часы. Один тон на всё приложение (правило дизайна),
+     цветным остаётся только счётчик долга. */
+  #dash-doors {
+    display: flex; flex-direction: column;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .dash-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--card-border);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dash-row:last-child { border-bottom: none; }
+  .dash-row:active { background: var(--accent-soft); }
+  /* Арабские глифы рисуются мельче латиницы в том же кегле - ۩ и ن при 16px
+     превращались в закорючки. Даём им свой размер и фиксированную высоту
+     строки, чтобы ряды не гуляли. */
+  .dash-row .mark {
+    flex: 0 0 auto; width: 26px; text-align: center;
+    font-size: 20px; line-height: 26px; height: 26px; color: var(--accent);
+  }
+  .dash-row .text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .dash-row .label {
+    font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em;
+  }
+  .dash-row .sub {
+    font-size: 12.5px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dash-row .go { margin-left: auto; color: var(--muted); font-size: 17px; line-height: 1; }
+  .dash-row .badge {
+    margin-left: auto; flex: 0 0 auto;
+    background: var(--no); color: #fff;
+    border-radius: 8px; min-width: 22px; padding: 2px 7px;
+    font-size: 12px; font-weight: 700; text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .dash-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
   .dash-card {
     width: 100%;
@@ -1806,8 +1872,7 @@
     <button class="lang-opt" data-lang="uz" role="menuitem">
       <span>Ўзбекча</span><span class="check">✓</span></button>
   </div>
-  <h1>YassirApp</h1>
-  <div id="dash-online"></div>
+  <div id="dash-head"><h1>YassirApp</h1><span id="dash-online"></span></div>
   <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
        в скрипте. Пустой каркас: наполняется после ответа /pulse. -->
   <div id="dash-pulse">
@@ -1825,30 +1890,37 @@
       <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
     </div>
   </div>
-  <div class="dash-card" id="dash-mushaf" tabindex="0" role="button">
-    <span class="icon-badge">📗</span>
-    <div><div class="label" data-i18n="dash_mushaf">Мусхаф</div><div class="sub" data-i18n="dash_mushaf_sub">Чтение с таджвидом и переводом</div></div>
+  <div id="dash-doors">
+  <div class="dash-row" id="dash-mushaf" tabindex="0" role="button">
+    <span class="mark">۩</span>
+    <span class="text"><span class="label" data-i18n="dash_mushaf">Мусхаф</span><span class="sub" id="dash-mushaf-sub" data-i18n="dash_mushaf_sub">Чтение с таджвидом и переводом</span></span>
+    <span class="go">&rsaquo;</span>
   </div>
-  <div class="dash-card" id="dash-trainer" tabindex="0" role="button">
-    <span class="icon-badge">🌱</span>
-    <div><div class="label" data-i18n="dash_trainer">Тренажёр</div><div class="sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</div></div>
+  <div class="dash-row" id="dash-trainer" tabindex="0" role="button">
+    <span class="mark">ن</span>
+    <span class="text"><span class="label" data-i18n="dash_trainer">Тренажёр</span><span class="sub" id="dash-trainer-sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</span></span>
+    <span class="go">&rsaquo;</span>
   </div>
   <!-- Своя третья дверь студента (04.09.2026, экран "Сдачи" из макета
        01.09): свои сдачи, ответ устаза и пересдача. Видна всем - у кого
        сдач ещё нет, увидит пустой список с объяснением, а не отсутствие
        двери (иначе непонятно, куда потом смотреть). -->
-  <div class="dash-card" id="dash-subs" tabindex="0" role="button">
-    <span class="icon-badge">🎙</span>
-    <div><div class="label" data-i18n="dash_subs">Сдачи</div><div class="sub" data-i18n="dash_subs_sub">Мои записи и ответ устаза</div></div>
+  <div class="dash-row" id="dash-subs" tabindex="0" role="button">
+    <span class="mark">◴</span>
+    <span class="text"><span class="label" data-i18n="dash_subs">Сдачи</span><span class="sub" id="dash-subs-sub" data-i18n="dash_subs_sub">Мои записи и ответ устаза</span></span>
+    <span class="go" id="dash-subs-go">&rsaquo;</span>
+    <span class="badge" id="dash-subs-count" style="display:none"></span>
   </div>
   <!-- 4-я дверь, только у устаза (03.09.2026, пункт 13 старого макета
        40+40) - роль узнаём из heartbeat, дверь скрыта, пока ответ не
        пришёл (нет мигания "было-стало" при открытии). Красный счётчик -
        всегда долг, тот же принцип, что у #dash-online. -->
-  <div class="dash-card" id="dash-ustaz" tabindex="0" role="button" style="display:none">
-    <span class="icon-badge">🕌</span>
-    <div><div class="label" data-i18n="dash_ustaz">Устаз</div><div class="sub" id="dash-ustaz-sub" data-i18n="dash_ustaz_sub">Сдачи на проверке</div></div>
-    <span class="dash-card-count" id="dash-ustaz-count" style="display:none"></span>
+  <div class="dash-row" id="dash-ustaz" tabindex="0" role="button" style="display:none">
+    <span class="mark">✓</span>
+    <span class="text"><span class="label" data-i18n="dash_ustaz">Устаз</span><span class="sub" id="dash-ustaz-sub" data-i18n="dash_ustaz_sub">Сдачи на проверке</span></span>
+    <span class="go" id="dash-ustaz-go">&rsaquo;</span>
+    <span class="badge" id="dash-ustaz-count" style="display:none"></span>
+  </div>
   </div>
 </div>
 <div id="word-popup"></div>
@@ -2341,6 +2413,9 @@
       tab_trainer_full: '🌱 Тренажёр',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Мои слова',
       online_now_n: 'сейчас в онлайне учатся %N%',
+      dash_words_today: '%N% из %M% слов сегодня',
+      dash_subs_waiting: 'на проверке %N%',
+      dash_subs_retake: 'нужно пересдать %N%',
       pulse_today: 'сегодня',
       pulse_yesterday: 'вчера',
       pulse_hifz: 'заучил',
@@ -2642,13 +2717,57 @@
       if (res.data && res.data.is_ustaz) {
         door.style.display = 'flex';
         var n = res.data.waiting_count || 0;
-        if (n > 0) { count.textContent = n; count.style.display = 'flex'; }
-        else { count.style.display = 'none'; }
+        var go = document.getElementById('dash-ustaz-go');
+        if (n > 0) {
+          count.textContent = n; count.style.display = 'block'; go.style.display = 'none';
+        } else {
+          count.style.display = 'none'; go.style.display = 'block';
+        }
       } else {
         door.style.display = 'none';
       }
+      // Факты на дверях (07.09.2026): раздел сам говорит, что у него внутри.
+      if (res.data && res.data.facts) dashFacts(res.data.facts);
     });
   }
+  /* Подписи дверей: вместо вечного описания раздела - его сегодняшнее
+     состояние. «Чтение с таджвидом и переводом» человек прочитал один раз в
+     первый день; «стр. 15, половина листа» отвечает на вопрос, где он стоит,
+     каждый раз. Пока факта нет (новичок ещё не заходил в заучивание), остаётся
+     прежнее описание - пустая строка была бы хуже. */
+  function dashFacts(f) {
+    var mush = document.getElementById('dash-mushaf-sub');
+    if (f.hifz && f.hifz.page) {
+      var st = f.hifz.stage, page = f.hifz.page;
+      mush.textContent = st === 3 ? T('ustaz_place_page', { P: page })
+        : st === 2 ? T('ustaz_place_half', { P: page })
+        : T('ustaz_place', { P: page, L: (f.hifz.line || 0) + 1 });
+    }
+    if (f.words) {
+      document.getElementById('dash-trainer-sub').textContent =
+        T('dash_words_today', { N: f.words.done, M: f.words.target });
+    }
+    var subsSub = document.getElementById('dash-subs-sub');
+    var subsCount = document.getElementById('dash-subs-count');
+    var subsGo = document.getElementById('dash-subs-go');
+    if (f.subs) {
+      // Пересдача - единственный настоящий долг студента, её и показываем
+      // счётчиком. «На проверке» - очередь устаза, о ней спокойной строкой.
+      if (f.subs.retake > 0) {
+        subsSub.textContent = T('dash_subs_retake', { N: f.subs.retake });
+        subsCount.textContent = f.subs.retake;
+        subsCount.style.display = 'block';
+        subsGo.style.display = 'none';
+      } else {
+        subsCount.style.display = 'none';
+        subsGo.style.display = 'block';
+        subsSub.textContent = f.subs.waiting > 0
+          ? T('dash_subs_waiting', { N: f.subs.waiting })
+          : T('dash_subs_sub');
+      }
+    }
+  }
+
   setTimeout(sendHeartbeat, 0);
   setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 
@@ -3143,7 +3262,7 @@
   document.getElementById('trainer-tab-mushaf').addEventListener('click', function () { openMushaf('page'); });
   // role="button" на <div> не даёт Enter/Space нативно, в отличие от <button> -
   // нужен явный keydown (30.08.2026, клавиатурная навигация Telegram Desktop).
-  Array.prototype.forEach.call(document.querySelectorAll('.dash-card'), function (card) {
+  Array.prototype.forEach.call(document.querySelectorAll('.dash-card, .dash-row'), function (card) {
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); }
     });

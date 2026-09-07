@@ -1447,6 +1447,22 @@ def get_student_submissions(student_id, limit=20):
     return [dict(r) for r in rows]
 
 
+def get_submission_counts(student_id):
+    """Две цифры для двери «Сдачи» на дашборде (07.09.2026): сколько ждёт
+    устаза и сколько просит пересдачи. Отдельным COUNT, а не длиной списка:
+    дверь показывается на каждом открытии главного экрана, а сдач у активного
+    студента бывает под сотню — тянуть их все ради двух чисел незачем."""
+    with db() as c:
+        row = c.execute(
+            "SELECT"
+            "  SUM(CASE WHEN reviewed_at IS NULL THEN 1 ELSE 0 END) AS waiting,"
+            "  SUM(CASE WHEN verdict='retake' THEN 1 ELSE 0 END) AS retake"
+            " FROM voice_submissions WHERE student_id=?",
+            (student_id,)
+        ).fetchone()
+    return {"waiting": (row["waiting"] or 0), "retake": (row["retake"] or 0)}
+
+
 VERDICT_ACCEPTED = "accepted"
 VERDICT_RETAKE = "retake"
 
