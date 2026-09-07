@@ -24,13 +24,14 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 from urllib.parse import parse_qsl
 
 import aiohttp
 from aiohttp import web
 
-from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS
+from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, get_all_groups,
@@ -628,13 +629,69 @@ async def handle_revision_credit(request, user_id):
 ONLINE_WINDOW_SECONDS = 60
 _last_seen = {}  # user_id -> unix-время последнего heartbeat
 
+# Джамаат один - и в онлайне считаем всех, мужчин и женщин (07.09.2026,
+# решение пользователя; то же основание, что у "дыхания": core/pulse.py
+# складывает числа обеих баз). Боты живут разными процессами, общей памяти
+# нет, поэтому каждый выкладывает СВОЁ число в маленький файл рядом с
+# кодом - каталог у ботов общий (там же общий hadiths.db).
+#
+# Почему файл, а не таблица: heartbeat приходит каждые 20 секунд от каждого
+# открытого приложения, и превращать это в запись в SQLite ради
+# необязательной цифры - лишние блокировки на базе, из которой в тот же
+# момент читают муфрадат. Файл переписывается не чаще раза в 10 секунд и
+# заменяется целиком (os.replace), так что читатель всегда видит либо
+# старое число, либо новое, но не половину.
+ONLINE_SHARE_EVERY = 10      # не чаще раза в 10 сек
+ONLINE_SHARE_STALE = 45      # молчит дольше - значит, там уже никого
+_ONLINE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sources")
+_online_written = 0.0
+
+
+def _online_file(profile):
+    return os.path.join(_ONLINE_DIR, "online_%s.json" % profile)
+
+
+def _online_publish(n):
+    """Выложить своё число для соседнего бота. Тихо: не смогли записать -
+    сосед просто не увидит нас, цифра не критичная."""
+    global _online_written
+    now = time.time()
+    if now - _online_written < ONLINE_SHARE_EVERY:
+        return
+    _online_written = now
+    path = _online_file(PROFILE)
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"n": n, "ts": now}, f)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def _online_pair():
+    """Сколько сейчас в другом боте. Устаревший файл читаем как ноль:
+    heartbeat идёт каждые 20 секунд, и молчание дольше сорока пяти означает,
+    что приложение там закрыли, а не что запись потерялась."""
+    other = "female" if PROFILE == "male" else "male"
+    try:
+        with open(_online_file(other), encoding="utf-8") as f:
+            data = json.load(f)
+        if time.time() - float(data.get("ts") or 0) > ONLINE_SHARE_STALE:
+            return 0
+        return max(0, int(data.get("n") or 0))
+    except (OSError, ValueError, TypeError):
+        return 0
+
 
 def _online_count():
     cutoff = time.time() - ONLINE_WINDOW_SECONDS
     stale = [uid for uid, ts in _last_seen.items() if ts < cutoff]
     for uid in stale:
         del _last_seen[uid]
-    return len(_last_seen)
+    mine = len(_last_seen)
+    _online_publish(mine)
+    return mine + _online_pair()
 
 
 @with_auth
