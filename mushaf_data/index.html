@@ -1556,6 +1556,22 @@
     cursor: pointer;
   }
   .ustaz-zones button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  /* Фильтр ВНУТРИ зоны (07.09.2026): вкладок кабинета осталось три, а
+     «Проверено» отвечает на два разных вопроса - что вообще разобрано и
+     кому висит пересдача. Второй вопрос важнее, но четвёртой вкладкой он не
+     тянет: это не отдельное место, а срез того же списка. Отсюда и размер -
+     строка мельче и без рамки, чтобы не спорить с зонами. */
+  .ustaz-filter { display: flex; gap: 14px; padding: 2px 4px; }
+  .ustaz-filter button {
+    border: none; background: none; padding: 2px 0; cursor: pointer;
+    font: inherit; font-size: 12.5px; color: var(--muted);
+    border-bottom: 1.5px solid transparent;
+  }
+  .ustaz-filter button.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+  .sub-row.open { cursor: pointer; }
+  .sub-row .note { font-size: 12px; margin-top: 2px; }
+  .sub-row .note.wait { color: var(--no); }
+  .sub-row .note.answered { color: var(--ok); }
   /* Месяц полосками: один столбик - один день, высота одна, цвет по числу
      сданных заданий. Не график, а «видно с одного взгляда, где провалы». */
   .stu-row {
@@ -2085,6 +2101,7 @@
     <div class="hint" id="review-hint"></div>
     <div class="row">
       <button id="review-play">▶ Прослушать сдачу</button>
+      <button id="review-mine" style="display:none">▶ Мой разбор</button>
       <button id="review-back10" style="display:none">↺ 10 сек</button>
       <button id="review-comment">🎙 Замечание</button>
     </div>
@@ -2286,6 +2303,7 @@
       review_failed: 'Не получилось — попробуй ещё раз',
       review_need_comment: 'Сначала запиши замечание — без него пересдача не уйдёт',
       review_play: '▶ Прослушать сдачу',
+      review_play_mine: '▶ Мой разбор',
       review_stop: '⏸ Стоп',
       review_back10: '↺ 10 сек',
       subs_verdict_ok: 'принято',
@@ -2301,6 +2319,12 @@
       ustaz_zone_queue: 'Ждут',
       ustaz_zone_students: 'Студенты',
       ustaz_zone_done: 'Проверено',
+      ustaz_pill_done: 'разобрано',
+      ustaz_done_all: 'всё',
+      ustaz_done_retakes: 'пересдачи · %N%',
+      ustaz_has_voice: 'разбор голосом',
+      ustaz_retake_waiting: 'ждёт пересдачи',
+      ustaz_retake_answered: 'пересдал — новая запись в «Ждут»',
       ustaz_done_empty: 'Здесь появится то, что уже разобрано',
       ustaz_by: 'разобрал %N%',
       subs_month_title: 'Мой месяц',
@@ -6157,25 +6181,34 @@
     try { reviewAudio.pause(); } catch (e) {}
     if (reviewAudio.src && reviewAudio.src.indexOf('blob:') === 0) URL.revokeObjectURL(reviewAudio.src);
     reviewAudio.removeAttribute('src');
-    reviewPlaying = false;
+    reviewPlaying = null;
     document.getElementById('review-play').textContent = T('review_play');
+    document.getElementById('review-mine').textContent = T('review_play_mine');
     document.getElementById('review-back10').style.display = 'none';
   }
 
   reviewAudio.addEventListener('ended', reviewStopAudio);
 
-  function reviewPlay() {
-    if (reviewPlaying) { reviewStopAudio(); return; }
-    var btn = document.getElementById('review-play');
+  /* Два звука на один плеер (07.09.2026): запись студента и собственное
+     замечание устаза. Открыв уже разобранную сдачу, устаз должен слышать не
+     только её, но и что сам тогда сказал, - иначе список пересдач читается
+     как «кому-то что-то вернули», без содержания. Играет всегда один: тап по
+     второй кнопке останавливает первую. */
+  function reviewPlay(kind) {
+    kind = kind === 'review' ? 'review' : 'own';
+    var was = reviewPlaying;
+    if (was) reviewStopAudio();
+    if (was === kind) return;             // повторный тап по той же кнопке - стоп
+    var btn = document.getElementById(kind === 'own' ? 'review-play' : 'review-mine');
     btn.disabled = true;
-    fetch(apiBase() + '/ustaz/audio?id=' + review.sub.id + '&kind=own', {
+    fetch(apiBase() + '/ustaz/audio?id=' + review.sub.id + '&kind=' + kind, {
       headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' }
     }).then(function (r) {
       if (!r.ok) throw new Error('audio');
       return r.blob();
     }).then(function (blob) {
       reviewAudio.src = URL.createObjectURL(blob);
-      reviewPlaying = true;
+      reviewPlaying = kind;
       btn.disabled = false;
       btn.textContent = T('review_stop');
       var back = document.getElementById('review-back10');
@@ -6187,7 +6220,9 @@
       btn.textContent = T('review_failed');
       // Запись не пошла - отматывать нечего, кнопка не должна остаться.
       document.getElementById('review-back10').style.display = 'none';
-      setTimeout(function () { btn.textContent = T('review_play'); }, 2000);
+      setTimeout(function () {
+        btn.textContent = T(kind === 'own' ? 'review_play' : 'review_play_mine');
+      }, 2000);
     });
   }
 
@@ -6220,6 +6255,9 @@
 
   function reviewAfterRender() {
     if (!review.on) return;
+    var mine = document.getElementById('review-mine');
+    mine.style.display = review.sub && review.sub.has_review_audio ? '' : 'none';
+    mine.textContent = T('review_play_mine');
     applyErrorMarks(reviewMarkedList());
     reviewHint();
     hifzHead();   // шапку проверки рисует она сама, см. hifzHead
@@ -6318,7 +6356,8 @@
     });
   }
 
-  document.getElementById('review-play').addEventListener('click', reviewPlay);
+  document.getElementById('review-play').addEventListener('click', function () { reviewPlay('own'); });
+  document.getElementById('review-mine').addEventListener('click', function () { reviewPlay('review'); });
   /* Отмотка на 10 секунд (07.09.2026, просьба пользователя): устаз слушает
      чужую начитку и ловит ошибку на слух - нужное место переслушивают по
      нескольку раз, каждое нажатие отматывает ещё на 10 секунд. */
@@ -6600,7 +6639,8 @@
 
      Успеваемость видит ЛЮБОЙ устаз по ЛЮБОЙ группе (решение пользователя):
      проверять он по-прежнему может только у себя, а знать - про всех. */
-  var ustazZone = 'queue';          // 'queue' | 'students'
+  var ustazZone = 'queue';          // 'queue' | 'students' | 'done'
+  var doneFilter = 'all';           // срез зоны "Проверено": 'all' | 'retake'
   var stuGroups = null;             // все группы, грузим один раз за сессию
   var stuGroupId = null;
   var stuData = null;
@@ -6698,9 +6738,17 @@
       if (!stuGroupId && stuGroups.length) stuGroupId = stuGroups[0].id;
       return apiCall('/ustaz/reviewed?group=' + stuGroupId);
     }).then(function (res) {
-      var items = (res.data && res.data.items) || [];
+      var all = (res.data && res.data.items) || [];
       var today = (res.data && res.data.today) || '';
-      var html = '<div class="ustaz-head">' + ustazZones() + stuGroupTabs() + '</div>';
+      var retakes = all.filter(function (it) { return it.verdict === 'retake'; });
+      var items = doneFilter === 'retake' ? retakes : all;
+      var html = '<div class="ustaz-head">' + ustazZones() + stuGroupTabs() +
+        '<div class="ustaz-filter">' +
+        '<button data-done="all"' + (doneFilter === 'all' ? ' class="on"' : '') + '>' +
+        T('ustaz_done_all') + '</button>' +
+        '<button data-done="retake"' + (doneFilter === 'retake' ? ' class="on"' : '') + '>' +
+        T('ustaz_done_retakes', { N: retakes.length }) + '</button>' +
+        '</div></div>';
       if (!items.length) {
         html += '<div class="ustaz-empty">' + T('ustaz_done_empty') + '</div>';
       } else {
@@ -6714,17 +6762,52 @@
             var pill = it.verdict === 'accepted'
               ? ['done', T('subs_verdict_ok')]
               : (it.verdict === 'retake' ? ['retake', T('subs_verdict_retake')]
-                : ['wait', T('subs_done')]);
-            return '<div class="sub-row"><div class="top">' +
+                // Разобрано реплаем в группе, без явного вердикта. Слово
+                // студента («сдано») здесь не годится: устаз смотрит на
+                // СВОЮ работу, а не на факт сдачи.
+                : ['wait', T('ustaz_pill_done')]);
+            /* Строку можно открыть - тот же лист, что видит студент: его
+               пометки, запись студента и голос разбора. Открывается только
+               сдача из приложения: у голосового, присланного в группу, места
+               на листе нет и показывать нечего. */
+            var open = it.hifz_page != null;
+            // Что внутри: без этого «принято» с разбором на пять слов и
+            // «принято» молчком выглядят в списке одинаково.
+            var what = [];
+            if (it.marks) what.push(T('subs_marked_words', { N: it.marks }));
+            if (it.has_review_audio) what.push(T('ustaz_has_voice'));
+            var note = '';
+            if (it.verdict === 'retake') {
+              // Пересдал - долг закрыт самим фактом записи (то же правило, что
+              // у гейта). Без этой строки пометка «на пересдачу» висела бы
+              // вечно, хотя ответ студента уже лежит в «Ждут».
+              note = it.redone
+                ? '<div class="note answered">' + T('ustaz_retake_answered') + '</div>'
+                : '<div class="note wait">' + T('ustaz_retake_waiting') + '</div>';
+            }
+            return '<div class="sub-row' + (open ? ' open' : '') + '"' +
+              (open ? ' data-review="' + it.id + '"' : '') + '><div class="top">' +
               '<span class="place">' + ustazEsc(it.student_name) + '</span>' +
               '<span class="sub-pill ' + pill[0] + '">' + pill[1] + '</span></div>' +
               '<div class="meta">' + ustazPlace(it) +
               (it.verdict_by_name ? ' · ' + T('ustaz_by', { N: ustazEsc(it.verdict_by_name) }) : '') +
-              '</div></div>';
+              (what.length ? ' · ' + what.join(' · ') : '') + '</div>' + note + '</div>';
           });
       }
       body.innerHTML = html;
       ustazBindZones(body);
+      Array.prototype.forEach.call(body.querySelectorAll('[data-review]'), function (el) {
+        el.addEventListener('click', function () {
+          reviewOpen(parseInt(el.getAttribute('data-review'), 10));
+        });
+      });
+      Array.prototype.forEach.call(body.querySelectorAll('.ustaz-filter button'), function (b) {
+        b.addEventListener('click', function () {
+          doneFilter = b.getAttribute('data-done');
+          body.scrollTop = 0;
+          openReviewed();
+        });
+      });
       Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
         el.addEventListener('click', function () {
           stuGroupId = parseInt(el.getAttribute('data-gid'), 10);

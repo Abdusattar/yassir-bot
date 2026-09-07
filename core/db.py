@@ -1648,7 +1648,18 @@ def get_reviewed_submissions(group_ids, limit=50):
     """Зона "Проверено" кабинета устаза (04.09.2026, макет 01.09): что уже
     разобрано, свежее сверху. Показываем и вердикт, и того, кто его поставил -
     в группе может проверять и устаз группы, и подхвативший супер-админ, и
-    "кто разобрал" это ровно тот вопрос, ради которого зона и нужна."""
+    "кто разобрал" это ровно тот вопрос, ради которого зона и нужна.
+
+    07.09.2026: строку стало можно открыть и посмотреть - те же пометки на
+    листе, запись студента и голос разбора, что видит студент. Поэтому здесь
+    же едут признаки содержимого (error_words, has_audio, has_review_audio):
+    без них список не отличал бы разбор с пометками от простого "принято".
+
+    redone - студент уже ответил на эту пересдачу новой записью. Считаем тем
+    же правилом, что и гейт (см. get_blocking_retake): всё, что пришло по той
+    же единице ПОСЛЕ verdict_after_id, и есть ответ. Без этого признака
+    карточка так и висела бы с пометкой "на пересдачу", хотя запись студента
+    уже лежит в очереди."""
     if not group_ids:
         return []
     placeholders = ",".join("?" * len(group_ids))
@@ -1656,6 +1667,14 @@ def get_reviewed_submissions(group_ids, limit=50):
         rows = c.execute(
             f"SELECT vs.id, vs.date, vs.reviewed_at, vs.verdict, vs.verdict_at,"
             f" vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.group_id,"
+            f" vs.error_words,"
+            f" vs.file_id IS NOT NULL AS has_audio,"
+            f" vs.review_file_id IS NOT NULL AS has_review_audio,"
+            f" (SELECT 1 FROM voice_submissions n"
+            f"   WHERE n.student_id = vs.student_id AND n.group_id = vs.group_id"
+            f"     AND n.hifz_page IS vs.hifz_page AND n.hifz_line IS vs.hifz_line"
+            f"     AND n.hifz_stage IS vs.hifz_stage"
+            f"     AND n.id > COALESCE(vs.verdict_after_id, vs.id) LIMIT 1) AS redone,"
             f" u.name AS student_name, g.title AS group_title,"
             f" ru.name AS verdict_by_name"
             f" FROM voice_submissions vs"
@@ -1666,7 +1685,18 @@ def get_reviewed_submissions(group_ids, limit=50):
             f" ORDER BY vs.reviewed_at DESC LIMIT ?",
             (*group_ids, limit)
         ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        row = dict(r)
+        try:
+            row["marks"] = len(json.loads(row.pop("error_words") or "[]"))
+        except (TypeError, ValueError):
+            row["marks"] = 0
+        row["has_audio"] = bool(row["has_audio"])
+        row["has_review_audio"] = bool(row["has_review_audio"])
+        row["redone"] = bool(row["redone"])
+        out.append(row)
+    return out
 
 
 def get_submission_audio(submission_id, student_id, kind):

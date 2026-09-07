@@ -35,6 +35,7 @@ from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss, ensure
 from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
 from core.mushaf_words import (
     get_starred_progress_keys, remove_starred_by_progress_key, add_starred_word_by_progress_key,
+    _merge_tail_arabic,
 )
 
 # Языки перевода, доступные в тренажёре (26.08.2026) - код -> подпись кнопки.
@@ -289,10 +290,17 @@ def get_words_by_progress_keys(progress_keys, language=DEFAULT_LANGUAGE):
     (решение пользователя 29.08.2026, "подтягивать сразу, вне закладки").
     Одна строка на progress_key (MIN(id) - представитель, arabic_text и
     translation у всех вхождений одного progress_key совпадают по
-    построению, см. core/sampler.py) - _merge_glued_translations тут не
-    нужен, "*"-хвосты просто не имеют своего progress_key и не попадут в
-    выборку по WHERE IN (эти progress_keys уже разрешены на реальных
-    словах, см. core/mushaf_words.py:_resolve_progress_key)."""
+    построению, см. core/sampler.py).
+
+    Хвосты устойчивых сочетаний ("*") сюда не попадают - у них нет своего
+    progress_key. А вот ГОЛОВА попадает, и её надо склеить с хвостом,
+    иначе на карточке окажется одно слово с переводом всей связки:
+    "مِن - до вас" вместо "مِن قَبْلِكُمْ - до вас" (живой баг 07.09.2026,
+    скриншот materials/min.jpeg; "до вас" стоит на مِن в 12 аятах, всего
+    таких голов 1115 из 77433 строк). В выборке по диапазону страниц
+    склейку делает _merge_glued_translations на предзагруженном списке
+    аята - здесь его нет, поэтому тот же _merge_tail_arabic, что и при
+    записи слова в "Мои слова" (core/mushaf_words.py)."""
     progress_keys = list({*progress_keys})
     if not progress_keys:
         return []
@@ -306,7 +314,13 @@ def get_words_by_progress_keys(progress_keys, language=DEFAULT_LANGUAGE):
             f"GROUP BY progress_key",
             (*progress_keys, language)
         ).fetchall()
-    words = [dict(r) for r in rows]
+        words = []
+        for r in rows:
+            w = dict(r)
+            w["arabic_text"] = _merge_tail_arabic(
+                conn, w["surah_number"], w["ayah_number"], w["position"],
+                w["arabic_text"], language)
+            words.append(w)
     return [
         {**w, "translation": _clean_translation(w["translation"])}
         for w in words if not _is_junk(w["translation"])
