@@ -4909,16 +4909,23 @@
     });
   }
 
-  document.getElementById('hifz-submit').addEventListener('click', function () {
-    if (hifz.line === null || hifz.picking) return;
+  /* Шторка записи. Место берём параметром, а не из шапки: при пересдаче
+     панель открывается сразу, ещё до того как лист догрузится и hifzHead
+     впишет туда строку (07.09.2026). */
+  function hifzRecOpen(place) {
     hifzListenStop();  // запись голоса и прослушка Хусари одновременно мешают друг другу
     hifzRecReset();
     document.getElementById('hifz-rec-place').textContent =
-      document.getElementById('hifz-where').textContent;
+      place || document.getElementById('hifz-where').textContent;
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
     hifzRecButtons('idle');
     document.getElementById('hifz-rec').classList.add('visible');
     hifzRecPad();
+  }
+
+  document.getElementById('hifz-submit').addEventListener('click', function () {
+    if (hifz.line === null || hifz.picking) return;
+    hifzRecOpen();
   });
 
   // Один слушатель на всю панель: кнопки пересобираются под состояние.
@@ -5810,6 +5817,11 @@
     var mini = document.getElementById('rec-review');
     mini.classList.toggle('on', !!item.has_review_audio);
     document.getElementById('rec-review-text').textContent = T('rec_review_text');
+    /* «Пересдать» - это уже решение записать, а не заход в режим заучивания:
+       лишний тап по «Сдать» внизу студент воспринимал как ещё один шаг
+       («нажимаю на пересдать и открывается кнопка записать?», 07.09.2026).
+       Шторка не модалка - лист с пометками устаза под ней виден и читается. */
+    hifzRecOpen(subsPlace(item));
   }
 
   // Возврат к обычной сессии после пересдачи - место и этап, на которых
