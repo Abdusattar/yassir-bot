@@ -130,3 +130,35 @@ def test_wave_share_still_picks_least_shown(monkeypatch):
 
     for _ in range(20):
         assert pick_question_word(words, progress)["progress_key"] == words[-1]["progress_key"]
+
+
+def test_другой_перевод_того_же_слова_не_идёт_в_варианты():
+    """Пословный источник идёт за связным переводом, поэтому у служебных слов
+    десятки контекстных значений (у «من» - 501). Если такое значение попадёт
+    в варианты рядом с верным, оба будут правильными для показанного слова, а
+    засчитан будет один (07.09.2026, разбор со скриншотами пользователя)."""
+    target = {"id": 1, "progress_key": 1, "arabic_text": "وَهُوَ", "translation": "и он"}
+    same = {"id": 2, "progress_key": 2, "arabic_text": "وَهُوَ",
+            "translation": "в то время как оно"}
+    others = [
+        {"id": i, "progress_key": i, "arabic_text": "كلمة%d" % i, "translation": "перевод%d" % i}
+        for i in range(3, 9)
+    ]
+    q = generate_question([target] + [same] + others, {}, n_options=4)
+
+    assert q is not None
+    # Цель выбирает pick_question_word - какая из двух форм ею станет,
+    # неважно: в вариантах не должно оказаться ОБЕИХ.
+    together = {"и он", "в то время как оно"} & set(q["options"])
+    assert len(together) == 1
+
+
+def test_варианты_различаются_по_смыслу():
+    """Старое правило (одинаковый перевод не дублируется) продолжает
+    действовать - проверка на «то же слово» его не заменяет."""
+    pool = _pool(10)
+    pool[1] = {**pool[1], "translation": pool[0]["translation"]}
+    q = generate_question(pool, {}, n_options=4)
+
+    assert q is not None
+    assert len(set(q["options"])) == len(q["options"])

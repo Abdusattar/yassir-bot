@@ -35,7 +35,7 @@ from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss, ensure
 from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
 from core.mushaf_words import (
     get_starred_progress_keys, remove_starred_by_progress_key, add_starred_word_by_progress_key,
-    _merge_tail_arabic,
+    _merge_tail_arabic, _normalize_rasm,
 )
 
 # Языки перевода, доступные в тренажёре (26.08.2026) - код -> подпись кнопки.
@@ -611,9 +611,19 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None):
 
     target_norm = _normalize_gloss(target["translation"])
     seen_norms = {target_norm}
+    target_rasm = _normalize_rasm(target.get("arabic_text", ""))
     distractor_pool = []
     for w in random.sample(words, len(words)):
         if w["id"] == target["id"] or _is_scaffold(w["translation"]):
+            continue
+        # Другой перевод ТОГО ЖЕ слова вариантом быть не может (07.09.2026,
+        # живой разбор с пользователем). Пословный источник идёт за связным
+        # переводом Кулиева, поэтому у служебных слов десятки контекстных
+        # значений: у одного только "من" - 501 отдельное значение, у "ما" -
+        # 207, а всего таких форм 5369 из 14794. Без этой проверки в вопросе
+        # "وَهُوَ" рядом могли встать "и он" и "в то время как оно" - оба
+        # верные, и студент отвечает наугад, а потом видит "неверно".
+        if target_rasm and _normalize_rasm(w.get("arabic_text", "")) == target_rasm:
             continue
         norm = _normalize_gloss(w["translation"])
         if norm in seen_norms:
