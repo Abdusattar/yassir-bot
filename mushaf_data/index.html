@@ -2067,7 +2067,6 @@
       subs_wait: 'на проверке',
       subs_done: 'проверено',
       subs_my_record: '▶ Моя запись',
-      subs_review_audio: '▶ Разбор устаза',
       subs_retake: '🎙 Пересдать',
       subs_redo: 'Перезаписать',
       subs_review_open: 'Разобрать',
@@ -4692,7 +4691,7 @@
       var kind = key.split(':')[1];
       b.textContent = subsPlayingKey === key
         ? T('subs_playing')
-        : (kind === 'own' ? T('subs_my_record') : T('subs_review_audio'));
+        : T('subs_my_record');
     });
   }
 
@@ -4731,43 +4730,32 @@
           : T('subs_review_voice')) + '</div>';
     }
     var hasReview = marks.length || item.has_review_audio;
-    html += '<div class="sub-actions">';
-    if (item.has_audio) {
-      html += '<button data-play="' + item.id + ':own">' + T('subs_my_record') + '</button>';
+    var fromApp = item.hifz_page != null;
+    /* Сдача голосовым прямо в группу: в приложении она только отмечается, слушать
+       нечего — ни свою запись, ни ответ устаза (07.09.2026, решение
+       пользователя). Две причины. Первая: и запись, и реплай лежат в самой
+       группе Telegram, там их и слушают — приложение не должно быть вторым
+       плеером к тому же аудио. Вторая, важнее: бот записывает в сдачи ЛЮБОЕ
+       голосовое студента в группе, поэтому «моя запись» здесь запросто
+       окажется не сдачей, а просто сказанным вслух словом. Место сдачи
+       известно только у сдач из приложения — их и разбираем на листе. */
+    var acts = '';
+    if (fromApp && item.has_audio) {
+      acts += '<button data-play="' + item.id + ':own">' + T('subs_my_record') + '</button>';
     }
-    /* Голос устаза играет здесь только у сдач БЕЗ места - тех, что сданы
-       голосовым прямо в группу (07.09.2026). Их большинство: на 07.09 таких
-       разборов 839 против 30 у сдач из приложения. Листа с подсветкой у них
-       нет и быть не может (место неизвестно), поэтому единственное разумное
-       место для голоса - сама строка списка. У сдач из приложения кнопки
-       здесь нет: там разбор открывается на листе, кнопка ниже. */
-    if (item.hifz_page == null && item.has_review_audio) {
-      html += '<button data-play="' + item.id + ':review">' + T('subs_review_audio') + '</button>';
+    /* «Перезаписать» - только пока сдачу не посмотрели (07.09.2026, решение
+       пользователя: у проверенной перезаписывать незачем). И только там, где
+       разбирать нечего: если разбор есть, дорога одна - через него, ниже. */
+    if (fromApp && !item.reviewed_at && item.verdict !== 'accepted' && !hasReview) {
+      acts += '<button data-retake="' + item.id + '">' + T('subs_redo') + '</button>';
     }
-    /* «Перезаписать» - обычной кнопкой и только пока не принято (07.09.2026).
-       Раньше здесь стояла зелёная «Пересдать» на КАЖДОЙ строке, включая
-       принятые: обязательная пересдача и добровольная перезапись выглядели
-       одинаково, и главное действие экрана оказывалось на строках, где делать
-       нечего. Обязательная теперь живёт отдельным блоком наверху. */
-    /* «Перезаписать» остаётся только там, где разбирать нечего: устаз
-       отреагировал без пометок и без голоса (старые сдачи - до правила
-       «пересдача только с разбором»). Когда разбор есть, дорога одна -
-       через него, и она ниже. */
-    if (item.hifz_page != null && item.verdict !== 'accepted' && !hasReview) {
-      html += '<button data-retake="' + item.id + '">' + T('subs_redo') + '</button>';
-    }
-    html += '</div>';
-    /* «Открыть это место» - посмотреть страницу, ничего не запуская
-       (07.09.2026, вопрос пользователя: устаз мог отметить слова или
-       наговорить разбор и при этом ПРИНЯТЬ работу - студенту всё равно надо
-       это увидеть). Появляется при любом разборе, в том числе когда есть
-       только голос: слушать замечание, глядя на ту самую строку, - совсем
-       не то же, что на слух. Нет разбора - нет кнопки, открывать нечего. */
+    // У групповой сдачи кнопок не остаётся вовсе - пустую полосу не рисуем.
+    if (acts) html += '<div class="sub-actions">' + acts + '</div>';
     /* Одна дверь в разбор (07.09.2026). Раньше их было две и вели они в
        разные места: «Пересдать» включала запись, а посмотреть пометки при
        вердикте «принято» можно было только сделав вид, что идёшь
        пересдавать. Теперь дверь одна, а запись - шаг внутри неё. */
-    if (item.hifz_page != null && hasReview) {
+    if (fromApp && hasReview) {
       html += '<div class="sub-actions" style="margin-top:6px">' +
         '<button style="flex:1" class="sub-open" data-look="' + item.id + '">' +
         T(item.verdict === 'retake' ? 'subs_review_open' : 'subs_review_view') +
@@ -5152,7 +5140,11 @@
   // что уже принят у устаза в очереди - то же слово ("ещё N старше"), тот же
   // жест (тап разворачивает). Данные уже все на руках (SUBMISSIONS_LIMIT=20,
   // это не сотни строк устаза) - делим на клиенте, второй запрос не нужен.
-  var SUBS_WINDOW_DAYS = 3;
+  /* Неделя и всё (07.09.2026, решение пользователя): раньше показывались
+     три дня плюс сворачиваемый хвост «ещё N старше». Хвост убран — студенту
+     он не нужен: своя история за месяц и так видна календарём выше, а список
+     существует ради вопроса «надо ли мне что-то сделать сейчас». */
+  var SUBS_WINDOW_DAYS = 7;
 
   function subsDateAdd(iso, days) {
     var d = new Date(iso + 'T00:00:00Z');
@@ -5202,7 +5194,6 @@
       // строка дважды на экране читается как две разные работы.
       var feed = items.filter(function (it) { return it.verdict !== 'retake'; });
       var recent = feed.filter(function (it) { return it.date >= cutoff; });
-      var older = feed.filter(function (it) { return it.date < cutoff; });
       /* Сверху - только то, что просит устаз (07.09.2026). У активного
          студента сдач больше сотни, из них половина «ждёт проверки» - но это
          очередь УСТАЗА, а не задача студента: он своё сдал. Экран должен
@@ -5229,10 +5220,6 @@
         '<div id="subs-recent-rows">' +
         recent.map(function (it) { return subsRow(it, today); }).join('') +
         '</div>';
-      if (older.length) {
-        html += '<div class="ustaz-older" id="subs-older">' +
-          T('ustaz_older', { N: older.length }) + '</div>';
-      }
       html += '<div class="subs-empty" style="margin-top:6px;font-size:12.5px">' +
         T('subs_retake_hint') + '</div>';
       body.innerHTML = html;
@@ -5240,17 +5227,6 @@
       subsBindRows(document.getElementById('subs-recent-rows'), items);
       var todoBox = document.getElementById('subs-todo-rows');
       if (todoBox) subsBindRows(todoBox, items);
-      var olderEl = document.getElementById('subs-older');
-      if (olderEl) {
-        // Хвост уже в памяти - разворачиваем на месте, без похода на сервер.
-        olderEl.addEventListener('click', function () {
-          olderEl.outerHTML = '<div class="ustaz-group-title">' + T('ustaz_older_title') + '</div>' +
-            '<div id="subs-older-rows">' +
-            older.map(function (it) { return subsRow(it, today); }).join('') +
-            '</div>';
-          subsBindRows(document.getElementById('subs-older-rows'), items);
-        });
-      }
     }).catch(function () {
       body.innerHTML = '<div class="subs-empty">' + T('subs_empty') + '</div>';
     });
