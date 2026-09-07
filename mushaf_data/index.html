@@ -1190,6 +1190,69 @@
   #review-foot button:disabled { opacity: .5; cursor: default; }
   #review-foot .hint { font-size: 12px; color: var(--muted); text-align: center; }
 
+  /* Разбор устаза глазами студента (07.09.2026). Та же нижняя полоса, что
+     и у проверки, только вместо вердикта - голос устаза. В ПОТОКЕ колонки
+     (flex: 0 0 auto), а не поверх листа: тогда странице не нужен добавочный
+     отступ снизу, она сама занимает остаток высоты и скроллится - половина
+     и целая страница в экран не влезают. */
+  #look-foot {
+    display: none;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px 14px;
+    background: var(--chrome-bg, var(--card-bg));
+    border-top: 1px solid var(--card-border);
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #app.look #look-foot { display: flex; }
+  #app.look #hifz-foot { display: none !important; }
+  #look-foot .who { font-size: 12px; color: var(--muted); display: flex; gap: 6px;
+    align-items: baseline; }
+  #look-foot .who b { color: var(--ink); font-size: 12.5px; font-weight: 600; }
+  #look-foot .who span.dur { margin-left: auto; font-variant-numeric: tabular-nums; }
+  #look-foot .player { display: flex; align-items: center; gap: 10px; }
+  #look-play {
+    width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%;
+    background: var(--accent); border: none; color: #fff; font-size: 15px;
+    cursor: pointer; font-family: inherit;
+  }
+  #look-play:disabled { opacity: .5; cursor: default; }
+  #look-foot .bar { flex: 1 1 auto; }
+  #look-track { height: 4px; border-radius: 999px; background: var(--card-border);
+    position: relative; cursor: pointer; }
+  #look-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0;
+    border-radius: 999px; background: var(--accent); }
+  #look-foot .t { display: flex; justify-content: space-between; font-size: 10.5px;
+    color: var(--muted); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  #look-foot .row { display: flex; gap: 8px; }
+  #look-foot .row button {
+    flex: 1 1 auto;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 10px;
+    font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer;
+  }
+  #look-foot .row button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  }
+
+  /* Свёрнутый разбор внутри панели записи: пересдавая, студент должен иметь
+     возможность переслушать замечание, не бросая запись. */
+  #rec-review {
+    display: none; align-items: center; gap: 8px;
+    background: var(--accent-soft, var(--card-bg));
+    border: 1px solid var(--card-border);
+    border-radius: 10px; padding: 7px 10px; margin-bottom: 8px;
+    font-size: 11.5px; color: var(--ink);
+  }
+  #rec-review.on { display: flex; }
+  #rec-review button {
+    width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%;
+    background: var(--accent); border: none; color: #fff; font-size: 10px;
+    cursor: pointer; font-family: inherit;
+  }
+
   /* Кабинет студента "Сдачи" (04.09.2026) - делит каркас с кабинетом
      устаза ниже: топбар + прокручиваемое тело, список сверху вниз. */
   #subs {
@@ -1832,12 +1895,28 @@
     <div class="hint" id="review-hint"></div>
     <div class="row">
       <button id="review-play">▶ Прослушать сдачу</button>
+      <button id="review-back10" style="display:none">↺ 10 сек</button>
       <button id="review-comment">🎙 Замечание</button>
     </div>
     <div class="row">
       <button id="review-accept" class="ok">✅ Принято</button>
       <button id="review-retake" class="no">↺ На пересдачу</button>
     </div>
+  </div>
+
+  <!-- Разбор устаза у студента (07.09.2026): голос и лист в одном кадре.
+       Раньше голос жил в списке "Сдачи", а пометки - на странице, и слушать
+       разбор, глядя на свою строку, было нельзя вообще. -->
+  <div id="look-foot">
+    <div class="who"><b id="look-who">Замечание устаза</b><span class="dur" id="look-dur">—</span></div>
+    <div class="player">
+      <button id="look-play" title="Слушать">▶</button>
+      <div class="bar">
+        <div id="look-track"><div id="look-fill"></div></div>
+        <div class="t"><span id="look-cur">0:00</span><span id="look-total">0:00</span></div>
+      </div>
+    </div>
+    <div class="row" id="look-actions"></div>
   </div>
 
   <div id="hifz-foot">
@@ -1863,6 +1942,9 @@
   <div id="hifz-rec">
     <div class="card">
       <button id="hifz-rec-close" title="Закрыть">✕</button>
+      <!-- Пересдача: разбор сворачивается сюда, чтобы переслушать замечание,
+           не выходя из записи. -->
+      <div id="rec-review"><button id="rec-review-play" title="Слушать">▶</button><span id="rec-review-text">Замечание устаза</span></div>
       <div class="place" id="hifz-rec-place">—</div>
       <div class="timer" id="hifz-rec-timer">0:00</div>
       <div class="hint" id="hifz-rec-hint"></div>
@@ -1985,11 +2067,18 @@
       subs_wait: 'на проверке',
       subs_done: 'проверено',
       subs_my_record: '▶ Моя запись',
-      subs_review_audio: '▶ Разбор устаза',
       subs_retake: '🎙 Пересдать',
       subs_redo: 'Перезаписать',
-      subs_open_place: '📖 Открыть это место',
-      subs_open_place_marks: '📖 Открыть это место · с пометками',
+      subs_review_open: 'Разобрать',
+      subs_review_view: 'Посмотреть разбор',
+      look_from: '%N% — замечание',
+      look_from_ustaz: 'Замечание устаза',
+      look_no_audio: 'Устаз отметил слова без голосового разбора',
+      look_failed: 'Не удалось проиграть запись',
+      look_back10: '↺ 10 сек назад',
+      look_retake: '🎙 Пересдать',
+      look_sub: 'разбор устаза',
+      rec_review_text: 'Замечание устаза — переслушать',
       subs_todo_title: 'НУЖНО ПЕРЕСДАТЬ — %N%',
       subs_todo_hint: 'Послушай замечание и начитай заново. Отправишь — пойдёшь дальше, устаз посмотрит потом.',
       subs_waiting_quiet: 'на проверке %N% — ждёт устаза, от тебя ничего не нужно',
@@ -2006,6 +2095,7 @@
       review_need_comment: 'Сначала запиши замечание — без него пересдача не уйдёт',
       review_play: '▶ Прослушать сдачу',
       review_stop: '⏸ Стоп',
+      review_back10: '↺ 10 сек',
       subs_verdict_ok: 'принято',
       subs_verdict_retake: 'на пересдачу',
       subs_marked_words: 'Отмечено слов: %N%',
@@ -3320,6 +3410,28 @@
     var n = hifzTextLines().length;
     var where = document.getElementById('hifz-where');
     var sub = document.getElementById('hifz-sub');
+    var fix = document.getElementById('hifz-fix');
+    /* Шапка принадлежит РОЛИ, а не режиму (07.09.2026). У проверки своя:
+       имя студента и группа. Раньше их вписывал reviewAfterRender поверх
+       студенческой строки - и любой следующий hifzHead() (а его зовёт
+       hifzApply при каждой перерисовке) возвращал туда "стр. 15 · строка 3
+       из 8". Заодно здесь же снимается "поправить": у устаза она меняет
+       ЕГО СОБСТВЕННОЕ место заучивания, а следующий тап по строке чужой
+       сдачи сохранял бы его себе (hifzPickDone -> hifzSave -> POST /hifz). */
+    if (typeof review !== 'undefined' && review.on && review.sub) {
+      where.textContent = review.sub.student_name || '';
+      sub.textContent = review.sub.group_title || '';
+      fix.style.display = 'none';
+      return;
+    }
+    // Разбор: место называем так же, как в списке сдач, - студент должен
+    // видеть, ЧТО он сдавал, а не только где на листе горит подсветка.
+    if (typeof look !== 'undefined' && look.on && look.item) {
+      where.textContent = subsPlace(look.item);
+      sub.textContent = T('look_sub');
+      fix.style.display = 'none';
+      return;
+    }
     if (hifz.picking) {
       // Шапка спрашивает ровно про ту единицу, что выбрана внизу — «укажи
       // этап» нигде не пишем, вопрос всегда конкретный (02.09.2026).
@@ -3353,8 +3465,13 @@
     document.getElementById('hifz-big-btn').textContent = T('hifz_big');
     document.getElementById('hifz-submit').textContent = T('hifz_submit');
     document.getElementById('hifz-submit').disabled = hifz.picking;
-    document.getElementById('hifz-fix').textContent = T('hifz_fix');
-    document.getElementById('hifz-fix').style.display = hifz.picking ? 'none' : '';
+    fix.textContent = T('hifz_fix');
+    /* В пересдаче место не меняют: пересдаётся ровно то, что сдавал (так и
+       написано студенту в подсказке, и того же требует сервер - гейт ищет
+       сдачу той же единицы, иначе retake_pending). Со сменой места запись
+       уходила бы не туда, а указатель на сервере успевал сдвинуться
+       (hifzSave), и возврат hifzRetakeFinish чинил бы только экран. */
+    fix.style.display = (hifz.picking || hifzRetakeMode) ? 'none' : '';
     var units = document.querySelectorAll('#hifz-units button');
     Array.prototype.forEach.call(units, function (b) {
       b.textContent = T('hifz_unit_' + b.getAttribute('data-unit'));
@@ -3464,6 +3581,10 @@
     // Проверка сдачи закрывается своей дорогой - обратно в кабинет устаза,
     // а не в обычное чтение (04.09.2026).
     if (review.on) { reviewClose(); return; }
+    // Разбор - тоже: студент пришёл из «Сдач» и возвращается туда же
+    // (07.09.2026). Без этого ✕ высаживал бы его в чтение мусхафа, откуда
+    // до своего списка сдач надо идти через дашборд.
+    if (look.on) { lookClose(); return; }
     // Выход из режима во время пересдачи (см. subsRetake) обязан вернуть
     // указатель на место, где студент был до неё, и снять сам признак
     // пересдачи - иначе следующая ОБЫЧНАЯ сдача не сдвинула бы указатель.
@@ -3756,6 +3877,10 @@
     hifzRecReset();
     hifzRecRelease();   // панель закрыта - микрофон отпущен, индикатор гаснет
     document.getElementById('hifz-rec').classList.remove('visible');
+    // Свёрнутый разбор живёт только внутри этой панели: закрылась - и слушать
+    // его здесь больше негде, кнопка не должна остаться висеть.
+    lookStopAudio();
+    document.getElementById('rec-review').classList.remove('on');
     hifzRecPad();
   }
 
@@ -4330,6 +4455,12 @@
     var t = e.changedTouches[0];
     var dx = t.clientX - touchStartX;
     var dy = t.clientY - touchStartY;
+    /* Проверка и пересдача привязаны к одной странице (07.09.2026).
+       У устаза это прямая порча данных: пометка адресуется парой
+       (строка, слово) без номера страницы, и на соседней она ляжет на
+       ДРУГИЕ слова - а вердикт уйдёт с этими координатами. У студента
+       пересдаётся ровно то место, что сдавал, уходить с него некуда. */
+    if ((typeof review !== 'undefined' && review.on) || hifzRetakeMode) return;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       justSwiped = true;
       loadPage(dx < 0 ? currentPage - 1 : currentPage + 1);
@@ -4560,7 +4691,7 @@
       var kind = key.split(':')[1];
       b.textContent = subsPlayingKey === key
         ? T('subs_playing')
-        : (kind === 'own' ? T('subs_my_record') : T('subs_review_audio'));
+        : T('subs_my_record');   // разбор устаза играет на листе, не здесь
     });
   }
 
@@ -4598,19 +4729,24 @@
           ? T('subs_review_from', { N: ustazEsc(item.review_by_name) })
           : T('subs_review_voice')) + '</div>';
     }
+    var hasReview = marks.length || item.has_review_audio;
     html += '<div class="sub-actions">';
     if (item.has_audio) {
       html += '<button data-play="' + item.id + ':own">' + T('subs_my_record') + '</button>';
     }
-    if (item.has_review_audio) {
-      html += '<button data-play="' + item.id + ':review">' + T('subs_review_audio') + '</button>';
-    }
+    /* Голос устаза больше не играет ЗДЕСЬ (07.09.2026): слушать разбор,
+       не видя строки, - половина разбора. Он переехал на сам лист, кнопка
+       ниже ведёт туда. */
     /* «Перезаписать» - обычной кнопкой и только пока не принято (07.09.2026).
        Раньше здесь стояла зелёная «Пересдать» на КАЖДОЙ строке, включая
        принятые: обязательная пересдача и добровольная перезапись выглядели
        одинаково, и главное действие экрана оказывалось на строках, где делать
        нечего. Обязательная теперь живёт отдельным блоком наверху. */
-    if (item.hifz_page != null && item.verdict !== 'accepted') {
+    /* «Перезаписать» остаётся только там, где разбирать нечего: устаз
+       отреагировал без пометок и без голоса (старые сдачи - до правила
+       «пересдача только с разбором»). Когда разбор есть, дорога одна -
+       через него, и она ниже. */
+    if (item.hifz_page != null && item.verdict !== 'accepted' && !hasReview) {
       html += '<button data-retake="' + item.id + '">' + T('subs_redo') + '</button>';
     }
     html += '</div>';
@@ -4620,30 +4756,206 @@
        это увидеть). Появляется при любом разборе, в том числе когда есть
        только голос: слушать замечание, глядя на ту самую строку, - совсем
        не то же, что на слух. Нет разбора - нет кнопки, открывать нечего. */
-    if (item.hifz_page != null && (marks.length || item.has_review_audio)) {
+    /* Одна дверь в разбор (07.09.2026). Раньше их было две и вели они в
+       разные места: «Пересдать» включала запись, а посмотреть пометки при
+       вердикте «принято» можно было только сделав вид, что идёшь
+       пересдавать. Теперь дверь одна, а запись - шаг внутри неё. */
+    if (item.hifz_page != null && hasReview) {
       html += '<div class="sub-actions" style="margin-top:6px">' +
-        '<button style="flex:1" data-look="' + item.id + '">' +
-        T(marks.length ? 'subs_open_place_marks' : 'subs_open_place') + '</button></div>';
+        '<button style="flex:1" class="sub-open" data-look="' + item.id + '">' +
+        T(item.verdict === 'retake' ? 'subs_review_open' : 'subs_review_view') +
+        '</button></div>';
     }
     return html + '</div>';
   }
 
-  /* Посмотреть место сдачи, НИЧЕГО не запуская (07.09.2026). До этого
-     единственная дорога к подсвеченной странице шла через «Пересдать», а она
-     включает режим заучивания и ведёт на запись - то есть посмотреть, что
-     отметил устаз при вердикте «принято», можно было только сделав вид, что
-     идёшь пересдавать. Неправильное действие ради правильной цели.
+  /* ЭКРАН РАЗБОРА (07.09.2026)
 
-     Пометки рисует renderPage по pendingErrorMarks (см. reveal) - режим
-     заучивания для этого не нужен. */
-  function subsLook(item) {
+     Голос устаза и его пометки - две половины одного разбора, а лежали они
+     на разных экранах: аудио играло в списке сдач, пометки рисовались на
+     листе. Слушать замечание, глядя на свою строку, было нельзя.
+
+     Здесь они сходятся: та же страница мусхафа, та же подсветка единицы,
+     что видел устаз, его пометки поверх - и его голос в нижней полосе.
+     Подсветку даёт hifzApply (свет на сданной единице, приглушение
+     остального), поэтому режим заучивания включается, но КЛАСС look убирает
+     его нижнюю полосу с «Крупно» и «Сдать»: разбор - это не заучивание.
+
+     Указатель "где я" не двигается: смотреть разбор старой сдачи можно
+     когда угодно, прогресс от этого не отматывается (та же осторожность,
+     что в subsRetake). */
+  var look = { on: false, item: null, saved: null, url: null, playing: false };
+  var lookAudio = new Audio();
+
+  function lookFmt(sec) {
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    var s = Math.floor(sec);
+    return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+  }
+
+  function lookRenderActions() {
+    var box = document.getElementById('look-actions');
+    box.innerHTML = '';
+    var defs = [['look-back10', 'look_back10', false]];
+    // Пересдача - только там, где её просят. У принятой работы разбор
+    // смотрят, чтобы знать на будущее, пересдавать нечего.
+    if (look.item && look.item.verdict === 'retake') {
+      defs.push(['look-retake', 'look_retake', true]);
+    }
+    defs.forEach(function (d) {
+      var b = document.createElement('button');
+      b.id = d[0];
+      b.textContent = T(d[1]);
+      if (d[2]) b.className = 'primary';
+      box.appendChild(b);
+    });
+    var back = document.getElementById('look-back10');
+    if (back) back.addEventListener('click', function () {
+      lookAudio.currentTime = Math.max(0, lookAudio.currentTime - 10);
+    });
+    var re = document.getElementById('look-retake');
+    if (re) re.addEventListener('click', lookRetake);
+  }
+
+  function lookOpen(item) {
     subsStopAudio();
     try { pendingErrorMarks = JSON.parse(item.error_words || '[]'); }
     catch (e) { pendingErrorMarks = null; }
+    look.on = true;
+    look.item = item;
+    look.saved = { line: hifz.line, stage: hifz.stage, on: hifz.on };
+    hifz.on = true;
+    hifz.picking = false;
+    hifz.stage = item.hifz_stage || 1;
+    hifz.line = item.hifz_line || 0;
     document.getElementById('subs').style.display = 'none';
+    document.getElementById('app').classList.add('look');
+    document.getElementById('look-who').textContent = item.review_by_name
+      ? T('look_from', { N: item.review_by_name })
+      : T('look_from_ustaz');
+    document.getElementById('look-cur').textContent = '0:00';
+    document.getElementById('look-total').textContent = '0:00';
+    document.getElementById('look-fill').style.width = '0';
+    document.getElementById('look-dur').textContent =
+      item.has_review_audio ? '' : T('look_no_audio');
+    document.getElementById('look-play').disabled = !item.has_review_audio;
+    lookRenderActions();
     openMushaf('page');
-    if (currentPage !== item.hifz_page) loadPage(item.hifz_page);
-    else if (pendingErrorMarks) { applyErrorMarks(pendingErrorMarks); pendingErrorMarks = null; }
+    if (currentPage !== item.hifz_page) {
+      loadPage(item.hifz_page);   // renderPage сама позовёт hifzApply/hifzHead
+    } else {
+      hifzApply();
+      if (pendingErrorMarks) { applyErrorMarks(pendingErrorMarks); pendingErrorMarks = null; }
+    }
+  }
+
+  // Выход из разбора - обратно в «Сдачи», а не в чтение: студент пришёл
+  // оттуда и туда же возвращается (та же дорога, что у проверки устаза).
+  function lookClose() {
+    lookStopAudio();
+    look.on = false;
+    look.item = null;
+    document.getElementById('app').classList.remove('look');
+    applyErrorMarks([]);
+    if (look.saved) {
+      hifz.line = look.saved.line;
+      hifz.stage = look.saved.stage;
+      hifz.on = look.saved.on;
+      look.saved = null;
+    }
+    hifzApply();
+    document.getElementById('app').style.display = 'none';
+    openSubs();
+  }
+
+  function lookStopAudio() {
+    try { lookAudio.pause(); } catch (e) {}
+    look.playing = false;
+    var b = document.getElementById('look-play');
+    if (b) b.textContent = '▶';
+    var rb = document.getElementById('rec-review-play');
+    if (rb) rb.textContent = '▶';
+  }
+
+  function lookFreeAudio() {
+    lookStopAudio();
+    if (look.url) { URL.revokeObjectURL(look.url); look.url = null; }
+    lookAudio.removeAttribute('src');
+  }
+
+  /* Запись тянем один раз за разбор и держим blob: студент слушает её по
+     кругу, а в пересдаче переслушивает из панели записи - второй заход в
+     сеть там был бы не к месту. Заголовок initData нельзя поставить на
+     <audio src>, поэтому fetch + blob, как и в списке сдач. */
+  function lookLoadAudio() {
+    if (look.url) return Promise.resolve();
+    if (!look.item || !look.item.has_review_audio) return Promise.reject();
+    return fetch(apiBase() + '/submissions/audio?id=' + look.item.id + '&kind=review', {
+      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('audio');
+      return r.blob();
+    }).then(function (blob) {
+      look.url = URL.createObjectURL(blob);
+      lookAudio.src = look.url;
+    });
+  }
+
+  function lookToggle(btn) {
+    if (look.playing) { lookAudio.pause(); return; }
+    btn.disabled = true;
+    lookLoadAudio().then(function () {
+      btn.disabled = false;
+      return lookAudio.play();
+    }).catch(function () {
+      btn.disabled = false;
+      document.getElementById('look-dur').textContent = T('look_failed');
+    });
+  }
+
+  lookAudio.addEventListener('play', function () {
+    look.playing = true;
+    var b = document.getElementById('look-play');
+    if (b) b.textContent = '❚❚';
+    var rb = document.getElementById('rec-review-play');
+    if (rb) rb.textContent = '❚❚';
+  });
+  lookAudio.addEventListener('pause', lookStopAudio);
+  lookAudio.addEventListener('ended', lookStopAudio);
+  lookAudio.addEventListener('timeupdate', function () {
+    if (!look.on) return;
+    var d = lookAudio.duration;
+    document.getElementById('look-cur').textContent = lookFmt(lookAudio.currentTime);
+    if (isFinite(d) && d > 0) {
+      document.getElementById('look-total').textContent = lookFmt(d);
+      document.getElementById('look-fill').style.width =
+        (lookAudio.currentTime / d * 100) + '%';
+    }
+  });
+
+  document.getElementById('look-play').addEventListener('click', function (e) {
+    lookToggle(e.currentTarget);
+  });
+  // Перемотка тапом по полосе - разбор длиной в минуту переслушивают кусками.
+  document.getElementById('rec-review-play').addEventListener('click', function (e) {
+    lookToggle(e.currentTarget);
+  });
+  document.getElementById('look-track').addEventListener('click', function (e) {
+    var d = lookAudio.duration;
+    if (!isFinite(d) || d <= 0) return;
+    var box = e.currentTarget.getBoundingClientRect();
+    lookAudio.currentTime = Math.min(d, Math.max(0, (e.clientX - box.left) / box.width * d));
+  });
+
+  // Из разбора - прямо в запись, тем же местом. Пометки остаются на листе,
+  // а сам разбор сворачивается в строку внутри панели записи.
+  function lookRetake() {
+    var item = look.item;
+    lookStopAudio();
+    look.on = false;
+    document.getElementById('app').classList.remove('look');
+    look.saved = null;      // место вернёт уже пересдача (hifzRetakeFinish)
+    subsRetake(item, true);
   }
 
   // Пересдача: открываем заучивание РОВНО на том месте, что сдавали, и
@@ -4653,12 +4965,17 @@
   var hifzRetakeMode = false;
   var hifzRetakeSaved = null;
 
-  function subsRetake(item) {
+  /* fromLook - пересдача начата из разбора: лист уже открыт на нужной
+     странице, пометки уже нарисованы, а разбор надо оставить под рукой
+     свёрнутым (см. #rec-review). */
+  function subsRetake(item, fromLook) {
     subsStopAudio();
     // Слова, отмеченные устазом, студент должен увидеть НА СТРАНИЦЕ - ради
     // этого пересдача и открывается прямо здесь, а не отдельным списком.
-    try { pendingErrorMarks = JSON.parse(item.error_words || '[]'); }
-    catch (e) { pendingErrorMarks = null; }
+    if (!fromLook) {
+      try { pendingErrorMarks = JSON.parse(item.error_words || '[]'); }
+      catch (e) { pendingErrorMarks = null; }
+    }
     hifzRetakeSaved = { line: hifz.line, stage: hifz.stage, on: hifz.on };
     hifzRetakeMode = true;
     hifz.on = true;
@@ -4673,6 +4990,10 @@
       hifzApply();
       hifzHead();
     }
+    // Свёрнутый разбор в панели записи - только когда есть что слушать.
+    var mini = document.getElementById('rec-review');
+    mini.classList.toggle('on', !!(item.has_review_audio && look.item === item));
+    document.getElementById('rec-review-text').textContent = T('rec_review_text');
   }
 
   // Возврат к обычной сессии после пересдачи - место и этап, на которых
@@ -4680,6 +5001,11 @@
   function hifzRetakeFinish() {
     if (!hifzRetakeMode) return;
     hifzRetakeMode = false;
+    // Пересдача отправлена - разбор отработан. Отпускаем и запись, и лист:
+    // держать blob замечания в памяти дальше незачем.
+    lookFreeAudio();
+    look.item = null;
+    applyErrorMarks([]);
     if (hifzRetakeSaved) {
       hifz.line = hifzRetakeSaved.line;
       hifz.stage = hifzRetakeSaved.stage;
@@ -4845,7 +5171,7 @@
       b.addEventListener('click', function () {
         var id = parseInt(b.getAttribute('data-look'), 10);
         var item = items.filter(function (x) { return x.id === id; })[0];
-        if (item) subsLook(item);
+        if (item) lookOpen(item);
       });
     });
   }
@@ -4978,6 +5304,7 @@
     reviewAudio.removeAttribute('src');
     reviewPlaying = false;
     document.getElementById('review-play').textContent = T('review_play');
+    document.getElementById('review-back10').style.display = 'none';
   }
 
   reviewAudio.addEventListener('ended', reviewStopAudio);
@@ -4996,10 +5323,15 @@
       reviewPlaying = true;
       btn.disabled = false;
       btn.textContent = T('review_stop');
+      var back = document.getElementById('review-back10');
+      back.textContent = T('review_back10');
+      back.style.display = '';
       return reviewAudio.play();
     }).catch(function () {
       btn.disabled = false;
       btn.textContent = T('review_failed');
+      // Запись не пошла - отматывать нечего, кнопка не должна остаться.
+      document.getElementById('review-back10').style.display = 'none';
       setTimeout(function () { btn.textContent = T('review_play'); }, 2000);
     });
   }
@@ -5035,10 +5367,7 @@
     if (!review.on) return;
     applyErrorMarks(reviewMarkedList());
     reviewHint();
-    var where = document.getElementById('hifz-where');
-    var sub = document.getElementById('hifz-sub');
-    if (where) where.textContent = review.sub.student_name;
-    if (sub) sub.textContent = review.sub.group_title || '';
+    hifzHead();   // шапку проверки рисует она сама, см. hifzHead
   }
 
   function reviewClose() {
@@ -5135,6 +5464,12 @@
   }
 
   document.getElementById('review-play').addEventListener('click', reviewPlay);
+  /* Отмотка на 10 секунд (07.09.2026, просьба пользователя): устаз слушает
+     чужую начитку и ловит ошибку на слух - нужное место переслушивают по
+     нескольку раз, каждое нажатие отматывает ещё на 10 секунд. */
+  document.getElementById('review-back10').addEventListener('click', function () {
+    reviewAudio.currentTime = Math.max(0, reviewAudio.currentTime - 10);
+  });
   document.getElementById('review-comment').addEventListener('click', reviewComment);
   document.getElementById('review-accept').addEventListener('click', function () { reviewVerdict('accepted'); });
   document.getElementById('review-retake').addEventListener('click', function () { reviewVerdict('retake'); });
