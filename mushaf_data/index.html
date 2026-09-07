@@ -2818,7 +2818,9 @@
     ripples: [], floats: [], queue: [], shown: 0, count: 0, tally: null,
     raf: 0, last: 0, slide: 1, from: 0, best: 0,
     // Разгон: день собирается на глазах, а не появляется готовым.
-    intro: 0, introDur: 0, introAt: 0, introWord: 0
+    intro: 0, introDur: 0, introAt: 0, introWord: 0,
+    // Мерцание в тишине: сердце не должно замирать, когда никто не сдаёт.
+    shimmer: 0, shimmerGap: 0
   };
   var PULSE_INTRO_GAP = 20000;    // не повторять разгон чаще раза в 20 секунд
   var PULSE_KINDS = ['m', 'r', 't', 'other', 'review'];
@@ -2909,7 +2911,10 @@
       pulse.shape = pulseHeartShape(people);
       pulse.dots = [];
       pulse.ghost = [];
-      for (var i = 0; i < people; i++) { pulse.dots.push({ v: 0, warm: 0, k: 'm' }); pulse.ghost.push(0); }
+      for (var i = 0; i < people; i++) {
+        pulse.dots.push({ v: 0, s: 0, warm: 0, k: 'm' });
+        pulse.ghost.push(0);
+      }
     }
     pulseWarm(t.people || 0, pulse.dots);
     var yday = days[days.length - 2];
@@ -3144,7 +3149,29 @@
       pulseHead();
     }
 
-    pulse.dots.forEach(function (d) { d.v *= pulse.intro ? 0.96 : 0.985; });
+    /* Мерцание (07.09.2026, пожелание пользователя: «пусть в сердце
+       временами даже если никто не сдаёт, идёт мерцание этих точек»).
+       Ночью и в дневное затишье очередь событий пуста, и сердце застывало
+       ровным полем точек - живого в нём не оставалось ничего, кроме
+       медленного дыхания масштаба.
+
+       Искра НЕ считается действием: не зажигает точку насовсем (warm),
+       не даёт круга, слова и не двигает счётчик - она только чуть светлее
+       на секунду. Иначе тишину было бы не отличить от работы джамаата.
+       Пауза между искрами случайная: ровный такт читался бы как индикатор
+       загрузки, а не как дыхание. */
+    if (!PULSE_REDUCED && !pulse.intro && !pulse.queue.length
+        && now - pulse.shimmer > pulse.shimmerGap) {
+      pulse.shimmer = now;
+      pulse.shimmerGap = 420 + Math.random() * 1100;
+      var si = Math.floor(Math.random() * pulse.dots.length);
+      pulse.dots[si].s = 0.55 + Math.random() * 0.45;
+    }
+
+    pulse.dots.forEach(function (d) {
+      d.v *= pulse.intro ? 0.96 : 0.985;
+      if (d.s) d.s *= 0.972;
+    });
     pulse.ripples.forEach(function (rp) { rp.r += 0.7; });
     pulse.ripples = pulse.ripples.filter(function (rp) { return rp.r < 22; });
     pulse.floats.forEach(function (fl) {
@@ -3187,6 +3214,18 @@
       ctx.beginPath(); ctx.arc(p2[0], p2[1], 2.3 + d.v * 1.9, 0, Math.PI * 2);
       ctx.fillStyle = (d.warm || d.v > 0.05) ? pulseColor(d.k) : dim;
       ctx.globalAlpha = d.warm ? 0.62 + d.v * 0.38 : (d.v > 0.05 ? 0.5 + d.v * 0.5 : 1);
+      ctx.fill(); ctx.globalAlpha = 1;
+    }
+
+    // Искры рисуем поверх поля: у зажжённой точки это добавочный блик её
+    // же цветом, у спящей - едва заметный тёплый отсвет.
+    for (i = 0; i < pulse.dots.length; i++) {
+      var d3 = pulse.dots[i];
+      if (!d3.s || d3.s < 0.03) continue;
+      var p4 = at(i);
+      ctx.beginPath(); ctx.arc(p4[0], p4[1], 2.3 + d3.s * 1.3, 0, Math.PI * 2);
+      ctx.fillStyle = pulseColor(d3.warm ? d3.k : 'm');
+      ctx.globalAlpha = d3.s * (d3.warm ? 0.5 : 0.34);
       ctx.fill(); ctx.globalAlpha = 1;
     }
 
