@@ -60,6 +60,7 @@ from core.mushaf_words import (
     get_hifz_progress, add_hifz_progress, HIFZ_PROGRESS_TARGET,
     check_new_words_for_line,
 )
+from core.pulse import get_pulse
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.prep import prep_progress
 
@@ -975,6 +976,18 @@ TELEGRAM_FILE_MAX_BYTES = 25 * 1024 * 1024
 
 
 @with_auth
+async def handle_pulse(request, user_id):
+    """GET — «дыхание Яссира» для главного экрана (07.09.2026): ритм по часам
+    и дням, ОБЩИЙ для мужского и женского ботов. Ответ кэшируется на минуту в
+    core/pulse.py, поэтому дёргать его на каждое открытие дашборда дёшево.
+
+    Данные не персональные: сколько джамаат сделал сегодня, сколько человек
+    занималось, рекордный день. Имён и групп здесь нет — экран показывает,
+    что проект живой, а не кто чем занят."""
+    return web.json_response(get_pulse())
+
+
+@with_auth
 async def handle_submissions(request, user_id):
     """GET - мои сдачи. student_id (users.id) находим по Telegram ID: в этом
     проекте users.phone - это он и есть (см. память проекта)."""
@@ -1045,6 +1058,7 @@ def build_app():
     app.router.add_get("/api/muf/ustaz/audio", handle_ustaz_audio)
     app.router.add_post("/api/muf/ustaz/verdict", handle_ustaz_verdict)
     app.router.add_post("/api/muf/ustaz/comment", handle_ustaz_comment)
+    app.router.add_get("/api/muf/pulse", handle_pulse)
     app.router.add_get("/api/muf/submissions", handle_submissions)
     app.router.add_get("/api/muf/submissions/audio", handle_submission_audio)
     return app

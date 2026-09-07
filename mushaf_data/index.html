@@ -1047,6 +1047,65 @@
     width: 7px; height: 7px; border-radius: 50%;
     background: #2fbf6e; flex: 0 0 auto;
   }
+  /* «Дыхание Яссира» (07.09.2026) - первое, что видит человек на главном
+     экране: сердце из точек-людей и волна суток. Показывает не персональный
+     прогресс, а то, что джамаат живой - кто-то прямо сейчас сдаёт, устаз
+     разбирает. Данные общие для мужского и женского ботов (core/pulse.py):
+     свои 100 человек выглядят бедно, весь джамаат - совсем другое дело.
+     direction: ltr - та же ловушка RTL-контейнера, что у #dash-online. */
+  #dash-pulse {
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 11px 12px 8px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-sm);
+    display: none;              /* до первого ответа /pulse ничего не мигает */
+    flex-direction: column;
+    gap: 3px;
+  }
+  #dash-pulse .p-count { display: flex; align-items: baseline; gap: 7px; }
+  #dash-pulse .p-count b {
+    font-size: 25px; font-weight: 700; color: var(--ink);
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+    transition: color .25s;
+  }
+  #dash-pulse .p-count b.hit { color: var(--accent); }
+  #dash-pulse .p-count span { font-size: 12px; color: var(--muted); }
+  #dash-pulse .p-split {
+    display: flex; flex-wrap: wrap; gap: 3px 10px;
+    font-size: 10.5px; color: var(--muted); margin-bottom: 1px;
+  }
+  #dash-pulse .p-split i { font-style: normal; display: inline-flex; align-items: center; gap: 4px; }
+  #dash-pulse .p-split u {
+    width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+    text-decoration: none;
+  }
+  #dash-pulse canvas { display: block; width: 100%; }
+  #dash-pulse .p-days {
+    border-top: 1px solid var(--card-border); margin-top: 4px; padding-top: 6px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  #dash-pulse .p-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  #dash-pulse .p-row b { color: var(--ink); font-size: 11.5px; font-weight: 600; }
+  #dash-pulse .p-arrow {
+    border: 1px solid var(--card-border); background: var(--card-bg);
+    color: var(--muted); border-radius: 8px; width: 26px; height: 24px;
+    font: inherit; font-size: 13px; line-height: 1; padding: 0; cursor: pointer;
+  }
+  #dash-pulse .p-arrow:disabled { opacity: .35; cursor: default; }
+  #dash-pulse .p-dots { display: flex; gap: 4px; align-items: center; margin-left: auto; }
+  #dash-pulse .p-dots i {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--card-border); display: block;
+  }
+  #dash-pulse .p-dots i.on { background: var(--accent); }
+  #dash-pulse .p-foot { justify-content: space-between; }
+
   .dash-card {
     width: 100%;
     max-width: 320px;
@@ -1284,6 +1343,15 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     direction: ltr;
   }
+  /* Тело - flex-столбец, а флекс-элементы по умолчанию СЖИМАЮТСЯ. Пока
+     список короткий, это незаметно; как только сдач становится много, блок
+     «нужно пересдать» ужимается - и у него overflow:hidden, который снимает
+     защиту min-height:auto, поэтому он схлопывался вплоть до одной красной
+     линии, унося с собой замечание устаза и кнопку «Разобрать» (жалоба
+     07.09.2026: «пометка устазовская на пересдачу вверху не видна»).
+     Правило одно на всех прямых детей: никто здесь не резиновый, высоту
+     задаёт содержимое, а прокручивается сам столбец. */
+  #subs-body > * { flex: 0 0 auto; }
   .sub-row {
     background: var(--card-bg); border: 1px solid var(--card-border);
     border-radius: 12px; padding: 12px 14px;
@@ -1740,6 +1808,23 @@
   </div>
   <h1>YassirApp</h1>
   <div id="dash-online"></div>
+  <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
+       в скрипте. Пустой каркас: наполняется после ответа /pulse. -->
+  <div id="dash-pulse">
+    <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
+    <div class="p-split" id="pulse-split"></div>
+    <canvas id="pulse-heart" width="330" height="168"></canvas>
+    <div class="p-days">
+      <div class="p-row">
+        <button class="p-arrow" id="pulse-prev" aria-label="день назад">&lsaquo;</button>
+        <b id="pulse-day">&nbsp;</b>
+        <span class="p-dots" id="pulse-dots"></span>
+        <button class="p-arrow" id="pulse-next" aria-label="день вперёд">&rsaquo;</button>
+      </div>
+      <canvas id="pulse-wave" width="330" height="70"></canvas>
+      <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
+    </div>
+  </div>
   <div class="dash-card" id="dash-mushaf" tabindex="0" role="button">
     <span class="icon-badge">📗</span>
     <div><div class="label" data-i18n="dash_mushaf">Мусхаф</div><div class="sub" data-i18n="dash_mushaf_sub">Чтение с таджвидом и переводом</div></div>
@@ -2256,6 +2341,19 @@
       tab_trainer_full: '🌱 Тренажёр',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Мои слова',
       online_now_n: 'сейчас в онлайне учатся %N%',
+      pulse_today: 'сегодня',
+      pulse_yesterday: 'вчера',
+      pulse_hifz: 'заучил',
+      pulse_rep: 'повторил',
+      pulse_word: 'слова',
+      pulse_ustaz: 'разобрал',
+      pulse_sub: '%A% сегодня',
+      pulse_quiet: 'тихо · последнее действие %T% назад',
+      pulse_day_sum: '%A% · %P%',
+      pulse_running: 'день ещё идёт',
+      pulse_peak: 'плотнее всего в %H%:00',
+      pulse_best: 'рекорд джамаата',
+      pulse_record: 'рекорд %N%',
     },
     ky: {
       dash_mushaf: 'Мусхаф',
@@ -2553,6 +2651,439 @@
   }
   setTimeout(sendHeartbeat, 0);
   setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+
+  // «Дыхание Яссира» (07.09.2026) — сердце из точек-людей и волна суток над
+  // карточками. Числа настоящие (core/pulse.py, обе базы вместе), а вспышки —
+  // не выдумка: раз в минуту сервер отдаёт новый счёт, разницу проигрываем
+  // событиями по одному, распределив по следующей минуте. Поэтому каждая
+  // вспышка — чьё-то реальное задание или разбор устаза, просто увиденное с
+  // задержкой до минуты; когда в проекте тихо, экран честно молчит.
+  var PULSE_REFRESH_MS = 60000;
+  var pulse = {
+    data: null, view: 0, today: 0, dots: [], ghost: [], shape: null,
+    ripples: [], floats: [], queue: [], shown: 0, count: 0, tally: null,
+    raf: 0, last: 0, slide: 1, from: 0, best: 0
+  };
+  var PULSE_KINDS = ['m', 'r', 't', 'other', 'review'];
+
+  function pulseColor(kind) {
+    // Один тон на всё приложение (правило дизайна проекта): заучивание и
+    // повторение — акцент разной плотности, слова — золото маркера мусхафа,
+    // разбор устаза — чернила. Не светофор из пяти цветов.
+    var cs = getComputedStyle(document.documentElement);
+    var acc = cs.getPropertyValue('--accent').trim();
+    if (kind === 'r') return 'color-mix(in srgb, ' + acc + ' 62%, transparent)';
+    if (kind === 't') return cs.getPropertyValue('--marker-color').trim();
+    if (kind === 'review') return cs.getPropertyValue('--ink').trim();
+    return acc;
+  }
+  function pulseWord(kind) {
+    return T(kind === 'r' ? 'pulse_rep' : kind === 't' ? 'pulse_word'
+           : kind === 'review' ? 'pulse_ustaz' : 'pulse_hifz');
+  }
+  function pulsePlural(n, one, few, many) {
+    var a = Math.abs(n) % 100, b = a % 10;
+    return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many;
+  }
+  function pulseNum(n, one, few, many) {
+    return n + ' ' + pulsePlural(n, one, few, many);
+  }
+  function pulseFit(cv) {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 320;
+    var h = cv.getAttribute('height') / cv.getAttribute('width') * w;
+    if (cv.width !== Math.round(w * dpr)) {
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(h * dpr);
+      cv.style.height = h + 'px';
+    }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  // Точки внутри сердца: неявная кривая (x²+y²−1)³ − x²y³ ≤ 0, шаг сетки
+  // подбираем так, чтобы точек хватило на весь джамаат.
+  function pulseHeartShape(n) {
+    var pts = [];
+    for (var step = 0.075; step > 0.011 && pts.length < n; step -= 0.002) {
+      pts = [];
+      for (var y = 1.3; y >= -1.4; y -= step)
+        for (var x = -1.4; x <= 1.4; x += step * 0.92) {
+          var a = x * x + y * y - 1;
+          if (a * a * a - x * x * y * y * y <= 0) pts.push([x, y]);
+        }
+    }
+    var out = [], k = pts.length / n;
+    for (var i = 0; i < n; i++) out.push(pts[Math.floor(i * k)] || [0, 0]);
+    return out;
+  }
+
+  function pulseApply(data) {
+    var prev = pulse.data;
+    pulse.data = data;
+    var days = data.days || [];
+    pulse.today = days.length - 1;
+    if (pulse.view >= days.length || !prev) { pulse.view = pulse.today; pulse.from = pulse.today; }
+    pulse.best = 0;
+    days.forEach(function (d, i) {
+      if (i < days.length - 1 && pulseSum(d) > pulseSum(days[pulse.best])) pulse.best = i;
+    });
+
+    var t = data.today || {};
+    var totalNow = PULSE_KINDS.reduce(function (a, k) { return a + (t[k] || 0); }, 0);
+    if (prev) {
+      // Разницу с прошлым ответом ставим в очередь — по событию за раз.
+      PULSE_KINDS.forEach(function (k) {
+        var was = (prev.today || {})[k] || 0, now = t[k] || 0;
+        for (var i = 0; i < Math.min(now - was, 40); i++) pulse.queue.push(k);
+      });
+      // Перемешиваем, иначе сначала пойдут все «заучил», потом все «слова».
+      pulse.queue.sort(function () { return Math.random() - 0.5; });
+    } else {
+      pulse.shown = totalNow;
+    }
+    pulse.count = totalNow;
+    pulse.tally = {};
+    PULSE_KINDS.forEach(function (k) { pulse.tally[k] = t[k] || 0; });
+
+    var people = Math.max(40, Math.min(600, data.people_total || 0));
+    if (!pulse.shape || pulse.dots.length !== people) {
+      pulse.shape = pulseHeartShape(people);
+      pulse.dots = [];
+      pulse.ghost = [];
+      for (var i = 0; i < people; i++) { pulse.dots.push({ v: 0, warm: 0, k: 'm' }); pulse.ghost.push(0); }
+    }
+    pulseWarm(t.people || 0, pulse.dots);
+    var yday = days[days.length - 2];
+    pulseGhost(yday ? yday.people : 0);
+    pulseLabels();
+    document.getElementById('dash-pulse').style.display = 'flex';
+    pulseStart();
+  }
+
+  function pulseSum(day) {
+    return (day.total || []).reduce(function (a, b) { return a + b; }, 0);
+  }
+  function pulseWarm(target, dots) {          // столько людей уже занималось
+    var warm = 0, guard = 0;
+    dots.forEach(function (d) { if (d.warm) warm++; });
+    while (warm > target) {                    // новый день — гасим лишние
+      var i = Math.floor(Math.random() * dots.length);
+      if (!dots[i].warm) { if (guard++ > 6000) break; continue; }
+      dots[i].warm = 0; warm--;
+    }
+    guard = 0;
+    while (warm < Math.min(target, dots.length) && guard++ < 6000) {
+      var j = Math.floor(Math.random() * dots.length);
+      if (dots[j].warm) continue;
+      dots[j].warm = 1;
+      dots[j].k = PULSE_KINDS[Math.floor(Math.random() * 3)];
+      warm++;
+    }
+  }
+  function pulseGhost(target) {
+    var have = 0, guard = 0;
+    pulse.ghost.forEach(function (g) { if (g) have++; });
+    if (have >= target) return;
+    while (have < Math.min(target, pulse.ghost.length) && guard++ < 6000) {
+      var i = Math.floor(Math.random() * pulse.ghost.length);
+      if (pulse.ghost[i]) continue;
+      pulse.ghost[i] = 1; have++;
+    }
+  }
+
+  function pulseLabels() {
+    var d = pulse.data;
+    if (!d) return;
+    var days = d.days || [], row = days[pulse.view] || { total: [], people: 0 };
+    var sum = pulseSum(row);
+    var peak = row.total ? row.total.indexOf(Math.max.apply(null, row.total)) : 0;
+    var name = pulse.view === pulse.today ? T('pulse_today')
+             : pulse.view === pulse.today - 1 ? T('pulse_yesterday')
+             : (row.date || '').slice(8) + '.' + (row.date || '').slice(5, 7);
+    document.getElementById('pulse-day').textContent = name;
+    document.getElementById('pulse-sum').innerHTML = T('pulse_day_sum', {
+      A: '<b>' + sum + '</b> ' + pulsePlural(sum, 'действие', 'действия', 'действий'),
+      P: pulseNum(row.people || 0, 'человек', 'человека', 'человек')
+    });
+    document.getElementById('pulse-peak').textContent =
+      pulse.view === pulse.best ? T('pulse_best')
+      : pulse.view === pulse.today ? T('pulse_running')
+      : T('pulse_peak', { H: (peak < 10 ? '0' : '') + peak });
+    document.getElementById('pulse-prev').disabled = pulse.view === 0;
+    document.getElementById('pulse-next').disabled = pulse.view === pulse.today;
+    var dots = document.getElementById('pulse-dots');
+    while (dots.children.length > days.length) dots.removeChild(dots.lastChild);
+    while (dots.children.length < days.length) dots.appendChild(document.createElement('i'));
+    Array.prototype.forEach.call(dots.children, function (el, k) {
+      el.className = k === pulse.view ? 'on' : '';
+    });
+  }
+
+  function pulseGo(i) {
+    var days = (pulse.data || {}).days || [];
+    if (i < 0 || i >= days.length || i === pulse.view) return;
+    pulse.from = pulse.view; pulse.view = i; pulse.slide = 0;
+    pulseLabels();
+  }
+
+  function pulseHead() {
+    var d = pulse.data;
+    if (!d) return;
+    var q = d.quiet_min;
+    var sub = document.getElementById('pulse-sub');
+    if (q != null && q >= 45 && !pulse.queue.length) {
+      // В проекте тишина — так и говорим, вместо бодрого счёта ни о чём.
+      var txt = q < 90 ? pulseNum(q, 'минуту', 'минуты', 'минут')
+              : pulseNum(Math.round(q / 60), 'час', 'часа', 'часов');
+      sub.textContent = T('pulse_quiet', { T: txt });
+    } else {
+      sub.textContent = T('pulse_sub', {
+        A: pulsePlural(pulse.shown, 'действие', 'действия', 'действий')
+      });
+    }
+    document.getElementById('pulse-count').textContent = pulse.shown;
+    var split = document.getElementById('pulse-split'), html = '';
+    ['m', 'r', 't', 'review'].forEach(function (k) {
+      var n = (pulse.tally || {})[k] || 0;
+      if (!n) return;
+      html += '<i><u style="background:' + pulseColor(k) + '"></u>' + pulseWord(k) + ' ' + n + '</i>';
+    });
+    split.innerHTML = html;
+  }
+
+  // Ритм часа: чем плотнее этот час на неделе, тем чаще бьётся сердце.
+  function pulseBpm(h) {
+    var pr = (pulse.data || {}).profile;
+    if (!pr) return 60;
+    var by = [], i, k;
+    for (i = 0; i < 24; i++) {
+      var s = 0;
+      for (k = 0; k < PULSE_KINDS.length; k++) s += (pr[PULSE_KINDS[k]] || [])[i] || 0;
+      by.push(s);
+    }
+    var mx = Math.max.apply(null, by) || 1;
+    return 44 + (by[h] / mx) * 46;
+  }
+  function pulseBeat(now, h) {
+    var ph = (now / 1000) * (pulseBpm(h) / 60); ph -= Math.floor(ph);
+    function b(c, w, a) { var d = ph - c; return a * Math.exp(-(d * d) / w); }
+    return b(0, 0.0016, 1) + b(0.16, 0.0022, 0.45) + b(1, 0.0016, 1);
+  }
+
+  var PULSE_FAJR = 5, PULSE_GHOST_GONE = 10;
+  function pulseDrawHeart(now) {
+    var cv = document.getElementById('pulse-heart');
+    var f = pulseFit(cv), ctx = f.ctx, w = f.w, h = f.h;
+    var hour = (pulse.data || {}).hour || 0;
+    var sc = Math.min(w / 3.5, h / 3.0)
+           * (1 + pulseBeat(now, hour) * 0.05)
+           * (1 + Math.sin(now / 2600) * 0.018);   // тихое дыхание между ударами
+    var cx = w / 2, cy = h / 2 + h * 0.06;
+    function at(i) {
+      return [cx + pulse.shape[i][0] * sc, cy - pulse.shape[i][1] * sc];
+    }
+
+    // Очередь реальных событий: по одному раз в несколько кадров.
+    if (pulse.queue.length && now - pulse.last > (PULSE_REFRESH_MS / (pulse.queue.length + 4))) {
+      pulse.last = now;
+      var kind = pulse.queue.shift();
+      var idx = Math.floor(Math.random() * pulse.dots.length);
+      var d0 = pulse.dots[idx];
+      d0.v = 1; d0.k = kind;
+      if (kind !== 'review') d0.warm = 1;
+      var p = at(idx);
+      pulse.ripples.push({ i: idx, r: 0, k: kind });
+      var last = pulse.floats[pulse.floats.length - 1];
+      if (!last || last.life < 0.55) pulse.floats.push({ i: idx, dy: 8, k: kind, life: 1 });
+      if (pulse.floats.length > 2) pulse.floats.shift();
+      if (pulse.shown < pulse.count) pulse.shown++;
+      var cnt = document.getElementById('pulse-count');
+      cnt.classList.add('hit');
+      setTimeout(function () { cnt.classList.remove('hit'); }, 220);
+      pulseHead();
+    }
+
+    pulse.dots.forEach(function (d) { d.v *= 0.985; });
+    pulse.ripples.forEach(function (rp) { rp.r += 0.7; });
+    pulse.ripples = pulse.ripples.filter(function (rp) { return rp.r < 22; });
+    pulse.floats.forEach(function (fl) { fl.life -= 0.013; fl.dy += 0.3; });
+    pulse.floats = pulse.floats.filter(function (fl) { return fl.life > 0; });
+
+    pulse.ripples.forEach(function (rp) {
+      var p = at(rp.i);
+      ctx.beginPath(); ctx.arc(p[0], p[1], rp.r, 0, Math.PI * 2);
+      ctx.strokeStyle = pulseColor(rp.k);
+      ctx.globalAlpha = Math.max(0, 1 - rp.r / 22) * 0.4;
+      ctx.lineWidth = 1.3; ctx.stroke(); ctx.globalAlpha = 1;
+    });
+
+    var lit = 0, i;
+    for (i = 0; i < pulse.dots.length; i++) if (pulse.dots[i].warm) lit++;
+    // Тень вчерашнего дня догорает до фаджра: ночью на экране всё равно
+    // должно быть на что смотреть, а после утренней молитвы она уступает
+    // место новому дню. Заполнение сегодняшнего гасит её и само по себе.
+    var afterFajr = hour >= PULSE_GHOST_GONE ? 1
+      : hour >= PULSE_FAJR ? (hour - PULSE_FAJR) / (PULSE_GHOST_GONE - PULSE_FAJR) : 0;
+    var yday = ((pulse.data || {}).days || [])[((pulse.data || {}).days || []).length - 2];
+    var byDay = Math.max(0, 1 - lit / Math.max(1, (yday ? yday.people : 40) * 0.45));
+    var gAlpha = Math.min(byDay, 1 - afterFajr) * 0.3;
+    if (gAlpha > 0.01) {
+      ctx.fillStyle = pulseColor('m');
+      for (i = 0; i < pulse.ghost.length; i++) {
+        if (!pulse.ghost[i] || pulse.dots[i].warm) continue;
+        var pg = at(i);
+        ctx.beginPath(); ctx.arc(pg[0], pg[1], 2.3, 0, Math.PI * 2);
+        ctx.globalAlpha = gAlpha; ctx.fill(); ctx.globalAlpha = 1;
+      }
+    }
+
+    var dim = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+    for (i = 0; i < pulse.dots.length; i++) {
+      var d = pulse.dots[i], p2 = at(i);
+      ctx.beginPath(); ctx.arc(p2[0], p2[1], 2.3 + d.v * 1.9, 0, Math.PI * 2);
+      ctx.fillStyle = (d.warm || d.v > 0.05) ? pulseColor(d.k) : dim;
+      ctx.globalAlpha = d.warm ? 0.62 + d.v * 0.38 : (d.v > 0.05 ? 0.5 + d.v * 0.5 : 1);
+      ctx.fill(); ctx.globalAlpha = 1;
+    }
+
+    ctx.font = '600 10.5px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    pulse.floats.forEach(function (fl) {
+      var p3 = at(fl.i);
+      ctx.globalAlpha = Math.min(1, fl.life * 1.6);
+      ctx.fillStyle = pulseColor(fl.k);
+      ctx.fillText(pulseWord(fl.k), Math.min(w - 28, Math.max(28, p3[0])), p3[1] - fl.dy);
+      ctx.globalAlpha = 1;
+    });
+    ctx.textAlign = 'left';
+  }
+
+  // Волна суток: плавная линия (Catmull-Rom), под ней бледный вчерашний день,
+  // пунктиром — рекорд джамаата. Листается стрелками и свайпом.
+  function pulseWavePath(ctx, pts) {
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+      ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6,
+                        p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6,
+                        p2[0], p2[1]);
+    }
+  }
+  function pulseDrawWave(now) {
+    var d = pulse.data;
+    if (!d || !d.days || !d.days.length) return;
+    var cv = document.getElementById('pulse-wave');
+    var f = pulseFit(cv), ctx = f.ctx, w = f.w, h = f.h, base = h - 12;
+    var days = d.days, hour = d.hour || 0;
+    var mx = 1;
+    days.forEach(function (r) { mx = Math.max(mx, Math.max.apply(null, r.total)); });
+    function pointsOf(row, upto) {
+      var pad = 3, top = 6, pts = [], last = upto === undefined ? 23 : upto;
+      for (var i = 0; i <= last; i++)
+        pts.push([pad + (w - pad * 2) * (i / 23), base - (row.total[i] / mx) * (base - top)]);
+      return pts;
+    }
+    function stroke(pts, color, alpha, width) {
+      ctx.beginPath(); pulseWavePath(ctx, pts);
+      ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (pulse.slide < 1) pulse.slide = Math.min(1, pulse.slide + 0.09);
+
+    var cs = getComputedStyle(document.documentElement);
+    var muted = cs.getPropertyValue('--muted').trim();
+    var accent = cs.getPropertyValue('--accent').trim();
+    var gold = cs.getPropertyValue('--marker-color').trim();
+    var row = days[pulse.view], prevRow = days[pulse.view - 1];
+    var upto = pulse.view === pulse.today ? Math.min(23, hour) : 23;
+
+    if (prevRow && pulse.view - 1 !== pulse.best)
+      stroke(pointsOf(prevRow), muted, 0.35, 1);
+    if (pulse.view !== pulse.best) {
+      var bp = pointsOf(days[pulse.best]);
+      ctx.setLineDash([3, 3]); stroke(bp, gold, 0.7, 1); ctx.setLineDash([]);
+      var ph = days[pulse.best].total.indexOf(Math.max.apply(null, days[pulse.best].total));
+      ctx.fillStyle = gold; ctx.globalAlpha = 0.9;
+      ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(T('pulse_record', { N: pulseSum(days[pulse.best]) }),
+                   Math.min(w - 30, Math.max(30, bp[ph][0])), bp[ph][1] - 5);
+      ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+    }
+
+    var pts = pointsOf(row, upto);
+    if (pulse.slide < 1 && days[pulse.from]) {
+      var old = pointsOf(days[pulse.from], upto);
+      pts = pts.map(function (p, i) {
+        var o = old[Math.min(i, old.length - 1)];
+        return [p[0], o[1] + (p[1] - o[1]) * pulse.slide];
+      });
+    }
+    var g = ctx.createLinearGradient(0, 0, 0, base);
+    g.addColorStop(0, accent); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath(); pulseWavePath(ctx, pts);
+    ctx.lineTo(pts[pts.length - 1][0], base); ctx.lineTo(pts[0][0], base); ctx.closePath();
+    ctx.fillStyle = g; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+    stroke(pts, accent, 1, 1.7);
+    if (pulse.view === pulse.today) {
+      var lastPt = pts[pts.length - 1];
+      ctx.beginPath();
+      ctx.arc(lastPt[0], lastPt[1], 2.4 + pulseBeat(now, hour) * 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = accent; ctx.fill();
+    }
+    ctx.fillStyle = muted; ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('00', 2, h - 1);
+    ctx.fillText('12', w / 2 - 6, h - 1);
+    ctx.fillText('23', w - 13, h - 1);
+  }
+
+  // Кадры крутим только когда дашборд реально виден: в мусхафе или тренажёре
+  // рисовать невидимый canvas — зря жечь батарею телефона.
+  var PULSE_REDUCED = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function pulseVisible() {
+    var dash = document.getElementById('dashboard');
+    return !document.hidden && dash && dash.style.display !== 'none' && pulse.data;
+  }
+  function pulseFrame(now) {
+    pulse.raf = 0;
+    if (!pulseVisible()) return;
+    pulseDrawHeart(now);
+    pulseDrawWave(now);
+    if (!PULSE_REDUCED) pulseStart();
+  }
+  function pulseStart() {
+    if (pulse.raf || !pulseVisible()) return;
+    pulse.raf = requestAnimationFrame(pulseFrame);
+  }
+
+  function pulseLoad() {
+    if (document.hidden) return;
+    apiCall('/pulse').then(function (res) {
+      if (res.status !== 200 || !res.data || !res.data.days) return;
+      pulseApply(res.data);
+      pulseHead();
+    }).catch(function (err) { console.error('pulse', err); });
+  }
+
+  (function pulseInit() {
+    document.getElementById('pulse-prev').onclick = function () { pulseGo(pulse.view - 1); };
+    document.getElementById('pulse-next').onclick = function () { pulseGo(pulse.view + 1); };
+    var wave = document.getElementById('pulse-wave'), x0 = null;
+    wave.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    wave.addEventListener('touchend', function (e) {
+      if (x0 === null) return;
+      var dx = e.changedTouches[0].clientX - x0; x0 = null;
+      if (Math.abs(dx) > 30) pulseGo(pulse.view + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { pulseStart(); pulseLoad(); }
+    });
+    setTimeout(pulseLoad, 0);
+    setInterval(pulseLoad, PULSE_REFRESH_MS);
+  })();
 
   // Дашборд YassirApp (28.08.2026/29.08.2026) - первый экран. "Мусхаф" и
   // "Тренажёр" оба теперь переключают вид ВНУТРИ этого же приложения (до
