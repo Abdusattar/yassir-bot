@@ -2235,7 +2235,7 @@
       subs_my_record: '▶ Моя запись',
       subs_retake: '🎙 Пересдать',
       subs_redo: 'Перезаписать',
-      subs_review_open: 'Разобрать',
+      subs_retake_do: 'Пересдать',
       subs_review_view: 'Посмотреть разбор',
       look_from: '%N% — замечание',
       look_from_ustaz: 'Замечание устаза',
@@ -5512,10 +5512,17 @@
        разные места: «Пересдать» включала запись, а посмотреть пометки при
        вердикте «принято» можно было только сделав вид, что идёшь
        пересдавать. Теперь дверь одна, а запись - шаг внутри неё. */
+    /* Вердикт «на пересдачу» - это работа, а не чтение: кнопка так и
+       называется и ведёт сразу к записи, где на листе уже стоят пометки
+       устаза, а его голос лежит свёрнутым в панели записи (07.09.2026,
+       замечание пользователя: «нужно пересдать, студент пересдаёт»).
+       Остальным разборам - «Посмотреть разбор»: там смотреть и слушать. */
     if (fromApp && hasReview) {
+      var retake = item.verdict === 'retake';
       html += '<div class="sub-actions" style="margin-top:6px">' +
-        '<button style="flex:1" class="sub-open" data-look="' + item.id + '">' +
-        T(item.verdict === 'retake' ? 'subs_review_open' : 'subs_review_view') +
+        '<button style="flex:1" class="' + (retake ? 'primary' : 'sub-open') + '" ' +
+        (retake ? 'data-retake="' : 'data-look="') + item.id + '">' +
+        T(retake ? 'subs_retake_do' : 'subs_review_view') +
         '</button></div>';
     }
     return html + '</div>';
@@ -5742,9 +5749,17 @@
       hifzApply();
       hifzHead();
     }
-    // Свёрнутый разбор в панели записи - только когда есть что слушать.
+    /* Свёрнутый разбор в панели записи - только когда есть что слушать.
+       Пересдачу открывают двумя дорогами: из экрана разбора (там запись уже
+       подгружена) и прямо из блока «нужно пересдать» - там её надо подцепить
+       здесь, иначе студент остался бы наедине с пометками, без голоса устаза
+       (07.09.2026). */
+    if (!fromLook && look.item !== item) {
+      lookFreeAudio();
+      look.item = item;
+    }
     var mini = document.getElementById('rec-review');
-    mini.classList.toggle('on', !!(item.has_review_audio && look.item === item));
+    mini.classList.toggle('on', !!item.has_review_audio);
     document.getElementById('rec-review-text').textContent = T('rec_review_text');
   }
 
