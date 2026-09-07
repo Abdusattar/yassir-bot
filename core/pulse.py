@@ -98,12 +98,22 @@ def _active_students(conn):
 
 
 def _last_action(conn):
-    """Локальное время последнего действия джамаата, ISO-строкой или None."""
+    """Локальное время последнего действия джамаата, ISO-строкой или None.
+
+    Обе выборки приводим к ОДНОМУ виду "ГГГГ-ММ-ДД ЧЧ:ММ:СС", потому что
+    сравниваем строками. score_events.created_at это UTC (см. память про
+    часовой пояс), его сдвигаем; voice_submissions.reviewed_at уже локальное,
+    но записано через isoformat() - с "T" и смещением "+06:00" на конце.
+    Без выравнивания "2026-09-07 21:55:33" оказывалось МЕНЬШЕ, чем
+    "2026-09-07T20:18:38+06:00" (пробел меньше буквы "T"), и экран писал
+    "тихо, последнее действие 50 минут назад" в тот момент, когда джамаат
+    сдавал (живой баг 07.09.2026)."""
     best = None
     for sql in (
         "SELECT MAX(datetime(created_at, '+%d hours')) FROM score_events"
         " WHERE category='task' AND date >= date('now', '-2 day')" % TZ_SHIFT,
-        "SELECT MAX(reviewed_at) FROM voice_submissions"
+        "SELECT MAX(substr(replace(reviewed_at, 'T', ' '), 1, 19))"
+        " FROM voice_submissions"
         " WHERE reviewed_at IS NOT NULL AND date >= date('now', '-2 day')",
     ):
         rows = _rows(conn, sql)

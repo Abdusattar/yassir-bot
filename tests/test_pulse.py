@@ -135,3 +135,32 @@ def test_cache_holds_between_calls(test_db, monkeypatch):
     assert second is first                  # минуту отдаём тот же ответ
     pulse._cache["at"] = 0.0
     assert pulse.get_pulse()["today"]["r"] == 1
+
+
+def test_свежая_сдача_важнее_старого_разбора(test_db, monkeypatch):
+    """«Тихо» считалось по строковому сравнению двух разных форматов времени:
+    score_events приходит как «2026-09-07 21:55:33», а reviewed_at — как
+    «2026-09-07T20:18:38+06:00». Пробел меньше буквы «T», поэтому старый
+    разбор побеждал свежую сдачу, и экран писал «тихо, 50 минут назад» в
+    момент, когда джамаат сдавал (живой баг 07.09.2026)."""
+    _fresh(monkeypatch, test_db)
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    today = db.get_date()
+
+    with db.db() as c:
+        # Разбор устаза — полтора часа назад, в своём формате (с «T»).
+        c.execute(
+            "INSERT INTO voice_submissions(student_id,group_id,chat_id,message_id,"
+            "date,sent_at,reviewed_at) VALUES(?,?,?,?,?,?,?)",
+            (sid, group["id"], CHAT, 1, today, today + "T20:00:00+06:00",
+             today + "T20:18:38.632620+06:00"))
+        # Сдача — только что, created_at в UTC (см. TZ_SHIFT).
+        c.execute(
+            "INSERT INTO score_events(student_id,group_id,date,category,"
+            "subcategory,points,created_at) VALUES(?,?,?,'task','m',1,?)",
+            (sid, group["id"], today, today + " 15:55:33"))
+
+    with db.db() as c:
+        latest = pulse._last_action(c)
+    assert latest.startswith(today + " 21:55")
