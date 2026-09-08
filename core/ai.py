@@ -15,6 +15,7 @@ def _model_for_lang(lang: str) -> str:
     return _LANG_MODEL.get(lang, AI_MODEL)
 from core.i18n import lang_instruction
 from core.db import get_student_memory, save_chat
+from core import nasiha_bank
 from core.content import PROJECT_INFO
 
 log = logging.getLogger(__name__)
@@ -216,6 +217,18 @@ async def parse_report(text, group_tasks):
 
 # ── ИИ-проверка отчёта ────────────────────────────────────────────────────────
 
+async def _keep(kind, prompt, lang="ru", *, name=None, gtype=None, bucket=None,
+                system=None, model=None, max_tokens=1024):
+    """Сгенерировать насыху и положить её в банк (08.09.2026).
+
+    Копилка на будущее: сейчас каждый такой текст стоит отдельного вызова ИИ
+    и живёт ровно одну отправку. Когда наберётся месяц материала, выдача
+    пойдёт из банка (см. core/nasiha_bank.py) - там же и причины."""
+    text = await ask_ai(prompt, system=system or _MOTIVATIONAL_SYSTEM,
+                        model=model or _model_for_lang(lang), max_tokens=max_tokens)
+    nasiha_bank.save(kind, text, lang=lang, gtype=gtype, bucket=bucket, name=name)
+    return text
+
 async def check_report(name, tasks_done, lang="ru", hadith=None, ayah=None):
     all_done = len(tasks_done) >= 3
     source_block = await _build_source_block(hadith, ayah, lang)
@@ -232,7 +245,7 @@ async def check_report(name, tasks_done, lang="ru", hadith=None, ayah=None):
         + ("say they completed everything." if all_done else "gently encourage to finish.") + "\n"
         + lang_instruction(lang) + " Total: 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("report_praise", prompt, lang, name=name)
 
 
 async def answer_question(question, program_info, group_title, phone=None, group_id=None, student_name="", is_ustaz=False):
@@ -373,7 +386,8 @@ async def reminder(name, missed_tasks, day, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang)) or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah."
+    return (await _keep("reminder", prompt, lang, name=name)
+            or "📖 Assalamu alaykum, " + name + "! Don't forget to submit your report, inshAllah.")
 
 
 async def _get_hadith_translation(hadith: dict, lang: str) -> str:
@@ -508,7 +522,7 @@ async def group_motivation(missing_names, group_title, lang="ru",
         + ("- Обратиться к студентам по именам и призвать сдать сегодня.\n" if names_str else "")
         + lang_instruction(lang) + " Длина: 5-7 строк."
     )
-    return await ask_ai(prompt, system=system, model=_model_for_lang(lang))
+    return await _keep("group_motivation", prompt, lang, system=system)
 
 
 # ── Закрывающие строки по языкам (добавляются механически после base-текста) ──
@@ -602,7 +616,8 @@ async def group_motivation_base(lang: str, gtype: str,
         "- Завершай мягким общим напоминанием, без призыва по именам.\n"
         + lang_instruction(lang) + " Длина: 4-6 строк."
     )
-    return await ask_ai(prompt, system=system, model=model or _model_for_lang(lang), max_tokens=max_tokens)
+    return await _keep("group_base", prompt, lang, gtype=gtype, system=system,
+                       model=model or _model_for_lang(lang), max_tokens=max_tokens)
 
 
 async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah=None):
@@ -617,7 +632,7 @@ async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah
         + "a dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("streak", prompt, lang, name=name, bucket=str(streak_days))
 
 
 async def praise_completed(name, lang="ru", hadith=None, ayah=None):
@@ -631,7 +646,7 @@ async def praise_completed(name, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: joyful, sincere. Length: 4-6 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("completed", prompt, lang, name=name)
 
 
 async def morning_miss_nasiha(lang="ru", hadith=None, ayah=None):
@@ -645,7 +660,7 @@ async def morning_miss_nasiha(lang="ru", hadith=None, ayah=None):
         + "end with a brief dua. No names, no blame, no guilt.\n"
         + lang_instruction(lang) + " Tone: very soft. 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("morning_miss", prompt, lang)
 
 
 async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
@@ -660,7 +675,8 @@ async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: kind, no blame. 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("absent", prompt, lang, name=name,
+                       bucket=nasiha_bank.days_bucket(days))
 
 
 async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah=None):
@@ -675,7 +691,7 @@ async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah
         + "a brief dua.\n"
         + lang_instruction(lang) + " Short and warm: 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("winner", prompt, lang, name=name, bucket=period_label)
 
 
 async def group_praise(names, lang="ru", hadith=None, ayah=None):
@@ -690,7 +706,7 @@ async def group_praise(names, lang="ru", hadith=None, ayah=None):
         + "a dua for all.\n"
         + lang_instruction(lang) + " Tone: inspiring. Length: 5-7 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("group_praise", prompt, lang)
 
 
 async def warning_skips(name, skip_count, transfer_limit, lang="ru", hadith=None, ayah=None, is_pro=False):
@@ -711,7 +727,9 @@ async def warning_skips(name, skip_count, transfer_limit, lang="ru", hadith=None
         + "a short call to return.\n"
         + lang_instruction(lang) + " Tone: clear and kind, not harsh. 3-4 lines."
     )
-    return await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    return await _keep("skips", prompt, lang, name=name,
+                       gtype="pro" if is_pro else "relaxed",
+                       bucket=nasiha_bank.skips_bucket(skip_count, transfer_limit))
 
 
 async def ask_admin_improvement(groups):
@@ -734,7 +752,9 @@ async def mystats_comment(name, streak, rank, total_score, days_done, lang="ru")
         "1 sentence of encouragement + 1 dua.\n"
         + lang_instruction(lang) + " Length: 2-3 lines."
     )
-    return await ask_ai(prompt)
+    text = await ask_ai(prompt)
+    nasiha_bank.save("mystats", text, lang=lang, name=name)
+    return text
 
 
 # «ИИ не ответил» - это НЕ «ИИ сказал, что это не имя» (08.09.2026). Пока
@@ -921,6 +941,7 @@ async def morning_report_intro(hadith=None, ayah=None) -> str | None:
     result = await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_NASIHA_MODEL, max_tokens=1600)
     if result:
         result = result.strip().strip('"').rstrip(" ·")
+    nasiha_bank.save("tadabbur_morning", result)
     return result
 
 
@@ -932,6 +953,7 @@ async def daily_tadabbur_post() -> str | None:
     result = await ask_ai(prompt, system=_TADABBUR_POST_SYSTEM, model=_NASIHA_MODEL, max_tokens=1600)
     if result:
         result = result.rstrip(" ·").strip()
+    nasiha_bank.save("tadabbur_post", result)
     return result
 
 
@@ -974,4 +996,5 @@ async def daily_nasiha(hadith=None, ayah=None) -> str | None:
     result = await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_NASIHA_MODEL, max_tokens=1600)
     if result:
         result = result.rstrip(" ·").strip()
+    nasiha_bank.save("tadabbur_nasiha", result)
     return result
