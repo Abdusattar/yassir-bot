@@ -58,7 +58,13 @@ from aiohttp import web                   # noqa: E402
 
 PORT = 8799
 STUDENT = "777001"
+# Тот же id, которым проставлены вердикты в seed_submissions: устаз должен
+# видеть в «Проверено» СВОЙ разбор, а не чужой.
+USTAZ = "888002"
 CHAT = "-100999001"
+# Вторая группа того же устаза: в кабинете должны быть видны вкладки групп -
+# у Умара устаза их четыре, и «где переключить группу» это первый вопрос.
+CHAT2 = "-100999002"
 SHOTS = ROOT / "mushaf_data" / "onboarding"
 SHOT_WIDTH = 520          # ширина итогового jpg; на экране он ~300 CSS-пикселей
 # 72 давало ~800 КБ на набор: лист Аль-Бакары плотнее Фатихи, и вес вырос
@@ -66,10 +72,14 @@ SHOT_WIDTH = 520          # ширина итогового jpg; на экран
 SHOT_QUALITY = 65
 
 # Сцена -> имя файла. Порядок тот же, что в LEARN (mushaf_data/index.html).
+# Сцены на "u_" снимаются под аккаунтом устаза (см. USTAZ и /frame?as=ustaz):
+# у студента этих экранов нет вообще.
 SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs", "look",
           "read", "bookmark", "revision", "revision_ask",
           "trainer_start", "trainer_q", "trainer_daily", "trainer_range", "trainer_answer",
-          "word_tap", "word_add", "mywords"]
+          "word_tap", "word_add", "mywords",
+          "u_door", "u_queue", "u_open", "u_marks", "u_comment", "u_verdict",
+          "u_done", "u_students"]
 
 CHROME_CANDIDATES = [
     os.environ.get("CHROME"),
@@ -99,6 +109,20 @@ def seed():
     group = db.get_group(CHAT)
     if not db.find_user_by_phone(STUDENT):
         db.add_student("Абдулла", group["id"], phone=STUDENT)
+    if not db.get_group(CHAT2):
+        db.save_group(CHAT2, "N-2a", tasks="m,r,t")
+    group2 = db.get_group(CHAT2)
+    for name, phone, grp in (("Хамза", "777002", group), ("Ибрахим", "777003", group),
+                             ("Юсуф", "777004", group2), ("Билял", "777005", group2)):
+        if not db.find_user_by_phone(phone):
+            db.add_student(name, grp["id"], phone=phone)
+    # Устаз этих групп - под ним снимаются сцены "u_*". Имя нужно:
+    # в зоне «Проверено» стоит подпись «разобрал ...».
+    if not db.find_user_by_phone(USTAZ):
+        db.add_group_admin(group["id"], USTAZ)
+        db.add_group_admin(group2["id"], USTAZ)
+        with sqlite3.connect(db.DB) as conn:
+            conn.execute("UPDATE users SET name='Устаз' WHERE phone=?", (USTAZ,))
     return group
 
 
@@ -122,10 +146,20 @@ def seed_submissions():
         if verdict:
             db.save_submission_review(CHAT, msg_id, "voice",
                                       review_file_id="rev%d" % msg_id,
-                                      review_by="888002")
+                                      review_by=USTAZ)
             sub = [r for r in db.get_student_submissions(user["id"])
                    if r["hifz_line"] == line][0]
-            db.set_submission_verdict(sub["id"], verdict, "888002", words)
+            db.set_submission_verdict(sub["id"], verdict, USTAZ, words)
+    # Ещё две сдачи в очередь - у устаза она никогда не из одной строки, а
+    # своя группа должна открываться первой (ustazDefaultGroup: где больше ждут).
+    for phone, chat, msg_id, page, line, stage in (
+            ("777002", CHAT, 111, 4, 0, 1),
+            ("777004", CHAT2, 112, 5, 0, 2)):
+        other = db.find_user_by_phone(phone)
+        if other and not db.get_student_submissions(other["id"]):
+            db.save_voice_submission(other["id"], db.get_group(chat)["id"], chat,
+                                     msg_id, today, file_id="dev%d" % msg_id,
+                                     hifz_page=page, hifz_line=line, hifz_stage=stage)
 
 
 def set_state(mode):
@@ -155,7 +189,7 @@ def set_state(mode):
 
 TELEGRAM_STUB = (
     "<script>window.Telegram={WebApp:{initData:'%s',"
-    "initDataUnsafe:{user:{id:%s,first_name:'Абдулла'}},"
+    "initDataUnsafe:{user:{id:%s,first_name:'%s'}},"
     "colorScheme:'light',themeParams:{},"
     "ready:function(){},expand:function(){},close:function(){},"
     "onEvent:function(){},offEvent:function(){},"
@@ -164,7 +198,7 @@ TELEGRAM_STUB = (
     "MainButton:{show:function(){},hide:function(){},setText:function(){},"
     "onClick:function(){},offClick:function(){}},"
     "BackButton:{show:function(){},hide:function(){},onClick:function(){},"
-    "offClick:function(){}}}};</script>" % (STUDENT, STUDENT)
+    "offClick:function(){}}}};</script>"
 )
 
 SCENE_SCRIPT = """
@@ -191,6 +225,26 @@ SCENE_SCRIPT = """
   };
   var state = function (mode) { return fetch('/dev/state?mode=' + mode).then(function (r) { return r.json(); }); };
   var line = function (i) { return document.querySelectorAll('#ayah-text .mushaf-line')[i]; };
+
+  // Единственная ждущая сдача стенда (стр. 3, строчка 3) - через неё
+  // снимается весь разбор.
+  var openWaiting = async function () {
+    $('dash-ustaz').click(); await wait(1900);
+    // Именно сдача Абдуллы (стр. 3, строчка 4): пометки ниже ставятся в его
+    // строку, а не в соседнюю - устаз отмечает то место, что слушает.
+    var row = Array.prototype.filter.call(
+      document.querySelectorAll('[data-review]'),
+      function (el) { return el.textContent.indexOf('Абдулла') >= 0; })[0];
+    if (!row) throw new Error('сдача Абдуллы не в очереди - проверь seed_submissions');
+    row.click(); await wait(2200);
+  };
+
+  // Тап по слову в режиме проверки = пометка ошибки (см. showWordPopup).
+  var markWord = function (ln, idx) {
+    var row = document.querySelector('#ayah-text .mushaf-line[data-line="' + ln + '"]');
+    if (!row || !row.children[idx]) throw new Error('нет слова ' + ln + ':' + idx);
+    row.children[idx].click();
+  };
 
   // Мусхаф открывается на Фатихе, а её лист короткий - половина снимка
   // выходит пустой, и всё важное на нём мелкое. Уходим на полный лист
@@ -349,6 +403,38 @@ SCENE_SCRIPT = """
       await wait(1200);
     },
 
+    // --- кабинет устаза (снимается под другим аккаунтом) ---
+    u_door: async function () { spot('#dash-ustaz'); },
+
+    u_queue: async function () { $('dash-ustaz').click(); await wait(1900); },
+
+    u_open: async function () { await openWaiting(); spot('#review-play'); },
+
+    u_marks: async function () {
+      await openWaiting();
+      markWord(3, 2); markWord(3, 6);
+      await wait(500);
+    },
+
+    u_comment: async function () { await openWaiting(); spot('#review-comment'); },
+
+    u_verdict: async function () {
+      await openWaiting();
+      markWord(3, 2);
+      spot('#review-foot .row:last-child');
+      await wait(400);
+    },
+
+    u_done: async function () {
+      $('dash-ustaz').click(); await wait(1900);
+      document.querySelector('.ustaz-zones [data-zone="done"]').click(); await wait(1700);
+    },
+
+    u_students: async function () {
+      $('dash-ustaz').click(); await wait(1900);
+      document.querySelector('.ustaz-zones [data-zone="students"]').click(); await wait(2000);
+    },
+
     learn: async function () { $('dash-learn').click(); await wait(800); },
 
     learn_step1: async function () {
@@ -381,11 +467,11 @@ SCENE_SCRIPT = """
 """ % STUDENT
 
 
-def dev_index():
+def dev_index(user_id=STUDENT, name="Абдулла"):
     html = (ROOT / "mushaf_data" / "index.html").read_text(encoding="utf-8")
     tag = '<script src="https://telegram.org/js/telegram-web-app.js"></script>'
     assert tag in html, "SDK Telegram больше не подключается так — поправь заглушку"
-    html = html.replace(tag, TELEGRAM_STUB, 1)
+    html = html.replace(tag, TELEGRAM_STUB % (user_id, user_id, name), 1)
     api_base = "return '/api/muf/' + profile;"
     assert api_base in html, "apiBase() изменился — стенду нужен путь без профиля"
     html = html.replace(api_base, "return '/api/muf';", 1)
@@ -396,10 +482,11 @@ def build_app():
     seed()
     seed_submissions()
     app = api.build_app()
-    index_html = dev_index()
+    pages = {"student": dev_index(), "ustaz": dev_index(USTAZ, "Устаз")}
 
     async def index(request):
-        return web.Response(text=index_html, content_type="text/html")
+        who = "ustaz" if request.query.get("as") == "ustaz" else "student"
+        return web.Response(text=pages[who], content_type="text/html")
 
     async def state(request):
         set_state(request.query.get("mode", "fresh"))
@@ -411,6 +498,8 @@ def build_app():
         src = "/?bot=male"
         if request.query.get("scene"):
             src += "&scene=" + request.query["scene"]
+        if request.query.get("as"):
+            src += "&as=" + request.query["as"]
         return web.Response(content_type="text/html", text=(
             "<style>html,body{margin:0;background:#fff}"
             "iframe{border:0;display:block;width:%spx;height:%spx}</style>"
@@ -425,18 +514,21 @@ def build_app():
 
 # ─── съёмка ───────────────────────────────────────────────────────────────
 
-def shoot(chrome, out_dir):
+def shoot(chrome, out_dir, only=None):
     from PIL import Image
 
     SHOTS.mkdir(exist_ok=True)
     total = 0
     for scene in SCENES:
+        if only and scene not in only:
+            continue
         png = out_dir / ("%s.png" % scene)
+        who = "&as=ustaz" if scene.startswith("u_") else ""
         subprocess.run([
             chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
             "--window-size=390,844", "--virtual-time-budget=17000",
             "--screenshot=%s" % png,
-            "http://127.0.0.1:%d/frame?w=390&h=844&scene=%s" % (PORT, scene),
+            "http://127.0.0.1:%d/frame?w=390&h=844&scene=%s%s" % (PORT, scene, who),
         ], check=True, capture_output=True)
         if not png.exists():
             raise SystemExit("сцена %s не снялась" % scene)
@@ -453,6 +545,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true",
                         help="только поднять стенд (открывать /frame?scene=...)")
+    parser.add_argument("--only", default="",
+                        help="снять только эти сцены через запятую")
     args = parser.parse_args()
 
     app = build_app()
@@ -468,8 +562,12 @@ def main():
         daemon=True)
     runner.start()
     time.sleep(3)
+    only = [s.strip() for s in args.only.split(",") if s.strip()]
+    unknown = [s for s in only if s not in SCENES]
+    if unknown:
+        raise SystemExit("нет таких сцен: %s" % ", ".join(unknown))
     with tempfile.TemporaryDirectory() as tmp:
-        shoot(chrome, pathlib.Path(tmp))
+        shoot(chrome, pathlib.Path(tmp), only)
 
 
 if __name__ == "__main__":
