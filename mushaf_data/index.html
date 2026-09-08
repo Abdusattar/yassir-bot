@@ -727,6 +727,13 @@
   #page-nav button.page-nav-util {
     font-size: 16px; padding: 8px 9px; direction: ltr;
   }
+  /* 🔖 «Сохранить закладку» - единственная кнопка полосы, которая ПИШЕТ:
+     случайный тап при листании перезапишет место, куда студент вернётся
+     завтра. Её и отодвигаем от остальных (08.09.2026, просьба пользователя);
+     « «К закладке» остаётся в навигационной группе - она просто переносит.
+     Отступ логический: полоса живёт в rtl, margin-left увёл бы его не в ту
+     сторону - проверено скриншотом. */
+  #btn-bookmark-go { margin-inline-start: 16px; }
   #page-indicator {
     font-size: 13px; color: var(--muted);
     cursor: pointer; padding: 4px 10px; border-radius: 8px;
@@ -1511,6 +1518,7 @@
     font: inherit; font-size: 12.5px; font-weight: 600;
     background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 2px;
   }
+  #learn-body > .learn-lead, #learn-body > .learn-item { max-width: 520px; width: 100%; align-self: center; }
   #learn-body {
     flex: 1 1 auto; min-height: 0; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -1539,21 +1547,46 @@
     border: 1px solid var(--card-border); border-radius: 15px; overflow: hidden;
     background: var(--card-bg); align-self: center; max-width: 100%;
   }
-  /* Картинка не должна съедать экран: под ней ещё заголовок и объяснение,
-     а ниже - точки и кнопки. Держим её в пределах половины высоты, ширину
-     считает браузер (снимок вертикальный). */
+  /* Снимок - главное на шаге: по нему видно, куда нажимать. Даём ему всю
+     ширину и до двух третей высоты (08.09.2026: при половине экрана мелко,
+     жалоба пользователя). Не влезло - шаг прокручивается, а тап по снимку
+     открывает его во весь экран. */
+  #learn-step .shot { cursor: zoom-in; }
+  /* На маленьком экране снимок неизбежно мелкий - подсказываем, что его
+     можно открыть целиком; сам по себе тап никто не угадает. */
+  .learn-zoomhint { font-size: 11.5px; color: var(--muted); text-align: center; margin: -4px 0 0; }
   #learn-step .shot img {
-    display: block; width: auto; max-width: 100%; max-height: 56vh;
+    display: block; width: 100%; max-width: 100%; max-height: 66vh;
+    object-fit: contain;
   }
-  #learn-step h3 { margin: 0; font-size: 15.5px; font-weight: 650; text-wrap: balance; }
-  #learn-step p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+  /* Короткий экран (старый Android, 640 точек): при 66vh под снимком не
+     остаётся места объяснению - оно обрезается на середине фразы. */
+  @media (max-height: 720px) {
+    #learn-step .shot img { max-height: 44vh; }
+  }
+  /* Снимок во весь экран - поверх всего, тап в любом месте закрывает. */
+  #learn-zoom {
+    display: none; position: fixed; inset: 0; z-index: 60;
+    background: rgba(20, 16, 8, .92);
+    align-items: center; justify-content: center; padding: 12px;
+    cursor: zoom-out;
+  }
+  #learn-zoom.visible { display: flex; }
+  #learn-zoom img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+  #learn-step { max-width: 520px; width: 100%; align-self: center; }
+  #learn-step h3 {
+    margin: 0; font-size: clamp(15.5px, 4.4vw, 19px); font-weight: 650; text-wrap: balance;
+  }
+  #learn-step p {
+    margin: 0; font-size: clamp(13.5px, 3.8vw, 16px); line-height: 1.55; color: var(--ink);
+  }
   #learn-foot { flex: 0 0 auto; padding: 0 16px 16px; direction: ltr; }
   #learn-dots { display: flex; gap: 5px; justify-content: center; margin: 0 0 10px; }
   #learn-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--card-border); display: block; }
   #learn-dots i.on { background: var(--ok); width: 16px; border-radius: 3px; }
-  #learn-buttons { display: flex; gap: 8px; }
+  #learn-buttons { display: flex; gap: 8px; max-width: 520px; width: 100%; margin: 0 auto; }
   #learn-buttons button {
-    flex: 1; font: inherit; font-size: 13.5px; padding: 11px 10px; border-radius: 11px;
+    flex: 1; font: inherit; font-size: clamp(13px, 3.7vw, 15px); padding: 11px 10px; border-radius: 11px;
     border: 1px solid var(--card-border); background: var(--card-bg); color: var(--muted);
     cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
@@ -2377,6 +2410,7 @@
     <span id="learn-title" data-i18n="learn_title">Как учимся</span>
   </div>
   <div id="learn-body"></div>
+  <div id="learn-zoom"><img alt=""></div>
   <div id="learn-foot" style="display:none">
     <div id="learn-dots"></div>
     <div id="learn-buttons">
@@ -2434,6 +2468,7 @@
       learn_read: 'прочитано',
       learn_of: '%N% из %M%',
       learn_soon: 'скоро',
+      learn_zoom: 'нажми на снимок, чтобы рассмотреть',
       dash_subs: 'Работа с устазом',
       dash_subs_sub: 'Мои записи, разбор и пересдача',
       subs_title: 'Работа с устазом',
@@ -6337,7 +6372,20 @@
          'Открывается кнопкой «Разбор устаза». Розовым отмечены слова, где была ошибка, внизу — его голос и «↺ 10 сек назад», если не расслышал. Заходить стоит и когда приняли: пометки там тоже есть. Кнопка «Пересдать» записывает то же место заново — и как только запись ушла, дорога снова открыта, ждать ответа не надо.']
       ]
     },
-    { id: 'revision', mark: '🔁', name: 'Повторение', desc: 'Что читать каждый день', steps: [] },
+    {
+      id: 'revision', mark: '🔁', name: 'Повторение',
+      desc: 'Что читать каждый день',
+      steps: [
+        ['read', 'Читаешь всё, что уже выучил',
+         'Повторение — это не вчерашняя строчка. Каждый день перечитываешь с начала суры Аль-Бакара до места, где остановился. Кнопка » в полосе страниц открывает её начало сразу. Забыл — подглядывай в текст, это не экзамен: цель — освежить, а не проверить себя.'],
+        ['bookmark', 'Закладка помнит, где ты',
+         '🔖 сохраняет страницу, на которой закончил, а « возвращает к ней. Рядом » — начало Аль-Бакары, откуда повторение начинается. Полоса страниц читается справа налево: 🔖 « ‹ стр. N › ».'],
+        ['revision', 'Прочитал — нажми 🔁',
+         'Кнопка стоит рядом с 📖, на странице чтения. Это то же самое, что написать «повторил» в группу, только без набора текста.'],
+        ['revision_ask', 'Подтверди — и готово',
+         'Приложение переспросит: случайный тап не должен закрывать задание. Ответил «Да» — повторение за сегодня засчитано, а в группу уйдёт отметка. Второй раз за день жать не нужно, скажет, что уже засчитано.']
+      ]
+    },
     { id: 'words', mark: '\u0646', name: 'Слова и тренажёр', desc: 'Муфрадат, «Мои слова»', steps: [] }
   ];
 
@@ -6398,6 +6446,7 @@
     body.innerHTML =
       '<div id="learn-step">' +
       '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
+      '<p class="learn-zoomhint">' + T('learn_zoom') + '</p>' +
       '<h3>' + s[1] + '</h3><p>' + s[2] + '</p></div>';
     body.scrollTop = 0;
     var dots = '';
@@ -6406,6 +6455,12 @@
     document.getElementById('learn-prev').style.display = step ? '' : 'none';
     document.getElementById('learn-next').textContent = last ? T('learn_done') : T('learn_next');
     document.getElementById('learn-foot').style.display = '';
+    // Мелкий шрифт на снимке не прочитать - по тапу показываем его целиком.
+    body.querySelector('.shot').addEventListener('click', function () {
+      var zoom = document.getElementById('learn-zoom');
+      zoom.querySelector('img').src = 'onboarding/' + s[0] + '.jpg';
+      zoom.classList.add('visible');
+    });
     if (last) learnMarkDone(sec.id);
   }
 
@@ -6426,6 +6481,9 @@
   }
 
   document.getElementById('dash-learn').addEventListener('click', openLearn);
+  document.getElementById('learn-zoom').addEventListener('click', function () {
+    this.classList.remove('visible');
+  });
   document.getElementById('learn-prev').addEventListener('click', function () { learnStepBy(-1); });
   document.getElementById('learn-next').addEventListener('click', function () { learnStepBy(1); });
   document.getElementById('learn-back').addEventListener('click', function () {

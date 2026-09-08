@@ -52,11 +52,14 @@ PORT = 8799
 STUDENT = "777001"
 CHAT = "-100999001"
 SHOTS = ROOT / "mushaf_data" / "onboarding"
-SHOT_WIDTH = 540          # ширина итогового jpg; на экране он ~300 CSS-пикселей
-SHOT_QUALITY = 72
+SHOT_WIDTH = 520          # ширина итогового jpg; на экране он ~300 CSS-пикселей
+# 72 давало ~800 КБ на набор: лист Аль-Бакары плотнее Фатихи, и вес вырос
+# вдвое. Студенты сидят на мобильном интернете - держим набор в ~500 КБ.
+SHOT_QUALITY = 65
 
 # Сцена -> имя файла. Порядок тот же, что в LEARN (mushaf_data/index.html).
-SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs", "look"]
+SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs", "look",
+          "read", "bookmark", "revision", "revision_ask"]
 
 CHROME_CANDIDATES = [
     os.environ.get("CHROME"),
@@ -169,23 +172,34 @@ SCENE_SCRIPT = """
   var state = function (mode) { return fetch('/dev/state?mode=' + mode).then(function (r) { return r.json(); }); };
   var line = function (i) { return document.querySelectorAll('#ayah-text .mushaf-line')[i]; };
 
+  // Мусхаф открывается на Фатихе, а её лист короткий - половина снимка
+  // выходит пустой, и всё важное на нём мелкое. Уходим на полный лист
+  // Аль-Бакары: там страница заполнена, как у настоящего студента.
+  var goFullPage = async function () {
+    $('btn-go-baqara').click(); await wait(1400);      // стр. 2, начало Бакары
+    $('btn-prev').click(); await wait(1300);           // стр. 3 - лист целиком
+  };
+
   var scenes = {
     dash: async function () { spot('#dash-mushaf'); },
 
     mushaf: async function () {
       await state('fresh');
-      $('dash-mushaf').click(); await wait(1500); spot('#btn-hifz');
+      $('dash-mushaf').click(); await wait(1500);
+      await goFullPage(); spot('#btn-hifz');
     },
 
     pick: async function () {
       await state('fresh');
       $('dash-mushaf').click(); await wait(1500);
+      await goFullPage();
       $('btn-hifz').click(); await wait(900);
     },
 
     pointer: async function () {
       await state('fresh');
       $('dash-mushaf').click(); await wait(1500);
+      await goFullPage();
       $('btn-hifz').click(); await wait(900);
       line(1).click(); await wait(900);
       spot('#hifz-foot');
@@ -194,6 +208,7 @@ SCENE_SCRIPT = """
     big: async function () {
       await state('fresh');
       $('dash-mushaf').click(); await wait(1500);
+      await goFullPage();
       $('btn-hifz').click(); await wait(900);
       line(1).click(); await wait(700);
       $('hifz-big-btn').click(); await wait(900);
@@ -202,6 +217,7 @@ SCENE_SCRIPT = """
     rec: async function () {
       await state('fresh');
       $('dash-mushaf').click(); await wait(1500);
+      await goFullPage();
       $('btn-hifz').click(); await wait(900);
       line(1).click(); await wait(700);
       $('hifz-submit').click(); await wait(900);
@@ -212,6 +228,7 @@ SCENE_SCRIPT = """
     progress: async function () {
       await state('stage2');
       $('dash-mushaf').click(); await wait(1500);
+      await goFullPage();
       $('btn-hifz').click(); await wait(1000);
       $('hifz-submit').click(); await wait(700);
       $('hifz-rec-actions').style.display = 'none';
@@ -224,6 +241,32 @@ SCENE_SCRIPT = """
 
     subs: async function () { $('dash-subs').click(); await wait(1800); },
 
+    // --- повторение ---
+    // Повторение идёт с начала Аль-Бакары - показываем её начало, а не
+    // Фатиху, на которой мусхаф открывается по умолчанию.
+    read: async function () {
+      $('dash-mushaf').click(); await wait(1600);
+      $('btn-go-baqara').click(); await wait(1400);
+    },
+
+    bookmark: async function () {
+      $('dash-mushaf').click(); await wait(1600);
+      await goFullPage();
+      spot('#btn-bookmark-save');
+    },
+
+    revision: async function () {
+      $('dash-mushaf').click(); await wait(1600);
+      await goFullPage();
+      spot('#btn-revision');
+    },
+
+    revision_ask: async function () {
+      $('dash-mushaf').click(); await wait(1600);
+      await goFullPage();
+      $('btn-revision').click(); await wait(800);
+    },
+
     look: async function () {
       $('dash-subs').click(); await wait(1800);
       var b = document.querySelector('[data-look]');
@@ -231,6 +274,16 @@ SCENE_SCRIPT = """
     },
 
     learn: async function () { $('dash-learn').click(); await wait(800); },
+
+    learn_step1: async function () {
+      $('dash-learn').click(); await wait(800);
+      document.querySelector('[data-sec="0"]').click(); await wait(1200);
+    },
+
+    learn_revision: async function () {
+      $('dash-learn').click(); await wait(800);
+      document.querySelector('[data-sec="2"]').click(); await wait(1200);
+    },
 
     learn_step: async function () {
       $('dash-learn').click(); await wait(800);
