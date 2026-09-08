@@ -1485,6 +1485,81 @@
     font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
     font-family: inherit;
   }
+  /* Раздел «Как учимся» (08.09.2026) - объяснение по шагам, экран за
+     экраном. Вход - оглавление разделов: сдача заучивания и разбор устаза
+     разведены намеренно, это разные места и разные моменты. Внутри раздела
+     один шаг на экран (решение пользователя): онбординг читают один раз и
+     тогда, когда растерялись, - там важнее довести до конца, чем дать
+     быстрый доступ; за возврат отвечает оглавление. */
+  #learn {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  #learn-topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    direction: ltr; flex: 0 0 auto;
+  }
+  #learn-topbar button {
+    font: inherit; font-size: 12.5px; font-weight: 600;
+    background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 2px;
+  }
+  #learn-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  .learn-lead { font-size: 12.5px; color: var(--muted); margin: 0 2px 4px; }
+  .learn-item {
+    display: flex; gap: 11px; align-items: flex-start; text-align: left;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 15px; padding: 12px 13px; font: inherit; color: var(--ink);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .learn-item .mk { font-size: 17px; color: var(--muted); line-height: 1.2; flex: 0 0 auto; }
+  .learn-item .nm { font-size: 14px; font-weight: 640; display: block; }
+  .learn-item .ds { font-size: 11.5px; color: var(--muted); display: block; margin-top: 2px; }
+  .learn-item .cnt { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; flex: 0 0 auto; }
+  .learn-item .cnt.done { color: var(--ok); }
+  /* Шаг: картинка сверху, под ней текст, внизу точки и кнопки. Картинка -
+     реальный экран приложения, снятый скриптом (scripts/shoot_onboarding.py),
+     поэтому «где нажимать» видно без слов. */
+  #learn-step { display: flex; flex-direction: column; gap: 12px; }
+  #learn-step .shot {
+    border: 1px solid var(--card-border); border-radius: 15px; overflow: hidden;
+    background: var(--card-bg); align-self: center; max-width: 100%;
+  }
+  /* Картинка не должна съедать экран: под ней ещё заголовок и объяснение,
+     а ниже - точки и кнопки. Держим её в пределах половины высоты, ширину
+     считает браузер (снимок вертикальный). */
+  #learn-step .shot img {
+    display: block; width: auto; max-width: 100%; max-height: 56vh;
+  }
+  #learn-step h3 { margin: 0; font-size: 15.5px; font-weight: 650; text-wrap: balance; }
+  #learn-step p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+  #learn-foot { flex: 0 0 auto; padding: 0 16px 16px; direction: ltr; }
+  #learn-dots { display: flex; gap: 5px; justify-content: center; margin: 0 0 10px; }
+  #learn-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--card-border); display: block; }
+  #learn-dots i.on { background: var(--ok); width: 16px; border-radius: 3px; }
+  #learn-buttons { display: flex; gap: 8px; }
+  #learn-buttons button {
+    flex: 1; font: inherit; font-size: 13.5px; padding: 11px 10px; border-radius: 11px;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--muted);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #learn-buttons button.go {
+    flex: 2; background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 600;
+  }
   #subs-body {
     flex: 1 1 auto; min-height: 0; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -2004,7 +2079,7 @@
        непонятно, куда потом смотреть). -->
   <div class="dash-row" id="dash-subs" tabindex="0" role="button">
     <span class="mark">◴</span>
-    <span class="text"><span class="label" data-i18n="dash_subs">Заучивания</span><span class="sub" id="dash-subs-sub" data-i18n="dash_subs_sub">Мои записи и ответ устаза</span></span>
+    <span class="text"><span class="label" data-i18n="dash_subs">Работа с устазом</span><span class="sub" id="dash-subs-sub" data-i18n="dash_subs_sub">Мои записи, разбор и пересдача</span></span>
     <span class="badge" id="dash-subs-count" style="display:none"></span>
   </div>
   <div class="dash-row" id="dash-mushaf" tabindex="0" role="button">
@@ -2023,6 +2098,13 @@
   <div class="dash-row" id="dash-trainer" tabindex="0" role="button">
     <span class="mark">ن</span>
     <span class="text"><span class="label" data-i18n="dash_trainer">Тренажёр</span><span class="sub" id="dash-trainer-sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</span></span>
+  </div>
+  <!-- «Как учимся» (08.09.2026): объяснение по шагам на снимках самого
+       приложения. Видна всем, не только новичку - за правилами возвращаются
+       и через полгода. -->
+  <div class="dash-row" id="dash-learn" tabindex="0" role="button">
+    <span class="mark">✎</span>
+    <span class="text"><span class="label" data-i18n="dash_learn">Как учимся</span><span class="sub" data-i18n="dash_learn_sub">Повторение, муфрадат, заучивание</span></span>
   </div>
   </div>
 </div>
@@ -2284,9 +2366,24 @@
 <div id="subs">
   <div id="subs-topbar">
     <button id="subs-back" data-i18n="back_dashboard">← Дашборд</button>
-    <span data-i18n="subs_title">Заучивания</span>
+    <span data-i18n="subs_title">Работа с устазом</span>
   </div>
   <div id="subs-body"></div>
+</div>
+
+<div id="learn">
+  <div id="learn-topbar">
+    <button id="learn-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span id="learn-title" data-i18n="learn_title">Как учимся</span>
+  </div>
+  <div id="learn-body"></div>
+  <div id="learn-foot" style="display:none">
+    <div id="learn-dots"></div>
+    <div id="learn-buttons">
+      <button id="learn-prev" data-i18n="learn_prev">Назад</button>
+      <button id="learn-next" class="go" data-i18n="learn_next">Дальше</button>
+    </div>
+  </div>
 </div>
 
 <div id="ustaz">
@@ -2320,9 +2417,26 @@
       dash_trainer: 'Тренажёр',
       dash_trainer_sub: 'Муфрадат — учи слова Корана',
       dash_ustaz: 'Устаз',
-      dash_subs: 'Заучивания',
-      dash_subs_sub: 'Мои записи и ответ устаза',
-      subs_title: 'Заучивания',
+      // Дверь называется по тому, что за ней лежит (08.09.2026): сдают
+      // заучивание в Мусхафе, а здесь - что я отправил и что ответил устаз.
+      // Прежнее «Заучивания» обещало кнопку сдачи, которой тут нет.
+      dash_learn: 'Как учимся',
+      dash_learn_sub: 'Повторение, муфрадат, заучивание',
+      learn_title: 'Как учимся',
+      learn_lead: 'Коротко и по шагам. Заходи за тем разделом, который нужен.',
+      learn_prev: 'Назад',
+      learn_next: 'Дальше',
+      learn_done: 'Готово',
+      learn_again: 'Пройти заново',
+      learn_back_toc: '← Как учимся',
+      learn_steps: '%N% шагов',
+      learn_steps_few: '%N% шага',
+      learn_read: 'прочитано',
+      learn_of: '%N% из %M%',
+      learn_soon: 'скоро',
+      dash_subs: 'Работа с устазом',
+      dash_subs_sub: 'Мои записи, разбор и пересдача',
+      subs_title: 'Работа с устазом',
       subs_empty: 'Здесь появятся твои сдачи 40+40 — записи, ответ устаза и пересдача 🤲',
       subs_loading: 'Загрузка…',
       subs_wait: 'на проверке',
@@ -2337,7 +2451,7 @@
       look_from_ustaz: 'Замечание устаза',
       look_no_audio: 'Устаз отметил слова без голосового разбора',
       look_failed: 'Не удалось проиграть запись',
-      look_back: '‹ Заучивания',
+      look_back: '‹ К моим сдачам',
       look_back10: '↺ 10 сек назад',
       look_retake: '🎙 Пересдать',
       look_sub: 'разбор устаза',
@@ -6173,6 +6287,155 @@
       });
     });
   }
+
+  /* --- «Как учимся» (08.09.2026) ---------------------------------------
+     Онбординг на снимках самого приложения: каждый шаг - реальный экран, на
+     нём обведено то, на что нажимаешь. Снимки делает scripts/shoot_onboarding.py
+     (кликает по НАСТОЯЩИМ кнопкам в локальной копии приложения), лежат в
+     mushaf_data/onboarding/. Переименуют кнопку - съёмка упадёт, а не соврёт.
+
+     Тексты держим здесь, рядом с шагами, а не в общем словаре I18N: это
+     связный рассказ, и править его надо целиком, видя порядок. Пока только
+     по-русски (правило проекта: локализация одним проходом, когда отшлифуется).
+
+     Разделов четыре, готовы два: сдача заучивания и работа с устазом. Они
+     разведены намеренно - это разные места и разные моменты: сдают в Мусхафе,
+     а разбор ждёт за своей дверью. «Повторение» и «Слова» показываем как
+     «скоро»: обещание честнее пустой двери.
+
+     Внутри раздела - один шаг на экран (решение пользователя 08.09.2026):
+     онбординг читают один раз и тогда, когда растерялись, - там важнее
+     довести до конца, чем дать быстрый доступ; за возврат отвечает оглавление. */
+  var LEARN = [
+    {
+      id: 'hifz', mark: '\u25f4', name: 'Заучивание',
+      desc: 'Как сдать 40+40 из Мусхафа',
+      steps: [
+        ['dash', 'Открой «Мусхаф»',
+         'Заучивание сдаётся отсюда — там же, где ты читаешь.'],
+        ['mushaf', 'Нажми 📖 наверху',
+         'Эта кнопка включает режим заучивания. Рядом 🔁 — она для повторения, не путай.'],
+        ['pick', 'Первый раз — отметь своё место',
+         'Приложение спросит, с какой строчки начинаешь. Внизу выбери, что заучиваешь: строку, половину листа или всю страницу. Потом тапни по самой строке.'],
+        ['pointer', 'Место отмечено',
+         'Наверху видно, где ты стоишь: страница, строчка и этап. Ошибся — «поправить» вернёт выбор. Дальше приложение ведёт само: строчки первой половины, половина целиком, строчки второй, вторая половина, вся страница.'],
+        ['big', '«Крупно» — здесь делаешь 40 + 40',
+         'Строка на весь экран, к ней добавлено первое слово следующей — чтобы стык не рвался. 40 раз читаешь глядя, потом 40 раз по памяти. 🔊 читает это же место голосом Хусари, по кругу. Тап по слову — дословный перевод.'],
+        ['rec', 'Готов — «🎙 Сдать», потом «Записать»',
+         'Читаешь вслух то, что заучил. Запись уходит устазу вместе с картинкой листа: ему видно, какое место ты сдавал.'],
+        ['progress', 'На половине и странице — отметь повторы',
+         'Строчку закрывает одна сдача. А половину листа и целую страницу почти никто не делает за раз, их набирают за 2-3 дня. Поэтому после отправки приложение спрашивает, сколько повторов вышло сегодня: жми +10 / +20 / +40 или «своё» и впиши число. Место закроется и пойдёт дальше, когда наберётся 80.']
+      ]
+    },
+    {
+      id: 'ustaz', mark: '\u2713', name: 'Работа с устазом',
+      desc: 'Разбор, пометки, пересдача',
+      steps: [
+        ['subs', 'Здесь видно, что с твоими записями',
+         '«На проверке» — устаз ещё не дошёл, от тебя ничего не нужно. «Принято» — разобрано. «Пересдать» — просит начитать это место заново; такие записи собраны наверху, чтобы не искать.'],
+        ['look', 'Разбор: его пометки на твоём листе',
+         'Открывается кнопкой «Разбор устаза». Розовым отмечены слова, где была ошибка, внизу — его голос и «↺ 10 сек назад», если не расслышал. Заходить стоит и когда приняли: пометки там тоже есть. Кнопка «Пересдать» записывает то же место заново — и как только запись ушла, дорога снова открыта, ждать ответа не надо.']
+      ]
+    },
+    { id: 'revision', mark: '🔁', name: 'Повторение', desc: 'Что читать каждый день', steps: [] },
+    { id: 'words', mark: '\u0646', name: 'Слова и тренажёр', desc: 'Муфрадат, «Мои слова»', steps: [] }
+  ];
+
+  var LEARN_DONE_KEY = 'yassir_learn_done';
+  var learnAt = null;          // {section, step} или null - значит оглавление
+
+  function learnDone() {
+    try { return JSON.parse(localStorage.getItem(LEARN_DONE_KEY) || '[]'); }
+    catch (e) { return []; }
+  }
+  function learnMarkDone(id) {
+    try {
+      var done = learnDone();
+      if (done.indexOf(id) < 0) { done.push(id); localStorage.setItem(LEARN_DONE_KEY, JSON.stringify(done)); }
+    } catch (e) { /* приватный режим - галочка просто не запомнится */ }
+  }
+
+  function learnPlural(n) {
+    return T(n >= 2 && n <= 4 ? 'learn_steps_few' : 'learn_steps', { N: n });
+  }
+
+  function learnRenderToc() {
+    learnAt = null;
+    var done = learnDone();
+    document.getElementById('learn-title').textContent = T('learn_title');
+    document.getElementById('learn-back').textContent = T('back_dashboard');
+    document.getElementById('learn-foot').style.display = 'none';
+    var html = '<p class="learn-lead">' + T('learn_lead') + '</p>';
+    LEARN.forEach(function (sec, i) {
+      var empty = !sec.steps.length;
+      var right = empty ? T('learn_soon')
+        : (done.indexOf(sec.id) >= 0
+            ? '<span class="done">\u2713 ' + T('learn_read') + '</span>'
+            : learnPlural(sec.steps.length));
+      html += '<button class="learn-item"' + (empty ? ' disabled style="opacity:.55"' : ' data-sec="' + i + '"') + '>' +
+        '<span class="mk">' + sec.mark + '</span>' +
+        '<span><span class="nm">' + sec.name + '</span>' +
+        '<span class="ds">' + sec.desc + '</span></span>' +
+        '<span class="cnt">' + right + '</span></button>';
+    });
+    var body = document.getElementById('learn-body');
+    body.innerHTML = html;
+    Array.prototype.forEach.call(body.querySelectorAll('[data-sec]'), function (b) {
+      b.addEventListener('click', function () {
+        learnRenderStep(parseInt(b.getAttribute('data-sec'), 10), 0);
+      });
+    });
+  }
+
+  function learnRenderStep(si, step) {
+    var sec = LEARN[si];
+    learnAt = { section: si, step: step };
+    var s = sec.steps[step], last = step === sec.steps.length - 1;
+    document.getElementById('learn-title').textContent =
+      sec.name + ' \u00b7 ' + T('learn_of', { N: step + 1, M: sec.steps.length });
+    document.getElementById('learn-back').textContent = T('learn_back_toc');
+    var body = document.getElementById('learn-body');
+    body.innerHTML =
+      '<div id="learn-step">' +
+      '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
+      '<h3>' + s[1] + '</h3><p>' + s[2] + '</p></div>';
+    body.scrollTop = 0;
+    var dots = '';
+    sec.steps.forEach(function (_, i) { dots += '<i' + (i === step ? ' class="on"' : '') + '></i>'; });
+    document.getElementById('learn-dots').innerHTML = dots;
+    document.getElementById('learn-prev').style.display = step ? '' : 'none';
+    document.getElementById('learn-next').textContent = last ? T('learn_done') : T('learn_next');
+    document.getElementById('learn-foot').style.display = '';
+    if (last) learnMarkDone(sec.id);
+  }
+
+  function learnStepBy(delta) {
+    if (!learnAt) return;
+    var sec = LEARN[learnAt.section], next = learnAt.step + delta;
+    // Край в любую сторону возвращает в оглавление: «назад» с первого шага и
+    // «Готово» с последнего ведут в одно и то же место, откуда любой раздел
+    // открывается одним тапом.
+    if (next < 0 || next >= sec.steps.length) return learnRenderToc();
+    learnRenderStep(learnAt.section, next);
+  }
+
+  function openLearn() {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('learn').style.display = 'flex';
+    learnRenderToc();
+  }
+
+  document.getElementById('dash-learn').addEventListener('click', openLearn);
+  document.getElementById('learn-prev').addEventListener('click', function () { learnStepBy(-1); });
+  document.getElementById('learn-next').addEventListener('click', function () { learnStepBy(1); });
+  document.getElementById('learn-back').addEventListener('click', function () {
+    // Из шага «назад» ведёт в оглавление, из оглавления - на дашборд: одним
+    // тапом из середины рассказа студента не выкидываем.
+    if (learnAt) return learnRenderToc();
+    document.getElementById('learn').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'flex';
+    if (typeof pulseIntroStart === 'function') pulseIntroStart();
+  });
 
   function openSubs() {
     document.getElementById('dashboard').style.display = 'none';
