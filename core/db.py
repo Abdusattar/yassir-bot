@@ -1420,6 +1420,23 @@ def save_submission_review(chat_id, message_id, review_type, review_file_id=None
         )
 
 
+# Студент уже ответил на пересдачу: по той же единице есть запись НОВЕЕ, чем
+# последняя на момент вердикта (verdict_after_id). Одно правило на все места,
+# где спрашивают "долг ещё держится?" - см. get_blocking_retake.
+#
+# На этапах 2 и 3 (половина листа, страница) это правило работает само собой:
+# студент добивает свои 40+40 частями за 2-3 дня, каждая часть - сдача той же
+# единицы. Отвечать отдельной "пересдачей" ему не нужно, продолжение работы и
+# есть ответ (решение пользователя 08.09.2026).
+_REDONE_EXISTS = (
+    "SELECT 1 FROM voice_submissions n"
+    " WHERE n.student_id = vs.student_id AND n.group_id = vs.group_id"
+    "   AND n.hifz_page IS vs.hifz_page AND n.hifz_line IS vs.hifz_line"
+    "   AND n.hifz_stage IS vs.hifz_stage"
+    "   AND n.id > COALESCE(vs.verdict_after_id, vs.id) LIMIT 1"
+)
+
+
 def get_student_submissions(student_id, limit=20):
     """Свои сдачи для кабинета студента (04.09.2026, экран "Сдачи" из макета
     01.09). Отдаём только признаки наличия аудио, не сами file_id: сырой
@@ -1427,7 +1444,11 @@ def get_student_submissions(student_id, limit=20):
     core/mufradat_api.py, handle_submission_audio).
 
     Имя устаза берём по review_by (users.phone - это Telegram ID, см.
-    память проекта), LEFT JOIN: у старых разборов колонка пуста."""
+    память проекта), LEFT JOIN: у старых разборов колонка пуста.
+
+    redone - на пересдачу уже ответили (08.09.2026). Без него блок "ПЕРЕСДАТЬ"
+    держал карточку вечно: студент 2-3 этапа продолжает сдавать ту же половину
+    или страницу, долг закрывается сам, а экран всё показывал задачу."""
     with db() as c:
         rows = c.execute(
             "SELECT vs.id, vs.date, vs.sent_at, vs.reviewed_at,"
@@ -1436,6 +1457,7 @@ def get_student_submissions(student_id, limit=20):
             " vs.review_type, vs.review_text,"
             " vs.review_file_id IS NOT NULL AS has_review_audio,"
             " vs.verdict, vs.verdict_at, vs.error_words,"
+            f" ({_REDONE_EXISTS}) AS redone,"
             " g.title AS group_title, ru.name AS review_by_name"
             " FROM voice_submissions vs"
             " JOIN groups g ON g.id = vs.group_id"
@@ -1444,7 +1466,12 @@ def get_student_submissions(student_id, limit=20):
             " ORDER BY vs.date DESC, vs.id DESC LIMIT ?",
             (student_id, limit)
         ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        row = dict(r)
+        row["redone"] = bool(row["redone"])
+        out.append(row)
+    return out
 
 
 SERIES_WINDOW_MINUTES = 30
@@ -1526,7 +1553,11 @@ def get_submission_counts(student_id):
     должны говорить одно и то же.
 
     Пересдачи — исключение: их берём за всю историю. Долг не истекает по
-    сроку, и спрятать его через неделю значило бы потерять работу студента."""
+    сроку, и спрятать его через неделю значило бы потерять работу студента.
+
+    Но считаем только НЕотвеченные (08.09.2026, _REDONE_EXISTS): пересдача,
+    на которую студент уже записал новую сдачу, — не его задача, а очередь
+    устаза. Иначе цифра на двери не гасла никогда."""
     since = (get_now().date() - timedelta(days=SUBMISSIONS_WINDOW_DAYS - 1)).isoformat()
     with db() as c:
         rows = c.execute(
@@ -1537,8 +1568,9 @@ def get_submission_counts(student_id):
             (student_id, since)
         ).fetchall()
         retake = c.execute(
-            "SELECT COUNT(*) AS n FROM voice_submissions"
-            " WHERE student_id=? AND verdict='retake'",
+            "SELECT COUNT(*) AS n FROM voice_submissions vs"
+            " WHERE vs.student_id=? AND vs.verdict='retake'"
+            f" AND NOT EXISTS ({_REDONE_EXISTS})",
             (student_id,)
         ).fetchone()["n"]
     waiting = sum(1 for r in merge_submission_series(rows) if not r["reviewed_at"])
@@ -1698,11 +1730,7 @@ def get_reviewed_submissions(group_ids, limit=50):
             f" vs.error_words,"
             f" vs.file_id IS NOT NULL AS has_audio,"
             f" vs.review_file_id IS NOT NULL AS has_review_audio,"
-            f" (SELECT 1 FROM voice_submissions n"
-            f"   WHERE n.student_id = vs.student_id AND n.group_id = vs.group_id"
-            f"     AND n.hifz_page IS vs.hifz_page AND n.hifz_line IS vs.hifz_line"
-            f"     AND n.hifz_stage IS vs.hifz_stage"
-            f"     AND n.id > COALESCE(vs.verdict_after_id, vs.id) LIMIT 1) AS redone,"
+            f" ({_REDONE_EXISTS}) AS redone,"
             f" u.name AS student_name, g.title AS group_title,"
             f" ru.name AS verdict_by_name"
             f" FROM voice_submissions vs"

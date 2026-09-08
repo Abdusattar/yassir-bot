@@ -2363,6 +2363,7 @@
       review_back10: '↺ 10 сек',
       subs_verdict_ok: 'принято',
       subs_verdict_retake: 'на пересдачу',
+      subs_verdict_redone: 'пересдал — ждёт устаза',
       subs_marked_words: 'Отмечено слов: %N%',
       hifz_retake_pending: 'Сначала пересдай: %P%',
       subs_retake_hint: 'Пересдаётся ровно то, что сдавал: та же строчка, половина или страница.',
@@ -5177,31 +5178,47 @@
       document.getElementById('hifz-progress-own-input').focus();
     }
   });
+  // Возвращает промис отправки (или null, если вводить было нечего) - нижняя
+  // кнопка панели ждёт его, прежде чем закрыться.
   function hifzProgressCommitOwn() {
     var input = document.getElementById('hifz-progress-own-input');
     var n = parseInt(input.value, 10);
     document.getElementById('hifz-progress-chips').style.display = 'flex';
     document.getElementById('hifz-progress-own-row').style.display = 'none';
     input.value = '';
-    if (isFinite(n) && n > 0) hifzProgressSubmitDelta(Math.min(n, HIFZ_PROGRESS_TARGET));
+    if (isFinite(n) && n > 0) return hifzProgressSubmitDelta(Math.min(n, HIFZ_PROGRESS_TARGET));
+    return null;
   }
   document.getElementById('hifz-progress-own-ok').addEventListener('click', hifzProgressCommitOwn);
   document.getElementById('hifz-progress-own-input').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') hifzProgressCommitOwn();
   });
 
-  // Кнопка внизу панели: пока не 80 - просто закрывает (числа уже
-  // сохранены по каждому тапу), после 80 - закрывает И двигает указатель
-  // (частичная сдача его никогда не трогает, только полный счёт).
+  /* Кнопка внизу панели: сохраняет недосохранённое и закрывает, а после 80
+     ещё и двигает указатель (частичная сдача его никогда не трогает).
+
+     Число, набранное в поле «своё», раньше пропадало молча: кнопка «ок»
+     рядом с полем маленькая, а внизу стоит большая «Сохранить и продолжить»
+     - и она только закрывала панель, в поле не заглядывая. Поймано
+     08.09.2026 на живых логах: два вечера подряд студент вводил повторы по
+     этапу 3, POST /hifz/progress не ушёл НИ РАЗУ, счётчик так и остался
+     0/80. Теперь кнопка сперва досохраняет введённое и лишь потом
+     закрывает - иначе она обманывает своим же названием. */
   document.getElementById('hifz-progress-save').addEventListener('click', function () {
-    var key = hifzProgressKey(currentPage, hifz.stage, hifzProgressHalf());
-    var p = hifzProgressCache[key];
-    var closed = p && p.count >= HIFZ_PROGRESS_TARGET;
-    hifzRecClose();
-    if (closed) {
-      hifzNext();
-      if (document.getElementById('hifz-big').classList.contains('visible')) hifzBigRender();
+    var typing = document.getElementById('hifz-progress-own-row').style.display !== 'none';
+    var pending = typing ? hifzProgressCommitOwn() : null;
+    function finish() {
+      var p = hifzProgressCache[hifzProgressKey(currentPage, hifz.stage, hifzProgressHalf())];
+      var closed = p && p.count >= HIFZ_PROGRESS_TARGET;
+      hifzRecClose();
+      if (closed) {
+        hifzNext();
+        if (document.getElementById('hifz-big').classList.contains('visible')) hifzBigRender();
+      }
     }
+    // Ждём ответ сервера: только по нему видно, дошло ли до 80 - а от этого
+    // зависит, сдвинется указатель или нет.
+    if (pending) pending.then(finish); else finish();
   });
 
   /* «Сдать» прямо с «Крупно»: именно там студент делает свои 40 повторов,
@@ -5657,10 +5674,14 @@
     var done = !!item.reviewed_at;
     // Вердикт устаза важнее факта "отреагировал": принято - это закрытая
     // дорога, пересдача - работа, которая держит студента на месте.
+    // Пересдача, на которую студент уже ответил новой записью, красной не
+    // ходит: работа сделана, дальше ход устаза (08.09.2026).
     var pill = item.verdict === 'accepted'
       ? ['done', T('subs_verdict_ok')]
       : (item.verdict === 'retake'
-        ? ['retake', T('subs_verdict_retake')]
+        ? (item.redone
+          ? ['wait', T('subs_verdict_redone')]
+          : ['retake', T('subs_verdict_retake')])
         : [done ? 'done' : 'wait', T(done ? 'subs_done' : 'subs_wait')]);
     var marks = [];
     try { marks = JSON.parse(item.error_words || '[]'); } catch (e) { marks = []; }
@@ -5719,7 +5740,7 @@
        (07.09.2026). При вердикте «на пересдачу» дверь выделена: это работа,
        которую от студента ждут. */
     if (fromApp && hasReview) {
-      var retake = item.verdict === 'retake';
+      var retake = item.verdict === 'retake' && !item.redone;
       html += '<div class="sub-actions" style="margin-top:6px">' +
         '<button style="flex:1" class="' + (retake ? 'primary' : 'sub-open') +
         '" data-look="' + item.id + '">' +
@@ -6169,8 +6190,9 @@
       // списка (была ровно эта жалоба).
       var cutoff = subsDateAdd(today, -(SUBS_WINDOW_DAYS - 1));
       // Сдачи из блока «нужно пересдать» в ленте не повторяем - одна и та же
-      // строка дважды на экране читается как две разные работы.
-      var feed = items.filter(function (it) { return it.verdict !== 'retake'; });
+      // строка дважды на экране читается как две разные работы. Отвеченная
+      // пересдача (redone) в блоке не висит, значит её место здесь.
+      var feed = items.filter(function (it) { return it.verdict !== 'retake' || it.redone; });
       var recent = feed.filter(function (it) { return it.date >= cutoff; });
       /* Сверху - только то, что просит устаз (07.09.2026). У активного
          студента сдач больше сотни, из них половина «ждёт проверки» - но это
@@ -6180,7 +6202,12 @@
          Блок, а не вкладка: пусто - и его нет вовсе, ноль места. Вкладка же
          существует всегда и заставляет в неё заглядывать, чтобы убедиться,
          что там пусто. */
-      var todo = items.filter(function (it) { return it.verdict === 'retake'; });
+      /* На этапах 2/3 студент добивает 40+40 частями за 2-3 дня, и каждая
+         часть - сдача той же половины/страницы. Такая запись и есть ответ на
+         замечание устаза (08.09.2026, решение пользователя): долг гаснет сам,
+         карточка уходит в ленту, отдельной «пересдачи» никто не ждёт. Признак
+         redone считает сервер тем же правилом, что снимает гейт. */
+      var todo = items.filter(function (it) { return it.verdict === 'retake' && !it.redone; });
       var waiting = items.filter(function (it) { return !it.reviewed_at; }).length;
       var html = '';
       if (todo.length) {

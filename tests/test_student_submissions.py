@@ -295,6 +295,45 @@ def test_app_submissions_are_never_merged(test_db):
     assert len(merged) == 2
 
 
+def test_next_part_of_the_same_stage_closes_the_debt(test_db):
+    """Этапы 2 и 3 студент сдаёт частями за 2-3 дня (08.09.2026). Устаз
+    разбирает первую часть и просит пересдать, студент продолжает добивать
+    свои 40+40 — следующая часть той же страницы и есть ответ на замечание.
+    Дверь «Сдачи» долга больше не показывает, карточка не висит задачей."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    db.save_voice_submission(sid, group["id"], CHAT, 1, db.get_date(), file_id="a",
+                             hifz_page=20, hifz_line=0, hifz_stage=3)
+    first = db.get_student_submissions(sid)[0]["id"]
+    db.set_submission_verdict(first, db.VERDICT_RETAKE, "888002", [{"line": 2, "word": 4}])
+    assert db.get_submission_counts(sid)["retake"] == 1
+
+    db.save_voice_submission(sid, group["id"], CHAT, 2, db.get_date(), file_id="b",
+                             hifz_page=20, hifz_line=0, hifz_stage=3)
+
+    assert db.get_submission_counts(sid)["retake"] == 0
+    row = [r for r in db.get_student_submissions(sid) if r["id"] == first][0]
+    assert row["redone"] is True
+
+
+def test_part_of_another_place_leaves_the_debt(test_db):
+    """Сдача другого места ответом не считается — иначе долг гасила бы любая
+    работа, а не та, о которой говорил устаз."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    db.save_voice_submission(sid, group["id"], CHAT, 1, db.get_date(), file_id="a",
+                             hifz_page=20, hifz_line=0, hifz_stage=3)
+    first = db.get_student_submissions(sid)[0]["id"]
+    db.set_submission_verdict(first, db.VERDICT_RETAKE, "888002")
+
+    db.save_voice_submission(sid, group["id"], CHAT, 2, db.get_date(), file_id="b",
+                             hifz_page=21, hifz_line=0, hifz_stage=3)
+
+    assert db.get_submission_counts(sid)["retake"] == 1
+    row = [r for r in db.get_student_submissions(sid) if r["id"] == first][0]
+    assert row["redone"] is False
+
+
 def test_retake_debt_survives_the_week_window(test_db):
     """Долг не истекает по сроку: пересдачу считаем за всю историю, даже
     если сама сдача давно вышла из недельного окна экрана."""
