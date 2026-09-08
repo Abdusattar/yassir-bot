@@ -29,6 +29,7 @@ from core.db import (
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
+    looks_like_plain_name,
     save_voice_submission, mark_voice_reviewed, save_submission_review,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
@@ -1120,7 +1121,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     if looks_like_greeting(text):
                         await send_message(chat_id, T("dm_reg_ask_name_again", "ru"))
                     else:
-                        name = await ai.extract_name(text) or await ai.extract_name(sender_name)
+                        if looks_like_plain_name(text):
+                            name = text.strip()
+                        else:
+                            got = await ai.extract_name(text)
+                            if got == ai.AI_DOWN:
+                                log.warning("dm extract_name: ИИ недоступен, имя как есть (%s)", phone)
+                                name = ((sender_name or text).strip())[:32]
+                            else:
+                                name = (got or "").strip() or None
+                                if not name and sender_name:
+                                    got2 = await ai.extract_name(sender_name)
+                                    name = None if got2 == ai.AI_DOWN else (got2 or "").strip() or None
                         if not name:
                             await send_message(chat_id, T("dm_reg_ask_name_again", "ru"))
                         else:
@@ -1290,17 +1302,33 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                         set_pending_name(phone, group_id, raw_input)
                         await send_message(chat_id, T("ask_name", glang))
                         return
-                # Извлекаем имя через ИИ; если не получилось — пробуем Telegram-имя
-                new_name = (await ai.extract_name(raw_input) or "").strip() or None
-                if not new_name and sender_name:
-                    new_name = (await ai.extract_name(sender_name) or "").strip() or None
-                if not new_name:
-                    await send_message(chat_id, T("ask_name_again", glang))
-                    return
-                # Проверяем что это действительно имя человека
-                if not await ai.is_valid_name(new_name):
-                    await send_message(chat_id, T("ask_name_confirm", glang, name=new_name))
-                    return
+                # Просто имя («Салия», «Салия. М.») распознаём сами - ИИ здесь
+                # не нужен вовсе (08.09.2026). Раньше каждая регистрация
+                # тратила два вызова ИИ, а когда у OpenRouter кончились
+                # кредиты - вставала совсем: бот по кругу просил имя у той,
+                # кто его уже написала.
+                if looks_like_plain_name(raw_input):
+                    new_name = raw_input
+                else:
+                    got = await ai.extract_name(raw_input)
+                    if got == ai.AI_DOWN:
+                        # ИИ молчит - регистрируем по тому, что есть: имя из
+                        # Telegram, иначе написанное. Лучше записать неточно
+                        # (устаз поправит) чем не пустить человека вообще.
+                        log.warning("extract_name: ИИ недоступен, имя берём как есть (%s)", phone)
+                        new_name = ((sender_name or raw_input).strip())[:32]
+                    else:
+                        new_name = (got or "").strip() or None
+                        if not new_name and sender_name:
+                            got2 = await ai.extract_name(sender_name)
+                            new_name = None if got2 == ai.AI_DOWN else (got2 or "").strip() or None
+                        if not new_name:
+                            await send_message(chat_id, T("ask_name_again", glang))
+                            return
+                        # Проверяем что это действительно имя человека
+                        if not await ai.is_valid_name(new_name):
+                            await send_message(chat_id, T("ask_name_confirm", glang, name=new_name))
+                            return
                 # Проверяем: не студент ли уже в другой учебной группе
                 gtype = group["group_type"] or "relaxed"
                 if gtype != "tadabbur":

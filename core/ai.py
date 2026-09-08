@@ -737,8 +737,17 @@ async def mystats_comment(name, streak, rank, total_score, days_done, lang="ru")
     return await ask_ai(prompt)
 
 
+# «ИИ не ответил» - это НЕ «ИИ сказал, что это не имя» (08.09.2026). Пока
+# оба случая давали None, пустой баланс OpenRouter выглядел как бесконечный
+# отказ: бот по кругу просил имя у человека, который его уже написал.
+AI_DOWN = "__ai_unavailable__"
+
+
 async def extract_name(text: str) -> str | None:
-    """Extracts a person's name from arbitrary user input."""
+    """Имя из произвольного текста.
+
+    Строка - имя; None - ИИ ответил, что это не имя; AI_DOWN - ответа от
+    ИИ не было вовсе (сеть, лимит, пустой баланс), решать вызывающему."""
     result = await ask_ai(
         "The user wrote: «" + text + "»\n"
         "Extract only the person's name. Return ONE word or a few words (the name only) — no extra text.\n"
@@ -746,7 +755,7 @@ async def extract_name(text: str) -> str | None:
         system="You are a name extraction assistant. Reply only with the name or the word NO."
     )
     if not result:
-        return None
+        return AI_DOWN
     result = result.strip().strip("«»\"'·—-")
     first_word = result.upper().split()[0].strip("·—-.") if result else ""
     if first_word in ("НЕТ", "NET", "NO", "NONE") or not result:
