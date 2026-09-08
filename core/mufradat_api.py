@@ -769,19 +769,35 @@ def _dashboard_facts(user_id):
     }
 
 
-def _visible_ustaz_groups(user_id):
-    """(группы, id своих, супер-админ ли). Устаз видит свои группы;
-    супер-админ - ВСЕ активные, свои первыми: он и контролирует устазов, и
-    сам проверяет там, где устаз группы не успел (решение пользователя
-    04.09.2026). Поэтому "чужая" группа для него не просмотр, а работа -
-    приём сдачи там ему и так разрешён (is_group_admin в core/handlers.py)."""
+def _visible_ustaz_groups(user_id, scope="own"):
+    """(группы, id своих, супер-админ ли, скрытые группы).
+
+    Устаз видит свои группы. Супер-админ - тоже свои, а чужие разворачивает
+    сам (08.09.2026, решение пользователя): у Умара устаза своих четыре, а
+    кабинет вываливал все восемнадцать активных, и до работы надо было
+    прокрутить чужое. Чужие никуда не делись - они за кнопкой, со счётчиком
+    ожидающих, чтобы было видно, где скопилось.
+
+    Подхват чужой группы этим НЕ отнимается - он и был смыслом "всех групп"
+    (04.09.2026): супер-админ проверяет там, где устаз не успел. Право
+    открыть конкретную сдачу считается отдельно (_allowed_submission,
+    scope="all"), и приём в чужой группе как работал, так и работает
+    (is_group_admin в core/handlers.py возвращает True супер-админу везде).
+
+    scope="all" - развернуть чужие. У супер-админа БЕЗ своих групп чужие
+    показываются сразу: иначе кабинет открывается пустым."""
     admin_groups = get_admin_groups(user_id)
     is_super = user_id in SUPER_ADMIN_IDS
     own_ids = [g["id"] for g in admin_groups]
     visible = list(admin_groups)
+    hidden = []
     if is_super:
-        visible += [g for g in get_all_groups() if g["id"] not in own_ids]
-    return visible, own_ids, is_super
+        others = [g for g in get_all_groups() if g["id"] not in own_ids]
+        if scope == "all" or not admin_groups:
+            visible += others
+        else:
+            hidden = others
+    return visible, own_ids, is_super, hidden
 
 
 @with_auth
@@ -792,7 +808,8 @@ async def handle_ustaz_waiting(request, user_id):
     реплаем в группе Telegram, кабинет здесь ничего не решает - гейт
     "пересдача блокирует этап" (пункт 11 макета) отложен отдельно, до
     согласования с Умар устазом."""
-    visible, own_ids, is_super = _visible_ustaz_groups(user_id)
+    scope = "all" if request.query.get("all") == "1" else "own"
+    visible, own_ids, is_super, hidden = _visible_ustaz_groups(user_id, scope)
     if not visible and not is_super:
         return web.json_response({"error": "not_ustaz"}, status=403)
     group_ids = [g["id"] for g in visible]
@@ -821,6 +838,12 @@ async def handle_ustaz_waiting(request, user_id):
         # "сегодня"/"вчера", не спрашивая часовой пояс устройства.
         "today": get_date(),
         "is_super": is_super,
+        # Свёрнутые чужие группы: сколько их и сколько там ждёт - кнопка
+        # "показать остальные" должна говорить, есть ли там работа.
+        "hidden": {
+            "groups": len(hidden),
+            "waiting": count_pending_voice_reviews([g["id"] for g in hidden]) if hidden else 0,
+        },
     })
 
 
@@ -943,7 +966,9 @@ def _ustaz_submission(user_id, submission_id):
     sub = get_submission(submission_id)
     if not sub:
         return None
-    visible, _own, _is_super = _visible_ustaz_groups(user_id)
+    # Право проверять шире, чем список на экране: супер-админ открывает
+    # сдачу чужой группы, даже пока та свёрнута.
+    visible, _own, _is_super, _hidden = _visible_ustaz_groups(user_id, "all")
     return sub if sub["group_id"] in [g["id"] for g in visible] else None
 
 

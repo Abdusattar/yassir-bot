@@ -74,8 +74,12 @@ def test_ustaz_sees_only_his_group(test_db, monkeypatch):
     assert data["is_super"] is False
 
 
-def test_super_admin_sees_every_group(test_db, monkeypatch):
-    """Свои помечены mine=True и идут первыми, остальные — ниже."""
+def test_super_admin_starts_with_his_own_groups(test_db, monkeypatch):
+    """08.09.2026: кабинет открывается на СВОИХ группах даже у супер-админа.
+    Чужие не пропали — они свёрнуты и посчитаны, чтобы кнопка «показать
+    остальные» говорила, есть ли там работа. Раньше все восемнадцать
+    активных групп валились списком, и до своей работы надо было
+    прокручивать чужое."""
     app = _setup(monkeypatch, ["999"])
     mine = _group("-100901", "Подготовительная")
     _group("-100902", "N-2a")
@@ -84,10 +88,26 @@ def test_super_admin_sees_every_group(test_db, monkeypatch):
     status, data = _get(app, "/api/muf/ustaz/waiting", "999")
 
     assert status == 200
+    assert [g["title"] for g in data["groups"]] == ["Подготовительная"]
+    assert data["groups"][0]["mine"] is True
+    assert data["hidden"]["groups"] == 1
+    assert data["is_super"] is True
+
+
+def test_super_admin_can_unfold_the_rest(test_db, monkeypatch):
+    """?all=1 — тот самый подхват: чужая группа открывается по требованию."""
+    app = _setup(monkeypatch, ["999"])
+    mine = _group("-100901", "Подготовительная")
+    _group("-100902", "N-2a")
+    db.add_group_admin(mine["id"], "999")
+
+    status, data = _get(app, "/api/muf/ustaz/waiting?all=1", "999")
+
+    assert status == 200
     by_title = {g["title"]: g for g in data["groups"]}
     assert by_title["Подготовительная"]["mine"] is True
     assert by_title["N-2a"]["mine"] is False
-    assert data["is_super"] is True
+    assert data["hidden"]["groups"] == 0
 
 
 def test_super_admin_keeps_cabinet_without_any_ustaz_role(test_db, monkeypatch):

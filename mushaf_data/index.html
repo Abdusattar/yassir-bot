@@ -2528,6 +2528,8 @@
       ustaz_done_all: 'всё',
       ustaz_done_retakes: 'пересдачи · %N%',
       ustaz_has_voice: 'разбор голосом',
+      ustaz_more_groups: 'показать остальные группы (%N%) · ждут %W%',
+      ustaz_more_groups_calm: 'показать остальные группы (%N%)',
       ustaz_retake_waiting: 'ждёт пересдачи',
       ustaz_retake_answered: 'пересдал — новая запись в «Ждут»',
       ustaz_done_empty: 'Здесь появится то, что уже разобрано',
@@ -3680,7 +3682,9 @@
     document.getElementById('dashboard').style.display = 'flex';
     if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
-  document.getElementById('dash-ustaz').addEventListener('click', openUstaz);
+  // Через обёртку, не напрямую: слушатель передал бы объект события
+  // первым аргументом, и openUstaz принял бы его за withAll.
+  document.getElementById('dash-ustaz').addEventListener('click', function () { openUstaz(); });
   document.getElementById('ustaz-back').addEventListener('click', function () {
     document.getElementById('ustaz').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
@@ -7076,6 +7080,15 @@
       html += '<div class="ustaz-older" id="ustaz-older">' +
         T('ustaz_older', { N: olderCount }) + '</div>';
     }
+    /* Чужие группы у супер-устаза свёрнуты (08.09.2026): кабинет открывается
+       на своих, остальные - одним тапом. В подписи сразу видно, есть ли там
+       работа, иначе кнопка молчит о главном. */
+    var hidden = data.hidden || {};
+    if (hidden.groups) {
+      html += '<div class="ustaz-older" id="ustaz-more-groups">' +
+        T(hidden.waiting ? 'ustaz_more_groups' : 'ustaz_more_groups_calm',
+          { N: hidden.groups, W: hidden.waiting }) + '</div>';
+    }
     body.innerHTML = html;
     ustazBindZones(body);
 
@@ -7094,6 +7107,8 @@
     });
     var olderEl = document.getElementById('ustaz-older');
     if (olderEl) olderEl.addEventListener('click', function () { ustazLoadOlder(data); });
+    var moreEl = document.getElementById('ustaz-more-groups');
+    if (moreEl) moreEl.addEventListener('click', function () { openUstaz(true); });
   }
 
   // Хвост тянем ОТДЕЛЬНЫМ запросом и дописываем под окном, не заменяя его:
@@ -7412,14 +7427,16 @@
     });
   }
 
-  function openUstaz() {
+  // withAll - развернуть чужие группы (только у супер-устаза, см.
+  // core/mufradat_api.py:_visible_ustaz_groups).
+  function openUstaz(withAll) {
     ustazZone = 'queue';
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('ustaz').style.display = 'flex';
     var body = document.getElementById('ustaz-body');
     body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
     ustazGroupFilter = null;   // выберется по данным, см. ustazDefaultGroup
-    apiCall('/ustaz/waiting').then(function (res) {
+    apiCall('/ustaz/waiting' + (withAll ? '?all=1' : '')).then(function (res) {
       if (res.status === 401 || res.status === 403 || !res.data) {
         body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_empty') + '</div>';
         return;
