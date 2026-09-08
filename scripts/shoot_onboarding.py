@@ -38,6 +38,14 @@ import core.mushaf_words as mushaf_words  # noqa: E402
 
 TMP = pathlib.Path(tempfile.gettempdir()) / "yassir_onboarding_stand"
 TMP.mkdir(exist_ok=True)
+
+# Тренажёру нужен словарь (mufradat_words) - на пустой базе вопрос не
+# соберётся. Берём КОПИЮ рабочей sources/hadiths.db: прогресс тестового
+# студента пишется в копию и живой базы не касается.
+_REAL_WORDS = ROOT / "sources" / "hadiths.db"
+_STAND_WORDS = TMP / "hadiths.db"
+if _REAL_WORDS.exists() and not _STAND_WORDS.exists():
+    shutil.copy2(_REAL_WORDS, _STAND_WORDS)
 db.DB = str(TMP / "dev.db")
 sampler.HADITHS_DB = str(TMP / "hadiths.db")
 mushaf_words.HADITHS_DB = str(TMP / "hadiths.db")
@@ -59,7 +67,9 @@ SHOT_QUALITY = 65
 
 # Сцена -> имя файла. Порядок тот же, что в LEARN (mushaf_data/index.html).
 SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs", "look",
-          "read", "bookmark", "revision", "revision_ask"]
+          "read", "bookmark", "revision", "revision_ask",
+          "trainer_start", "trainer_q", "trainer_daily", "trainer_range", "trainer_answer",
+          "word_tap", "word_add", "mywords"]
 
 CHROME_CANDIDATES = [
     os.environ.get("CHROME"),
@@ -129,6 +139,16 @@ def set_state(mode):
         mushaf_words.set_hifz_pointer(STUDENT, 3, 0, 2)
         if mushaf_words.get_hifz_progress(STUDENT, 3, 2, 0) == 0:
             mushaf_words.add_hifz_progress(STUDENT, 3, 2, 0, 24)
+    if mode == "trainer_fresh":
+        # Первый вход в тренажёр: закладки нет, приложение спрашивает
+        # страницу. Без сброса сцена сняла бы обычный вопрос.
+        with sqlite3.connect(str(TMP / "hadiths.db")) as conn:
+            conn.execute("DELETE FROM mufradat_page WHERE user_id=?", (STUDENT,))
+    if mode == "words":
+        # Тренажёр без закладки просит выбрать страницу - для сцены с
+        # вопросом её надо поставить заранее.
+        from core.mufradat import set_current_page
+        set_current_page(STUDENT, 3)
 
 
 # ─── страница стенда ──────────────────────────────────────────────────────
@@ -273,6 +293,62 @@ SCENE_SCRIPT = """
       if (b) { b.click(); await wait(1600); }
     },
 
+    // --- слова и тренажёр ---
+    trainer_start: async function () {
+      await state('trainer_fresh');
+      $('dash-trainer').click(); await wait(1800);
+    },
+
+    trainer_q: async function () {
+      await state('words');
+      $('dash-trainer').click(); await wait(2200);
+    },
+
+    trainer_daily: async function () {
+      await state('words');
+      $('dash-trainer').click(); await wait(2200);
+      spot('#trainer-daily');
+    },
+
+    trainer_range: async function () {
+      await state('words');
+      $('dash-trainer').click(); await wait(2200);
+      spot('.trainer-pagebar');       // ➖ ➕ - шаг закладки на страницу
+    },
+
+    trainer_answer: async function () {
+      await state('words');
+      $('dash-trainer').click(); await wait(2200);
+      var opt = document.querySelector('#trainer-body button');
+      if (opt) { opt.click(); await wait(1400); }
+    },
+
+    mywords: async function () {
+      $('dash-trainer').click(); await wait(1600);
+      $('trainer-tab-mywords').click(); await wait(1600);
+    },
+
+    // Попап перевода живёт 1800 мс, а headless прокручивает таймеры
+    // (--virtual-time-budget) - к моменту снимка он уже спрятан. Держим его
+    // видимым принудительно: сам попап настоящий, гасится только таймер.
+    word_tap: async function () {
+      $('dash-mushaf').click(); await wait(1600);
+      await goFullPage();
+      var w = document.querySelectorAll('#ayah-text [data-tr]')[5];
+      w.click();
+      setInterval(function () { $('word-popup').classList.add('visible'); }, 30);
+      await wait(900);
+    },
+
+    word_add: async function () {
+      $('dash-mushaf').click(); await wait(1600);
+      await goFullPage();
+      var w = document.querySelectorAll('#ayah-text [data-tr]')[5];
+      w.click(); await wait(80); w.click();
+      setInterval(function () { $('word-popup').classList.add('visible'); }, 30);
+      await wait(1200);
+    },
+
     learn: async function () { $('dash-learn').click(); await wait(800); },
 
     learn_step1: async function () {
@@ -282,7 +358,7 @@ SCENE_SCRIPT = """
 
     learn_revision: async function () {
       $('dash-learn').click(); await wait(800);
-      document.querySelector('[data-sec="2"]').click(); await wait(1200);
+      document.querySelector('[data-sec="1"]').click(); await wait(1200);
     },
 
     learn_step: async function () {
