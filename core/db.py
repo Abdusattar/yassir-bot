@@ -2966,6 +2966,51 @@ def has_any_group_history(phone):
     return row is not None
 
 
+def joins_as_student(phone, group_id):
+    """Устаз входит в группу УЧИТЬСЯ, а не вести её?
+
+    Все устазы, кроме Умар устаза, сами студенты в других группах (правило
+    пользователя, 08.09.2026), и обычные правила на них распространяются:
+    пропустил - ушёл в подготовительную, отучился - вернулся. Пока вход
+    любого устаза не обрабатывался вовсе (bot.py, is_any_group_admin), такой
+    возврат просто не происходил: Имран прошёл подготовительную, Умар устаз
+    подтвердил, бот выдал ссылку на N-1 - и вход в N-1 молча пропустили. Он
+    остался незарегистрированным, выпуск не оформился, а на следующий день
+    его первое же сообщение выкинуло его из группы как «вернувшегося без
+    подготовительной».
+
+    Признаки, по которым видно именно СТУДЕНЧЕСКИЙ вход - все три про
+    подготовительную и про возврат к своим, а не про новую группу для
+    ведения:
+      1) висит метка «должен вернуться через prep» (кикнут за пропуски);
+      2) сейчас активен в подготовительной (её проходит, а не ведёт);
+      3) уже был студентом ИМЕННО в этой группе (возвращается к себе).
+
+    Устаз, которого назначают вести новую группу, ни под один не подходит -
+    для него поведение остаётся прежним: бот его не трогает."""
+    with db() as c:
+        row = c.execute("SELECT 1 FROM pending_prep_return WHERE phone=?", (phone,)).fetchone()
+        if row:
+            return True
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN users u ON u.id=ug.user_id
+            JOIN groups g ON g.id=ug.group_id
+            WHERE u.phone=? AND ug.role='student' AND ug.active=1
+              AND g.group_type='prep' AND g.active=1
+            LIMIT 1
+        """, (phone,)).fetchone()
+        if row:
+            return True
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN users u ON u.id=ug.user_id
+            WHERE u.phone=? AND ug.group_id=? AND ug.role='student'
+            LIMIT 1
+        """, (phone, group_id)).fetchone()
+    return row is not None
+
+
 def has_learning_group_history(phone):
     """Хоть раз состоял в pro/relaxed/prep (учебная история) - в отличие от
     has_any_group_history() НЕ считает Тадаббур (она открыта для всех, не
