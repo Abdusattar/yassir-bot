@@ -56,6 +56,13 @@ OR_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("CLAUDE_API_KEY", "")
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
 AI_MODEL = os.getenv("AI_MODEL", "deepseek/deepseek-v4-flash")
 
+# Незваный ответ бота на сообщение студента (09.09.2026, выключен решением
+# пользователя): когда сообщение не распознано ни как отчёт, ни как узр, бот
+# спрашивал ИИ "относится ли это к делу" и, если да, отвечал сам. Слишком
+# много непрошеных реплик в группах. Прямое обращение ("Яссир, ...") этим
+# флагом НЕ затрагивается - оно работает всегда, как и зачёт заданий.
+AI_ANSWER_IF_RELEVANT = os.getenv("AI_ANSWER_IF_RELEVANT", "false").lower() == "true"
+
 # Shadow mode: если задан SHADOW_CHAT_IDS — бот не отвечает в группах,
 # а пересылает ответы наблюдателям (через запятую: user_id или chat_id)
 SHADOW_CHAT_IDS = [s.strip() for s in os.getenv("SHADOW_CHAT_IDS", "").split(",") if s.strip()]

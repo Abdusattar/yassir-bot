@@ -29,6 +29,7 @@ from core.db import (
     set_upgrade_decision, get_pending_upgrade_target, resolve_upgrade_offer,
     get_pending_group_nudge, get_return_nudge_candidates, get_last_return_nudge_at,
     mark_return_nudge_sent, get_last_known_lang, has_learning_group_history,
+    bot_leads_group,
 )
 from core.prep import (
     PREP_MIN_DAYS, announce_prep_graduate_arrival,
@@ -55,7 +56,7 @@ async def run_transfer_checks():
     groups = get_all_groups()
     for group in groups:
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         await _check_group_for_transfers(group, gtype)
     await kick_unregistered()
@@ -436,7 +437,7 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
                   existing_user["name"], existing_group["id"])
         return
 
-    if existing_group and gtype != "tadabbur":
+    if existing_group and bot_leads_group(gtype):
         if existing_group["id"] == group_info["id"]:
             log.info("join: %s rejoined own group %s, no-op", uid, group_info["id"])
             return
@@ -542,7 +543,7 @@ async def handle_member_left(chat_id, uid):
         return
     deactivate_student(student["id"], group["id"])
     gtype = group["group_type"] or "relaxed"
-    if gtype != "tadabbur":
+    if bot_leads_group(gtype):
         try:
             await send_message(chat_id, T("student_left_group", get_group_lang(group), name=student["name"]))
         except Exception as e:
@@ -606,8 +607,8 @@ async def kick_unregistered():
             # дождёмся следующей ежедневной проверки.
             continue
         try:
-            # Пропускаем тадаббур — там регистрация не нужна
-            if gtype == "tadabbur":
+            # Тадаббур и служебные группы пропускаем — там регистрация не нужна
+            if not bot_leads_group(gtype):
                 remove_unregistered(uid, chat_id)
                 continue
             # Если уже зарегистрировался — просто чистим запись

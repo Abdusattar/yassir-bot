@@ -17,6 +17,7 @@ from core.db import (
     get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date,
     count_unpublished_parts, get_users_due_for_survey, get_users_due_for_survey_nudge,
     start_survey, touch_survey_stage, get_prep_group, get_pending_voice_reviews,
+    bot_leads_group,
 )
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
@@ -45,7 +46,7 @@ async def morning_reminder():
 
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
@@ -96,7 +97,7 @@ async def morning_tadabbur_report():
 
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         try:
             group_tasks = get_group_tasks(group)
@@ -199,7 +200,7 @@ async def voice_review_report():
 
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         try:
             title = group["title"] or str(group["chat_id"])
@@ -239,7 +240,7 @@ async def voice_review_report():
 
 async def ustaz_waiting_digest():
     for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
+        if not bot_leads_group(group["group_type"]):
             continue
         try:
             pending = get_pending_voice_reviews([group["id"]])
@@ -359,7 +360,7 @@ def _week_ops_stats(start, end):
         # исключена отдельно (17.08.2026, решение пользователя) - студенты
         # там максимум 5-14 дней, урок им в принципе не положен, включать её
         # в "не провели урок" было бы нечестным попрёком.
-        if (group["group_type"] or "relaxed") in ("tadabbur", "prep"):
+        if not bot_leads_group(group["group_type"]) or (group["group_type"] or "relaxed") == "prep":
             continue
         title = group["title"] or str(group["chat_id"])
         with db() as c:
@@ -427,7 +428,7 @@ def _top_students_by_points(start, end, limit=10):
             JOIN users u ON u.id = e.student_id
             JOIN groups g ON g.id = e.group_id
             WHERE e.date >= ? AND e.date <= ?
-              AND (g.group_type IS NULL OR g.group_type != 'tadabbur')
+              AND (g.group_type IS NULL OR g.group_type NOT IN ('tadabbur','staff'))
             GROUP BY e.student_id
             HAVING total_points > 0
             ORDER BY total_points DESC
@@ -674,7 +675,7 @@ def _full_period_students(period_start, period_end):
     days = [(period_start + timedelta(days=i)).isoformat() for i in range((period_end - period_start).days + 1)]
     names = []
     for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
+        if not bot_leads_group(group["group_type"]):
             continue
         group_tasks = get_group_tasks(group)
         total_tasks = len(group_tasks)
@@ -703,7 +704,7 @@ def _streak_leaders(anchor_date, threshold):
     my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
     result = []
     for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
+        if not bot_leads_group(group["group_type"]):
             continue
         group_tasks = get_group_tasks(group)
         for s in get_students(group["id"]):
@@ -754,7 +755,7 @@ async def weekly_tadabbur_summary():
     try:
         task_count = 0
         for group in get_all_groups():
-            if (group["group_type"] or "relaxed") == "tadabbur":
+            if not bot_leads_group(group["group_type"]):
                 continue
             with db() as c:
                 task_n = c.execute(
@@ -821,7 +822,7 @@ async def monthly_tadabbur_summary():
     try:
         task_count = 0
         for group in get_all_groups():
-            if (group["group_type"] or "relaxed") == "tadabbur":
+            if not bot_leads_group(group["group_type"]):
                 continue
             with db() as c:
                 task_n = c.execute(
@@ -951,7 +952,7 @@ async def publish_curriculum_parts():
             )
             for group in get_all_groups():
                 gtype = group["group_type"] or "relaxed"
-                if gtype == "tadabbur":
+                if not bot_leads_group(gtype):
                     continue
                 if task_key not in get_group_tasks(group):
                     continue
@@ -1028,7 +1029,7 @@ async def streak_bonuses():
     ayah   = sampler.sample_ayah()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         glang = get_group_lang(group)
         group_tasks = get_group_tasks(group)
@@ -1055,7 +1056,7 @@ async def individual_reminders():
 
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         glang = get_group_lang(group)
         hadith = hadith_pro if gtype == "pro" else hadith_relaxed
@@ -1088,7 +1089,7 @@ async def personal_reminders():
 
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         group_tasks = get_group_tasks(group)
         glang = get_group_lang(group)
@@ -1141,7 +1142,7 @@ async def dm_connect_reminder():
         return
 
     for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
+        if not bot_leads_group(group["group_type"]):
             continue
         chat_id = group["chat_id"]
         try:
@@ -1290,7 +1291,7 @@ async def evening_report():
     today = get_date()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
@@ -1321,7 +1322,7 @@ async def skip_warnings():
     ayah   = sampler.sample_ayah()
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         glang = get_group_lang(group)
         chat_id = group["chat_id"]
@@ -1421,7 +1422,7 @@ async def tadabbur_invite_reminder():
     if not tadabbur:
         return
     for group in get_all_groups():
-        if group["group_type"] == "tadabbur":
+        if not bot_leads_group(group["group_type"]):
             continue
         try:
             missing = get_students_not_in_tadabbur(group["id"])
@@ -1516,7 +1517,7 @@ async def weekly_report():
 
     for group in get_all_groups():
         gtype = group["group_type"] or "relaxed"
-        if gtype == "tadabbur":
+        if not bot_leads_group(gtype):
             continue
         chat_id = group["chat_id"]
         group_id = group["id"]
@@ -1607,7 +1608,7 @@ async def monthly_report():
     hadith = sampler.sample_hadith()
     ayah   = sampler.sample_ayah()
     for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
+        if not bot_leads_group(group["group_type"]):
             continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)
@@ -1692,7 +1693,7 @@ async def quarterly_leaders_report():
         return
 
     for group in get_all_groups():
-        if (group["group_type"] or "relaxed") == "tadabbur":
+        if not bot_leads_group(group["group_type"]):
             continue
         chat_id = group["chat_id"]
         group_tasks = get_group_tasks(group)

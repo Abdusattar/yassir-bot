@@ -93,7 +93,7 @@ def _active_students(conn):
         "SELECT COUNT(DISTINCT ug.user_id) FROM user_groups ug"
         " JOIN groups g ON g.id = ug.group_id"
         " WHERE ug.role='student' AND ug.active=1 AND g.active=1"
-        "   AND g.group_type != 'tadabbur'")
+        "   AND (g.group_type IS NULL OR g.group_type NOT IN ('tadabbur','staff'))")
     return rows[0][0] if rows else 0
 
 

@@ -14,7 +14,7 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL, MUFRADAT_API_PORT
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.handlers import process_message, handle_reaction
@@ -270,11 +270,11 @@ async def main():
                         # joins_as_student.
                         is_ustaz_elsewhere = is_any_group_admin(uid) and not (
                             group_info and joins_as_student(uid, group_info["id"]))
-                        is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
+                        is_unled = group_info and not bot_leads_group(group_info["group_type"])
                         is_obs = is_observer(uid)
-                        log.info("chat_member join: uid=%s group=%s super=%s grp_admin=%s ustaz_elsewhere=%s tadabbur=%s observer=%s",
-                                 uid, group_info and group_info["id"], is_super, is_grp_admin, is_ustaz_elsewhere, is_tadabbur, is_obs)
-                        if group_info and not is_super and not is_grp_admin and not is_ustaz_elsewhere and not is_tadabbur and not is_obs:
+                        log.info("chat_member join: uid=%s group=%s super=%s grp_admin=%s ustaz_elsewhere=%s unled=%s observer=%s",
+                                 uid, group_info and group_info["id"], is_super, is_grp_admin, is_ustaz_elsewhere, is_unled, is_obs)
+                        if group_info and not is_super and not is_grp_admin and not is_ustaz_elsewhere and not is_unled and not is_obs:
                             tg_name = (user.get("first_name") or "").strip()
                             if user.get("last_name"):
                                 tg_name = (tg_name + " " + user["last_name"]).strip()
@@ -395,8 +395,8 @@ async def main():
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
                         is_ustaz_elsewhere = is_any_group_admin(uid) and not (
                             group_info and joins_as_student(uid, group_info["id"]))
-                        is_tadabbur = group_info and (group_info["group_type"] or "relaxed") == "tadabbur"
-                        if is_super or is_grp_admin or is_ustaz_elsewhere or is_tadabbur or is_observer(uid):
+                        is_unled = group_info and not bot_leads_group(group_info["group_type"])
+                        if is_super or is_grp_admin or is_ustaz_elsewhere or is_unled or is_observer(uid):
                             continue
                         tg_name = (nm.get("first_name") or "").strip()
                         if nm.get("last_name"):

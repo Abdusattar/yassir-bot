@@ -4,7 +4,8 @@ import re
 import time
 import unicodedata
 
-from config import SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, REQUIRE_PREP_FOR_NEW_STUDENTS
+from config import (SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, REQUIRE_PREP_FOR_NEW_STUDENTS,
+                    AI_ANSWER_IF_RELEVANT)
 from core.content import (
     TASK_KEYS, DEFAULT_TASKS, SHORT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
@@ -17,6 +18,7 @@ from core.db import (
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
     register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
     add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
+    is_service_group,
     set_observer, unset_observer, is_observer,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
@@ -1222,6 +1224,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     glang = get_group_lang(group)
     gtype = group["group_type"] or "relaxed"
 
+    # ── Служебная группа: бот молчит (09.09.2026) ─────────────────────────────
+    # Рабочий чат устазов ("Группа устазат") - там никто не учится: ни сдач,
+    # ни баллов, ни регистрации, ни ответов ИИ. Единственное исключение -
+    # /settype, иначе тип уже не переключить обратно из самой группы.
+    if is_service_group(gtype) and not text.startswith("/settype"):
+        return
+
     # ── Устаз реплаем отмечает голосовую сдачу как проверенную ─────────────────
     # (любой реплай — текст, эмодзи или свой голосовой с разбором ошибки)
     if reply_to_message_id and is_group_admin(phone, group_id):
@@ -1475,17 +1484,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # ── Управление типом группы (новые команды) ───────────────────────────────
     if text.startswith("/settype ") and is_group_admin(phone, group_id):
         gtype = text[9:].strip().lower()
-        if gtype in ("pro", "relaxed", "tadabbur", "prep"):
+        if gtype in ("pro", "relaxed", "tadabbur", "prep", "staff"):
             update_group_type(chat_id, gtype)
             type_desc = {
                 "pro": "Про-группа (10 дней без отчёта → Тадаббур)",
                 "relaxed": "Расслабленная (20 дней подряд → Тадаббур)",
                 "tadabbur": "Тадаббур — пространство красоты и смыслов Корана (не учебная группа)",
                 "prep": "Подготовительная (14 дней, ≥5 сдал → выбор relaxed-группы)",
+                "staff": "Служебная — рабочий чат устазов, здесь я только присутствую",
             }
             await send_message(chat_id, "✅ Тип группы: " + type_desc[gtype])
         else:
-            await send_message(chat_id, "Доступные типы:\n/settype pro\n/settype relaxed\n/settype tadabbur\n/settype prep")
+            await send_message(chat_id, "Доступные типы:\n/settype pro\n/settype relaxed\n/settype tadabbur\n/settype prep\n/settype staff")
         return
 
     if text.startswith("/setlink ") and is_group_admin(phone, group_id):
@@ -1828,7 +1838,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 await send_message(chat_id,
                     "✅ " + s["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
             return
-        if not is_media and _yassir_quota_ok(phone):
+        # Незваный ответ бота (см. AI_ANSWER_IF_RELEVANT в config.py): по
+        # умолчанию выключен с 09.09.2026 - слишком много непрошеных реплик
+        # в группах. Прямое обращение "Яссир, ..." обрабатывается выше и
+        # этим флагом не затронуто.
+        if AI_ANSWER_IF_RELEVANT and not is_media and _yassir_quota_ok(phone):
             answer = await ai.answer_if_relevant(
                 text, _build_reference_for_question(text),
                 group["title"] or chat_id, phone, group_id, s["name"],
