@@ -356,6 +356,34 @@
     color: var(--accent); font-size: 13.5px; font-weight: 600;
     white-space: nowrap;
   }
+  /* Общее правило навигации (09.09.2026): «← Откуда» слева вверху,
+     ✕ справа вверху, низ — только действия. В разборе #hifz-close и ЕСТЬ
+     возврат (класс .back) — он остаётся слева; в режиме заучивания это
+     настоящее закрытие режима, оно уезжает вправо, а место читается
+     слева (класс .closing ставит hifzClose(), см. hifzHead). */
+  #hifz-head.closing #hifz-close { order: 2; }
+  #hifz-head.closing .where { text-align: left; }
+
+  /* Один вид у всех подписанных возвратов приложения. */
+  .nav-back {
+    background: none; border: none; color: var(--accent);
+    font: 600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 0; cursor: pointer; white-space: nowrap;
+  }
+  /* Липкая шапка кабинета - flex-колонка, кнопка иначе растянулась бы на
+     всю ширину и её текст встал бы по центру (09.09.2026, поймано
+     скриншотом): возврат всегда прижат влево. */
+  .ustaz-head > .nav-back { align-self: flex-start; }
+  /* Шапка «Крупно»: слева возврат, следом место на листе. */
+  #hifz-big-head {
+    display: flex; align-items: center; gap: 10px; direction: ltr;
+    padding: 10px 14px; border-bottom: 1px solid var(--chrome-border);
+    background: var(--chrome-bg);
+  }
+  #hifz-big-where {
+    font: 600 12.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--ink);
+  }
   /* ─── Сдача 40+40: запись прямо в приложении (02.09.2026) ────────────
      Порядок из макета: записал → ПРОСЛУШАЛ СЕБЯ → отправил / перезаписал /
      удалил. Пока не отправил — сдачи не существует, поэтому «Удалить»
@@ -791,7 +819,6 @@
   /* Возврат с "Смысла"/"Мои слова" (30.08.2026) - просто стрелка, без
      текста (решение пользователя "просто иконка возврата"), крупнее
      обычных text+icon кнопок бара. */
-  #tab-back { font-size: 20px; }
 
   #words-list {
     flex: 1 1 auto;
@@ -2143,10 +2170,14 @@
 </div>
 <div id="word-popup"></div>
 <div id="hifz-big">
-  <div id="hifz-big-head" style="flex:0 0 auto"></div>
+  <!-- Возврат стоит в шапке слева, а не внизу (09.09.2026, общее правило
+       навигации): низ — только действия, здесь 🔊 и «Сдать». -->
+  <div id="hifz-big-head" style="flex:0 0 auto">
+    <button id="hifz-big-close" class="nav-back" data-i18n="back_page">← Страница</button>
+    <span id="hifz-big-where"></span>
+  </div>
   <div class="big-inner"><div class="big-words" id="hifz-big-words"></div></div>
   <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
-    <button id="hifz-big-close" style="flex:1;background:var(--card-bg);border:1px solid var(--card-border);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer">На страницу</button>
     <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать">🔊</button>
     <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer">🎙 Сдать</button>
   </div>
@@ -2245,8 +2276,9 @@
        "Смысл": целостный перевод аятов страницы (Кулиев, api.quran.com,
        разрешение правообладателя на постоянное размещение подтверждено
        пользователем лично 28.08.2026). Переход на след./пред. страницу
-       перевода и назад на мусхаф - через #page-nav и #tab-back, они уже
-       общие для всех вьюх, отдельной навигации внутри "Смысла" не нужно. -->
+       перевода - через #page-nav, назад на мусхаф - через "← Мусхаф" в
+       шапке (#mushaf-back), они уже общие для всех вьюх, отдельной
+       навигации внутри "Смысла" не нужно. -->
   <div id="view-meaning" class="view">
     <div id="meaning-list"></div>
   </div>
@@ -2356,12 +2388,11 @@
          сабвью показываются только ПУТИ КУДА ИДТИ, не текущее место (см.
          switchTab), текст+иконка как в #trainer-tabbar:
            Страница: Смысл, Мои слова, Тренажёр (3 кнопки)
-           Смысл: только "🔙" (1) - в Смысл попадают ТОЛЬКО со Страницы,
-             другого входа нет, "назад" однозначно туда, состояние не нужно
-           Мои слова: Тренажёр, "🔙" (2) - "🔙" ведёт на Страницу ИЛИ в
-             Тренажёр, смотря откуда зашли (mywordsOrigin, т.к. "Мои
-             слова" достижимы из обоих мест, см. openMushaf) -->
-    <button id="tab-back" class="tab-btn" title="Назад">🔙</button>
+           Смысл: пусто - идти отсюда некуда, назад ведёт шапка
+           Мои слова: Тренажёр (1) - назад ведёт шапка
+         Возврата тут больше нет (09.09.2026, общее правило навигации):
+         "← Откуда" стоит слева вверху (#mushaf-back, подпись ставит
+         switchTab), низ - только пути и действия. -->
     <button id="tab-meaning" class="tab-btn" data-i18n="tab_meaning_full">📜 Смысл</button>
     <!-- ⭐, не 🔖 (30.08.2026, пользователь поймал путаницу с закладкой
          страницы, у которой тот же 🔖) - совпадает с реальным именем
@@ -2486,7 +2517,7 @@
       look_from_ustaz: 'Замечание устаза',
       look_no_audio: 'Устаз отметил слова без голосового разбора',
       look_failed: 'Не удалось проиграть запись',
-      look_back: '‹ К моим сдачам',
+      look_back: '← Заучивания',
       look_back10: '↺ 10 сек назад',
       look_retake: '🎙 Пересдать',
       look_sub: 'разбор устаза',
@@ -2586,6 +2617,11 @@
       ustaz_days: '%N% дн',
       ustaz_minutes: '%N% мин',
       back_dashboard: '← Дашборд',
+      back_page: '← Страница',
+      back_mushaf: '← Мусхаф',
+      back_trainer: '← Тренажёр',
+      review_back: '← Устаз',
+      trainer_rating_title: 'Рейтинг',
       tab_mywords: '⭐ Мои слова',
       surah_list_title: 'Суры',
       hifz_pick: 'С какой строчки начинаем?',
@@ -2635,7 +2671,6 @@
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Закончить',
       btn_rating: '🏆 Рейтинг',
-      btn_back: '⬅️ Назад',
       btn_start: 'Начать',
       btn_yes: 'Да',
       btn_cancel: 'Отмена',
@@ -2657,7 +2692,6 @@
       rank_line: '🏆 Место в %D%: %X%',
       x_of_y: '%P% из %T%',
       btn_new_card: '🔁 Новая карточка',
-      btn_dashboard: '🏠 Дашборд',
       top_title: '🏆 Топ по муфрадату',
       no_rank_yet: 'Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲',
       division_1: '🥇 Дивизион 1 (стр. 11+)',
@@ -2718,7 +2752,6 @@
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Бүтүрүү',
       btn_rating: '🏆 Рейтинг',
-      btn_back: '⬅️ Артка',
       btn_start: 'Баштоо',
       btn_yes: 'Ооба',
       btn_cancel: 'Жокко чыгаруу',
@@ -2740,7 +2773,6 @@
       rank_line: '🏆 %D% ичиндеги орун: %X%',
       x_of_y: '%T% ичинен %P%',
       btn_new_card: '🔁 Жаңы карточка',
-      btn_dashboard: '🏠 Башкы бет',
       top_title: '🏆 Муфрадат боюнча топ',
       no_rank_yet: 'Азырынча эч ким рейтингге кире турганчалык машыкканы жок 🤲',
       division_1: '🥇 1-дивизион (11+ бет)',
@@ -2775,7 +2807,6 @@
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Менинг сўзларим',
       btn_finish: '✅ Тугатиш',
       btn_rating: '🏆 Рейтинг',
-      btn_back: '⬅️ Ортга',
       btn_start: 'Бошлаш',
       btn_yes: 'Ҳа',
       btn_cancel: 'Бекор қилиш',
@@ -2797,7 +2828,6 @@
       rank_line: '🏆 %D% даги ўрин: %X%',
       x_of_y: '%T% тадан %P%',
       btn_new_card: '🔁 Янги карточка',
-      btn_dashboard: '🏠 Бош саҳифа',
       top_title: '🏆 Муфрадат рейтинги',
       no_rank_yet: 'Ҳозирча ҳеч ким рейтингга тушадиган даражада машқ қилмади 🤲',
       division_1: '🥇 1-дивизион (11+ бет)',
@@ -3713,6 +3743,15 @@
     });
   });
   document.getElementById('mushaf-back').addEventListener('click', function () {
+    /* Возврат по стеку (09.09.2026): с "Смысла"/"Моих слов" - на шаг
+       назад (страница или тренажёр, откуда пришли), и только со самой
+       Страницы - из мусхафа на дашборд. Подпись ставит switchTab. */
+    if (!document.getElementById('view-page').classList.contains('active')) {
+      var onMywords = document.getElementById('view-mywords').classList.contains('active');
+      if (onMywords && mywordsOrigin === 'trainer') openTrainer();
+      else switchTab('page');
+      return;
+    }
     document.getElementById('app').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
     if (typeof pulseIntroStart === 'function') pulseIntroStart();
@@ -4165,16 +4204,24 @@
     // всегда показывает "куда ещё пойти", никогда кнопку на текущее
     // место:
     //   Страница - Смысл, Мои слова, Тренажёр (3, текст+иконка)
-    //   Смысл - только "🔙" (в Смысл попадают ТОЛЬКО со Страницы, другого
-    //     входа нет - "назад" однозначно туда, состояние не нужно)
-    //   Мои слова - Тренажёр + "🔙" (назад - на Страницу или в Тренажёр,
-    //     смотря откуда зашли, см. mywordsOrigin/tab-back ниже) - НО если
+    //   Смысл - пусто (идти отсюда некуда, назад ведёт шапка)
+    //   Мои слова - Тренажёр - НО если
     //     зашли ИЗ Тренажёра, "Тренажёр" не показываем вовсе (30.08.2026,
     //     поймано пользователем: обе кнопки вели бы в одно и то же место -
     //     дублирование, как и с "текущим местом" в остальных случаях).
     var onPage = name === 'page', onMeaning = name === 'meaning', onMywords = name === 'mywords';
     var mywordsFromTrainer = onMywords && mywordsOrigin === 'trainer';
-    document.getElementById('tab-back').style.display = onPage ? 'none' : '';
+    /* Возврат слева вверху подписан тем, КУДА уводит (09.09.2026): со
+       Страницы - на дашборд, с сабвью - назад по стеку. "Мои слова"
+       достижимы из двух мест, поэтому смотрим mywordsOrigin - тот же
+       признак, по которому раньше решала кнопка 🔙 в таббаре. */
+    document.getElementById('mushaf-back').textContent = onPage
+      ? T('back_dashboard')
+      : (mywordsFromTrainer ? T('back_trainer') : T('back_mushaf'));
+    /* На "Смысле" идти больше некуда - панель пуста, и от неё осталась бы
+       только полоска border-top. Прячем её целиком (09.09.2026). Инлайн
+       безопасен: режим заучивания гасит #tabbar своим !important. */
+    document.getElementById('tabbar').style.display = onMeaning ? 'none' : 'flex';
     document.getElementById('tab-meaning').style.display = onPage ? '' : 'none';
     document.getElementById('tab-mywords').style.display = onPage ? '' : 'none';
     document.getElementById('tab-trainer').style.display =
@@ -4205,14 +4252,6 @@
   document.getElementById('tab-mywords').addEventListener('click', function () {
     mywordsOrigin = 'page';
     switchTab('mywords');
-  });
-  document.getElementById('tab-back').addEventListener('click', function () {
-    var onMywords = document.getElementById('view-mywords').classList.contains('active');
-    if (onMywords && mywordsOrigin === 'trainer') {
-      openTrainer();
-    } else {
-      switchTab('page');
-    }
   });
   switchTab('page');
 
@@ -4515,6 +4554,14 @@
        перерисовке и на всех выходах из разбора (в том числе через
        пересдачу), значит подпись сама возвращается к ✕. */
     var close = document.getElementById('hifz-close');
+    /* Крестик и подписанный возврат - один элемент в двух ролях, поэтому
+       сторону задаём здесь же (09.09.2026): возврат слева, закрытие
+       справа. Класс висит на шапке - CSS переставляет её содержимое. */
+    function hifzClose(label, isBack) {
+      close.textContent = label;
+      close.classList.toggle('back', isBack);
+      document.getElementById('hifz-head').classList.toggle('closing', !isBack);
+    }
     /* Шапка принадлежит РОЛИ, а не режиму (07.09.2026). У проверки своя:
        имя студента и группа. Раньше их вписывал reviewAfterRender поверх
        студенческой строки - и любой следующий hifzHead() (а его зовёт
@@ -4523,8 +4570,11 @@
        ЕГО СОБСТВЕННОЕ место заучивания, а следующий тап по строке чужой
        сдачи сохранял бы его себе (hifzPickDone -> hifzSave -> POST /hifz). */
     if (typeof review !== 'undefined' && review.on && review.sub) {
-      close.textContent = '✕';
-      close.classList.remove('back');
+      /* Выход из проверки - это ВОЗВРАТ в кабинет (hifzExit -> reviewClose),
+         а не закрытие мусхафа, значит и подписан он должен быть так же, как
+         разбор у студента (09.09.2026, общее правило навигации). Голый ✕
+         тут читался как "закрыть", хотя уводит на прежнюю вкладку кабинета. */
+      hifzClose(T('review_back'), true);
       where.textContent = review.sub.student_name || '';
       sub.textContent = review.sub.group_title || '';
       fix.style.display = 'none';
@@ -4533,15 +4583,13 @@
     // Разбор: место называем так же, как в списке сдач, - студент должен
     // видеть, ЧТО он сдавал, а не только где на листе горит подсветка.
     if (typeof look !== 'undefined' && look.on && look.item) {
-      close.textContent = T('look_back');
-      close.classList.add('back');
+      hifzClose(T('look_back'), true);
       where.textContent = subsPlace(look.item);
       sub.textContent = T('look_sub');
       fix.style.display = 'none';
       return;
     }
-    close.textContent = '✕';
-    close.classList.remove('back');
+    hifzClose('✕', false);
     if (hifz.picking) {
       // Шапка спрашивает ровно про ту единицу, что выбрана внизу — «укажи
       // этап» нигде не пишем, вопрос всегда конкретный (02.09.2026).
@@ -4821,11 +4869,8 @@
     }
     var box = document.getElementById('hifz-big-words');
     box.innerHTML = html;
-    document.getElementById('hifz-big-head').innerHTML =
-      '<div style="padding:10px 14px;font:600 12.5px -apple-system,sans-serif;' +
-      'color:var(--ink);direction:ltr;border-bottom:1px solid var(--chrome-border);' +
-      'background:var(--chrome-bg)">' +
-      document.getElementById('hifz-where').textContent + '</div>';
+    document.getElementById('hifz-big-where').textContent =
+      document.getElementById('hifz-where').textContent;
     // Кегль подбираем под область: строка может лечь в два-три ряда, это
     // нормально — цель «удобно читать глядя», а не «уместить в одну строку».
     var area = box.parentNode;
@@ -7453,9 +7498,9 @@
       for (var dd = 1; dd <= info.today; dd++) {
         if (!((d.days || {})[stuDayKey(d.month, dd)] || []).length) missed++;
       }
-      body.innerHTML = '<div class="ustaz-head"><div class="ustaz-zones">' +
-        '<button class="on" id="stu-back">' + T('ustaz_student_back') + '</button>' +
-        '</div></div>' +
+      body.innerHTML = '<div class="ustaz-head">' +
+        '<button class="nav-back" id="stu-back">' + T('ustaz_student_back') + '</button>' +
+        '</div>' +
         '<div class="ustaz-group-title">' + ustazEsc(d.name) + '</div>' +
         '<div class="stu-cal">' + cells + '</div>' +
         '<div class="stu-legend">' +
@@ -7495,7 +7540,24 @@
     withAuthCheck(apiCall('/state'), function (data) { trainerState = data; renderTrainer(); });
   }
 
+  /* Шапка тренажёра подписана по экрану (09.09.2026, общее правило
+     навигации): на карточке - "← Дашборд" и заголовок "Тренажёр", в
+     рейтинге - "← Тренажёр" и заголовок "Рейтинг" (иначе слева и в центре
+     стояло бы одно и то же слово). Ставится в renderTrainer/endSession/
+     showLeaderboard, поэтому шапка сама возвращается к прежней при любом
+     уходе с рейтинга. */
+  var trainerScreen = 'card';
+  function setTrainerScreen(name) {
+    trainerScreen = name;
+    var rating = name === 'rating';
+    document.getElementById('trainer-back').textContent =
+      rating ? T('back_trainer') : T('back_dashboard');
+    document.getElementById('trainer-bookmark').textContent =
+      rating ? T('trainer_rating_title') : T('dash_trainer');
+  }
+
   document.getElementById('trainer-back').addEventListener('click', function () {
+    if (trainerScreen === 'rating') { renderTrainer(); return; }
     document.getElementById('trainer').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
     if (typeof pulseIntroStart === 'function') pulseIntroStart();
@@ -7558,6 +7620,7 @@
   function renderTrainer() {
     var d = trainerState;
     var body = document.getElementById('trainer-body');
+    setTrainerScreen('card');
     renderDailyBadge(d);
     if (!d) { body.innerHTML = ''; return; }
 
@@ -7633,6 +7696,10 @@
   }
 
   function endSession() {
+    /* Экран итога рисуется здесь, а не через renderTrainer, - подпись
+       возврата ставим явно, чтобы она не зависела от того, откуда пришли
+       (09.09.2026). */
+    setTrainerScreen('card');
     withAuthCheck(apiCall('/end', { method: 'POST' }), function (d) {
       var html = '<div class="trainer-msg">' + T('session_done') + '</div>';
       html += renderOverallScore(d.overall_score);
@@ -7647,19 +7714,14 @@
           X: T('x_of_y', { P: d.rank.place, T: d.rank.total }),
         }) + '</div>';
       }
-      html += '<div class="trainer-actions"><button id="tr-restart">' + T('btn_new_card') + '</button>' +
-        '<button id="tr-dashboard">' + T('btn_dashboard') + '</button></div>';
+      html += '<div class="trainer-actions"><button id="tr-restart">' + T('btn_new_card') + '</button></div>';
       document.getElementById('trainer-body').innerHTML = html;
       document.getElementById('tr-restart').addEventListener('click', openTrainer);
-      document.getElementById('tr-dashboard').addEventListener('click', function () {
-        document.getElementById('trainer').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-    if (typeof pulseIntroStart === 'function') pulseIntroStart();
-      });
     });
   }
 
   function showLeaderboard() {
+    setTrainerScreen('rating');
     withAuthCheck(apiCall('/leaderboard'), function (d) {
       var html = '<div class="trainer-msg">' + T('top_title') + '</div>';
       if (!d.in_group) {
@@ -7680,9 +7742,7 @@
           });
         });
       }
-      html += '<div class="trainer-actions"><button id="tr-back-q">' + T('btn_back') + '</button></div>';
       document.getElementById('trainer-body').innerHTML = html;
-      document.getElementById('tr-back-q').addEventListener('click', renderTrainer);
     });
   }
 })();
