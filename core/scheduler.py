@@ -17,7 +17,7 @@ from core.db import (
     get_next_part_to_publish, mark_curriculum_published, get_verify_log_for_date,
     count_unpublished_parts, get_users_due_for_survey, get_users_due_for_survey_nudge,
     start_survey, touch_survey_stage, get_prep_group, get_pending_voice_reviews,
-    bot_leads_group,
+    bot_leads_group, get_last_miss_nasiha_at, mark_miss_nasiha_sent,
 )
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
@@ -32,6 +32,21 @@ log = logging.getLogger(__name__)
 
 def _now():
     return datetime.now(pytz.timezone(TZ))
+
+
+# Личная насыха несдавшему уходит в личку не чаще раза в столько дней
+# (09.09.2026, решение пользователя): раньше она шла каждое утро подряд.
+MISS_NASIHA_MIN_DAYS = 3
+
+
+def _days_since(ts):
+    """Сколько суток прошло с отметки времени вида '2026-09-09 07:00:00'
+    (UTC, как их пишет sqlite datetime('now')). Нет отметки или мусор -
+    считаем, что прошло очень много: значит слать можно."""
+    try:
+        return (datetime.utcnow() - datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")).total_seconds() / 86400
+    except (ValueError, TypeError):
+        return 1e9
 
 
 # ── Утреннее напоминание (07:00) ──────────────────────────────────────────────
@@ -127,9 +142,13 @@ async def morning_tadabbur_report():
                     "full_count": len(full),
                 })
 
-            # Личная насыха несдавшим вчера — один текст на всех
+            # Личная насыха несдавшим вчера — один текст на всех, но одному
+            # человеку не чаще раза в MISS_NASIHA_MIN_DAYS дней (09.09.2026,
+            # решение пользователя): каждое утро — слишком часто. Отбор идёт
+            # ДО обращения к ИИ, чтобы не тратить запрос, когда слать некому.
             missing = get_missing_students(group["id"], group_tasks, date=yesterday)
             phones = [s["phone"] for s, _ in missing if s["phone"]]
+            phones = [p for p in phones if _days_since(get_last_miss_nasiha_at(p)) >= MISS_NASIHA_MIN_DAYS]
             if phones:
                 if random.random() < 0.5:
                     hadith, ayah = sampler.sample_hadith(), None
@@ -140,6 +159,7 @@ async def morning_tadabbur_report():
                     for phone in phones:
                         try:
                             await send_message(phone, "🤲 " + msg_personal)
+                            mark_miss_nasiha_sent(phone)
                         except Exception:
                             pass
                         await asyncio.sleep(0.5)

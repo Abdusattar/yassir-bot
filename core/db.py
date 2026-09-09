@@ -168,6 +168,10 @@ def init():
                 phone TEXT PRIMARY KEY,
                 last_sent_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS miss_nasihas(
+                phone TEXT PRIMARY KEY,
+                last_sent_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             CREATE TABLE IF NOT EXISTS upgrade_offers(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id INTEGER NOT NULL,
@@ -834,6 +838,24 @@ def mark_return_nudge_sent(phone):
     with db() as c:
         c.execute("""
             INSERT INTO return_nudges(phone, last_sent_at) VALUES(?, datetime('now'))
+            ON CONFLICT(phone) DO UPDATE SET last_sent_at=datetime('now')
+        """, (phone,))
+
+
+def get_last_miss_nasiha_at(phone):
+    """Когда этому студенту в последний раз уходила личная насыха за
+    несданный день (09.09.2026). Раньше она шла каждое утро - слишком
+    часто, теперь не чаще раза в MISS_NASIHA_MIN_DAYS дней
+    (см. core/scheduler.py)."""
+    with db() as c:
+        row = c.execute("SELECT last_sent_at FROM miss_nasihas WHERE phone=?", (phone,)).fetchone()
+    return row["last_sent_at"] if row else None
+
+
+def mark_miss_nasiha_sent(phone):
+    with db() as c:
+        c.execute("""
+            INSERT INTO miss_nasihas(phone, last_sent_at) VALUES(?, datetime('now'))
             ON CONFLICT(phone) DO UPDATE SET last_sent_at=datetime('now')
         """, (phone,))
 
