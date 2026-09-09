@@ -329,7 +329,16 @@ def save_mufradat_word(surah_number, ayah_number, position, arabic_text, transla
             conn.execute("UPDATE mufradat_words SET progress_key=id WHERE id=?", (cur.lastrowid,))
 
 
-def get_cached_nasiha(date: str) -> str | None:
+def _nasiha_cache_key(date: str, kind: str) -> str:
+    """Ключ дневного кэша насых. Тадаббур-насыха живёт тут с 17.08.2026 и
+    ключуется голой датой - её записи не трогаем. Всё остальное (насыха
+    несдавшему, 09.09.2026) добавляет к дате свой вид и язык, чтобы разные
+    тексты одного дня не затирали друг друга."""
+    return date if kind == "tadabbur" else "%s|%s" % (date, kind)
+
+
+def get_cached_nasiha(date: str, kind: str = "tadabbur") -> str | None:
+    date = _nasiha_cache_key(date, kind)
     if not HADITHS_DB.exists():
         return None
     try:
@@ -343,7 +352,8 @@ def get_cached_nasiha(date: str) -> str | None:
         return None
 
 
-def save_cached_nasiha(date: str, text: str) -> None:
+def save_cached_nasiha(date: str, text: str, kind: str = "tadabbur") -> None:
+    date = _nasiha_cache_key(date, kind)
     if not HADITHS_DB.exists():
         return
     try:

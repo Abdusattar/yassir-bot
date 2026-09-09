@@ -90,6 +90,29 @@ async def morning_reminder():
             log.error("morning_reminder error in %s: %s", chat_id, e)
 
 
+async def _miss_nasiha_text(lang, date_str):
+    """Текст личной насыхи за несданный день — ОДИН на весь проект, а не на
+    каждую группу (09.09.2026, решение пользователя: "текст один для всех
+    Яссир-проекта, зачем готовить индивидуальную для каждого").
+
+    Раньше он сочинялся заново для каждой группы: 13 групп = 13 вызовов ИИ
+    каждое утро, при том что читателю приходил один и тот же по смыслу
+    текст. Теперь один вызов на день и язык, а кэш лежит в общем hadiths.db
+    — значит мужской и женский боты берут оттуда же (тот же приём, что у
+    тадаббур-насыхи, 17.08.2026)."""
+    cached = sampler.get_cached_nasiha(date_str, kind="miss:" + lang)
+    if cached:
+        return cached
+    if random.random() < 0.5:
+        hadith, ayah = sampler.sample_hadith(), None
+    else:
+        hadith, ayah = None, sampler.sample_ayah()
+    text = await ai.morning_miss_nasiha(lang, hadith=hadith, ayah=ayah)
+    if text and len(text) >= 20:
+        sampler.save_cached_nasiha(date_str, text, kind="miss:" + lang)
+    return text
+
+
 # ── Утренний отчёт в Тадаббур (07:00) — итоги вчера по всем группам ──────────
 
 async def morning_tadabbur_report():
@@ -150,11 +173,7 @@ async def morning_tadabbur_report():
             phones = [s["phone"] for s, _ in missing if s["phone"]]
             phones = [p for p in phones if _days_since(get_last_miss_nasiha_at(p)) >= MISS_NASIHA_MIN_DAYS]
             if phones:
-                if random.random() < 0.5:
-                    hadith, ayah = sampler.sample_hadith(), None
-                else:
-                    hadith, ayah = None, sampler.sample_ayah()
-                msg_personal = await ai.morning_miss_nasiha(glang, hadith=hadith, ayah=ayah)
+                msg_personal = await _miss_nasiha_text(glang, yesterday)
                 if msg_personal and len(msg_personal) >= 20:
                     for phone in phones:
                         try:
