@@ -75,16 +75,19 @@ def test_onboarding_group_message_skips_link_when_dm_ok(test_db, monkeypatch):
 
 def test_onboarding_dm_sends_only_first_screen_with_button(test_db, monkeypatch):
     """13.08.2026: онбординг теперь по экранам (кнопка "Далее"), не 9
-    сообщений подряд - точка входа шлёт только первый экран (интро)."""
+    сообщений подряд - точка входа шлёт только первый экран.
+
+    С 09.09.2026 первый экран - это вход в YassirApp: текст плюс снимок
+    дашборда, кнопка "Далее" висит на снимке (он в экране последний)."""
     sent = _capture(monkeypatch)
 
     asyncio.run(prep.send_prep_onboarding_dm("p1", "ru"))
 
-    assert len(sent) == 1
-    kind, chat_id, content, buttons = sent[0]
-    assert kind == "text"
-    assert chat_id == "p1"
-    assert buttons is not None and buttons[0][1] == "ponb:1:p1"
+    assert len(sent) == 2
+    assert [s[0] for s in sent] == ["text", "photo"]
+    assert all(s[1] == "p1" for s in sent)
+    assert sent[0][3] is None                      # текст идёт без кнопки
+    assert sent[1][3][0][1] == "ponb:1:p1"         # кнопка - на снимке
 
 
 def test_onboarding_photo_failure_falls_back_to_text_button(test_db, monkeypatch):
@@ -104,11 +107,14 @@ def test_onboarding_photo_failure_falls_back_to_text_button(test_db, monkeypatch
     assert texts_with_buttons[0][3][0][1] == "ponb:2:p1"
 
 
-def test_onboarding_full_walkthrough_six_screens(test_db, monkeypatch):
+def test_onboarding_full_walkthrough(test_db, monkeypatch):
     """Проходим все экраны кнопками "Далее" (как реальный клик студента,
-    через handle_prep_onboarding_next) - в сумме должно получиться то же
-    содержимое, что раньше уходило одним потоком: 6 текстов, 3 фото,
-    последний экран без кнопки."""
+    через handle_prep_onboarding_next): 4 текста, 3 снимка приложения,
+    последний экран - без кнопки.
+
+    Экранов стало четыре вместо шести (09.09.2026): подробности переехали
+    в раздел «Как работаем» внутри приложения, снимки берутся из его же
+    набора."""
     g = _setup_prep_group()
     db.add_student("Азим", g["id"], phone="p1")
     sent = _capture(monkeypatch)
@@ -123,12 +129,12 @@ def test_onboarding_full_walkthrough_six_screens(test_db, monkeypatch):
 
     texts = [s for s in sent if s[0] == "text"]
     photos = [s for s in sent if s[0] == "photo"]
-    assert len(texts) == 6
+    assert len(texts) == 4
     assert len(photos) == 3
     assert {p[2].split("\\")[-1].split("/")[-1] for p in photos} == {
-        "Заучивание.PNG", "Повторение.PNG", "Слова.PNG"
+        "dash.jpg", "rec.jpg", "revision.jpg"
     }
-    assert sent[-1][3] is None  # последний экран (адаб) - без кнопки
+    assert sent[-1][3] is None  # последний экран (правила) - без кнопки
 
 
 def test_onboarding_if_pending_sends_for_active_prep_student(test_db, monkeypatch):

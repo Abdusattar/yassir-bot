@@ -56,20 +56,28 @@ from core.tg import (
 
 log = logging.getLogger(__name__)
 
-_ONBOARDING_DIR = Path(__file__).parent.parent / "knowledge"
+# Снимки берём из готового набора раздела «Как работаем» (09.09.2026): их
+# пересобирает scripts/shoot_onboarding.py по живому приложению, значит они
+# не устаревают вслед за интерфейсом. Прежние картинки лежали в knowledge/
+# и показывали сдачу перепиской в группе - этого пути новичку больше не
+# показываем, всё идёт через YassirApp.
+_ONBOARDING_DIR = Path(__file__).parent.parent / "mushaf_data" / "onboarding"
 
 # (text_key, photo_filename|None) - один экран = один шаг с кнопкой "Далее"
 # (13.08.2026, было 9 сообщений подряд, пользователь: "чтобы всё скопом не
 # приходило"). Текст+фото идут отдельными сообщениями (caption ограничен
 # 1024 символами, prep_onboarding_m длиннее), кнопка - на последнем
 # сообщении экрана.
+#
+# Экранов четыре, не шесть (09.09.2026, пользователь: "не надо слишком много
+# экранов"): вход в приложение, заучивание, повторение со словами, правила.
+# Подробное руководство теперь живёт в самом приложении - раздел «Как
+# работаем», куда первый экран и отправляет.
 _ONBOARDING_STEPS = [
-    ("prep_onboarding_intro", None),
-    ("prep_onboarding_m", "Заучивание.PNG"),
-    ("prep_onboarding_r", "Повторение.PNG"),
-    ("prep_onboarding_t", "Слова.PNG"),
+    ("prep_onboarding_intro", "dash.jpg"),
+    ("prep_onboarding_m", "rec.jpg"),
+    ("prep_onboarding_rt", "revision.jpg"),
     ("prep_onboarding_rules", None),
-    ("prep_onboarding_adab", None),
 ]
 
 PREP_DAYS = 14
@@ -724,7 +732,7 @@ async def _send_onboarding_screen(phone, screen_idx, glang):
 
 
 async def send_prep_onboarding_dm(phone, glang):
-    """Точка входа онбординга - первый из 6 экранов (13.08.2026, было 9
+    """Точка входа онбординга - первый из 4 экранов (13.08.2026, было 9
     сообщений подряд без остановки). Дальше студент идёт сам по кнопке
     "Далее" - см. handle_prep_onboarding_next(), роутинг в bot.py по
     префиксу callback_data "ponb:". Если не нажимает - ничего не
