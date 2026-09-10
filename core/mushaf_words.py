@@ -510,6 +510,30 @@ def _normalize_rasm(arabic_text):
     return _ARTICLE_RE.sub("", text)
 
 
+def _same_word_different_ending(a, b):
+    """Один ли это перевод с точностью до окончания (10.09.2026, живая
+    жалоба: на стр. 16 в "Мои слова" ушли и "Сулеймана", и "Сулейман" -
+    арабское слово одно, отличаются падежные окончания русского перевода).
+
+    Правило нарочно узкое: слова считаются одним, только если одно почти
+    целиком совпадает с началом другого. "Писание"/"предписал" (тот же
+    костяк كتاب, разный смысл) под него НЕ подпадают - решение
+    пользователя от 03.09.2026 "другой перевод = другое слово" в силе,
+    здесь снимается только разница окончаний."""
+    if a == b:
+        return True
+    a, b = a.replace("ё", "е"), b.replace("ё", "е")
+    short, long = (a, b) if len(a) <= len(b) else (b, a)
+    if len(short) < 4:
+        return False           # "дом"/"дома" короткие и слишком разные
+    common = 0
+    for x, y in zip(short, long):
+        if x != y:
+            break
+        common += 1
+    return common >= len(short) - 2
+
+
 def _normalize_translation(translation):
     if not translation:
         return ""
@@ -548,22 +572,34 @@ def _first_occurrence_pages(conn):
 
 def _line_word_triples(page_number, line_index):
     """(surah, ayah, position) слов ТЕКСТОВОЙ строки line_index (0-based) на
-    странице - из того же page{N}.json, что рендерит фронтенд ("lines",
-    там "line" 1-based)."""
+    странице - из того же page{N}.json, что рендерит фронтенд.
+
+    Считаем ТОЛЬКО текстовые строки, по порядку - ровно так же нумерует их
+    приложение (data-line в renderPage, hifzTextLines) и page_text_line_count
+    ниже. Поле "line" внутри json для этого не годится: оно нумерует ВСЕ
+    строки листа, включая название суры и басмалу.
+
+    Живой баг 10.09.2026 (Талас, первый день в подготовительной): он начал
+    заучивание с первой строки Аль-Бакары, а слова не появились. На стр. 2
+    "line":1 - название суры, "line":2 - басмала, и первая текстовая строка
+    имеет "line":3. Старая формула line_index+1 искала строку 1, попадала в
+    название суры и молча возвращала пусто. На листах без названия суры
+    (а их подавляющее большинство) обе нумерации совпадают - потому баг и
+    прятался с 03.09.2026."""
     path = os.path.join(_MUSHAF_DATA_DIR, f"page{page_number}.json")
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
         return []
-    for line in data.get("lines", []):
-        if line.get("type") == "text" and line.get("line") == line_index + 1:
-            return [
-                (t["surah"], t["ayah"], t["position"])
-                for t in line.get("tokens", [])
-                if t.get("type") == "word"
-            ]
-    return []
+    text_lines = [l for l in data.get("lines", []) if l.get("type") == "text"]
+    if not 0 <= line_index < len(text_lines):
+        return []
+    return [
+        (t["surah"], t["ayah"], t["position"])
+        for t in text_lines[line_index].get("tokens", [])
+        if t.get("type") == "word"
+    ]
 
 
 def check_new_words_for_line(user_id, page_number, line_index):
@@ -588,7 +624,20 @@ def check_new_words_for_line(user_id, page_number, line_index):
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
         occ = _first_occurrence_pages(conn)
-        new_pks = set()
+        # Что у человека уже лежит - чтобы не класть то же слово второй раз
+        # (10.09.2026). Сравниваем по костяку букв и переводу с точностью до
+        # окончания: отбор идёт по каждому ВХОЖДЕНИЮ (progress_key), и одно
+        # слово, дважды встреченное в аяте или на соседних строчках, давало
+        # две карточки. Для тренажёра вхождения честно разные, а "Мои слова"
+        # - список для чтения, и дубль там просто шум.
+        seen = [
+            (_normalize_rasm(_strip_tajweed_tags(arabic_html)), _normalize_translation(tr))
+            for arabic_html, tr in conn.execute(
+                "SELECT arabic_html, translation FROM mushaf_starred_words WHERE user_id=?",
+                (user_id,)
+            )
+        ]
+        new_pks = []
         for surah, ayah, position in triples:
             row = conn.execute(
                 "SELECT progress_key, arabic_text, translation FROM mufradat_words "
@@ -598,9 +647,14 @@ def check_new_words_for_line(user_id, page_number, line_index):
             if row is None or row[0] is None:
                 continue
             pk, arabic_text, translation = row
-            key = (_normalize_rasm(arabic_text), _normalize_translation(translation))
-            if occ.get(key) == page_number and page_number >= start_page:
-                new_pks.add(pk)
+            rasm = _normalize_rasm(arabic_text)
+            tr = _normalize_translation(translation)
+            if occ.get((rasm, tr)) != page_number or page_number < start_page:
+                continue
+            if any(rasm == r and _same_word_different_ending(tr, t) for r, t in seen):
+                continue
+            seen.append((rasm, tr))
+            new_pks.append(pk)
     for pk in new_pks:
         add_starred_word_by_progress_key(user_id, pk, source="hifz_new")
 
