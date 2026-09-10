@@ -1125,9 +1125,20 @@
     margin-bottom: 12px;
     box-shadow: var(--shadow-sm);
     display: none;              /* до первого ответа /pulse ничего не мигает */
-    flex-direction: column;
-    gap: 3px;
+    /* Сердце слева, число и разбивка сбоку справа, волна суток во всю
+       ширину под ними (10.09.2026, решение пользователя). Раньше всё шло в
+       столбик и блок занимал ~370px - почти пол-экрана, из-за чего двери
+       уезжали за сгиб. Сердце при этом не портится: pulseFit() берёт
+       clientWidth и перерисовывает фигуру под новый размер, а не сжимает
+       готовую картинку. */
+    grid-template-columns: 58% 1fr;
+    grid-template-areas: "heart count" "heart split" "days days";
+    column-gap: 12px; row-gap: 2px; align-items: center;
   }
+  #dash-pulse #pulse-heart { grid-area: heart; height: auto; }
+  #dash-pulse .p-count { grid-area: count; align-self: end; }
+  #dash-pulse .p-split { grid-area: split; align-self: start; }
+  #dash-pulse .p-days { grid-area: days; }
   #dash-pulse .p-count { display: flex; align-items: baseline; gap: 7px; }
   /* Число живое: по цифрам медленно проходит волна света - от чернил к
      акценту и обратно (07.09.2026, просьба пользователя «пусть переливается»).
@@ -1227,6 +1238,25 @@
     color: var(--muted); letter-spacing: -.01em;
   }
   #my-day .names span.on { color: var(--ink); font-weight: 600; }
+  /* «Мой день» в шапке (10.09.2026). Заголовок «МОЙ ДЕНЬ» здесь лишний -
+     полоски с подписями сами себя объясняют, а место в строке дорого.
+     Сетка вместо колонки: полоски и подписи слева друг под другом, «0 из 3»
+     справа во всю высоту. Правило сильнее, чем #my-day.on, поэтому
+     display:grid побеждает тамошний display:flex. */
+  #dash-head #my-day.on {
+    flex: 1; min-width: 0; margin: 0;
+    padding: 7px 13px 6px; border-radius: 16px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "bars num" "names num";
+    column-gap: 12px; row-gap: 4px; align-items: center;
+  }
+  #dash-head #my-day .cap { grid-area: num; }
+  #dash-head #my-day .cap span { display: none; }
+  #dash-head #my-day .cap b { font-size: 14px; }
+  #dash-head #my-day .bars { grid-area: bars; }
+  #dash-head #my-day .names { grid-area: names; }
+  #dash-head #my-day .names span { font-size: 9.5px; }
 
   /* Двери (07.09.2026, новый стиль). Были четыре одинаковые плитки с
      цветными эмодзи - четыре равных пятна, между которыми глазу не за что
@@ -1245,9 +1275,12 @@
   }
   .dash-row {
     position: relative;
-    display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
-    aspect-ratio: 1 / 1;
-    padding: 16px 15px 17px;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
+    /* Квадрат (10.09.2026) отменён: при ширине 390 плитка выходила ~173px, и
+       четыре двери занимали пол-экрана, отодвигая всё остальное за сгиб.
+       Высота теперь по содержимому, но не ниже 116 - палец попадает. */
+    min-height: 116px;
+    padding: 13px 13px 14px;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 20px;
@@ -1288,20 +1321,20 @@
   }
   .dash-row .badge.calm { background: var(--accent); }
   .dash-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  /* Дверей три (у студента нет кабинета устаза) - третья занимает строку
-     целиком: пустая половина рядом читалась бы как потерянная дверь. */
-  #dash-doors.three #dash-trainer {
-    grid-column: 1 / -1; aspect-ratio: auto; min-height: 92px;
+  /* Сколько дверей у кого (10.09.2026): у студента их четыре - «Работа с
+     устазом», «Мусхаф», «Тренажёр», «Как работаем» - и они складываются в
+     ровный квадрат 2x2, никакого исключения не нужно. У устаза пятая,
+     «Устаз», и тогда последняя занимает строку целиком: пустая половина
+     рядом читалась бы как потерянная дверь.
+     Класс .three ставится, когда человек НЕ устаз (см. sendHeartbeat),
+     поэтому правило для устаза - через :not(.three). */
+  #dash-doors:not(.three) #dash-learn {
+    grid-column: 1 / -1; min-height: 74px;
     flex-direction: row; align-items: center; gap: 14px;
   }
-  #dash-doors.three #dash-trainer .text { flex: 1; }
-  /* На телефоне плитка честно квадратная (~173px при ширине экрана 390).
-     Шире - квадрат раздувался бы в пустое поле между знаком и подписью,
-     поэтому там высота фиксированная. max-height тут не годится:
-     aspect-ratio пересчитывает по нему И ширину, плитки ужимаются. */
-  @media (min-width: 460px) {
-    .dash-row { aspect-ratio: auto; min-height: 176px; }
-  }
+  #dash-doors:not(.three) #dash-learn .text { flex: 1; }
+  /* Правило под широкий экран убрано вместе с квадратом (10.09.2026):
+     высота теперь и так по содержимому, а min-height одинаков везде. */
 
   .dash-card {
     width: 100%;
@@ -2207,34 +2240,21 @@
       <span>Ўзбекча</span><span class="check">✓</span></button>
   </div>
   <div id="dash-head">
+    <!-- «Мой день» переехал сюда 10.09.2026 (решение пользователя): строка
+         шапки пустовала на девять десятых, а карточка «Мой день» занимала
+         ~90px и отодвигала двери за первый экран. Разметка та же, меняется
+         только раскладка - см. #dash-head #my-day в стилях. -->
+    <div id="my-day">
+      <span class="cap" id="my-day-cap"></span>
+      <span class="bars" id="my-day-bars"></span>
+      <span class="names" id="my-day-names"></span>
+    </div>
     <span id="dash-online"></span>
     <div id="dash-settings">
       <button id="btn-lang-toggle" title="Тил / Язык" aria-haspopup="true"
               aria-expanded="false">RU</button>
       <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
     </div>
-  </div>
-  <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
-       в скрипте. Пустой каркас: наполняется после ответа /pulse. -->
-  <div id="dash-pulse">
-    <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
-    <div class="p-split" id="pulse-split"></div>
-    <canvas id="pulse-heart" width="330" height="168"></canvas>
-    <div class="p-days">
-      <div class="p-row">
-        <button class="p-arrow" id="pulse-prev" aria-label="день назад">&lsaquo;</button>
-        <b id="pulse-day">&nbsp;</b>
-        <span class="p-dots" id="pulse-dots"></span>
-        <button class="p-arrow" id="pulse-next" aria-label="день вперёд">&rsaquo;</button>
-      </div>
-      <canvas id="pulse-wave" width="330" height="70"></canvas>
-      <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
-    </div>
-  </div>
-  <div id="my-day">
-    <span class="cap" id="my-day-cap"></span>
-    <span class="bars" id="my-day-bars"></span>
-    <span class="names" id="my-day-names"></span>
   </div>
   <div id="dash-doors" class="three">
   <!-- Своя дверь студента (04.09.2026, экран "Сдачи" из макета 01.09): свои
@@ -2270,6 +2290,26 @@
     <span class="mark">✎</span>
     <span class="text"><span class="label" data-i18n="dash_learn">Как работаем</span><span class="sub" data-i18n="dash_learn_sub">Повторение, муфрадат, заучивание</span></span>
   </div>
+  </div>
+  <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
+       в скрипте. Пустой каркас: наполняется после ответа /pulse.
+       Стоит ПОД дверями с 10.09.2026: двери - это то, ради чего человек
+       открыл приложение, а пульс смотрят между делом. Раньше он шёл
+       первым и отодвигал двери за первый экран. -->
+  <div id="dash-pulse">
+    <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
+    <div class="p-split" id="pulse-split"></div>
+    <canvas id="pulse-heart" width="330" height="168"></canvas>
+    <div class="p-days">
+      <div class="p-row">
+        <button class="p-arrow" id="pulse-prev" aria-label="день назад">&lsaquo;</button>
+        <b id="pulse-day">&nbsp;</b>
+        <span class="p-dots" id="pulse-dots"></span>
+        <button class="p-arrow" id="pulse-next" aria-label="день вперёд">&rsaquo;</button>
+      </div>
+      <canvas id="pulse-wave" width="330" height="70"></canvas>
+      <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
+    </div>
   </div>
   <!-- Выход (10.09.2026) - только у сессии сайта. Внутри Telegram выходить
        не из чего: там нас узнаёт сам Telegram при каждом открытии, и кнопка
@@ -3553,7 +3593,10 @@
     var yday = days[days.length - 2];
     pulseGhost(yday ? yday.people : 0);
     pulseLabels();
-    document.getElementById('dash-pulse').style.display = 'flex';
+    // 'grid', а не 'flex' (10.09.2026): блок с этого дня раскладывается
+    // сеткой - сердце слева, число и разбивка справа. Инлайновый стиль
+    // сильнее таблицы стилей, поэтому раскладка задаётся здесь же.
+    document.getElementById('dash-pulse').style.display = 'grid';
     if (!prev) pulseIntroStart();       // первое открытие приложения
     pulseStart();
   }
