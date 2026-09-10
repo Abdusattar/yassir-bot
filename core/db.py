@@ -242,6 +242,10 @@ def init():
             CREATE INDEX IF NOT EXISTS idx_vl_date ON verify_log(date);
         """)
         _run_migrations(c)
+    # Свой вход в приложение вне Telegram (10.09.2026). Импорт внутри функции:
+    # core.web_auth сам берёт db() отсюда, на верхнем уровне вышел бы цикл.
+    from core.web_auth import init_web_auth
+    init_web_auth()
 
 
 def _run_migrations(c):

@@ -47,7 +47,16 @@ jobs:
             set -e
             cd ~/yassir-bot && git pull origin master
             source ~/yassir-bot/venv/bin/activate && pip install -r requirements.txt -q
-            cp ~/yassir-bot/mushaf_data/index.html /var/www/yassir-app/index.html
+            # Статика приложения. index.html жил здесь один до 10.09.2026 -
+            # теперь рядом манифест, service worker и иконки: без них значок
+            # на экране телефона и работа без сети просто не заведутся, а
+            # nginx отдаёт /var/www/yassir-app, а НЕ ~/yassir-bot/mushaf_data
+            # (см. wiki/mushaf_yassirapp.md, "Где реально лежат отдаваемые
+            # файлы"). page*.json сюда не копируются - они symlink'и.
+            for f in index.html manifest.json sw.js \
+                     icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png; do
+              cp ~/yassir-bot/mushaf_data/$f /var/www/yassir-app/$f
+            done
             sudo systemctl restart yassir-bot
             # Печатаем реальный HEAD - в логе Actions сразу видно, что
             # выкатилось, без похода на сервер.

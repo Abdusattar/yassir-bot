@@ -35,6 +35,10 @@ audio/
 # Сгенерированные данные мусхаф-страниц (scripts/export_mushaf_page.py) -
 # регенерируются из mufradat_words, не нужны в истории git
 mushaf_data/*.json
+# ...но manifest.json написан руками, а не сгенерирован: это часть
+# приложения (значок на экране телефона, 10.09.2026), она обязана ехать
+# в git и на сервер вместе с index.html.
+!mushaf_data/manifest.json
 
 # Кэш HTML печатной раскладки KFGQPC V4 из QUL (scripts/fix_mushaf_lines.py) -
 # 97 МБ скачанных превью, нужен только для перезапуска починки разметки.

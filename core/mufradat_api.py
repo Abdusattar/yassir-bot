@@ -65,6 +65,11 @@ from core.mushaf_words import (
 from core.pulse import get_pulse
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.prep import prep_progress
+from core.tg import get_bot_username
+from core.web_auth import (
+    new_login_code, take_session_for_code, resolve_session, revoke_session,
+    LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
+)
 
 log = logging.getLogger(__name__)
 
@@ -106,13 +111,38 @@ def validate_init_data(raw, bot_token, max_age_seconds=_INIT_DATA_MAX_AGE):
 
 
 def with_auth(handler):
+    """Два входа, один и тот же user_id на выходе.
+
+    Внутри Telegram — initData, как и было с 29.08.2026. С сайта
+    (yassirilm.com в обычном браузере) initData не существует вообще,
+    поэтому там своя сессия: Bearer-токен, выданный после подтверждения
+    входа ботом (см. core/web_auth.py).
+
+    Сессия лежит в базе ЭТОГО процесса, а мужской и женский — разные
+    процессы с разными базами. Значит женский токен на мужском порту просто
+    не найдётся и получит 401 — ровно как женская initData не проходила
+    мужской HMAC. Разделение баз по полу остаётся жёстким, а не зависящим
+    от параметра в адресе."""
     async def wrapped(request):
         raw = request.headers.get("X-Telegram-Init-Data", "")
-        user = validate_init_data(raw, TELEGRAM_TOKEN)
-        if user is None or not user.get("id"):
+        if raw:
+            user = validate_init_data(raw, TELEGRAM_TOKEN)
+            if user is None or not user.get("id"):
+                return web.json_response({"error": "unauthorized"}, status=401)
+            return await handler(request, str(user["id"]))
+        token = _bearer_token(request)
+        user_id = resolve_session(token) if token else None
+        if not user_id:
             return web.json_response({"error": "unauthorized"}, status=401)
-        return await handler(request, str(user["id"]))
+        return await handler(request, user_id)
     return wrapped
+
+
+def _bearer_token(request):
+    header = request.headers.get("Authorization", "")
+    if header.startswith("Bearer "):
+        return header[7:].strip()
+    return ""
 
 
 def _daily_fields(user_id):
@@ -1152,11 +1182,106 @@ async def handle_submission_audio(request, user_id):
     return await _telegram_audio_response(file_id)
 
 
+# ── Вход с сайта (10.09.2026) ─────────────────────────────────────────────────
+#
+# Три эндпоинта БЕЗ with_auth - они и существуют затем, чтобы авторизации
+# ещё не было. Защищает их не подпись, а то, что код входа знает только тот
+# браузер, который его запросил, живёт 15 минут и обменивается на токен
+# ровно один раз (core/web_auth.py).
+
+# Простой заслон от перебора: nginx у нас без limit_req вообще, а /auth/start
+# создаёт запись в базе на каждый вызов. Память процесса, не база - переживать
+# рестарт этому счётчику незачем.
+_login_hits = {}
+_LOGIN_MAX_PER_HOUR = 20        # с одного адреса - человеку хватает одного
+_LOGIN_MAX_PER_HOUR_SHARED = 300  # когда адрес неизвестен и все слиты в один
+
+
+def _client_ip(request):
+    """За nginx request.remote всегда 127.0.0.1 - настоящий адрес приходит
+    заголовком X-Real-IP (proxy_set_header в /etc/nginx/sites-available/
+    yassir-app, см. wiki/infrastructure.md). Пусто - значит заголовок ещё
+    не настроен, и различить людей мы не можем."""
+    return request.headers.get("X-Real-IP", "")
+
+
+def _login_rate_ok(ip):
+    """Заслон от перебора: /auth/start пишет строку в базу на каждый вызов.
+
+    Порог зависит от того, знаем ли мы адрес. Знаем - 20 в час на человека,
+    с запасом. Не знаем (заголовок X-Real-IP не настроен) - все запросы
+    приходят с одного 127.0.0.1, и порог в 20 запер бы вообще всех: в первый
+    день входить будут сотни студентов сразу. Тогда держим общий потолок
+    повыше - он всё ещё ловит машинный перебор, но живым людям не мешает.
+
+    Память процесса, а не база: переживать рестарт этому счётчику незачем.
+    """
+    key = ip or "_shared"
+    limit = _LOGIN_MAX_PER_HOUR if ip else _LOGIN_MAX_PER_HOUR_SHARED
+    now = time.time()
+    hits = [t for t in _login_hits.get(key, []) if now - t < 3600]
+    if len(hits) >= limit:
+        _login_hits[key] = hits
+        return False
+    hits.append(now)
+    _login_hits[key] = hits
+    if len(_login_hits) > 5000:            # чистим, чтобы словарь не рос вечно
+        for k in [k for k, v in _login_hits.items() if not v or now - v[-1] > 3600]:
+            _login_hits.pop(k, None)
+    return True
+
+
+async def handle_auth_start(request):
+    """POST - браузер просит код. В ответ ссылка в бота: человек нажимает
+    «Начать», бот узнаёт его по Telegram ID и подтверждает (см.
+    core/handlers.py). Ни телефона, ни SMS."""
+    username = get_bot_username()
+    if not username:
+        # Ссылку собрать не из чего. Бывает только до первого успешного getMe.
+        return web.json_response({"error": "bot_unknown"}, status=503)
+    if not _login_rate_ok(_client_ip(request)):
+        return web.json_response({"error": "too_many"}, status=429)
+    code = new_login_code()
+    return web.json_response({
+        "code": code,
+        "link": f"https://t.me/{username}?start={LOGIN_START_PREFIX}{code}",
+        "bot": username,
+        "ttl_minutes": LOGIN_CODE_TTL_MINUTES,
+    })
+
+
+async def handle_auth_poll(request):
+    """GET ?code= - браузер ждёт подтверждения. Пока его нет, отвечаем
+    pending; в момент подтверждения ОДИН раз отдаём токен сессии."""
+    code = request.query.get("code", "")
+    taken = take_session_for_code(code, request.headers.get("User-Agent", ""))
+    if not taken:
+        return web.json_response({"pending": True})
+    token, user_id = taken
+    user = find_user_by_phone(user_id)
+    return web.json_response({
+        "token": token,
+        "name": (user["name"] if user else "") or "",
+    })
+
+
+@with_auth
+async def handle_auth_logout(request, user_id):
+    """POST - выйти на ЭТОМ устройстве. Токен гасим по нему самому, а не по
+    user_id: выходя с компьютера в мечети, человек не должен вылетать со
+    своего телефона."""
+    revoke_session(_bearer_token(request))
+    return web.json_response({"ok": True})
+
+
 def build_app():
     # client_max_size по умолчанию 1 МБ - голосовая сдача 40+40 (несколько
     # минут записи из браузера) в него не влезает, aiohttp обрывал бы её
     # до нашего обработчика. Свой предел проверяем уже в handle_hifz_submit.
     app = web.Application(client_max_size=HIFZ_MAX_UPLOAD_BYTES + 1024 * 1024)
+    app.router.add_post("/api/muf/auth/start", handle_auth_start)
+    app.router.add_get("/api/muf/auth/poll", handle_auth_poll)
+    app.router.add_post("/api/muf/auth/logout", handle_auth_logout)
     app.router.add_get("/api/muf/state", handle_state)
     app.router.add_post("/api/muf/page", handle_page)
     app.router.add_post("/api/muf/answer", handle_answer)

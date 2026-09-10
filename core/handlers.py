@@ -45,8 +45,32 @@ from core.transfers import (
 )
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 from core.mushaf_words import advance_hifz_pointer
+from core.web_auth import claim_login_code, LOGIN_START_PREFIX
 
 log = logging.getLogger(__name__)
+
+# Ответы на вход в приложение с сайта (10.09.2026, см. обработчик
+# "/start login_" ниже). Вынесены сюда, а не написаны по месту: тексты бота
+# правятся отдельно от логики, и держать их в середине длинного разветвления
+# неудобно. Только по-русски - новое делаем на ru, ky/uz одним проходом,
+# когда отшлифуется.
+LOGIN_CONFIRMED = (
+    "✅ Вход подтверждён.\n\n"
+    "Возвращайся в приложение — оно уже открылось. Заходить заново не "
+    "придётся: это устройство я запомнил."
+)
+
+LOGIN_CODE_EXPIRED = (
+    "Эта ссылка на вход уже не годится — она живёт 15 минут 🤲\n\n"
+    "Открой приложение и нажми «Войти» ещё раз, я подтвержу."
+)
+
+LOGIN_NOT_A_STUDENT = (
+    "Я пока не вижу тебя в своих группах 🤲\n\n"
+    "Приложение открывается тем, кто уже учится. Если ты в женской группе — "
+    "вход нужно делать через женского бота. А если только собираешься "
+    "начать, напиши своему устазу, он подскажет с чего начать."
+)
 
 _TASK_NAMES = {
     "m": "Заучивание (или 40+40)",
@@ -826,6 +850,27 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # следующее сообщение ждёт (актуально и сейчас, когда
             # отправляется только первый экран, а не весь поток - 13.08.2026).
             asyncio.create_task(send_prep_onboarding_if_pending(phone))
+
+        # ── Вход в приложение с сайта (10.09.2026). Человек открыл
+        # yassirilm.com в обычном браузере, приложение дало ему ссылку
+        # t.me/<бот>?start=login_<код>, и вот он здесь. Подтверждаю, что это
+        # он: Telegram уже удостоверил личность самим фактом сообщения от
+        # этого user_id - ни пароля, ни кода из SMS не нужно.
+        #
+        # Подтверждает только СВОЙ бот: мужской знает мужчин, женский женщин
+        # (базы разные, см. wiki/infrastructure.md). Ошибся дверью - не найду
+        # в своих группах и скажу об этом, сессия в чужую базу не попадёт.
+        if text.startswith("/start " + LOGIN_START_PREFIX):
+            code = text.split(" ", 1)[1][len(LOGIN_START_PREFIX):].strip()
+            known = (is_admin(phone) or is_any_group_admin(phone)
+                     or get_learning_group(phone, include_prep=True) is not None)
+            if not known:
+                await send_message(chat_id, LOGIN_NOT_A_STUDENT)
+            elif claim_login_code(code, phone):
+                await send_message(chat_id, LOGIN_CONFIRMED)
+            else:
+                await send_message(chat_id, LOGIN_CODE_EXPIRED)
+            return
 
         # ── Мусхаф Mini App, личка - единственный вход в YassirApp теперь
         # только через Menu Button (кнопка рядом с полем ввода, bot.py) -

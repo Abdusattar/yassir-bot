@@ -7,6 +7,21 @@ from config import TG_API, SHADOW_CHAT_IDS
 
 log = logging.getLogger(__name__)
 
+# Имя бота (@username) — узнаётся один раз при старте из getMe (bot.py) и
+# нужно веб-входу, чтобы собрать ссылку t.me/<бот>?start=login_<код>
+# (10.09.2026). В конфиге его нет и не должно быть: у мужского и женского
+# процессов имена разные, а токен и так у каждого свой.
+_bot_username = ""
+
+
+def set_bot_username(name):
+    global _bot_username
+    _bot_username = (name or "").lstrip("@")
+
+
+def get_bot_username():
+    return _bot_username
+
 
 async def tg_call(method, payload=None, timeout=35):
     url = TG_API + "/" + method

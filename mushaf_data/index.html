@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="google" content="notranslate">
 <title>Мусхаф — Яссир</title>
+
+<!-- Приложение на экране телефона (10.09.2026). Магазины сознательно
+     пропущены: правим приложение почти каждый день, а ревью Apple на каждое
+     обновление убило бы этот темп. Manifest + иконка дают то же, что нужно
+     студенту — свой значок, полный экран, работа без сети.
+     На Android установку предлагает сам браузер, на iPhone её делают руками
+     («Поделиться → На экран Домой») — там работает apple-touch-icon. -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1f7a52">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="YassirApp">
 <script>
   // Применяем сохранённую тему ДО рендера (30.08.2026) - отдельный
   // маленький скрипт в <head>, а не внизу с основной логикой, чтобы не
@@ -2090,6 +2103,86 @@
     border-radius: 10px;
   }
   .trainer-lb-row.you { font-weight: 700; border-color: var(--accent); background: var(--accent-soft); }
+
+  /* ── Экран входа (10.09.2026) ───────────────────────────────────────────
+     Виден только когда приложение открыто как САЙТ: внутри Telegram нас
+     узнаёт initData, и этого экрана не существует.
+
+     direction: ltr обязателен - <html dir="rtl"> (нужен арабскому тексту
+     мусхафа) иначе перевернёт и порядок кнопок, и сами направленные знаки
+     (см. wiki/mushaf_yassirapp.md, "Ловушка: RTL-контейнер зеркалит и
+     порядок, и сами символы"). */
+  #login {
+    position: fixed; inset: 0; z-index: 100;
+    direction: ltr;
+    /* body задаёт 'Scheherazade New' - шрифт арабского текста мусхафа.
+       Весь остальной интерфейс живёт на системном, экран входа тоже. */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    overflow-y: auto;
+  }
+  .login-card {
+    width: 100%; max-width: 360px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-md);
+    padding: 28px 22px 22px;
+    text-align: center;
+  }
+  /* Арабский глиф в латинском кегле рисуется мельче - свой размер, как у
+     знаков на дверях дашборда. */
+  .login-mark {
+    /* Знак сажды рисуем арабским шрифтом сознательно: в системном он у
+       части устройств вырождается в квадрат. */
+    font-family: 'Scheherazade New', serif;
+    font-size: 44px; line-height: 1;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .login-card h1 {
+    margin: 0 0 6px; font-size: 22px; font-weight: 700; color: var(--ink);
+  }
+  .login-sub { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .login-q { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
+  .login-side, .login-go, .login-plain {
+    display: block; width: 100%;
+    font: inherit; font-size: 15px;
+    padding: 13px 14px; margin-bottom: 10px;
+    border-radius: 14px; cursor: pointer;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg); color: var(--ink);
+  }
+  .login-side:hover { border-color: var(--accent); }
+  /* Единственная закрашенная кнопка на экран - остальное outline
+     (см. "Дизайн-система" в wiki). */
+  .login-go {
+    background: var(--accent); color: var(--accent-ink);
+    border-color: var(--accent); font-weight: 600;
+    text-decoration: none; box-sizing: border-box;
+  }
+  .login-plain {
+    border: none; background: none; color: var(--muted);
+    font-size: 13px; padding: 6px; margin: 0;
+  }
+  .login-status { margin: 14px 0 6px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .login-status.bad { color: var(--no); }
+  #login-step-go { margin-top: 4px; }
+  .login-ios {
+    margin: 18px 0 0; padding-top: 14px;
+    border-top: 1px solid var(--card-border);
+    font-size: 12.5px; line-height: 1.5; color: var(--muted);
+  }
+
+  #dash-logout {
+    display: block; margin: 18px auto 6px;
+    font: inherit; font-size: 12.5px;
+    color: var(--muted); background: none; border: none;
+    cursor: pointer; padding: 6px 10px;
+  }
+  #dash-logout:hover { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -2167,6 +2260,11 @@
     <span class="text"><span class="label" data-i18n="dash_learn">Как работаем</span><span class="sub" data-i18n="dash_learn_sub">Повторение, муфрадат, заучивание</span></span>
   </div>
   </div>
+  <!-- Выход (10.09.2026) - только у сессии сайта. Внутри Telegram выходить
+       не из чего: там нас узнаёт сам Telegram при каждом открытии, и кнопка
+       была бы обманом. Стоит внизу и тихо: нужна редко (чужой компьютер,
+       потерянный телефон), а тянуть на себя внимание ей незачем. -->
+  <button id="dash-logout" hidden>Выйти из приложения</button>
 </div>
 <div id="word-popup"></div>
 <div id="hifz-big">
@@ -2459,10 +2557,202 @@
   <div id="ustaz-body"></div>
 </div>
 
+<!-- Экран входа (10.09.2026) - показывается только вне Telegram, см. JS.
+     Тексты здесь по-русски и без data-i18n намеренно: до входа язык
+     студента ещё неизвестен (он хранится на сервере, по Telegram ID), а
+     ky/uz делаем одним проходом, когда всё отшлифуется. -->
+<div id="login" hidden>
+  <div class="login-card">
+    <div class="login-mark">۩</div>
+    <h1>YassirApp</h1>
+    <p class="login-sub">Мусхаф, заучивание и слова Корана —<br>для тех, кто учится в Яссире.</p>
+
+    <div id="login-step-side">
+      <p class="login-q">В какой группе ты учишься?</p>
+      <button class="login-side" data-profile="male">Мужская группа</button>
+      <button class="login-side" data-profile="female">Женская группа</button>
+    </div>
+
+    <div id="login-step-go" hidden>
+      <!-- target="_blank": Telegram открывается отдельно, а эта вкладка
+           остаётся жить и ждать подтверждения. Уйди мы по ссылке в том же
+           окне - опрос оборвался бы на полпути. -->
+      <a id="login-link" class="login-go" target="_blank" rel="noopener">Подтвердить в Telegram</a>
+      <p id="login-status" class="login-status">Открой ссылку и нажми «Начать» — я жду подтверждения.</p>
+      <button id="login-back" class="login-plain">Выбрать другую группу</button>
+    </div>
+
+    <!-- Подсказка только для iPhone (10.09.2026). Android предлагает
+         установку сам, iOS — никогда: там это делается руками, и человек об
+         этом не догадается, если не сказать. Показываем на входе, потому что
+         это первый и единственный экран, который видят все. -->
+    <p id="login-ios" class="login-ios" hidden>
+      На iPhone: «Поделиться» → «На экран Домой» — и приложение будет
+      открываться со своего значка, как обычное.
+    </p>
+  </div>
+</div>
+
 <script>
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
+
+  // ── Кто мы такие (10.09.2026) ─────────────────────────────────────────
+  // Внутри Telegram нас узнаёт initData - подписанная строка, живёт сутки,
+  // приходит от самого Telegram. Открытое как сайт (yassirilm.com) то же
+  // приложение никакой initData не получает вообще, поэтому там свой
+  // токен сессии: его выдают после того, как вход подтвердил бот
+  // (core/web_auth.py). Всё остальное в приложении одинаково для обоих.
+  //
+  // localStorage, а не sessionStorage: сессия обязана пережить закрытие
+  // браузера, иначе долгий срок на сервере не имеет смысла.
+  var AUTH_KEY = 'yassir_auth';
+  var webAuth = null;
+  try { webAuth = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); } catch (e) {}
+
+  function saveAuth(v) {
+    try {
+      if (v) localStorage.setItem(AUTH_KEY, JSON.stringify(v));
+      else localStorage.removeItem(AUTH_KEY);
+    } catch (e) {}
+    webAuth = v;
+  }
+
+  // Один заголовок на все запросы приложения. До 10.09.2026 эта строчка
+  // была скопирована в шести местах - добавить второй способ входа значило
+  // бы поправить все шесть и не забыть ни одного.
+  function authHeaders() {
+    if (tg && tg.initData) return { 'X-Telegram-Init-Data': tg.initData };
+    if (webAuth && webAuth.token) return { 'Authorization': 'Bearer ' + webAuth.token };
+    return {};
+  }
+
+  // Офлайн и значок на экране (10.09.2026) - только для сайта, НЕ внутри
+  // Telegram. Причина в истории, а не в технике: index.html и page*.json
+  // обновляются на месте, и мы уже ловили телефон, на котором висела старая
+  // версия при правильном файле на сервере (29.08.2026). Внутри Telegram
+  // сейчас всё работает через nginx no-cache - трогать этот путь незачем,
+  // а класс ошибки у service worker'а ровно тот же, только живучее.
+  // Подробности стратегии по файлам - в самом sw.js.
+  if (!(tg && tg.initData) && 'serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
+
+  // Ни того, ни другого - значит приложение открыто как сайт и человек ещё
+  // не входил. Дальше идти незачем: показываем вход и выходим из всего
+  // скрипта. Объявления функций хойстятся целиком, поэтому showLogin()
+  // ниже по файлу здесь уже доступна (та же особенность, на которой
+  // однажды погорел apiBase - см. комментарий у него).
+  if (!(tg && tg.initData) && !(webAuth && webAuth.token)) {
+    showLogin();
+    return;
+  }
+
+  function showLogin() {
+    var box = document.getElementById('login');
+    var stepSide = document.getElementById('login-step-side');
+    var stepGo = document.getElementById('login-step-go');
+    var link = document.getElementById('login-link');
+    var status = document.getElementById('login-status');
+    var poll = null;
+    box.hidden = false;
+
+    // navigator.standalone есть только у Safari и равно true, когда
+    // приложение уже запущено со значка — тогда подсказка не нужна.
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !navigator.standalone) {
+      document.getElementById('login-ios').hidden = false;
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('.login-side'), function (b) {
+      b.addEventListener('click', function () { start(b.getAttribute('data-profile')); });
+    });
+    document.getElementById('login-back').addEventListener('click', function () {
+      if (poll) { clearInterval(poll); poll = null; }
+      stepGo.hidden = true;
+      stepSide.hidden = false;
+    });
+
+    function say(text, bad) {
+      status.textContent = text;
+      status.className = 'login-status' + (bad ? ' bad' : '');
+    }
+
+    // Профиль (мужской/женский) выбран ДО выдачи кода и решает, у какого
+    // бота человек входит. Это не косметика: у ботов разные базы, и код,
+    // выданный мужским процессом, подтвердить может только мужской бот.
+    // Ошибиться дверью не страшно - чужой бот не найдёт человека в своих
+    // группах и скажет об этом.
+    function start(profile) {
+      stepSide.hidden = true;
+      stepGo.hidden = false;
+      link.removeAttribute('href');
+      say('Готовлю вход…');
+      fetch('/api/muf/' + profile + '/auth/start', { method: 'POST' })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d || {} }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.d.link) {
+            say(res.d.error === 'too_many'
+              ? 'Слишком много попыток входа подряд. Попробуй через час 🤲'
+              : 'Не получилось начать вход. Проверь связь и попробуй ещё раз.', true);
+            return;
+          }
+          link.href = res.d.link;
+          say('Нажми кнопку выше, а в Telegram — «Начать». Жду подтверждения…');
+          waitFor(res.d.code, profile);
+        })
+        .catch(function () { say('Нет связи с сервером. Попробуй ещё раз.', true); });
+    }
+
+    // Опрос раз в две секунды. Держать соединение открытым (long-poll) не
+    // стали: вкладку на телефоне усыпляют, а короткий запрос переживает сон
+    // спокойно - вернулся в браузер, и следующий тик всё забрал.
+    function waitFor(code, profile) {
+      var until = Date.now() + 15 * 60 * 1000;   // столько же живёт код на сервере
+      if (poll) clearInterval(poll);
+      poll = setInterval(function () {
+        if (Date.now() > until) {
+          clearInterval(poll);
+          poll = null;
+          say('Ссылка на вход устарела — она живёт 15 минут. Выбери группу заново.', true);
+          return;
+        }
+        fetch('/api/muf/' + profile + '/auth/poll?code=' + encodeURIComponent(code))
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d || !d.token) return;
+            clearInterval(poll);
+            poll = null;
+            saveAuth({ token: d.token, profile: profile, name: d.name || '' });
+            say('Готово' + (d.name ? ', ' + d.name : '') + '. Открываю…');
+            // Перезагрузка, а не ручной запуск приложения: оно поднимается
+            // не одной функцией, а десятками мест по всему файлу (загрузка
+            // страницы мусхафа, синхронизация языка, указатель 40+40,
+            // пульс). Повторить этот порядок вручную - надёжный способ
+            // получить полурабочий экран; перезагрузка проходит ровно тот
+            // же путь, что и обычное открытие.
+            location.reload();
+          })
+          .catch(function () {});
+      }, 2000);
+    }
+  }
+
+  // Выход - только для сессии сайта (см. #dash-logout в разметке). Гасим
+  // токен и на сервере: иначе на чужом устройстве он остался бы рабочим
+  // ещё три месяца. Ответа не ждём молча - экран входа показываем в любом
+  // случае, даже если запрос не дошёл.
+  if (webAuth && webAuth.token) {
+    var logoutBtn = document.getElementById('dash-logout');
+    logoutBtn.hidden = false;
+    logoutBtn.addEventListener('click', function () {
+      var done = function () { saveAuth(null); location.reload(); };
+      fetch(apiBase() + '/auth/logout', { method: 'POST', headers: authHeaders() })
+        .then(done, done);
+    });
+  }
 
   // Локализация интерфейса (30.08.2026). Кыргызский нужен студентам G-8,
   // большинство остальных читает по-русски, поэтому ru - язык по умолчанию.
@@ -5220,7 +5510,7 @@
       fd.append('lines', String(hifzTextLines().length));
       return fetch(apiBase() + '/hifz/submit', {
         method: 'POST',
-        headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' },
+        headers: authHeaders(),
         body: fd
       });
     }).then(function (r) {
@@ -5696,14 +5986,20 @@
   // setTimeout(fn, 0) (см. комментарии у обоих мест) - те правки не
   // тронуты, они безвредны, здесь закрывается сам КЛАСС ошибки, чтобы
   // следующий такой вызов, где бы он в файле ни стоял, просто работал.
+  // Профиль (какой из двух процессов бота отвечает) внутри Telegram
+  // приходит параметром ?bot= из кнопки меню, а на сайте берётся из
+  // сессии: там адрес чистый, и подставить чужой профиль рукой в строке
+  // браузера нельзя - сервер всё равно ищет токен в СВОЕЙ базе и чужого
+  // не найдёт (10.09.2026).
   function apiBase() {
-    var profile = (new URLSearchParams(window.location.search)).get('bot') || 'male';
+    var profile = (new URLSearchParams(window.location.search)).get('bot')
+      || (webAuth && webAuth.profile) || 'male';
     return '/api/muf/' + profile;
   }
 
   function apiCall(path, opts) {
     opts = opts || {};
-    var headers = { 'X-Telegram-Init-Data': (tg && tg.initData) || '' };
+    var headers = authHeaders();
     var init = { method: opts.method || 'GET', headers: headers };
     if (opts.body) {
       headers['Content-Type'] = 'application/json';
@@ -5717,6 +6013,15 @@
         apiFailStreak = 0;
         apiEverOk = true;
         hideOffline();
+        // Сессия сайта кончилась (истекла, отозвана, база бота
+        // переехала) - возвращаем человека ко входу, а не оставляем
+        // на экране, где ничего не работает. Внутри Telegram этого
+        // пути нет: там 401 значит "протухла initData", и её починит
+        // сам Telegram при следующем открытии (10.09.2026).
+        if (r.status === 401 && !(tg && tg.initData) && webAuth) {
+          saveAuth(null);
+          location.reload();
+        }
         return { status: r.status, data: data };
       });
     }).catch(function () {
@@ -5841,7 +6146,7 @@
     var label = btn.textContent;
     btn.disabled = true;
     fetch(apiBase() + '/submissions/audio?id=' + id + '&kind=' + kind, {
-      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' }
+      headers: authHeaders()
     }).then(function (r) {
       if (!r.ok) throw new Error('audio');
       return r.blob();
@@ -6082,7 +6387,7 @@
     if (look.url) return Promise.resolve();
     if (!look.item || !look.item.has_review_audio) return Promise.reject();
     return fetch(apiBase() + '/submissions/audio?id=' + look.item.id + '&kind=review', {
-      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' }
+      headers: authHeaders()
     }).then(function (r) {
       if (!r.ok) throw new Error('audio');
       return r.blob();
@@ -6772,7 +7077,7 @@
     var btn = document.getElementById(kind === 'own' ? 'review-play' : 'review-mine');
     btn.disabled = true;
     fetch(apiBase() + '/ustaz/audio?id=' + review.sub.id + '&kind=' + kind, {
-      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' }
+      headers: authHeaders()
     }).then(function (r) {
       if (!r.ok) throw new Error('audio');
       return r.blob();
@@ -6911,7 +7216,7 @@
     fd.append('id', String(review.sub.id));
     fetch(apiBase() + '/ustaz/comment', {
       method: 'POST',
-      headers: { 'X-Telegram-Init-Data': (tg && tg.initData) || '' },
+      headers: authHeaders(),
       body: fd
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) {
