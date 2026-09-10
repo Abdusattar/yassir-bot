@@ -6243,6 +6243,63 @@
     }
   }, { passive: true });
 
+  /* Колесо мыши и клавиши листают страницы (10.09.2026, поймал пользователь:
+     «зашёл через браузер, мусхаф не скролится»).
+
+     Страница мусхафа всегда помещается в экран целиком - clampFontToFit
+     подгоняет шрифт под него, - поэтому прокручивать там нечего, и это
+     задумано. Но на компьютере нет свайпа, и человек упирался в тупик:
+     колесо крутится, ничего не происходит, а кнопки ‹ › он мог и не
+     заметить. Теперь колесо вниз - дальше по номерам, вверх - назад, как в
+     любой книге на экране.
+
+     Порог и пауза нужны из-за трекпада: один мах даёт десятки событий, и без
+     них пролистывало бы сразу пачку страниц. */
+  var wheelAcc = 0, wheelTurned = 0, wheelLast = 0;
+  var WHEEL_STEP = 110, WHEEL_PAUSE = 420, WHEEL_IDLE = 350;
+
+  function pageTurnBlocked() {
+    // Та же оговорка, что у свайпа: проверка и пересдача привязаны к одной
+    // странице, уходить с неё нельзя.
+    return (typeof review !== 'undefined' && review.on) || hifzRetakeMode;
+  }
+
+  pageWrap.addEventListener('wheel', function (e) {
+    if (pageTurnBlocked()) return;
+    // Если страница всё же выше экрана (узкое окно, крупный шрифт) - сперва
+    // обычная прокрутка, листаем только на краю.
+    if (pageWrap.scrollHeight > pageWrap.clientHeight + 1) {
+      var atTop = pageWrap.scrollTop <= 0;
+      var atBottom = pageWrap.scrollTop + pageWrap.clientHeight >= pageWrap.scrollHeight - 1;
+      if (!(e.deltaY > 0 ? atBottom : atTop)) return;
+    }
+    var now = Date.now();
+    if (now - wheelLast > WHEEL_IDLE) wheelAcc = 0;   // новый мах, а не тот же
+    wheelLast = now;
+    if (now - wheelTurned < WHEEL_PAUSE) return;      // страница только что перевернулась
+    wheelAcc += e.deltaY;
+    if (Math.abs(wheelAcc) < WHEEL_STEP) return;
+    wheelTurned = now;
+    var dir = wheelAcc > 0 ? 1 : -1;
+    wheelAcc = 0;
+    loadPage(currentPage + dir);
+  }, { passive: true });
+
+  // Клавиши - вторая половина того же: на компьютере ими листают привычнее,
+  // чем мышью. Вертикальные, а не ← →: страница арабская, и в RTL «вправо»
+  // читается неоднозначно, а «вниз» значит одно и то же везде.
+  document.addEventListener('keydown', function (e) {
+    if (document.getElementById('app').style.display === 'none') return;
+    if (pageTurnBlocked()) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    var dir = (e.key === 'ArrowDown' || e.key === 'PageDown') ? 1
+            : (e.key === 'ArrowUp' || e.key === 'PageUp') ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    loadPage(currentPage + dir);
+  });
+
   // Тап по номеру страницы - прямой переход (220 страниц, недостаточно
   // одних ◀▶ - решение пользователя 27.08.2026, после расширения с 9 до
   // всего диапазона сур 2-10).
