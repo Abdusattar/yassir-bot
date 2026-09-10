@@ -1124,6 +1124,9 @@
      direction: ltr - та же ловушка RTL-контейнера, что у #dash-online. */
   #dash-pulse {
     direction: ltr;
+    /* Пульс - отдельная мысль, а не пятая дверь: между ним и «Как работаем»
+       зазор должен быть больше, чем между плитками (10.09.2026). */
+    margin-top: 22px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -1139,7 +1142,7 @@
        clientWidth и перерисовывает фигуру под новый размер, а не сжимает
        готовую картинку. */
     grid-template-columns: 52% 1fr;
-    grid-template-areas: "heart count" "heart split" "days days";
+    grid-template-areas: "heart count" "heart split" "online online" "days days";
     column-gap: 12px; row-gap: 2px; align-items: center;
   }
   #dash-pulse #pulse-heart { grid-area: heart; height: auto; }
@@ -1152,6 +1155,14 @@
   }
   #dash-pulse .p-count span { font-size: 11.5px; line-height: 1.3; }
   #dash-pulse .p-split { grid-area: split; align-self: start; }
+  /* Своя строка во всю ширину, а не колонка рядом с сердцем: «сейчас в
+     онлайне учатся 7» в узкой колонке переносилось, и число оставалось
+     сиротой на второй строке (10.09.2026). Пустая строка схлопывается сама -
+     у #dash-online есть :empty { display: none }. */
+  #dash-pulse #dash-online {
+    grid-area: online; align-self: center;
+    font-size: 11.5px; margin: 4px 0 0;
+  }
   #dash-pulse .p-days { grid-area: days; }
   /* На компьютере доля в процентах давала чудовище: при 1920px сердце
      выходило 836px высотой. Колонку фиксируем - телефона это не касается
@@ -2266,7 +2277,6 @@
       <span class="bars" id="my-day-bars"></span>
       <span class="names" id="my-day-names"></span>
     </div>
-    <span id="dash-online"></span>
     <!-- Настройки собраны под одну шестерёнку (10.09.2026): язык и тема
          были двумя кнопками в шапке, а теперь живут внутри вместе с
          именем, годом рождения и местом. Угол справа - привычное место
@@ -2318,6 +2328,12 @@
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
     <div class="p-split" id="pulse-split"></div>
+    <!-- «Сейчас в онлайне» переехало сюда из шапки (10.09.2026, поймал
+         пользователь). Там оно стояло рядом с прогрессом заданий: текст
+         длинный и без переносов, он выдавливал карточку прогресса и ломал
+         «0 из 3» на три строки внахлёст. По смыслу это тоже про джамаат -
+         пульс и есть его место. -->
+    <span id="dash-online"></span>
     <!-- Пропорция 330x288, а не 330x168 (10.09.2026). pulseFit держит
            высоту холста строго по этому отношению, а масштаб фигуры -
            min(w/3.5, h/3.0). В половине ширины низкий холст упирал сердце

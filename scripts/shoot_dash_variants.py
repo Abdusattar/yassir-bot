@@ -199,7 +199,7 @@ PULSE_SIDE = """
 SHOT_H = {"pulse58": 1180, "pulse66": 1180, "feed_low": 1180,
           "ticker": 1180, "ticker_both": 1180, "ticker_smart": 1180,
           "myday_top": 1180, "myday_lab": 1180,
-          "settings": 900, "sett_live": 900, "dark": 900, "sett_dark": 900}
+          "settings": 900, "sett_live": 900, "dark": 900, "online": 900, "sett_dark": 900}
 
 
 MYDAY_CSS = """
@@ -346,6 +346,7 @@ VARIANTS = {
     "now": "",
     "sett_live": "",
     "dark": "",
+    "online": "",
     "sett_dark": "",
 
     # Макет экрана настроек - что откроется под шестерёнкой.
@@ -404,6 +405,13 @@ def page(variant):
     # сравнивать не с чем.
     if variant == "now":
         return html
+    if variant == "online":
+        # На стенде онлайн пуст (нужно >=3 человека) - подставляем строку
+        # руками, иначе кашу в шапке не увидеть.
+        return html + ("<script>window.addEventListener('load',function(){"
+                       "setTimeout(function(){var e=document.getElementById('dash-online');"
+                       "if(e)e.innerHTML='<span class=\"dot\"></span>сейчас в онлайне учатся 7';},2500);"
+                       "});</script>")
     if variant in ("dark", "sett_dark"):
         # Тёмная тема ставится до отрисовки, как это делает скрипт в <head>.
         js = "<script>document.documentElement.setAttribute('data-theme','dark');"
