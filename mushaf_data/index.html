@@ -1138,14 +1138,27 @@
        уезжали за сгиб. Сердце при этом не портится: pulseFit() берёт
        clientWidth и перерисовывает фигуру под новый размер, а не сжимает
        готовую картинку. */
-    grid-template-columns: 58% 1fr;
+    grid-template-columns: 52% 1fr;
     grid-template-areas: "heart count" "heart split" "days days";
     column-gap: 12px; row-gap: 2px; align-items: center;
   }
   #dash-pulse #pulse-heart { grid-area: heart; height: auto; }
-  #dash-pulse .p-count { grid-area: count; align-self: end; }
+  /* В узкой колонке число и подпись в одну строку не живут: «0» крупное, а
+     подпись длинная, и текст обтекал его рваными кусками. Ставим друг под
+     друга (10.09.2026). */
+  #dash-pulse .p-count {
+    grid-area: count; align-self: end;
+    flex-direction: column; align-items: flex-start; gap: 1px;
+  }
+  #dash-pulse .p-count span { font-size: 11.5px; line-height: 1.3; }
   #dash-pulse .p-split { grid-area: split; align-self: start; }
   #dash-pulse .p-days { grid-area: days; }
+  /* На компьютере доля в процентах давала чудовище: при 1920px сердце
+     выходило 836px высотой. Колонку фиксируем - телефона это не касается
+     (10.09.2026). */
+  @media (min-width: 520px) {
+    #dash-pulse { grid-template-columns: 250px 1fr; }
+  }
   #dash-pulse .p-count { display: flex; align-items: baseline; gap: 7px; }
   /* Число живое: по цифрам медленно проходит волна света - от чернил к
      акценту и обратно (07.09.2026, просьба пользователя «пусть переливается»).
@@ -1256,11 +1269,16 @@
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-areas: "bars num" "names num";
-    column-gap: 12px; row-gap: 4px; align-items: center;
+    /* 18px, а не 12: третья полоска упиралась прямо в «0 из 3», и строка
+       читалась как каша (10.09.2026). */
+    column-gap: 18px; row-gap: 3px; align-items: center;
   }
   #dash-head #my-day .cap { grid-area: num; }
   #dash-head #my-day .cap span { display: none; }
-  #dash-head #my-day .cap b { font-size: 14px; }
+  /* Легче подписей, а не тяжелее: главное в строке - полоски, число лишь
+     подводит итог. Было 14/700 и перетягивало строку на себя. */
+  #dash-head #my-day .cap b { font-size: 13px; font-weight: 600; }
+  #dash-head #my-day .bars i { height: 7px; border-radius: 4px; }
   #dash-head #my-day .bars { grid-area: bars; }
   #dash-head #my-day .names { grid-area: names; }
   #dash-head #my-day .names span { font-size: 9.5px; }
@@ -2300,7 +2318,13 @@
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
     <div class="p-split" id="pulse-split"></div>
-    <canvas id="pulse-heart" width="330" height="168"></canvas>
+    <!-- Пропорция 330x288, а не 330x168 (10.09.2026). pulseFit держит
+           высоту холста строго по этому отношению, а масштаб фигуры -
+           min(w/3.5, h/3.0). В половине ширины низкий холст упирал сердце
+           в высоту, и оно съёживалось втрое сильнее нужного, оставляя под
+           собой пустоту. При этом отношении ограничителем снова становится
+           ширина - сердце занимает свою половину целиком. -->
+      <canvas id="pulse-heart" width="330" height="288"></canvas>
     <div class="p-days">
       <div class="p-row">
         <button class="p-arrow" id="pulse-prev" aria-label="день назад">&lsaquo;</button>
@@ -3816,10 +3840,15 @@
              : pulse.view === pulse.today - 1 ? T('pulse_yesterday')
              : (row.date || '').slice(8) + '.' + (row.date || '').slice(5, 7);
     document.getElementById('pulse-day').textContent = name;
-    document.getElementById('pulse-sum').innerHTML = T('pulse_day_sum', {
-      A: '<b>' + sum + '</b> ' + pulsePlural(sum, 'действие', 'действия', 'действий'),
-      P: pulseNum(row.people || 0, 'человек', 'человека', 'человек')
-    });
+    // Для СЕГОДНЯ эта строка молчит (10.09.2026, поймал пользователь):
+    // сегодняшнее число уже стоит крупно в сердце над волной, и «0 действий
+    // · 0 человек» повторяло его слово в слово. На других днях повтора нет -
+    // там подпись единственный источник, и она остаётся.
+    document.getElementById('pulse-sum').innerHTML =
+      pulse.view === pulse.today ? '' : T('pulse_day_sum', {
+        A: '<b>' + sum + '</b> ' + pulsePlural(sum, 'действие', 'действия', 'действий'),
+        P: pulseNum(row.people || 0, 'человек', 'человека', 'человек')
+      });
     document.getElementById('pulse-peak').textContent =
       pulse.view === pulse.best ? T('pulse_best')
       : pulse.view === pulse.today ? T('pulse_running')
@@ -4149,7 +4178,11 @@
         D: bd.slice(8) + '.' + bd.slice(5, 7),
         N: pulseSum(days[pulse.best])
       }),
-                   Math.min(w - 52, Math.max(52, bp[ph][0])), bp[ph][1] - 5);
+                   Math.min(w - 52, Math.max(52, bp[ph][0])),
+                   // Math.max(9, ...) - когда пик рекорда у самого верха,
+                   // подпись уезжала за край холста и обрезалась
+                   // (10.09.2026; было и раньше, поймано на снимке).
+                   Math.max(9, bp[ph][1] - 5));
       ctx.textAlign = 'left'; ctx.globalAlpha = 1;
     }
 

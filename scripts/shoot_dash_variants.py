@@ -199,7 +199,7 @@ PULSE_SIDE = """
 SHOT_H = {"pulse58": 1180, "pulse66": 1180, "feed_low": 1180,
           "ticker": 1180, "ticker_both": 1180, "ticker_smart": 1180,
           "myday_top": 1180, "myday_lab": 1180,
-          "settings": 900, "sett_live": 900}
+          "settings": 900, "sett_live": 900, "dark": 900, "sett_dark": 900}
 
 
 MYDAY_CSS = """
@@ -345,6 +345,8 @@ SETTINGS_CSS = """
 VARIANTS = {
     "now": "",
     "sett_live": "",
+    "dark": "",
+    "sett_dark": "",
 
     # Макет экрана настроек - что откроется под шестерёнкой.
     "settings": SETTINGS_CSS,
@@ -402,6 +404,13 @@ def page(variant):
     # сравнивать не с чем.
     if variant == "now":
         return html
+    if variant in ("dark", "sett_dark"):
+        # Тёмная тема ставится до отрисовки, как это делает скрипт в <head>.
+        js = "<script>document.documentElement.setAttribute('data-theme','dark');"
+        if variant == "sett_dark":
+            js += ("window.addEventListener('load',function(){setTimeout(function(){"
+                   "document.getElementById('btn-profile').click();},1500);});")
+        return html + js + "</script>"
     if variant == "sett_live":
         # Настоящий экран настроек из index.html: открываем его тем же
         # тапом по шестерёнке, что и человек.
