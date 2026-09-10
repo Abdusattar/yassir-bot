@@ -198,7 +198,8 @@ PULSE_SIDE = """
 # Пульс живёт ниже сгиба - для его вариантов снимаем кадр повыше.
 SHOT_H = {"pulse58": 1180, "pulse66": 1180, "feed_low": 1180,
           "ticker": 1180, "ticker_both": 1180, "ticker_smart": 1180,
-          "myday_top": 1180, "myday_lab": 1180}
+          "myday_top": 1180, "myday_lab": 1180,
+          "settings": 900, "sett_live": 900}
 
 
 MYDAY_CSS = """
@@ -252,8 +253,101 @@ MYDAY_LAB = """
   #my-day .names span { font-size: 9.5px; }
 """
 
+
+# ── экран настроек (макет, 10.09.2026) ────────────────────────────────────
+# Показывается поверх дашборда, чтобы увидеть его в настоящем окружении:
+# те же карточки, та же палитра, тот же возврат «← Дашборд» слева вверху.
+SETTINGS_HTML = """
+<script>
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    var d = document.createElement('div');
+    d.id = 'sett';
+    d.innerHTML =
+      '<div class="s-head">'
+      +   '<button class="s-back">\u2190 \u0414\u0430\u0448\u0431\u043e\u0440\u0434</button>'
+      +   '<span class="s-title">Настройки</span>'
+      + '</div>'
+      + '<div class="s-card">'
+      +   '<label class="s-lab">Имя</label>'
+      +   '<input class="s-inp" value="Абдулла">'
+      +   '<p class="s-hint">Это имя видят устаз в отчётах и вся группа в рейтинге.</p>'
+      + '</div>'
+      + '<div class="s-card">'
+      +   '<label class="s-lab">Год рождения <i>по желанию</i></label>'
+      +   '<input class="s-inp" placeholder="например, 1994" inputmode="numeric">'
+      +   '<label class="s-lab s-lab2">Откуда сдаёшь задания <i>по желанию</i></label>'
+      +   '<select class="s-inp"><option>Не указано</option><option selected>Чуйская область</option>'
+      +   '<option>Бишкек</option><option>Ош</option><option>Ошская область</option>'
+      +   '<option>Джалал-Абадская область</option><option>Иссык-Кульская область</option>'
+      +   '<option>Нарынская область</option><option>Таласская область</option>'
+      +   '<option>Баткенская область</option><option>Другая страна</option></select>'
+      + '</div>'
+      + '<div class="s-card">'
+      +   '<label class="s-lab">Язык</label>'
+      +   '<div class="s-seg"><button>Русский</button><button class="on">Кыргызча</button><button>Ўзбекча</button></div>'
+      +   '<label class="s-lab s-lab2">Тема</label>'
+      +   '<div class="s-seg"><button class="on">☀️ День</button><button>🌙 Ночь</button></div>'
+      + '</div>'
+      + '<button class="s-out">Выйти из приложения</button>';
+    document.body.appendChild(d);
+  }, 1200);
+});
+</script>
+"""
+
+SETTINGS_CSS = """
+  #sett {
+    position: fixed; inset: 0; z-index: 90; overflow-y: auto;
+    direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    padding: 14px 16px 24px;
+  }
+  #sett .s-head { display: flex; align-items: center; gap: 10px; min-height: 38px; margin-bottom: 14px; }
+  #sett .s-back {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font: inherit; font-size: 14px; color: var(--accent);
+  }
+  #sett .s-title { margin-left: auto; margin-right: auto; font-size: 15px; font-weight: 600; color: var(--ink); }
+  #sett .s-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; box-shadow: var(--shadow-sm);
+    padding: 14px 15px 16px; margin-bottom: 12px;
+  }
+  #sett .s-lab {
+    display: block; font-size: 12px; font-weight: 600; color: var(--ink);
+    margin-bottom: 7px;
+  }
+  #sett .s-lab2 { margin-top: 16px; }
+  #sett .s-lab i { font-style: normal; font-weight: 400; color: var(--muted); }
+  #sett .s-inp {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 15px;
+    padding: 11px 12px; border-radius: 13px;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--ink);
+  }
+  #sett .s-hint { margin: 8px 2px 0; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  #sett .s-seg { display: flex; gap: 6px; }
+  #sett .s-seg button {
+    flex: 1; font: inherit; font-size: 13px; padding: 10px 4px;
+    border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--muted);
+  }
+  #sett .s-seg button.on {
+    border-color: var(--accent); color: var(--accent-ink);
+    background: var(--accent); font-weight: 600;
+  }
+  #sett .s-out {
+    display: block; margin: 18px auto 0; font: inherit; font-size: 12.5px;
+    color: var(--muted); background: none; border: none; cursor: pointer; padding: 6px 10px;
+  }
+"""
+
 VARIANTS = {
     "now": "",
+    "sett_live": "",
+
+    # Макет экрана настроек - что откроется под шестерёнкой.
+    "settings": SETTINGS_CSS,
 
     # Лента под дверями.
     "feed_low": COMMON + FEED_CSS + DOORS4 + """
@@ -308,6 +402,14 @@ def page(variant):
     # сравнивать не с чем.
     if variant == "now":
         return html
+    if variant == "sett_live":
+        # Настоящий экран настроек из index.html: открываем его тем же
+        # тапом по шестерёнке, что и человек.
+        return html + ("<script>window.addEventListener('load',function(){"
+                       "setTimeout(function(){document.getElementById('btn-profile').click();},1500);});"
+                       "</script>")
+    if variant == "settings":
+        return html + SETTINGS_HTML + "<style>%s</style>" % SETTINGS_CSS
     body = ADD_FEED.replace("SKIP", skip).replace("MYDAY_TOP", top)
     return html + body + ("<style>%s</style>" % css if css else "")
 

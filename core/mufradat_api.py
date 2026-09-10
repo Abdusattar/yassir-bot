@@ -41,6 +41,7 @@ from core.db import (
     get_group_by_id, get_students, get_reviewed_submissions,
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
     is_retake_answered, get_group_tasks, get_today_report, is_app_member,
+    get_profile, update_profile,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -1293,6 +1294,36 @@ async def handle_auth_logout(request, user_id):
     return web.json_response({"ok": True})
 
 
+@with_auth
+async def handle_profile_get(request, user_id):
+    """Профиль для экрана настроек: имя, год рождения, место."""
+    profile = get_profile(user_id)
+    if profile is None:
+        return web.json_response({"error": "no_user"}, status=404)
+    return web.json_response(profile)
+
+
+@with_auth
+async def handle_profile_set(request, user_id):
+    """Поля правятся по одному, по мере ухода с поля - экран настроек не
+    копит их до кнопки «Сохранить» (лучшая практика для настроек на
+    телефоне). Поэтому здесь принимается ЛЮБОЕ подмножество полей, а не всё
+    сразу, и отсутствующее не трогается."""
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    known = {k: body[k] for k in ("name", "birth_year", "location") if k in body}
+    if not known:
+        return web.json_response({"error": "nothing_to_save"}, status=400)
+    try:
+        return web.json_response(update_profile(user_id, **known))
+    except ValueError as e:
+        # Коды из update_profile: name_empty, name_too_long, birth_year_bad,
+        # location_too_long. Текст для человека подбирает приложение.
+        return web.json_response({"error": str(e)}, status=400)
+
+
 def build_app():
     # client_max_size по умолчанию 1 МБ - голосовая сдача 40+40 (несколько
     # минут записи из браузера) в него не влезает, aiohttp обрывал бы её
@@ -1304,6 +1335,8 @@ def build_app():
     app.router.add_get("/api/muf/state", handle_state)
     app.router.add_post("/api/muf/page", handle_page)
     app.router.add_post("/api/muf/answer", handle_answer)
+    app.router.add_get("/api/muf/profile", handle_profile_get)
+    app.router.add_post("/api/muf/profile", handle_profile_set)
     app.router.add_get("/api/muf/lang", handle_lang_get)
     app.router.add_post("/api/muf/lang", handle_lang)
     app.router.add_post("/api/muf/end", handle_end)

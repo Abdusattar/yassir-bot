@@ -3002,6 +3002,101 @@ def save_survey_age(phone, text):
         return "done"
 
 
+# ── Профиль в приложении (10.09.2026) ─────────────────────────────────────
+# Экран настроек под шестерёнкой пишет в ТЕ ЖЕ колонки, которые заполняла
+# анкета в личке (survey_location, survey_birth_year): сведения одни и те же,
+# второе хранилище для них только развело бы правду надвое.
+#
+# Побочный, но важный эффект: человек, заполнивший профиль сам, больше не
+# получит вопрос анкеты - survey_stage переводится в 'done'. Заодно это
+# снимает известную болезнь анкеты (застрявшая стадия ловит первое же
+# бытовое сообщение как ответ), см. коммит ec747cd.
+
+PROFILE_NAME_MAX = 60
+PROFILE_LOCATION_MAX = 80
+PROFILE_BIRTH_YEAR_MIN = 1930
+PROFILE_MIN_AGE = 5          # ниже этого - явная опечатка, а не возраст
+
+
+def get_profile(phone):
+    """Профиль для экрана настроек. None, если такого человека нет."""
+    with db() as c:
+        row = c.execute(
+            "SELECT name, survey_birth_year, survey_location FROM users WHERE phone=?",
+            (phone,)
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "name": row["name"] or "",
+        "birth_year": row["survey_birth_year"],
+        "location": row["survey_location"] or "",
+    }
+
+
+def update_profile(phone, name=None, birth_year=None, location=None):
+    """Меняет только переданные поля. Возвращает профиль после записи.
+
+    Имя обязательно и пустым не становится: его видит устаз в отчётах и вся
+    группа в рейтинге, и человек без имени превратился бы в пустую строку
+    таблицы. Год рождения и место - по желанию, пустая строка их СТИРАЕТ
+    (человек передумал делиться - это его право).
+
+    ValueError с понятным кодом - на всё, что не проходит проверку; вызвавший
+    превращает его в 400.
+    """
+    fields, params = [], []
+
+    if name is not None:
+        name = " ".join(str(name).split())          # схлопываем пробелы
+        if not name:
+            raise ValueError("name_empty")
+        if len(name) > PROFILE_NAME_MAX:
+            raise ValueError("name_too_long")
+        fields.append("name=?")
+        params.append(name)
+
+    if birth_year is not None:
+        if birth_year == "" or birth_year is False:
+            fields.append("survey_birth_year=NULL")
+        else:
+            try:
+                year = int(birth_year)
+            except (TypeError, ValueError):
+                raise ValueError("birth_year_bad")
+            this_year = int(get_date()[:4])
+            if not (PROFILE_BIRTH_YEAR_MIN <= year <= this_year - PROFILE_MIN_AGE):
+                raise ValueError("birth_year_bad")
+            fields.append("survey_birth_year=?")
+            params.append(year)
+
+    if location is not None:
+        location = " ".join(str(location).split())
+        if len(location) > PROFILE_LOCATION_MAX:
+            raise ValueError("location_too_long")
+        fields.append("survey_location=?")
+        params.append(location)
+
+    if not fields:
+        return get_profile(phone)
+
+    with db() as c:
+        c.execute("UPDATE users SET " + ", ".join(fields) + " WHERE phone=?",
+                  params + [phone])
+        # Профиль заполнен сам - анкете в личке спрашивать больше нечего.
+        row = c.execute(
+            "SELECT survey_birth_year, survey_location, survey_stage "
+            "FROM users WHERE phone=?", (phone,)
+        ).fetchone()
+        if (row and row["survey_birth_year"] and row["survey_location"]
+                and row["survey_stage"] != "done"):
+            c.execute(
+                "UPDATE users SET survey_stage='done', survey_stage_at=datetime('now') "
+                "WHERE phone=?", (phone,)
+            )
+    return get_profile(phone)
+
+
 def survey_answer_in_window(phone, hours=24):
     """Прошло ли меньше `hours` часов с момента как был задан текущий вопрос
     анкеты. Нужно, чтобы не перехватывать случайное сообщение, пришедшее

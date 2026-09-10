@@ -1026,67 +1026,74 @@
     margin-left: auto; flex: 0 0 auto;
     display: flex; align-items: center; gap: 8px;
   }
-  #btn-theme-toggle, #btn-lang-toggle {
-    position: static;
+  /* Шестерёнка (10.09.2026) - единственная кнопка в шапке. Была пара
+     «RU» и «луна», каждая со своим поведением; теперь обе живут внутри
+     настроек переключателями, где видно ВЫБРАННОЕ, а не то, куда попадёшь
+     следующим тапом. */
+  #btn-profile {
     background: var(--card-bg); border: 1px solid var(--card-border);
     box-shadow: var(--shadow-sm); border-radius: 50%;
-    width: 36px; height: 36px;
-    font-size: 18px; line-height: 1;
+    width: 38px; height: 38px;
+    font-size: 17px; line-height: 1; color: var(--muted);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
-  #btn-lang-toggle {
-    font-size: 13px; font-weight: 700; color: var(--accent);
-  }
-  /* Выбор языка списком (30.08.2026, вместо перебора по кругу). С тремя
-     языками цикл требовал до двух тапов, и каждый промежуточный тап
-     РЕАЛЬНО сохранял язык на сервере и перезагружал страницу - бросив на
-     полпути, студент оставался не на своём языке. Список: один тап
-     открыть, один выбрать, из любого состояния в любое, запись на сервер
-     одна. Названия родные ("Кыргызча", не "KY") - расшифровывать нечего.
-     Не отдельный экран и не модалка по центру: панель выезжает прямо под
-     кнопкой, дашборд остаётся на виду (решение пользователя). */
-  #lang-menu {
-    position: absolute; top: 60px; right: 16px;
-    z-index: 70;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 14px;
-    box-shadow: var(--shadow-md);
-    overflow: hidden;
-    min-width: 156px;
+
+  /* Экран настроек (10.09.2026). Отдельный экран, а не панель под кнопкой:
+     здесь не два переключателя, а профиль - имя, год рождения, место.
+     Возврат слева вверху и подписан, как во всех экранах приложения. */
+  #sett {
+    position: fixed; inset: 0; z-index: 90; overflow-y: auto;
     display: none;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    /* Страница мусхафа живёт в dir="rtl" - без явного ltr flex-дети
-       зеркалятся, и галочка уезжает ВЛЕВО от названия языка (поймано
-       скриншотом 30.08.2026, см. wiki/mushaf_yassirapp.md про RTL-ловушку:
-       координаты и ширины такое не ловят). Тот же приём, что у
-       #confirm-overlay. */
     direction: ltr;
-    transform-origin: top right;
-    animation: lang-menu-in 0.14s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    padding: 14px 16px 24px;
   }
-  #lang-menu.visible { display: block; }
-  @keyframes lang-menu-in {
-    from { opacity: 0; transform: scale(0.94) translateY(-4px); }
-    to { opacity: 1; transform: none; }
+  #sett.on { display: block; }
+  #sett .s-head { display: flex; align-items: center; gap: 10px; min-height: 38px; margin-bottom: 14px; }
+  #sett-back {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font: inherit; font-size: 14px; color: var(--accent);
   }
-  .lang-opt {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    padding: 12px 14px;
-    background: none; border: none;
-    /* Крупнее обычной кнопки - палец на телефоне, список выбирают редко,
-       промахиваться тут неприятнее, чем экономить пиксели. */
-    font-size: 15px; color: var(--ink);
-    text-align: left; cursor: pointer;
+  #sett .s-title {
+    margin-left: auto; margin-right: auto;
+    font-size: 15px; font-weight: 600; color: var(--ink);
   }
-  .lang-opt + .lang-opt { border-top: 1px solid var(--card-border); }
-  .lang-opt.active { color: var(--accent); font-weight: 700; }
-  .lang-opt .check { opacity: 0; }
-  .lang-opt.active .check { opacity: 1; }
+  #sett .s-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; box-shadow: var(--shadow-sm);
+    padding: 14px 15px 16px; margin-bottom: 12px;
+  }
+  #sett .s-lab {
+    display: block; font-size: 12px; font-weight: 600; color: var(--ink);
+    margin-bottom: 7px;
+  }
+  #sett .s-lab.s-lab2 { margin-top: 16px; }
+  /* «по желанию» стоит прямо в подписи, а не мелким текстом под полем:
+     обязательное здесь только имя, и это должно быть видно до того, как
+     человек начал заполнять. */
+  #sett .s-lab i { font-style: normal; font-weight: 400; color: var(--muted); }
+  #sett .s-inp {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 15px;
+    padding: 11px 12px; border-radius: 13px;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--ink);
+  }
+  #sett .s-inp:focus { outline: none; border-color: var(--accent); }
+  #sett .s-hint { margin: 8px 2px 0; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  #sett .s-hint.bad { color: var(--no); }
+  #sett .s-hint.ok { color: var(--accent); }
+  #sett .s-seg { display: flex; gap: 6px; }
+  #sett .s-seg button {
+    flex: 1; font: inherit; font-size: 13px; padding: 10px 4px;
+    border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--muted);
+  }
+  #sett .s-seg button.on {
+    border-color: var(--accent); color: var(--accent-ink);
+    background: var(--accent); font-weight: 600;
+  }
   /* "Сейчас онлайн" (30.08.2026) - ненавязчивая строка над карточками, не
      бейдж на конкретной карточке (не должна выглядеть как реклама одного
      раздела - решение пользователя). Пустая (не занимает места) до первого
@@ -2231,14 +2238,6 @@
 </head>
 <body>
 <div id="dashboard">
-  <div id="lang-menu" role="menu" aria-labelledby="btn-lang-toggle">
-    <button class="lang-opt" data-lang="ru" role="menuitem">
-      <span>Русский</span><span class="check">✓</span></button>
-    <button class="lang-opt" data-lang="ky" role="menuitem">
-      <span>Кыргызча</span><span class="check">✓</span></button>
-    <button class="lang-opt" data-lang="uz" role="menuitem">
-      <span>Ўзбекча</span><span class="check">✓</span></button>
-  </div>
   <div id="dash-head">
     <!-- «Мой день» переехал сюда 10.09.2026 (решение пользователя): строка
          шапки пустовала на девять десятых, а карточка «Мой день» занимала
@@ -2250,10 +2249,12 @@
       <span class="names" id="my-day-names"></span>
     </div>
     <span id="dash-online"></span>
+    <!-- Настройки собраны под одну шестерёнку (10.09.2026): язык и тема
+         были двумя кнопками в шапке, а теперь живут внутри вместе с
+         именем, годом рождения и местом. Угол справа - привычное место
+         для настроек, и строка освобождается под «Мой день». -->
     <div id="dash-settings">
-      <button id="btn-lang-toggle" title="Тил / Язык" aria-haspopup="true"
-              aria-expanded="false">RU</button>
-      <button id="btn-theme-toggle" title="Светлая/тёмная тема">🌙</button>
+      <button id="btn-profile" title="Настройки" aria-label="Настройки">⚙</button>
     </div>
   </div>
   <div id="dash-doors" class="three">
@@ -2311,10 +2312,66 @@
       <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
     </div>
   </div>
-  <!-- Выход (10.09.2026) - только у сессии сайта. Внутри Telegram выходить
-       не из чего: там нас узнаёт сам Telegram при каждом открытии, и кнопка
-       была бы обманом. Стоит внизу и тихо: нужна редко (чужой компьютер,
-       потерянный телефон), а тянуть на себя внимание ей незачем. -->
+</div>
+<!-- Настройки (10.09.2026). Обязательное здесь одно - имя: его видит устаз
+     в отчётах и вся группа в рейтинге. Год рождения и место человек говорит
+     по желанию; те же сведения раньше собирала анкета в личке, и пишутся они
+     в те же колонки (users.survey_*), см. update_profile в core/db.py.
+     Кнопки «Сохранить» нет намеренно: поле сохраняется, когда с него уходят,
+     и подтверждает это тихой строкой - так устроены настройки на телефоне,
+     а кнопку легко не заметить и уйти, думая что сохранил. -->
+<div id="sett">
+  <div class="s-head">
+    <button id="sett-back">← Дашборд</button>
+    <span class="s-title">Настройки</span>
+  </div>
+
+  <div class="s-card">
+    <label class="s-lab" for="sett-name">Имя</label>
+    <input class="s-inp" id="sett-name" maxlength="60" autocomplete="off">
+    <p class="s-hint" id="sett-name-hint">Это имя видят устаз в отчётах и вся группа в рейтинге.</p>
+  </div>
+
+  <div class="s-card">
+    <label class="s-lab" for="sett-year">Год рождения <i>по желанию</i></label>
+    <input class="s-inp" id="sett-year" inputmode="numeric" maxlength="4"
+           placeholder="например, 1994" autocomplete="off">
+    <label class="s-lab s-lab2" for="sett-place">Откуда сдаёшь задания <i>по желанию</i></label>
+    <select class="s-inp" id="sett-place">
+      <option value="">Не указано</option>
+      <option>Бишкек</option>
+      <option>Ош</option>
+      <option>Чуйская область</option>
+      <option>Ошская область</option>
+      <option>Джалал-Абадская область</option>
+      <option>Иссык-Кульская область</option>
+      <option>Нарынская область</option>
+      <option>Таласская область</option>
+      <option>Баткенская область</option>
+      <option value="__other">Другая страна</option>
+    </select>
+    <!-- Живущим не в Кыргызстане область не подходит - им хватает страны. -->
+    <input class="s-inp s-lab2" id="sett-country" hidden maxlength="60"
+           placeholder="Какая страна?" autocomplete="off">
+    <p class="s-hint" id="sett-place-hint"></p>
+  </div>
+
+  <div class="s-card">
+    <label class="s-lab">Язык</label>
+    <div class="s-seg" id="sett-lang">
+      <button data-lang="ru">Русский</button>
+      <button data-lang="ky">Кыргызча</button>
+      <button data-lang="uz">Ўзбекча</button>
+    </div>
+    <label class="s-lab s-lab2">Тема</label>
+    <div class="s-seg" id="sett-theme">
+      <button data-theme="light">☀️ День</button>
+      <button data-theme="dark">🌙 Ночь</button>
+    </div>
+  </div>
+
+  <!-- Выход - только у сессии сайта. Внутри Telegram выходить не из чего:
+       там нас узнаёт сам Telegram при каждом открытии. -->
   <button id="dash-logout" hidden>Выйти из приложения</button>
 </div>
 <div id="word-popup"></div>
@@ -3243,19 +3300,24 @@
     if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
     return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   }
-  var themeBtn = document.getElementById('btn-theme-toggle');
-  function updateThemeButtonIcon() {
-    // Показываем иконку ЦЕЛИ (на что переключит клик), не текущего
-    // состояния - привычнее для "☀️/🌙"-переключателей.
-    themeBtn.textContent = currentEffectiveTheme() === 'dark' ? '☀️' : '🌙';
+  // С 10.09.2026 тема выбирается переключателем в настройках. Кнопка в
+  // шапке показывала иконку ЦЕЛИ ("нажми, станет тёмной") - в переключателе
+  // из двух положений это было бы враньём: там видно ВЫБРАННОЕ.
+  function markTheme() {
+    var now = currentEffectiveTheme();
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#sett-theme button'),
+      function (b) { b.classList.toggle('on', b.getAttribute('data-theme') === now); });
   }
-  updateThemeButtonIcon();
-  themeBtn.addEventListener('click', function () {
-    savedTheme = currentEffectiveTheme() === 'dark' ? 'light' : 'dark';
-    try { localStorage.setItem(THEME_KEY, savedTheme); } catch (e) {}
+  document.getElementById('sett-theme').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    savedTheme = b.getAttribute('data-theme');
+    try { localStorage.setItem(THEME_KEY, savedTheme); } catch (e2) {}
     document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeButtonIcon();
+    markTheme();
   });
+  markTheme();
 
   // Переключатель языка (30.08.2026). Хранится на сервере по Telegram ID
   // (mufradat_lang) - тот же источник, что и язык слов в тренажёре, поэтому
@@ -3263,15 +3325,13 @@
   // как мгновенный кэш, чтобы интерфейс не моргал по-русски, пока идёт
   // запрос к API (у мусхафа старт заметно раньше ответа сервера).
   var LANG_KEY = 'yassir_ui_lang';
-  var langBtn = document.getElementById('btn-lang-toggle');
   try {
     var cached = localStorage.getItem(LANG_KEY);
     if (cached && I18N[cached]) UI_LANG = cached;
   } catch (e) {}
 
   function applyLang() {
-    langBtn.textContent = UI_LANG.toUpperCase();
-    if (typeof markActiveLang === 'function') markActiveLang();
+    if (typeof markLang === 'function') markLang();
     document.querySelectorAll('[data-i18n]').forEach(function (el) {
       el.textContent = T(el.getAttribute('data-i18n'));
     });
@@ -3288,57 +3348,157 @@
         document.getElementById('view-mywords').classList.contains('active')) loadMyWords();
   }
 
-  // Выбор языка списком (30.08.2026, см. CSS #lang-menu - почему не цикл).
-  // Порядок фиксированный: русский первым, он же дефолт.
-  var langMenu = document.getElementById('lang-menu');
-
-  function markActiveLang() {
-    langMenu.querySelectorAll('.lang-opt').forEach(function (btn) {
-      btn.classList.toggle('active', btn.getAttribute('data-lang') === UI_LANG);
-    });
+  // Язык выбирается переключателем в настройках (10.09.2026). Раньше это
+  // была выезжающая панель под кнопкой в шапке; кнопки в шапке больше нет,
+  // а поведение сохранилось: один тап - и выбор уходит на сервер тем же
+  // эндпоинтом, что и язык слов (он один на интерфейс и на переводы).
+  function markLang() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#sett-lang button'),
+      function (b) { b.classList.toggle('on', b.getAttribute('data-lang') === UI_LANG); });
   }
-  function closeLangMenu() {
-    langMenu.classList.remove('visible');
-    langBtn.setAttribute('aria-expanded', 'false');
-  }
-  function openLangMenu() {
-    markActiveLang();
-    langMenu.classList.add('visible');
-    langBtn.setAttribute('aria-expanded', 'true');
-  }
-
-  langBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    if (langMenu.classList.contains('visible')) closeLangMenu();
-    else openLangMenu();
-  });
-  // Тап мимо списка закрывает его - привычное поведение выпадающих меню,
-  // отдельной кнопки "закрыть" в такой мелкой панели быть не должно.
-  document.addEventListener('click', function (e) {
-    if (langMenu.classList.contains('visible') && !langMenu.contains(e.target)) {
-      closeLangMenu();
-    }
-  });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeLangMenu();
-  });
-
-  langMenu.addEventListener('click', function (e) {
-    var btn = e.target.closest('.lang-opt');
-    if (!btn) return;
-    var lang = btn.getAttribute('data-lang');
-    closeLangMenu();
-    // Тап по уже выбранному языку - просто закрыть: ни запроса к серверу,
-    // ни перезагрузки страницы.
+  document.getElementById('sett-lang').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    var lang = b.getAttribute('data-lang');
+    // Тап по уже выбранному - ничего: ни запроса, ни перерисовки.
     if (!I18N[lang] || lang === UI_LANG) return;
     UI_LANG = lang;
     try { localStorage.setItem(LANG_KEY, UI_LANG); } catch (e2) {}
     applyLang();
-    // Серверу сообщаем тем же эндпоинтом, что и раньше менял язык СЛОВ -
-    // язык один на интерфейс и на переводы, разводить их незачем.
     apiCall('/lang', { method: 'POST', body: { language: UI_LANG } })
       .then(function () { if (typeof loadPage === 'function' && currentPage) loadPage(currentPage); })
       .catch(function () {});
+  });
+
+  // ── Настройки: открытие экрана и профиль (10.09.2026) ─────────────────
+  // Кнопки «Сохранить» нет: поле уходит на сервер по событию change, то
+  // есть когда с него ушли или нажали Enter, и отвечает тихой строкой под
+  // карточкой. Так устроены настройки на телефоне; кнопку легко не заметить
+  // и уйти, думая что сохранил.
+  var settBox = document.getElementById('sett');
+  var settName = document.getElementById('sett-name');
+  var settYear = document.getElementById('sett-year');
+  var settPlace = document.getElementById('sett-place');
+  var settCountry = document.getElementById('sett-country');
+  var nameHint = document.getElementById('sett-name-hint');
+  var placeHint = document.getElementById('sett-place-hint');
+  var NAME_HINT_DEFAULT = nameHint.textContent;
+  var savedProfile = { name: '', birth_year: null, location: '' };
+  var profileLoaded = false;
+
+  // Коды приходят от update_profile (core/db.py); текст человеку подбираем
+  // здесь - сервер не знает, на каком языке он читает.
+  var SAVE_ERRORS = {
+    name_empty: 'Без имени нельзя — его видит устаз.',
+    name_too_long: 'Слишком длинное имя.',
+    birth_year_bad: 'Не похоже на год рождения.',
+    location_too_long: 'Слишком длинно.'
+  };
+
+  function settSay(el, text, cls, restore) {
+    el.textContent = text;
+    el.className = 's-hint' + (cls ? ' ' + cls : '');
+    if (restore) {
+      clearTimeout(el._back);
+      el._back = setTimeout(function () {
+        el.textContent = restore;
+        el.className = 's-hint';
+      }, 2600);
+    }
+  }
+
+  function settSave(patch, hint, restore) {
+    apiCall('/profile', { method: 'POST', body: patch }).then(function (res) {
+      if (res.status === 200 && res.data) {
+        savedProfile = res.data;
+        settSay(hint, 'Сохранено', 'ok', restore);
+        return;
+      }
+      var code = res.data && res.data.error;
+      settSay(hint, SAVE_ERRORS[code] || 'Не сохранилось — проверь связь.', 'bad');
+    }).catch(function () {
+      settSay(hint, 'Не сохранилось — проверь связь.', 'bad');
+    });
+  }
+
+  // Место хранится строкой. Если она не совпадает ни с одной областью -
+  // значит человек живёт не в Кыргызстане, и строка это название страны.
+  function settShowPlace(value) {
+    var found = false;
+    Array.prototype.forEach.call(settPlace.options, function (o) {
+      if (o.value !== '__other' && (o.value || o.text) === value) found = true;
+    });
+    if (value && !found) {
+      settPlace.value = '__other';
+      settCountry.value = value;
+      settCountry.hidden = false;
+    } else {
+      settPlace.value = value;
+      settCountry.value = '';
+      settCountry.hidden = true;
+    }
+  }
+
+  function settLoadProfile() {
+    apiCall('/profile').then(function (res) {
+      var d = res && res.data;
+      if (!d || !d.name && d.name !== '') return;
+      profileLoaded = true;
+      savedProfile = d;
+      settName.value = d.name || '';
+      settYear.value = d.birth_year || '';
+      settShowPlace(d.location || '');
+    }).catch(function () {});
+  }
+
+  function settOpen() {
+    settBox.classList.add('on');
+    markLang();
+    markTheme();
+    if (!profileLoaded) settLoadProfile();
+  }
+  function settClose() { settBox.classList.remove('on'); }
+
+  document.getElementById('btn-profile').addEventListener('click', settOpen);
+  document.getElementById('sett-back').addEventListener('click', settClose);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && settBox.classList.contains('on')) settClose();
+  });
+
+  settName.addEventListener('change', function () {
+    var v = settName.value.trim();
+    if (!v) {
+      // Пустым имя не остаётся: возвращаем прежнее, чтобы человек не ушёл
+      // с экрана, стерев себя.
+      settName.value = savedProfile.name || '';
+      settSay(nameHint, SAVE_ERRORS.name_empty, 'bad', NAME_HINT_DEFAULT);
+      return;
+    }
+    if (v === savedProfile.name) return;
+    settSave({ name: v }, nameHint, NAME_HINT_DEFAULT);
+  });
+
+  settYear.addEventListener('change', function () {
+    var v = settYear.value.trim();
+    if (String(savedProfile.birth_year || '') === v) return;
+    settSave({ birth_year: v }, placeHint, '');
+  });
+
+  settPlace.addEventListener('change', function () {
+    if (settPlace.value === '__other') {
+      settCountry.hidden = false;
+      settCountry.focus();
+      return;                       // ждём саму страну, сохранять нечего
+    }
+    settCountry.hidden = true;
+    settSave({ location: settPlace.value }, placeHint, '');
+  });
+
+  settCountry.addEventListener('change', function () {
+    var v = settCountry.value.trim();
+    if (!v || v === savedProfile.location) return;
+    settSave({ location: v }, placeHint, '');
   });
 
   // Узнаём язык с сервера при старте - он главнее локального кэша
