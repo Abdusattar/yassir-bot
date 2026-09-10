@@ -2568,6 +2568,10 @@
     <p class="login-sub">Мусхаф, заучивание и слова Корана —<br>для тех, кто учится в Яссире.</p>
 
     <div id="login-step-side">
+      <p id="login-wrong-side" class="login-status bad" hidden>
+        Этот бот тебя не знает — похоже, сторона выбрана не та. Попробуй
+        другую.
+      </p>
       <p class="login-q">В какой группе ты учишься?</p>
       <button class="login-side" data-profile="male">Мужская группа</button>
       <button class="login-side" data-profile="female">Женская группа</button>
@@ -2722,7 +2726,19 @@
         fetch('/api/muf/' + profile + '/auth/poll?code=' + encodeURIComponent(code))
           .then(function (r) { return r.json(); })
           .then(function (d) {
-            if (!d || !d.token) return;
+            if (!d) return;
+            // Бот не нашёл человека у себя - почти всегда выбрана не та
+            // сторона. Он сказал об этом в Telegram, но человек смотрит
+            // сюда: возвращаем его к выбору сами, не заставляя догадываться.
+            if (d.refused) {
+              clearInterval(poll);
+              poll = null;
+              stepGo.hidden = true;
+              stepSide.hidden = false;
+              document.getElementById('login-wrong-side').hidden = false;
+              return;
+            }
+            if (!d.token) return;
             clearInterval(poll);
             poll = null;
             saveAuth({ token: d.token, profile: profile, name: d.name || '' });

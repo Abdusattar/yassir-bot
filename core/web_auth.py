@@ -59,7 +59,8 @@ def init_web_auth():
                 created_at TEXT,
                 user_id TEXT,
                 claimed_at TEXT,
-                taken INTEGER DEFAULT 0
+                taken INTEGER DEFAULT 0,
+                refused INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS web_sessions(
                 token_hash TEXT PRIMARY KEY,
@@ -73,6 +74,11 @@ def init_web_auth():
             CREATE INDEX IF NOT EXISTS idx_web_sessions_user
                 ON web_sessions(user_id);
         """)
+        # Таблица уже могла быть создана раньше, без этой колонки:
+        # CREATE TABLE IF NOT EXISTS существующую не трогает.
+        cols = [r["name"] for r in c.execute("PRAGMA table_info(web_login_codes)")]
+        if "refused" not in cols:
+            c.execute("ALTER TABLE web_login_codes ADD COLUMN refused INTEGER DEFAULT 0")
 
 
 def _hash(token):
@@ -123,6 +129,37 @@ def claim_login_code(code, user_id):
         c.execute("UPDATE web_login_codes SET user_id=?, claimed_at=? WHERE code=?",
                   (str(user_id), _now_iso(), code))
         return True
+
+
+def refuse_login_code(code):
+    """Бот узнал код, но человека в СВОИХ группах не нашёл — почти всегда это
+    значит, что он выбрал не ту сторону (мужскую вместо женской).
+
+    Бот скажет ему об этом в Telegram, но вкладка в браузере в это время
+    молча ждёт подтверждения, и человек может не догадаться, что надо
+    вернуться и выбрать заново. Поэтому отказ помечается здесь и доезжает до
+    вкладки следующим же опросом."""
+    if not code:
+        return
+    with db() as c:
+        c.execute(
+            "UPDATE web_login_codes SET refused=1 "
+            "WHERE code=? AND user_id IS NULL",
+            (code,),
+        )
+
+
+def poll_login_code(code):
+    """Что показать вкладке: 'refused' — не та сторона, None — ещё ждём."""
+    if not code:
+        return None
+    with db() as c:
+        row = c.execute(
+            "SELECT refused FROM web_login_codes WHERE code=?", (code,)
+        ).fetchone()
+    if row is not None and row["refused"]:
+        return "refused"
+    return None
 
 
 def take_session_for_code(code, user_agent=""):

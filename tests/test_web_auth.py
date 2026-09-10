@@ -97,3 +97,28 @@ def test_expired_session_is_refused(test_db):
     with sqlite3.connect(test_db) as c:
         c.execute("UPDATE web_sessions SET expires_at=datetime('now','-1 day')")
     assert wa.resolve_session(token) is None
+
+
+def test_wrong_side_is_reported_back_to_the_browser(test_db):
+    """Человек выбрал мужскую сторону, а учится в женской группе. Бот скажет
+    ему об этом в Telegram, но смотрит он в это время в браузер — вкладка
+    обязана узнать об отказе и вернуть его к выбору."""
+    code = wa.new_login_code()
+    assert wa.poll_login_code(code) is None      # пока просто ждём
+
+    wa.refuse_login_code(code)
+    assert wa.poll_login_code(code) == "refused"
+    # Отказ не выдаёт токен и не занимает код
+    assert wa.take_session_for_code(code) is None
+
+
+def test_refusal_cannot_undo_a_successful_login(test_db):
+    """Подтверждённый код отказом уже не сбить — иначе чужой человек, ткнув
+    в ту же ссылку, выбивал бы хозяина из входа."""
+    code = wa.new_login_code()
+    wa.claim_login_code(code, "12345")
+    wa.refuse_login_code(code)
+
+    assert wa.poll_login_code(code) is None
+    token, user_id = wa.take_session_for_code(code)
+    assert user_id == "12345" and wa.resolve_session(token) == "12345"

@@ -45,7 +45,7 @@ from core.transfers import (
 )
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 from core.mushaf_words import advance_hifz_pointer
-from core.web_auth import claim_login_code, LOGIN_START_PREFIX
+from core.web_auth import claim_login_code, refuse_login_code, LOGIN_START_PREFIX
 
 log = logging.getLogger(__name__)
 
@@ -865,6 +865,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             known = (is_admin(phone) or is_any_group_admin(phone)
                      or get_learning_group(phone, include_prep=True) is not None)
             if not known:
+                # Скажем и вкладке в браузере, а не только сюда: там человек
+                # сейчас ждёт подтверждения и не знает, что оно не придёт.
+                refuse_login_code(code)
                 await send_message(chat_id, LOGIN_NOT_A_STUDENT)
             elif claim_login_code(code, phone):
                 await send_message(chat_id, LOGIN_CONFIRMED)

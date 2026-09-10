@@ -67,8 +67,8 @@ from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.prep import prep_progress
 from core.tg import get_bot_username
 from core.web_auth import (
-    new_login_code, take_session_for_code, resolve_session, revoke_session,
-    LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
+    new_login_code, take_session_for_code, poll_login_code, resolve_session,
+    revoke_session, LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
 )
 
 log = logging.getLogger(__name__)
@@ -1265,6 +1265,11 @@ async def handle_auth_poll(request):
     code = request.query.get("code", "")
     taken = take_session_for_code(code, request.headers.get("User-Agent", ""))
     if not taken:
+        # Бот увидел код, но человека в своих группах не нашёл - почти всегда
+        # это «выбрал не ту сторону». Пусть вкладка скажет об этом сама, а не
+        # ждёт молча подтверждения, которое не придёт.
+        if poll_login_code(code) == "refused":
+            return web.json_response({"refused": True})
         return web.json_response({"pending": True})
     token, user_id = taken
     user = find_user_by_phone(user_id)
