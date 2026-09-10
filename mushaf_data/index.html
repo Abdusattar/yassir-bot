@@ -2580,9 +2580,18 @@
           <button type="button" data-add="40">+40</button>
           <button type="button" id="hifz-progress-own" data-i18n="hifz_progress_own">своё</button>
         </div>
+        <!-- Кнопки «ок» рядом с полем больше нет (10.09.2026, решение
+             пользователя). Она была мелкой и стояла в двух шагах от большой
+             «Сохранить и продолжить» - человек набирал число и жал большую,
+             логично считая, что этого хватит. Хватает: с 08.09 большая
+             кнопка сперва досохраняет набранное. Значит «ок» ничего не
+             добавляла, только предлагала лишний тап и сомнение, засчиталось
+             ли. Enter в поле работает как раньше - для тех, кто хочет
+             добавить ещё раз, не закрывая панель. -->
         <div class="hp-own-row" id="hifz-progress-own-row" style="display:none">
-          <input id="hifz-progress-own-input" type="number" min="1" max="80" inputmode="numeric">
-          <button type="button" id="hifz-progress-own-ok" data-i18n="hifz_progress_ok">ок</button>
+          <input id="hifz-progress-own-input" type="number" min="1" max="80"
+                 inputmode="numeric" data-i18n-ph="hifz_progress_own_ph"
+                 placeholder="сколько раз">
         </div>
         <button type="button" id="hifz-progress-save" class="hp-save" data-i18n="hifz_progress_save">Сохранить и продолжить</button>
       </div>
@@ -3095,7 +3104,7 @@
       hifz_progress_was: 'Было по этапу',
       hifz_progress_of: 'из',
       hifz_progress_own: 'своё',
-      hifz_progress_ok: 'ок',
+      hifz_progress_own_ph: 'сколько раз',
       hifz_progress_save: 'Сохранить и продолжить',
       hifz_progress_close: 'Этап закрыт, дальше →',
       tab_mushaf: '📗 Мусхаф',
@@ -3339,6 +3348,11 @@
     // innerHTML, а не textContent.
     document.querySelectorAll('[data-i18n-html]').forEach(function (el) {
       el.innerHTML = T(el.getAttribute('data-i18n-html'));
+    });
+    // Подсказки в полях ввода - у них перевод ложится в placeholder
+    // (10.09.2026, первым таким стало поле «сколько раз» в панели 40+40).
+    document.querySelectorAll('[data-i18n-ph]').forEach(function (el) {
+      el.placeholder = T(el.getAttribute('data-i18n-ph'));
     });
     // Экраны, собранные в JS, перерисовываем - иначе язык применится
     // только после следующего действия студента.
@@ -5935,7 +5949,6 @@
     if (isFinite(n) && n > 0) return hifzProgressSubmitDelta(Math.min(n, HIFZ_PROGRESS_TARGET));
     return null;
   }
-  document.getElementById('hifz-progress-own-ok').addEventListener('click', hifzProgressCommitOwn);
   document.getElementById('hifz-progress-own-input').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') hifzProgressCommitOwn();
   });
