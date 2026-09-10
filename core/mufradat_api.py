@@ -40,7 +40,7 @@ from core.db import (
     get_group_month_progress, get_student_month_days, group_miss_threshold,
     get_group_by_id, get_students, get_reviewed_submissions,
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
-    is_retake_answered, get_group_tasks, get_today_report,
+    is_retake_answered, get_group_tasks, get_today_report, is_app_member,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -132,7 +132,12 @@ def with_auth(handler):
             return await handler(request, str(user["id"]))
         token = _bearer_token(request)
         user_id = resolve_session(token) if token else None
-        if not user_id:
+        # Право спрашивается КАЖДЫЙ раз, а не только при выдаче токена.
+        # Сессия живёт 90 дней: без этой проверки отчисленный студент ходил
+        # бы в приложение ещё три месяца, а мужской супер-админ, однажды
+        # вошедший в женскую половину, остался бы там навсегда. Запрос
+        # дешёвый и по индексу (10.09.2026).
+        if not user_id or not is_app_member(user_id):
             return web.json_response({"error": "unauthorized"}, status=401)
         return await handler(request, user_id)
     return wrapped

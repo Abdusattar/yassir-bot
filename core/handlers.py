@@ -18,7 +18,7 @@ from core.db import (
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
     register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
     add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
-    is_service_group,
+    is_service_group, is_app_member,
     set_observer, unset_observer, is_observer,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
@@ -234,18 +234,15 @@ def extract_phone(sender):
 def may_use_app(phone):
     """Пускать ли этого человека в приложение с сайта (10.09.2026).
 
-    Своим считается тот, кто уже учится или учит: активная учебная группа
-    (включая подготовительную - её студенты сдают те же задания), устаз
-    любой группы, супер-админ. В приложении есть личные данные - сдачи,
-    разборы, прогресс, - и открывать их незнакомцу незачем.
+    Правило целиком живёт в core/db.py:is_app_member - тем же вопросом
+    задаётся и API при каждом запросе по токену сессии.
 
-    Регистрации отсюда быть НЕ МОЖЕТ ни при каком ответе этой функции:
-    студентом человека делает только вход в группу (add_student), и ни одна
-    ветка /start туда не ведёт. Эта проверка решает лишь, отдавать ли ключ
-    от приложения.
+    Регистрации отсюда быть НЕ МОЖЕТ ни при каком ответе: студентом
+    человека делает только вход в группу (add_student), и ни одна ветка
+    /start туда не ведёт. Эта проверка решает лишь, отдавать ли ключ от
+    приложения.
     """
-    return (is_admin(phone) or is_any_group_admin(phone)
-            or get_learning_group(phone, include_prep=True) is not None)
+    return is_app_member(phone)
 
 
 def is_group_chat(chat_id):

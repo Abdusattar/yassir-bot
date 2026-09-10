@@ -2147,7 +2147,7 @@
   }
   .login-sub { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.5; }
   .login-q { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
-  .login-side, .login-go, .login-plain {
+  .login-side, .login-alt, .login-go, .login-plain {
     display: block; width: 100%;
     font: inherit; font-size: 15px;
     padding: 13px 14px; margin-bottom: 10px;
@@ -2155,7 +2155,7 @@
     border: 1px solid var(--card-border);
     background: var(--card-bg); color: var(--ink);
   }
-  .login-side:hover { border-color: var(--accent); }
+  .login-side:hover, .login-alt:hover { border-color: var(--accent); }
   /* Единственная закрашенная кнопка на экран - остальное outline
      (см. "Дизайн-система" в wiki). */
   .login-go {
@@ -2584,8 +2584,11 @@
       <a id="login-link" class="login-go" target="_blank" rel="noopener">Подтвердить в Telegram</a>
       <p id="login-status" class="login-status">Открой ссылку и нажми «Начать» — я жду подтверждения.</p>
       <!-- Не мелким серым: ошибиться стороной легко, и это первое, что
-           человек ищет глазами, когда понял ошибку (10.09.2026). -->
-      <button id="login-back" class="login-side">← Не та группа? Выбрать заново</button>
+           человек ищет глазами, когда понял ошибку (10.09.2026). Класс СВОЙ,
+           не login-side: по нему навешиваются обработчики выбора стороны, и
+           эта кнопка ловила бы их тоже - тап начинал бы вход в профиль
+           "null" одновременно с возвратом к выбору. -->
+      <button id="login-back" class="login-alt">← Не та группа? Выбрать заново</button>
     </div>
 
     <!-- Подсказка только для iPhone (10.09.2026). Android предлагает

@@ -7,6 +7,7 @@
 """
 import asyncio
 
+import core.db as db
 import core.mufradat_api as api
 from core import web_auth as wa
 
@@ -37,6 +38,13 @@ def _fresh_token(user_id="12345"):
     return wa.take_session_for_code(code)[0]
 
 
+def _make_student(phone="12345"):
+    """Право спрашивается при КАЖДОМ запросе (is_app_member), а не только при
+    выдаче токена, - значит у владельца сессии должна быть настоящая группа."""
+    db.save_group("-100901", "N-1", tasks="m,r,t")
+    db.add_student("Сатар", db.get_group("-100901")["id"], phone=phone)
+
+
 def test_no_credentials_at_all_is_401(test_db):
     status, _ = _request("GET", "/api/muf/state")
     assert status == 401
@@ -50,11 +58,13 @@ def test_garbage_bearer_is_401(test_db):
 def test_session_token_opens_the_same_doors_as_telegram(test_db, test_hadiths_db):
     """Главное обещание всей затеи: снаружи Telegram приложение работает
     ровно так же, просто удостоверяется другим способом."""
+    _make_student()
     status, _ = _request("GET", "/api/muf/state", _bearer(_fresh_token()))
     assert status == 200
 
 
 def test_revoked_session_is_shut_out(test_db, test_hadiths_db):
+    _make_student()
     token = _fresh_token()
     assert _request("GET", "/api/muf/state", _bearer(token))[0] == 200
     status, _ = _request("POST", "/api/muf/auth/logout", _bearer(token))
@@ -109,3 +119,28 @@ def test_real_ip_is_counted_per_person(test_db, monkeypatch):
     assert _request("POST", "/api/muf/auth/start", {"X-Real-IP": "1.1.1.1"})[0] == 429
     # Сосед по подъезду ни при чём
     assert _request("POST", "/api/muf/auth/start", {"X-Real-IP": "2.2.2.2"})[0] == 200
+
+
+def test_super_admin_of_the_other_half_is_not_let_in(test_db, monkeypatch):
+    """Решение пользователя 10.09.2026: Умар устаз и он остаются только в
+    мужской половине, Зейнеб и Асель — только в женской. В .env.female
+    исторически прописаны и мужские id, поэтому одного SUPER_ADMIN_IDS для
+    входа мало — нужна настоящая запись в ЭТОЙ базе."""
+    monkeypatch.setattr(api, "SUPER_ADMIN_IDS", ["272581710"])
+    token = _fresh_token("272581710")          # он супер-админ...
+    # ...но в этой базе его нет ни в одной группе
+    assert _request("GET", "/api/muf/state", _bearer(token))[0] == 401
+
+
+def test_leaving_the_group_closes_the_app_at_once(test_db, test_hadiths_db):
+    """Сессия живёт 90 дней, поэтому право спрашивается при каждом запросе:
+    отчисленный не должен ходить в приложение ещё три месяца."""
+    _make_student("12345")
+    token = _fresh_token("12345")
+    assert _request("GET", "/api/muf/state", _bearer(token))[0] == 200
+
+    group = db.get_group("-100901")
+    student = db.find_by_phone("12345", group["id"])
+    db.deactivate_student(student["id"], group["id"])
+
+    assert _request("GET", "/api/muf/state", _bearer(token))[0] == 401
