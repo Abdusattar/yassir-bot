@@ -231,6 +231,23 @@ def extract_phone(sender):
     return s.split("@")[0] if "@" in s else s
 
 
+def may_use_app(phone):
+    """Пускать ли этого человека в приложение с сайта (10.09.2026).
+
+    Своим считается тот, кто уже учится или учит: активная учебная группа
+    (включая подготовительную - её студенты сдают те же задания), устаз
+    любой группы, супер-админ. В приложении есть личные данные - сдачи,
+    разборы, прогресс, - и открывать их незнакомцу незачем.
+
+    Регистрации отсюда быть НЕ МОЖЕТ ни при каком ответе этой функции:
+    студентом человека делает только вход в группу (add_student), и ни одна
+    ветка /start туда не ведёт. Эта проверка решает лишь, отдавать ли ключ
+    от приложения.
+    """
+    return (is_admin(phone) or is_any_group_admin(phone)
+            or get_learning_group(phone, include_prep=True) is not None)
+
+
 def is_group_chat(chat_id):
     try:
         return int(str(chat_id)) < 0
@@ -837,6 +854,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # Студент написал боту в личку хотя бы раз — значит, бот теперь может писать
     # ему первым (Telegram запрещает боту инициировать диалог до этого момента)
     if not is_group:
+        # Вход в приложение с сайта, чужой бот (10.09.2026). Человек выбрал
+        # не ту сторону: женщина открыла мужского бота или наоборот. Выходим
+        # ПЕРВЫМ ЖЕ действием, до всего остального - иначе он оставит в чужой
+        # базе строку users (mark_dm_ok_by_phone ниже заводит её даже
+        # незнакомцу). Студентом это никого не делает - им делает только
+        # вход в группу, - но и следа тут быть не должно: человек просто
+        # ошибся дверью.
+        if text.startswith("/start " + LOGIN_START_PREFIX) and not may_use_app(phone):
+            refuse_login_code(text.split(" ", 1)[1][len(LOGIN_START_PREFIX):].strip())
+            await send_message(chat_id, LOGIN_NOT_A_STUDENT)
+            return
+
         was_dm_ok = get_dm_ok_by_phone(phone)
         mark_dm_ok_by_phone(phone)
         # Личка только что открылась впервые — если есть непросроченное
@@ -858,15 +887,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # этого user_id - ни пароля, ни кода из SMS не нужно.
         #
         # Подтверждает только СВОЙ бот: мужской знает мужчин, женский женщин
-        # (базы разные, см. wiki/infrastructure.md). Ошибся дверью - не найду
-        # в своих группах и скажу об этом, сессия в чужую базу не попадёт.
+        # (базы разные, см. wiki/infrastructure.md).
+        #
+        # may_use_app здесь спрашивается ВТОРОЙ раз - выше, в начале ветки
+        # лички, чужой уже отсеян. Это не забытый дубль: у двух проверок
+        # разные задачи. Верхняя следит, чтобы чужой не оставил в базе следа
+        # (mark_dm_ok_by_phone между ними заводит строку users кому угодно),
+        # нижняя - чтобы ключ от приложения не выдался. Каждая закрыта своим
+        # тестом (tests/test_web_login_wrong_bot.py); сложи их в одну, и
+        # первая же перестановка кода откроет чужому вход.
         if text.startswith("/start " + LOGIN_START_PREFIX):
             code = text.split(" ", 1)[1][len(LOGIN_START_PREFIX):].strip()
-            known = (is_admin(phone) or is_any_group_admin(phone)
-                     or get_learning_group(phone, include_prep=True) is not None)
-            if not known:
-                # Скажем и вкладке в браузере, а не только сюда: там человек
-                # сейчас ждёт подтверждения и не знает, что оно не придёт.
+            if not may_use_app(phone):
                 refuse_login_code(code)
                 await send_message(chat_id, LOGIN_NOT_A_STUDENT)
             elif claim_login_code(code, phone):
