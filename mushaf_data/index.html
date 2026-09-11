@@ -364,7 +364,83 @@
     align-items: center; justify-content: space-between;
     padding: 7px 12px; border-bottom: 1px solid var(--chrome-border);
   }
-  #hifz-head .where { text-align: right; line-height: 1.3; }
+  /* Шапка заучивания в одну строку (11.09.2026, просьба пользователя):
+     двумя строками она отъедала место у мусхафа, а этап умещается тут же
+     коротким словом. */
+  #hifz-head .where {
+    text-align: right; line-height: 1.3;
+    display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  #hifz-head .where b { display: inline; }
+  #hifz-head .where small::before { content: '· '; }
+
+  /* Счётчик 40+40 у кнопки Хусари. */
+  #hifz-count, #big-count {
+    flex: 0 0 auto; display: none; flex-direction: column; align-items: center;
+    cursor: pointer; direction: ltr; font: inherit;
+    border: 1px solid var(--accent); background: var(--accent-soft);
+    border-radius: 10px; padding: 4px 11px 5px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #hifz-count.on, #big-count.on { display: flex; }
+  #hifz-count .c-cap, #big-count .c-cap {
+    font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; line-height: 1.4;
+  }
+  #hifz-count .c-n, #big-count .c-n {
+    font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1;
+  }
+  #hifz-count .c-n b { font-size: 17px; font-weight: 700; }
+  #hifz-count .c-n i, #big-count .c-n i {
+    font-style: normal; font-size: 10.5px; color: var(--muted);
+  }
+  /* В «Крупно» мишень во всю ширину и заметно крупнее: её тапают вслепую,
+     не отрывая глаз от строки. */
+  #big-count {
+    margin: 0 14px 10px; padding: 13px 16px 11px; border-radius: 18px;
+    align-items: center;
+  }
+  #big-count .c-n b { font-size: 44px; font-weight: 700; line-height: 1.02; }
+  #big-count .c-n i { font-size: 14px; }
+  #big-count .c-cap { font-size: 11px; letter-spacing: .12em; }
+  /* Полоса всей работы (0-80) в основании мишени. Она отвечает на вопрос
+     «сколько всего осталось», не требуя читать второе число, и объясняет
+     сброс цифры на сороковом повторе: цифра пошла заново, а полоса
+     продолжила расти. */
+  /* align-self: stretch обязателен: мишень - flex-колонка с
+     align-items:center, и без него полоса получает ширину по содержимому,
+     то есть ноль (поймано скриншотом 11.09.2026 - ширина ставилась в 45%,
+     а на экране полоса оставалась пустой). */
+  #hifz-count .c-bar, #big-count .c-bar {
+    display: block; align-self: stretch; border-radius: 3px;
+    /* Подложка своя, не --card-border: на светлой мишени он почти сливается
+       с фоном, и первые повторы не читались вовсе (11.09.2026). */
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    overflow: hidden;
+  }
+  #hifz-count .c-bar { height: 4px; margin-top: 4px; }
+  #big-count .c-bar { height: 6px; margin-top: 9px; }
+  #hifz-count .c-bar i, #big-count .c-bar i {
+    display: block; height: 100%; background: var(--accent);
+    transition: width .18s ease-out;
+  }
+  #hifz-count.second .c-bar i, #big-count.second .c-bar i { background: var(--ok); }
+  /* Второй этап другим цветом: сорок «по памяти» — другая работа, и сразу
+     видно, что первые сорок позади. */
+  #hifz-count.second, #big-count.second {
+    border-color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent);
+  }
+  #hifz-count.second .c-cap, #big-count.second .c-cap { color: var(--ok); }
+  /* Набрано всё — мишень гаснет: дальше не считать, а сдавать. */
+  #hifz-count.full, #big-count.full { opacity: .5; }
+  /* Отклик на тап: цифра коротко подпрыгивает — единственный ответ, который
+     видно, не отрывая глаз от строки. */
+  #hifz-count.hit .c-n b, #big-count.hit .c-n b { animation: countHit .22s ease-out; }
+  @keyframes countHit { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) {
+    #hifz-count.hit .c-n b, #big-count.hit .c-n b { animation: none; }
+  }
   #hifz-head .where b { display: block; font-size: 12.5px; color: var(--ink); font-weight: 600; }
   #hifz-head .where small { font-size: 11px; color: var(--muted); }
   #hifz-head .where .fix {
@@ -1806,6 +1882,75 @@
     direction: ltr;
   }
   .learn-lead { font-size: 12.5px; color: var(--muted); margin: 0 2px 4px; }
+  /* ── Блоки «Знаний» (11.09.2026) ──────────────────────────────────────
+     Карточка с подписью и строками внутри — тот же приём, что у карточек
+     настроек (#sett .s-card). Блок не уводит на свой экран: пункты видны
+     сразу, и до темы по-прежнему два тапа, а не три. */
+  #learn-body .k-card {
+    max-width: 520px; width: 100%; align-self: center;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; box-shadow: var(--shadow-sm);
+    padding: 12px 0 2px; margin-bottom: 2px; overflow: hidden;
+  }
+  #learn-body .k-head {
+    display: flex; align-items: baseline; gap: 8px;
+    margin: 0 14px 6px; font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; color: var(--muted);
+  }
+  #learn-body .k-head i {
+    font-style: normal; font-weight: 400; letter-spacing: 0; font-size: 11px;
+  }
+  /* Внутри карточки строка — ряд списка, а не отдельная плитка. */
+  #learn-body .k-card .learn-item {
+    background: none; border: none; box-shadow: none; border-radius: 0;
+    margin: 0; width: 100%; box-sizing: border-box; padding: 11px 14px;
+  }
+  /* Разделитель во всю ширину: укороченная линия с отступами по бокам
+     читается как рамка вокруг строки, то есть как плитка внутри плитки
+     (поймано на снимке 11.09.2026). */
+  #learn-body .k-card .learn-item + .learn-item {
+    border-top: 1px solid var(--card-border);
+  }
+  /* Предметы — плитками: их ровно два, имена короткие, выбор равнозначный.
+     Строки нужны там, где у пункта длинное имя и спутники справа. */
+  #learn-body .k-tiles {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 2px 12px 12px;
+  }
+  #learn-body .k-tile {
+    display: flex; flex-direction: column; gap: 3px; text-align: left;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 12px 13px 11px; cursor: pointer;
+    font: inherit; color: var(--ink); -webkit-tap-highlight-color: transparent;
+  }
+  #learn-body .k-tile .t-mk { font-size: 19px; line-height: 1.1; margin-bottom: 2px; }
+  #learn-body .k-tile .t-nm { font-size: 15px; font-weight: 640; }
+  #learn-body .k-tile .t-ds { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+  #learn-body .k-tile .t-cnt {
+    margin-top: 6px; font-size: 11.5px; color: var(--accent); font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  #learn-body .k-empty { text-align: center; font-size: 12.5px; color: var(--muted); padding: 14px; }
+  /* Название главы над группой уроков. */
+  #learn-body .k-cap {
+    max-width: 520px; width: 100%; align-self: center;
+    margin: 14px 2px 2px; font-size: 11.5px; font-weight: 600; color: var(--muted);
+  }
+  /* Закрытый урок: название видно, но приглушено и не нажимается. */
+  #learn-body .learn-item.k-off { opacity: .45; cursor: default; }
+  /* Текст урока. Арабские названия и цитаты идут вперемешку с русским —
+     direction: ltr обязателен, иначе строка вроде «ط د ت / ص س ز» внутри
+     RTL-контейнера переставляется (та же ловушка, что с «7-бет»). */
+  #learn-body .k-text {
+    max-width: 520px; width: 100%; align-self: center; direction: ltr;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 18px; box-shadow: var(--shadow-sm);
+    padding: 14px 16px 18px; font-size: 14px; line-height: 1.55;
+    color: var(--ink); white-space: pre-wrap; word-break: break-word;
+  }
+  #learn-body .k-text .k-chapter {
+    margin: 0 0 10px; font-size: 11.5px; color: var(--muted); white-space: normal;
+  }
+  #learn-body .k-cap, #learn-body .learn-item .nm { direction: ltr; }
   .learn-item {
     display: flex; gap: 11px; align-items: flex-start; text-align: left;
     background: var(--card-bg); border: 1px solid var(--card-border);
@@ -2499,7 +2644,7 @@
        и через полгода. -->
   <div class="dash-row" id="dash-learn" tabindex="0" role="button">
     <span class="mark">✎</span>
-    <span class="text"><span class="label" data-i18n="dash_learn">Как работаем</span><span class="sub" data-i18n="dash_learn_sub">Повторение, муфрадат, заучивание</span></span>
+    <span class="text"><span class="label" data-i18n="dash_learn">Знания</span><span class="sub" data-i18n="dash_learn_sub">Как работаем, таджвид и нахв</span></span>
   </div>
   </div>
   <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
@@ -2623,6 +2768,17 @@
     <span id="hifz-big-where"></span>
   </div>
   <div class="big-inner"><div class="big-words" id="hifz-big-words"></div></div>
+  <!-- Мишень счёта стоит МЕЖДУ строкой и кнопками, во всю ширину
+       (11.09.2026, замечание пользователя: «в крупно же место есть»).
+       Здесь студент и делает свои сорок, тапая вслепую — чем больше
+       площадь, тем вернее попадание. Текст она не перекрывает: кегль в
+       «Крупно» подбирается под свободную область, и мишень входит в расчёт,
+       потому что лежит в разметке, а не дорисовывается после. -->
+  <button id="big-count" title="Отметить повтор">
+    <span class="c-cap"></span>
+    <span class="c-n"><b>0</b><i>/40</i></span>
+    <span class="c-bar"><i></i></span>
+  </button>
   <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
     <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать">🔊</button>
     <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer">🎙 Сдать</button>
@@ -2781,6 +2937,15 @@
          один <audio> на оба места, там же где студент делает 40
          повторов открывать заново не нужно. -->
     <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать">🔊</button>
+    <!-- Счётчик 40+40 (11.09.2026). Стоит у 🔊 по просьбе пользователя: низ
+         удобнее тапать, рука и так там, а Хусари включают ровно перед
+         повторами. Число то же самое, что копила панель «сколько сделал
+         сегодня» (mushaf_hifz_progress, 0-80): сорок глядя, сорок по
+         памяти. Значит цифры переживают выход и видны с другого телефона. -->
+    <button id="hifz-count" title="Отметить повтор">
+      <span class="c-cap"></span><span class="c-n"><b>0</b><i>/40</i></span>
+      <span class="c-bar"><i></i></span>
+    </button>
     <button id="hifz-submit" class="primary">🎙 Сдать</button>
     <!-- Выбор единицы — только пока идёт выбор места (02.09.2026). Студент
          может стартовать не с первой строки, а сразу с половины или всей
@@ -2893,7 +3058,7 @@
 <div id="learn">
   <div id="learn-topbar">
     <button id="learn-back" data-i18n="back_dashboard">← Дашборд</button>
-    <span id="learn-title" data-i18n="learn_title">Как работаем</span>
+    <span id="learn-title" data-i18n="learn_title">Знания</span>
   </div>
   <div id="learn-body"></div>
   <div id="learn-zoom"><img alt=""></div>
@@ -3164,15 +3329,26 @@
       // Дверь называется по тому, что за ней лежит (08.09.2026): сдают
       // заучивание в Мусхафе, а здесь - что я отправил и что ответил устаз.
       // Прежнее «Заучивания» обещало кнопку сдачи, которой тут нет.
-      dash_learn: 'Как работаем',
-      dash_learn_sub: 'Повторение, муфрадат, заучивание',
-      learn_title: 'Как работаем',
-      learn_lead: 'Коротко и по шагам. Заходи за тем разделом, который нужен.',
+      // 11.09.2026: дверь стала «Знания» - за ней теперь не только объяснения
+      // приложения, но и уроки таджвида и нахва, те самые, что выходят по
+      // четвергам в группы.
+      dash_learn: 'Знания',
+      dash_learn_sub: 'Как работаем, таджвид и нахв',
+      learn_title: 'Знания',
+      learn_lead: '',
+      learn_cap_how: 'КАК РАБОТАТЬ В ПРИЛОЖЕНИИ',
+      learn_cap_lessons: 'УРОКИ',
+      learn_lessons_note: 'новый каждый четверг',
+      learn_open_of: '%N% из %M%',
+      lesson_locked: 'ещё не открыт',
+      lesson_locked_soon: 'откроется в четверг',
+      lesson_part_of: 'часть %N% из %M%',
+      lessons_empty: 'Уроки появятся здесь, как только выйдет первый.',
       learn_prev: 'Назад',
       learn_next: 'Дальше',
       learn_done: 'Готово',
       learn_again: 'Пройти заново',
-      learn_back_toc: '← Как работаем',
+      learn_back_toc: '← Знания',
       learn_steps: '%N% шагов',
       learn_steps_few: '%N% шага',
       learn_read: 'прочитано',
@@ -3314,8 +3490,10 @@
       hifz_line_of: 'строчка %N% из %M%',
       hifz_lines_range: 'строчки %A%–%B%',
       hifz_whole: 'страница целиком',
-      hifz_stage1: 'этап 1 — по строчкам, 40+40',
-      hifz_stage2: 'этап 2 — половина страницы, 40+40',
+      hifz_count_looking: 'глядя',
+      hifz_count_memory: 'по памяти',
+      hifz_stage1: 'строчки',
+      hifz_stage2: 'половина листа',
       hifz_stage3: 'этап 3 — вся страница, 40+40',
       hifz_big: 'Крупно',
       hifz_fix: 'поправить',
@@ -4041,6 +4219,50 @@
   // угодно, но здесь важнее сам сдвиг за пределы синхронного старта:
   // setInterval-колбэки и так асинхронны, а вот этот, самый первый,
   // синхронно выполнился бы слишком рано без отложенного старта).
+  /* ── Новая версия приложения (11.09.2026) ────────────────────────────
+     Приложение с домашнего экрана при запуске НЕ перезагружается: система
+     возвращает ту же страницу вместе со старым кодом. Человек жмёт иконку и
+     видит вчерашнюю версию, хотя в браузере всё свежее. Service worker тут
+     не помогает — он берёт index.html из сети, но запроса просто нет.
+
+     Поэтому спрашиваем сами: метку версии при старте запоминаем, а при
+     каждом возвращении в приложение сверяем. Отличается — перезагружаемся.
+
+     Перезагрузка не должна случиться посреди работы: если идёт запись сдачи
+     или играет звук, откладываем до следующего возвращения. Потерять
+     недописанную сдачу ради свежего кода — плохой обмен. */
+  var appVersion = null;
+
+  function appVersionBusy() {
+    var rec = document.getElementById('hifz-rec');
+    if (rec && rec.classList.contains('visible')) return true;   // идёт сдача
+    var audios = document.getElementsByTagName('audio');
+    for (var i = 0; i < audios.length; i++) {
+      if (!audios[i].paused && !audios[i].ended) return true;    // играет звук
+    }
+    return false;
+  }
+
+  function appVersionCheck(first) {
+    fetch(apiBase() + '/version', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.v) return;
+        if (first || !appVersion) { appVersion = d.v; return; }
+        if (d.v !== appVersion && !appVersionBusy()) location.reload();
+      })
+      .catch(function () { /* нет сети - просто в другой раз */ });
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') appVersionCheck(false);
+  });
+  window.addEventListener('pageshow', function (e) {
+    // persisted - страница вернулась из «заморозки», ровно наш случай.
+    if (e.persisted) appVersionCheck(false);
+  });
+  setTimeout(function () { appVersionCheck(true); }, 1500);
+
   var HEARTBEAT_INTERVAL_MS = 20000;
   // Роль из heartbeat: по ней же показывается раздел онбординга
   // «Проверка сдач» (см. LEARN).
@@ -5605,6 +5827,9 @@
   }
 
   function hifzHead() {
+    // Счётчик живёт по тем же правилам, что шапка: место сменилось - число
+    // тоже (11.09.2026).
+    if (typeof hifzCountRender === 'function') setTimeout(hifzCountRender, 0);
     var n = hifzTextLines().length;
     var where = document.getElementById('hifz-where');
     var sub = document.getElementById('hifz-sub');
@@ -6408,6 +6633,102 @@
     var p = hifzProgressCache[hifzProgressKey(currentPage, stage, half)];
     return (p && hifzProgressPhaseText(p.count)) || T('hifz_stage' + stage);
   }
+
+  /* ── Счётчик повторов у кнопки Хусари (11.09.2026) ──────────────────
+     Тап = один повтор. Число то же, что копила панель «сколько сделал
+     сегодня»: 0-80 на место, первые сорок — глядя, вторые — по памяти.
+     Поэтому цифры и переживают выход из режима: они лежат на сервере,
+     а не в этом браузере.
+
+     На сервер шлём не каждый тап, а накопленное: сорок тапов подряд — это
+     сорок запросов на слабом интернете, и половина из них разошлась бы с
+     тем, что человек видит. Копим и отправляем через полторы секунды после
+     последнего тапа, а также при выходе с экрана. */
+  var hifzCountPending = 0, hifzCountTimer = null, hifzCountKey = null;
+
+  function hifzCountUnit() {
+    // На этапе 1 «половина» — это номер строки: иначе счёт всех строк одной
+    // половины слился бы в одно число (см. handle_hifz_progress_add).
+    if (hifz.stage === 1) return { stage: 1, half: hifz.line };
+    return { stage: hifz.stage, half: hifzProgressHalf() };
+  }
+
+  function hifzCountFlush() {
+    if (!hifzCountPending || !hifzCountKey) return;
+    var parts = hifzCountKey.split(':');
+    var delta = hifzCountPending;
+    hifzCountPending = 0;
+    apiCall('/hifz/progress', { method: 'POST', body: {
+      page: parseInt(parts[0], 10), stage: parseInt(parts[1], 10),
+      half: parseInt(parts[2], 10), delta: delta
+    } }).then(function (res) {
+      // Неуспех - это не только оборванная сеть: 400/401 тоже, и молча
+      // терять набитые тапы нельзя, человек их уже сделал (поймано на
+      // стенде 11.09.2026).
+      if (!res || !res.data || typeof res.data.count !== 'number') {
+        hifzCountPending += delta;
+        return;
+      }
+      var p = hifzProgressCache[hifzCountKey];
+      // Сервер знает лучше: он же видит сдачи с другого телефона.
+      if (p) p.count = res.data.count;
+      hifzCountRender();
+    }).catch(function () {
+      // Не дошло — вернём в копилку, следующий тап или выход попробуют снова.
+      hifzCountPending += delta;
+    });
+  }
+
+  function hifzCountRender() {
+    var page = document.getElementById('hifz-count');
+    var big = document.getElementById('big-count');
+    if (!page || !big) return;
+    var show = hifz.on && !hifz.picking
+      && !(typeof review !== 'undefined' && review.on)
+      && !(typeof look !== 'undefined' && look.on);
+    page.classList.toggle('on', !!show);
+    big.classList.toggle('on', !!show);
+    if (!show) return;
+
+    var u = hifzCountUnit();
+    hifzCountKey = hifzProgressKey(currentPage, u.stage, u.half);
+    hifzProgressEnsureLoaded(currentPage, u.stage, u.half);
+    var p = hifzProgressCache[hifzCountKey] || { count: 0 };
+    var count = p.count + hifzCountPending;
+    var second = count >= 40, full = count >= HIFZ_PROGRESS_TARGET;
+    var shown = full ? 40 : (second ? count - 40 : count);
+    [page, big].forEach(function (el) {
+      el.classList.toggle('second', second);
+      el.classList.toggle('full', full);
+      el.querySelector('.c-cap').textContent =
+        T(second ? 'hifz_count_memory' : 'hifz_count_looking');
+      el.querySelector('.c-n b').textContent = shown;
+      var bar = el.querySelector('.c-bar i');
+      if (bar) bar.style.width = Math.min(100, count / HIFZ_PROGRESS_TARGET * 100) + '%';
+    });
+  }
+
+  function hifzCountTap(el) {
+    var p = hifzProgressCache[hifzCountKey] || { count: 0 };
+    if (p.count + hifzCountPending >= HIFZ_PROGRESS_TARGET) return;
+    hifzCountPending += 1;
+    hifzCountRender();
+    el.classList.remove('hit');
+    void el.offsetWidth;              // перезапуск анимации на частых тапах
+    el.classList.add('hit');
+    clearTimeout(hifzCountTimer);
+    hifzCountTimer = setTimeout(hifzCountFlush, 1500);
+  }
+
+  ['hifz-count', 'big-count'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function () { hifzCountTap(el); });
+  });
+  // Ушёл со страницы, свернул, закрыл - досылаем накопленное.
+  window.addEventListener('pagehide', hifzCountFlush);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') hifzCountFlush();
+  });
 
   function hifzProgressRenderPanel(count) {
     document.getElementById('hifz-progress-count').textContent = count;
@@ -7656,19 +7977,42 @@
     return T(n >= 2 && n <= 4 ? 'learn_steps_few' : 'learn_steps', { N: n });
   }
 
+  /* Оглавление «Знаний» (11.09.2026) — два блока-карточки: объяснения
+     приложения и уроки, которые выходят по четвергам.
+
+     Блок именно карточка со строками внутри, а НЕ отдельный экран: экран на
+     блок добавил бы третий тап до темы (Знания → Уроки → Таджвид → тема),
+     а так их по-прежнему два. Приём тот же, что у карточек настроек
+     (#sett .s-card) — в приложении он уже родной.
+
+     Предметы внутри «Уроков» — плитками, а не строками: их ровно два, имена
+     короткие, и выбор там равнозначный. Строки нужны там, где у пункта
+     длинное имя и спутники справа (дата, замок, номер части) — то есть в
+     списке самих уроков. */
+  var lessonsCache = null;      // предметы со счётом, грузятся один раз за сеанс
+
   function learnRenderToc() {
     learnAt = null;
     var done = learnDone();
     document.getElementById('learn-title').textContent = T('learn_title');
     document.getElementById('learn-back').textContent = T('back_dashboard');
     document.getElementById('learn-foot').style.display = 'none';
-    var html = '<p class="learn-lead">' + T('learn_lead') + '</p>';
+
+    // Уроки идут ПЕРВЫМИ (решение пользователя 11.09.2026, когда увидел
+    // экран): за ними возвращаются каждую неделю, а объяснения приложения
+    // читают один раз и потом заходят изредка. Блок рисуется заглушкой и
+    // наполняется ответом — держать пустой экран, пока идёт сеть, незачем.
+    var html = '<div class="k-card" id="k-lessons"><p class="k-head">'
+      + T('learn_cap_lessons') + '<i>' + T('learn_lessons_note') + '</i></p>'
+      + '<div class="k-tiles" id="k-subjects"></div></div>';
+
+    html += '<div class="k-card"><p class="k-head">' + T('learn_cap_how') + '</p>';
     LEARN.forEach(function (sec, i) {
       if (sec.ustaz && !meIsUstaz) return;   // у студента такого экрана нет
       var empty = !sec.steps.length;
       var right = empty ? T('learn_soon')
         : (done.indexOf(sec.id) >= 0
-            ? '<span class="done">\u2713 ' + T('learn_read') + '</span>'
+            ? '<span class="done">✓ ' + T('learn_read') + '</span>'
             : learnPlural(sec.steps.length));
       html += '<button class="learn-item"' + (empty ? ' disabled style="opacity:.55"' : ' data-sec="' + i + '"') + '>' +
         '<span class="mk">' + sec.mark + '</span>' +
@@ -7676,6 +8020,9 @@
         '<span class="ds">' + sec.desc + '</span></span>' +
         '<span class="cnt">' + right + '</span></button>';
     });
+    html += '</div>';
+
+
     var body = document.getElementById('learn-body');
     body.innerHTML = html;
     Array.prototype.forEach.call(body.querySelectorAll('[data-sec]'), function (b) {
@@ -7683,6 +8030,111 @@
         learnRenderStep(parseInt(b.getAttribute('data-sec'), 10), 0);
       });
     });
+
+    if (lessonsCache) return lessonsRenderSubjects(lessonsCache);
+    apiCall('/lessons').then(function (res) {
+      var d = res && res.data;
+      lessonsCache = (d && d.subjects) || [];
+      lessonsRenderSubjects(lessonsCache);
+    }).catch(function () { lessonsRenderSubjects([]); });
+  }
+
+  var LESSON_MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                       'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  // «13 августа» вместо «2026-08-13»: дата урока - это «когда прошли», а не
+  // отметка в журнале.
+  function lessonDate(at) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(at || '');
+    if (!m) return at || '';
+    return parseInt(m[3], 10) + ' ' + LESSON_MONTHS[parseInt(m[2], 10) - 1];
+  }
+
+  function lessonsRenderSubjects(subjects) {
+    var box = document.getElementById('k-subjects');
+    if (!box) return;                      // ушли с оглавления, пока грузилось
+    if (!subjects.length) {
+      document.getElementById('k-lessons').innerHTML =
+        '<p class="k-empty">' + T('lessons_empty') + '</p>';
+      return;
+    }
+    box.innerHTML = subjects.map(function (s) {
+      return '<button class="k-tile" data-subj="' + s.id + '">'
+        + '<span class="t-mk">' + s.mark + '</span>'
+        + '<span class="t-nm">' + s.title + '</span>'
+        + '<span class="t-ds">' + s.sub + '</span>'
+        + '<span class="t-cnt">' + T('learn_open_of', { N: s.open, M: s.total }) + '</span>'
+        + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('[data-subj]'), function (b) {
+      b.addEventListener('click', function () {
+        lessonsRenderList(b.getAttribute('data-subj'));
+      });
+    });
+  }
+
+  // Список частей предмета: строками, сгруппированными по главам. Закрытый
+  // урок виден с названием, но приглушён и не нажимается — видно, что
+  // впереди (решение пользователя 11.09.2026).
+  function lessonsRenderList(subject) {
+    var meta = (lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {};
+    learnAt = { lessons: subject };
+    document.getElementById('learn-title').textContent = meta.title || '';
+    document.getElementById('learn-back').textContent = T('learn_back_toc');
+    document.getElementById('learn-foot').style.display = 'none';
+    var body = document.getElementById('learn-body');
+    body.innerHTML = '<p class="k-empty">…</p>';
+
+    apiCall('/lessons?subject=' + encodeURIComponent(subject)).then(function (res) {
+      var items = (res && res.data && res.data.items) || [];
+      if (!items.length) { body.innerHTML = '<p class="k-empty">' + T('lessons_empty') + '</p>'; return; }
+      var html = '', chapter = null, n = 0, firstClosed = true;
+      items.forEach(function (it) {
+        if (it.chapter !== chapter) {
+          chapter = it.chapter;
+          html += '<p class="k-cap">' + feedEsc(chapter) + '</p>';
+        }
+        n += 1;
+        var right = it.open ? '' : '🔒';
+        // «Откроется в четверг» — только у ближайшего закрытого: у всех
+        // остальных это было бы неправдой.
+        var desc = it.open ? lessonDate(it.at)
+          : (firstClosed ? T('lesson_locked_soon') : T('lesson_locked'));
+        if (!it.open) firstClosed = false;
+        var topic = it.parts > 1
+          ? it.topic + ' · ' + T('lesson_part_of', { N: it.part, M: it.parts })
+          : it.topic;
+        html += '<button class="learn-item' + (it.open ? '' : ' k-off') + '"'
+          + (it.open ? ' data-lesson="' + it.id + '"' : ' disabled') + '>'
+          + '<span class="mk">' + n + '</span>'
+          + '<span><span class="nm">' + feedEsc(topic) + '</span>'
+          + '<span class="ds">' + feedEsc(desc) + '</span></span>'
+          + '<span class="cnt">' + right + '</span></button>';
+      });
+      body.innerHTML = html;
+      body.scrollTop = 0;
+      Array.prototype.forEach.call(body.querySelectorAll('[data-lesson]'), function (b) {
+        b.addEventListener('click', function () {
+          lessonsRenderOne(subject, b.getAttribute('data-lesson'));
+        });
+      });
+    }).catch(function () { body.innerHTML = '<p class="k-empty">' + T('lessons_empty') + '</p>'; });
+  }
+
+  function lessonsRenderOne(subject, id) {
+    var body = document.getElementById('learn-body');
+    body.innerHTML = '<p class="k-empty">…</p>';
+    apiCall('/lesson?id=' + encodeURIComponent(id)).then(function (res) {
+      var d = res && res.data;
+      if (!d || !d.content) { return lessonsRenderList(subject); }
+      learnAt = { lesson: subject };
+      document.getElementById('learn-title').textContent = d.topic;
+      document.getElementById('learn-back').textContent = '← '
+        + (((lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {}).title || '');
+      body.innerHTML = '<div class="k-text"><p class="k-chapter">' + feedEsc(d.chapter)
+        + (d.parts > 1 ? ' · ' + T('lesson_part_of', { N: d.part, M: d.parts }) : '')
+        + '</p>' + feedEsc(d.content) + '</div>';
+      body.scrollTop = 0;
+    }).catch(function () { lessonsRenderList(subject); });
   }
 
   function learnRenderStep(si, step) {
@@ -7762,7 +8214,9 @@
   document.getElementById('learn-next').addEventListener('click', function () { learnStepBy(1); });
   document.getElementById('learn-back').addEventListener('click', function () {
     // Из шага «назад» ведёт в оглавление, из оглавления - на дашборд: одним
-    // тапом из середины рассказа студента не выкидываем.
+    // тапом из середины рассказа студента не выкидываем. У уроков уровней на
+    // один больше: из текста урока - в список тем, из списка - в оглавление.
+    if (learnAt && learnAt.lesson) return lessonsRenderList(learnAt.lesson);
     if (learnAt) return learnRenderToc();
     document.getElementById('learn').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';

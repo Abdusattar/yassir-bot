@@ -25,6 +25,7 @@ import hmac
 import json
 import logging
 import os
+import pathlib
 import time
 from urllib.parse import parse_qsl
 
@@ -547,8 +548,12 @@ async def handle_hifz_set(request, user_id):
 @with_auth
 async def handle_hifz_progress_get(request, user_id):
     """GET ?page=&stage=&half= - сколько повторов (0-80) уже накоплено по
-    ТЕКУЩЕЙ единице этапа 2/3 (03.09.2026). У этапа 1 (строка) счётчика
-    нет - там одна сдача и так закрывает единицу, спрашивать нечего."""
+    текущей единице.
+
+    Этап 1 (строка) добавлен 11.09.2026 вместе со счётчиком у кнопки Хусари:
+    сорок глядя и сорок по памяти человек делает и на строчке. Закрывает её
+    по-прежнему сдача, а не счёт. `half` на этом этапе - номер строки,
+    см. handle_hifz_progress_add."""
     try:
         page = int(request.query["page"])
         stage = int(request.query["stage"])
@@ -557,7 +562,7 @@ async def handle_hifz_progress_get(request, user_id):
         return web.json_response({"error": "bad_pointer"}, status=400)
     if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
         return web.json_response({"error": "bad_page"}, status=400)
-    if stage not in (2, 3) or half not in (0, 1):
+    if stage not in (1, 2, 3) or not (0 <= half <= (14 if stage == 1 else 1)):
         return web.json_response({"error": "bad_pointer"}, status=400)
     return web.json_response({
         "count": get_hifz_progress(user_id, page, stage, half),
@@ -582,7 +587,16 @@ async def handle_hifz_progress_add(request, user_id):
         return web.json_response({"error": "bad_pointer"}, status=400)
     if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
         return web.json_response({"error": "bad_page"}, status=400)
-    if stage not in (2, 3) or half not in (0, 1) or not (1 <= delta <= HIFZ_PROGRESS_TARGET):
+    # Этап 1 (по строчкам) допущен 11.09.2026: счётчик у кнопки Хусари
+    # набирает 40+40 и на строчке тоже — человек их там делает ровно так же.
+    # Закрытие строки при этом по-прежнему по сдаче, а не по счёту: `closed`
+    # на первом этапе фронтенд не использует.
+    #
+    # `half` на первом этапе означает НОМЕР СТРОКИ, а не половину листа:
+    # иначе счёт всех строк одной половины слился бы в одно число. Отсюда и
+    # потолок 14 — больше пятнадцати строк на листе мединского мусхафа нет.
+    max_half = 14 if stage == 1 else 1
+    if stage not in (1, 2, 3) or not (0 <= half <= max_half)             or not (1 <= delta <= HIFZ_PROGRESS_TARGET):
         return web.json_response({"error": "bad_pointer"}, status=400)
     count = add_hifz_progress(user_id, page, stage, half, delta)
     return web.json_response({
@@ -770,6 +784,36 @@ async def handle_heartbeat(request, user_id):
         # строка обязана оживать без перезагрузки экрана.
         "feed": _feed_brief(user_id),
     })
+
+
+# ── Уроки в «Знаниях» (11.09.2026) ────────────────────────────────────────
+
+@with_auth
+async def handle_lessons(request, user_id):
+    """GET — предметы со счётом «открыто из всего»; с ?subject=j|n — список
+    частей этого предмета."""
+    from core.lessons import lessons_of, subjects_overview
+    subject = request.query.get("subject")
+    if subject:
+        if subject not in ("j", "n"):
+            return web.json_response({"error": "bad_subject"}, status=400)
+        return web.json_response({"items": lessons_of(subject)})
+    return web.json_response({"subjects": subjects_overview()})
+
+
+@with_auth
+async def handle_lesson(request, user_id):
+    """GET ?id= — текст одного урока. Закрытый не отдаётся: программа вперёд
+    не раздаётся, и решать это на клиенте нельзя."""
+    from core.lessons import lesson
+    try:
+        part_id = int(request.query.get("id", ""))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    item = lesson(part_id)
+    if not item:
+        return web.json_response({"error": "not_open"}, status=404)
+    return web.json_response(item)
 
 
 def _feed_brief(user_id):
@@ -1428,11 +1472,50 @@ async def handle_profile_set(request, user_id):
         return web.json_response({"error": str(e)}, status=400)
 
 
+# ── Версия приложения (11.09.2026) ────────────────────────────────────────
+#
+# Зачем: приложение, поставленное на домашний экран, при запуске с иконки НЕ
+# перезагружается — система возвращает ту же страницу, что была открыта в
+# прошлый раз, вместе со старым кодом. Service worker тут ни при чём: он
+# берёт index.html из сети, но до него дело не доходит, потому что запроса
+# нет вовсе. Жалоба пользователя 11.09.2026: «в браузере обновляю — свежее,
+# с иконки — старое».
+#
+# Метка версии — время правки и размер самого index.html. Файл обновляется
+# деплоем на месте, имя не меняется, поэтому ни хеша содержимого, ни номера
+# сборки заводить не нужно.
+_APP_INDEX = pathlib.Path(__file__).resolve().parent.parent / "mushaf_data" / "index.html"
+_version_cache = {"at": 0.0, "v": ""}
+
+
+def app_version():
+    """Метка текущей версии. Пересчитывается не чаще раза в 10 секунд:
+    эндпоинт дёргает каждый телефон при каждом возвращении в приложение."""
+    now = time.time()
+    if _version_cache["v"] and now - _version_cache["at"] < 10:
+        return _version_cache["v"]
+    try:
+        st = _APP_INDEX.stat()
+        v = "%d-%d" % (int(st.st_mtime), st.st_size)
+    except OSError:
+        v = ""
+    _version_cache.update({"at": now, "v": v})
+    return v
+
+
+async def handle_version(request):
+    """GET — метка версии. Без авторизации намеренно: она ничего не
+    рассказывает о человеке, а работать должна и тогда, когда сессия
+    протухла (иначе застрявший телефон так и не узнает об обновлении)."""
+    return web.json_response({"v": app_version()})
+
+
 def build_app():
     # client_max_size по умолчанию 1 МБ - голосовая сдача 40+40 (несколько
     # минут записи из браузера) в него не влезает, aiohttp обрывал бы её
     # до нашего обработчика. Свой предел проверяем уже в handle_hifz_submit.
     app = web.Application(client_max_size=HIFZ_MAX_UPLOAD_BYTES + 1024 * 1024)
+    app.router.add_get("/api/muf/version", handle_version)
     app.router.add_post("/api/muf/auth/start", handle_auth_start)
     app.router.add_get("/api/muf/auth/poll", handle_auth_poll)
     app.router.add_post("/api/muf/auth/logout", handle_auth_logout)
@@ -1468,6 +1551,8 @@ def build_app():
     app.router.add_post("/api/muf/ustaz/verdict", handle_ustaz_verdict)
     app.router.add_post("/api/muf/ustaz/comment", handle_ustaz_comment)
     app.router.add_get("/api/muf/pulse", handle_pulse)
+    app.router.add_get("/api/muf/lessons", handle_lessons)
+    app.router.add_get("/api/muf/lesson", handle_lesson)
     app.router.add_get("/api/muf/feed", handle_feed)
     app.router.add_post("/api/muf/feed/read", handle_feed_read)
     app.router.add_get("/api/muf/feed/media", handle_feed_media)

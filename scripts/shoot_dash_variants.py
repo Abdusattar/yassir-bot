@@ -201,7 +201,7 @@ SHOT_H = {"brief1": 980, "brief_smart": 980, "brief2": 1020,
           "pulse58": 1180, "pulse66": 1180, "feed_low": 1180,
           "ticker": 1180, "ticker_both": 1180, "ticker_smart": 1180,
           "myday_top": 1180, "myday_lab": 1180,
-          "feed_live": 844, "feed_ustaz": 844, "feed_dark": 844, "settings": 900, "sett_live": 900, "dark": 900, "online": 900, "sett_dark": 900}
+          "count_wide": 844, "count_bar": 844, "count_bar_page": 844, "count_both": 844, "count_both0": 844, "count_page": 844, "count_big": 844, "count_big2": 844, "know_live": 900, "know_lessons": 900, "know_toc": 900, "know_list": 900, "feed_live": 844, "feed_ustaz": 844, "feed_dark": 844, "settings": 900, "sett_live": 900, "dark": 900, "online": 900, "sett_dark": 900}
 
 
 MYDAY_CSS = """
@@ -580,7 +580,276 @@ FEED_SCREEN_CSS = BRIEF_CSS + """
 """
 
 
+# ── макет «Знания» (11.09.2026) ───────────────────────────────────────────
+# Дверь «Как работаем» становится «Знания», внутри две группы: как работать
+# в приложении и уроки по четвергам (таджвид, нахв). Закрытый урок виден с
+# названием, но приглушён и не открывается - решение пользователя.
+#
+# Названия тем настоящие, сняты с прода 11.09.2026: спорить о вёрстке на
+# «Тема 1 / Тема 2» бессмысленно - арабский вперемешку с русским и есть та
+# самая длина строки, ради которой макет и снимается.
+KNOWLEDGE_HTML = """
+<script>
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    document.getElementById('dash-learn').click();
+    setTimeout(function () {
+      var scene = window.__KSCENE || 'toc';
+      var body = document.getElementById('learn-body');
+      var title = document.getElementById('learn-title');
+      var back = document.getElementById('learn-back');
+
+      function item(mark, name, desc, right, off) {
+        return '<button class="learn-item' + (off ? ' k-off' : '') + '"'
+          + (off ? ' disabled' : '') + '>'
+          + '<span class="mk">' + mark + '</span>'
+          + '<span><span class="nm">' + name + '</span>'
+          + '<span class="ds">' + desc + '</span></span>'
+          + '<span class="cnt">' + (right || '') + '</span></button>';
+      }
+      function cap(t) { return '<p class="k-cap">' + t + '</p>'; }
+
+      if (scene === 'toc') {
+        title.textContent = 'Знания';
+        // Два блока-карточки, а НЕ экран на каждый блок: пункты видны сразу
+        // и тапаются изнутри, до темы по-прежнему два тапа. Отдельный экран
+        // на блок добавил бы третий ни за что.
+        body.innerHTML =
+          '<div class="k-card"><p class="k-head">КАК РАБОТАТЬ В ПРИЛОЖЕНИИ</p>'
+          + item('◴', 'Заучивание', 'Как сдать 40+40 из Мусхафа', '7 шагов')
+          + item('🔁', 'Повторение', 'Что читать каждый день', '<span class="done">✓ прочитано</span>')
+          + item('ن', 'Слова и тренажёр', 'Муфрадат, «Мои слова»', '7 шагов')
+          + item('✓', 'Проверка сдач', 'Для устаза: разбор и вердикт', '5 шагов')
+          + '</div>'
+          + '<div class="k-card"><p class="k-head">УРОКИ<i>новый каждый четверг</i></p>'
+          + item('📘', 'Таджвид', 'Махаридж, сифаты', '9 из 12')
+          + item('📗', 'Нахв', 'Слово, число, и‘раб', '6 из 9')
+          + '</div>';
+      } else {
+        title.textContent = 'Таджвид';
+        back.textContent = '← Знания';
+        body.innerHTML =
+          cap('مخارج الحروف · Места выхода букв')
+          + item('1', 'Полость (الجوف) — буквы мадда', '10 сентября', '')
+          + item('2', 'Зубно-язычные — ط د ت / ص س ز', '27 августа', '')
+          + item('3', 'Кончик языка (ذلقية) — ل ن ر', '20 августа', '')
+          + item('4', 'Корень языка (أقصى اللسان)', '13 августа', '')
+          + item('5', 'Нос (الخيشوم) — гунна. Итог главы', 'откроется в четверг', '🔒', 1)
+          + cap('صفات الحروف · Свойства букв')
+          + item('6', 'Что такое сифат и пять противоположных пар', 'ещё не открыт', '🔒', 1)
+          + item('7', 'الهمس и الجهر', 'ещё не открыт', '🔒', 1);
+      }
+    }, 900);
+  }, 1500);
+});
+</script>
+"""
+
+KNOWLEDGE_CSS = """
+  /* Подпись группы: в одном списке два разных по природе раздела -
+     объяснения приложения и уроки программы. */
+  #learn-body .k-cap {
+    max-width: 520px; width: 100%; align-self: center;
+    margin: 16px 2px 6px; font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; color: var(--muted);
+  }
+  #learn-body .k-cap:first-of-type { margin-top: 6px; }
+  /* Блок «Знаний» - карточка с подписью и строками внутри. Тот же приём,
+     что у карточек настроек (#sett .s-card): в приложении он уже родной. */
+  #learn-body .k-card {
+    max-width: 520px; width: 100%; align-self: center;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; box-shadow: var(--shadow-sm);
+    padding: 12px 0 2px; margin-bottom: 12px; overflow: hidden;
+  }
+  #learn-body .k-head {
+    display: flex; align-items: baseline; gap: 8px;
+    margin: 0 14px 6px; font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; color: var(--muted);
+  }
+  #learn-body .k-head i {
+    font-style: normal; font-weight: 400; letter-spacing: 0; font-size: 11px;
+  }
+  /* Внутри карточки строка - не отдельная плитка, а ряд списка. */
+  #learn-body .k-card .learn-item {
+    background: none; border: none; box-shadow: none; border-radius: 0;
+    margin: 0; width: 100%; box-sizing: border-box; padding: 11px 14px;
+  }
+  /* Разделитель во всю ширину карточки: укороченная линия с отступами
+     читается как рамка вокруг строки, а не как разделение (поймано на
+     снимке 11.09.2026). */
+  #learn-body .k-card .learn-item + .learn-item {
+    border-top: 1px solid var(--card-border);
+  }
+  /* Закрытый урок: название видно, но приглушено и не нажимается
+     (решение пользователя 11.09.2026). */
+  #learn-body .learn-item.k-off { opacity: .45; cursor: default; }
+  /* Арабское название рядом с русским. Без ltr на самой строке порядок
+     слов переставляется - та же ловушка RTL, что с «7-бет». */
+  #learn-body .k-cap, #learn-body .learn-item .nm { direction: ltr; }
+"""
+
+
+# ── макет счётчика 40+40 (11.09.2026) ─────────────────────────────────────
+# Две мишени: компактная в шапке режима заучивания (рядом с местом - там,
+# где пользователь и просил) и крупная в «Крупно», где студент делает сами
+# повторы и тапает не глядя.
+#
+# Этапы идут по очереди: сорок раз глядя, потом сорок по памяти. Подпись
+# говорит, какой сейчас, - иначе непонятно, что считает цифра.
+COUNTER_HTML = """
+<script>
+// Счётчик 40+40 теперь настоящий (index.html), стенд только доводит до
+// нужного экрана: страница заучивания или «Крупно». Ничего не дорисовываем.
+window.addEventListener('load', function () {
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function $(id) { return document.getElementById(id); }
+  setTimeout(async function () {
+    var scene = window.__CSCENE || 'page';
+    $('dash-mushaf').click(); await wait(1600);
+    $('btn-go-baqara').click(); await wait(1400);
+    $('btn-prev').click(); await wait(1300);
+    $('btn-hifz').click(); await wait(900);
+    var l = document.querySelectorAll('#ayah-text .mushaf-line')[1];
+    if (l) l.click(); await wait(900);
+    var onPage = (scene === 'page' || scene === 'barpage');
+    if (!onPage) { $('hifz-big-btn').click(); await wait(900); }
+    // Несколько тапов - чтобы на снимке была не круглая нулевая мишень.
+    var el = $(onPage ? 'hifz-count' : 'big-count');
+    var n = scene === 'big2' ? 47 : 12;
+    if (scene === 'bar' || scene === 'barpage') {
+      // Вариант В: одна крупная цифра (текущая сороковка), а вся работа
+      // 0-80 - тонкой полосой в основании. Читается боковым зрением и не
+      // отнимает ширину у «Сдать».
+      el.classList.add('withbar');
+      el.insertAdjacentHTML('beforeend',
+        '<span class="c-bar"><i style="width:15%"></i></span>');
+      n = 12;
+    }
+    if (scene === 'both' || scene === 'both0') {
+      // Вариант пользователя: обе сороковки видны сразу, тап один и тот же.
+      // В начале обе по нулям — «0 / 0», предел подписан мелко.
+      var a = scene === 'both0' ? 0 : 12;
+      el.classList.add('both');
+      el.innerHTML =
+        '<span class="c-pair' + (a ? '' : ' off') + '"><b>' + a + '</b><u>глядя</u></span>'
+        + '<span class="c-sep">/</span>'
+        + '<span class="c-pair off"><b>0</b><u>по памяти</u></span>'
+        + '<span class="c-lim">до 40</span>';
+      n = 0;
+    }
+    for (var i = 0; i < n; i++) { el.click(); await wait(12); }
+    // Ждём дольше паузы перед отправкой (1.5 с) и ответа сервера - иначе
+    // снимок ловит миг, когда накопленное уже ушло, а ответ не вернулся.
+    await wait(2600);
+  }, 1400);
+});
+</script>
+"""
+
+WIDE_CSS = """
+  /* Широкая мишень в «Крупно»: стоит между строкой и кнопками, во всю
+     ширину. Тапают её вслепую - чем больше площадь, тем вернее попадание. */
+  #big-count.wide {
+    margin: 0 14px 10px; padding: 14px 16px 12px; border-radius: 18px;
+    align-items: center; gap: 2px;
+  }
+  #big-count.wide .c-cap { font-size: 11px; letter-spacing: .12em; }
+  #big-count.wide .c-n b { font-size: 44px; line-height: 1.02; }
+  #big-count.wide .c-n i { font-size: 14px; }
+  #big-count.wide .c-bar { height: 4px; margin-top: 10px; }
+"""
+
+BAR_CSS = """
+  /* Полоса всей работы (0-80) в основании мишени: даёт картину целиком, но
+     не требует читать второе число. */
+  #big-count.withbar, #hifz-count.withbar { padding-bottom: 4px; }
+  #big-count .c-bar, #hifz-count .c-bar {
+    display: block; width: 100%; height: 3px; border-radius: 2px;
+    background: var(--card-border); overflow: hidden; margin-top: 4px;
+  }
+  #big-count .c-bar i, #hifz-count .c-bar i {
+    display: block; height: 100%; background: var(--accent);
+  }
+"""
+
+BOTH_CSS = """
+  /* Вариант «обе сороковки сразу» (11.09.2026): внутри одной мишени два
+     счёта, второй приглушён, пока не дошли до него. */
+  #big-count.both { flex-direction: row; align-items: center; gap: 10px; padding: 6px 14px 7px; }
+  #big-count.both .c-pair { display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
+  #big-count.both .c-pair b { font-size: 22px; font-weight: 700; }
+  #big-count.both .c-pair i { display: none; }
+  #big-count.both .c-sep { font-size: 20px; color: var(--muted); font-weight: 300; }
+  #big-count.both .c-lim {
+    writing-mode: vertical-rl; font-size: 8.5px; color: var(--muted);
+    letter-spacing: .06em; margin-left: 2px;
+  }
+  #big-count.both .c-pair u {
+    text-decoration: none; font-size: 8.5px; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--muted);
+  }
+  #big-count.both .c-pair.off { opacity: .4; }
+  #big-count.both .c-pair + .c-pair { border-left: 1px solid var(--card-border); padding-left: 10px; }
+"""
+
+COUNTER_CSS = """
+  /* Шапка заучивания в одну строку (11.09.2026): две строки занимали место
+     над мусхафом, а этап умещается в ту же строку одним словом. */
+  #hifz-head.one-line .where { display: flex; align-items: baseline; gap: 7px; }
+  #hifz-head.one-line .where b { display: inline; }
+  #hifz-head.one-line .where em {
+    font-style: normal; font-size: 11px; color: var(--muted);
+  }
+  #hifz-head.one-line .where em::before { content: '· '; }
+
+  /* Мишень счёта - рядом с 🔊, в нижней полосе: низ удобнее тапать, и рука
+     уже там (решение пользователя 11.09.2026). */
+  #hifz-count, #big-count {
+    flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
+    gap: 0; cursor: pointer; direction: ltr;
+    border: 1px solid var(--accent); background: var(--accent-soft);
+    border-radius: 10px; padding: 4px 11px 5px; font: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #hifz-count .c-cap, #big-count .c-cap {
+    font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; line-height: 1.4;
+  }
+  #hifz-count .c-n, #big-count .c-n {
+    font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1;
+  }
+  #hifz-count .c-n b { font-size: 17px; font-weight: 700; }
+  #hifz-count .c-n i, #big-count .c-n i {
+    font-style: normal; font-size: 10.5px; color: var(--muted);
+  }
+  /* В «Крупно» мишень крупнее: там студент и делает сами повторы, тапает
+     между ними не глядя. */
+  #big-count { padding: 5px 15px 7px; border-radius: 12px; }
+  #big-count .c-n b { font-size: 25px; font-weight: 700; }
+  #big-count .c-cap { font-size: 9.5px; }
+  /* Второй этап другим цветом: сорок «по памяти» - другая работа, и видно,
+     что первые сорок позади. */
+  #hifz-count.second, #big-count.second {
+    border-color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent);
+  }
+  #hifz-count.second .c-cap, #big-count.second .c-cap { color: var(--ok); }
+"""
+
+
 VARIANTS = {
+    "count_wide": COUNTER_CSS + BAR_CSS + WIDE_CSS,
+    "count_bar": COUNTER_CSS + BAR_CSS,
+    "count_bar_page": COUNTER_CSS + BAR_CSS,
+    "count_both": COUNTER_CSS + BOTH_CSS,
+    "count_both0": COUNTER_CSS + BOTH_CSS,
+    "count_page": COUNTER_CSS,
+    "count_big": COUNTER_CSS,
+    "count_big2": COUNTER_CSS,
+    "know_live": "",
+    "know_lessons": "",
+    "know_toc": KNOWLEDGE_CSS,
+    "know_list": KNOWLEDGE_CSS,
     "feed_ustaz": "",
     "feed_dark": "",
     "feed_live": "",
@@ -671,6 +940,23 @@ def page(variant):
                        "window.addEventListener('load',function(){"
                        "setTimeout(function(){var b=document.getElementById('dash-brief');"
                        "if(b)b.click();},2500);});</script>")
+    if variant.startswith("count_"):
+        scene = {"count_page": "page", "count_big": "big",
+                 "count_wide": "wide", "count_bar": "bar", "count_bar_page": "barpage", "count_both": "both", "count_both0": "both0"}.get(variant, "big2")
+        pre = "<script>window.__CSCENE='%s';</script>" % scene
+        return html + pre + COUNTER_HTML + "<style>%s</style>" % css
+    if variant == "know_live":
+        return html + ("<script>window.addEventListener('load',function(){"
+                       "setTimeout(function(){document.getElementById('dash-learn').click();},1800);});"
+                       "</script>")
+    if variant == "know_lessons":
+        return html + ("<script>window.addEventListener('load',function(){"
+                       "setTimeout(function(){document.getElementById('dash-learn').click();"
+                       "setTimeout(function(){var t=document.querySelector('[data-subj=\"j\"]');"
+                       "if(t)t.click();},1400);},1800);});</script>")
+    if variant.startswith("know_"):
+        pre = "<script>window.__KSCENE='list';</script>" if variant == "know_list" else ""
+        return html + pre + KNOWLEDGE_HTML + "<style>%s</style>" % css
     if variant == "feed_ustaz":
         return html + ("<script>window.addEventListener('load',function(){"
                        "setTimeout(function(){var b=document.getElementById('dash-brief');"

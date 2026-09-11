@@ -169,6 +169,10 @@ def set_state(mode):
     with sqlite3.connect(str(TMP / "hadiths.db")) as conn:
         conn.execute(mushaf_words._HIFZ_SCHEMA)
         conn.execute("DELETE FROM mushaf_hifz_pointer WHERE user_id=?", (STUDENT,))
+        # Счётчик 40+40 копится на сервере и переживает прогоны стенда
+        # (11.09.2026): без сброса второй снимок показывал бы сумму двух.
+        conn.execute(mushaf_words._HIFZ_PROGRESS_SCHEMA)
+        conn.execute("DELETE FROM mushaf_hifz_progress WHERE user_id=?", (STUDENT,))
     if mode == "stage2":
         mushaf_words.set_hifz_pointer(STUDENT, 3, 0, 2)
         if mushaf_words.get_hifz_progress(STUDENT, 3, 2, 0) == 0:
@@ -520,10 +524,50 @@ def seed_feed():
                 is_bot=1, sender_name=feed.BOT_SENDER_NAME)
 
 
+def seed_lessons():
+    """Уроки для раздела «Знания» (11.09.2026). Темы настоящие, сняты с прода:
+    арабский вперемешку с русским и есть та длина строки, ради которой стенд
+    и существует. Часть открыта (published_at), часть ждёт четверга."""
+    with sqlite3.connect(db.DB) as conn:
+        if conn.execute("SELECT 1 FROM curriculum_parts LIMIT 1").fetchone():
+            return
+    mah = "مخارج الحروف (Места выхода букв)"
+    sif = "صفات الحروف (Свойства букв)"
+    kal = "الكلمة"
+    rows = [
+        ("j", mah, "Корень языка (أقصى اللسان)", 1, 1, "2026-08-13"),
+        ("j", mah, "Кончик языка (ذلقية) — ل ن ر", 1, 1, "2026-08-20"),
+        ("j", mah, "Зубно-язычные буквы — ط د ت / ص س ز / ظ ذ ث", 1, 1, "2026-08-27"),
+        ("j", mah, "Полость (الجوف) — буквы мадда", 1, 1, "2026-09-10"),
+        ("j", mah, "Нос (الخيشوم) — гунна. Итог главы", 1, 1, None),
+        ("j", sif, "Что такое сифат и пять противоположных пар", 1, 1, None),
+        ("j", sif, "الهمس и الجهر", 1, 1, None),
+        ("n", kal, "الاسم المفرد (Единственное число)", 1, 1, "2026-08-20"),
+        ("n", kal, "الاسم المثنى (Двойственное число)", 1, 1, "2026-08-27"),
+        ("n", kal, "الجمع وأنواعه (Три вида множественного числа)", 1, 4, "2026-09-10"),
+        ("n", kal, "الجمع وأنواعه (جمع المذكر السالم)", 2, 4, None),
+        ("n", kal, "الجمع وأنواعه (جمع المؤنث السالم)", 3, 4, None),
+    ]
+    text = ("Махрадж — это место, откуда выходит звук буквы. Всего мест выхода "
+            "семнадцать, и они собраны в пять областей.\n\n"
+            "الجوف — полость рта и горла. Отсюда выходят три буквы мадда: "
+            "ا و ي, и звук у них тянется, пока хватает дыхания.\n\n"
+            "Проверить махрадж просто: произнеси букву с сукуном, добавив "
+            "перед ней хамзу — أَقْ, أَبْ. Где звук обрывается, там и махрадж.")
+    with sqlite3.connect(db.DB) as conn:
+        for i, (subj, chapter, topic, num, total, pub) in enumerate(rows):
+            conn.execute(
+                "INSERT INTO curriculum_parts(subject, chapter, topic, part_number,"
+                " part_total, order_index, content, published_at)"
+                " VALUES(?,?,?,?,?,?,?,?)",
+                (subj, chapter, topic, num, total, i, text, pub))
+
+
 def build_app():
     seed()
     seed_submissions()
     seed_feed()
+    seed_lessons()
     app = api.build_app()
     pages = {"student": dev_index(), "ustaz": dev_index(USTAZ, "Устаз")}
 
