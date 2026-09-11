@@ -201,7 +201,7 @@ SHOT_H = {"brief1": 980, "brief_smart": 980, "brief2": 1020,
           "pulse58": 1180, "pulse66": 1180, "feed_low": 1180,
           "ticker": 1180, "ticker_both": 1180, "ticker_smart": 1180,
           "myday_top": 1180, "myday_lab": 1180,
-          "feed_live": 844, "feed_dark": 844, "settings": 900, "sett_live": 900, "dark": 900, "online": 900, "sett_dark": 900}
+          "feed_live": 844, "feed_ustaz": 844, "feed_dark": 844, "settings": 900, "sett_live": 900, "dark": 900, "online": 900, "sett_dark": 900}
 
 
 MYDAY_CSS = """
@@ -581,6 +581,7 @@ FEED_SCREEN_CSS = BRIEF_CSS + """
 
 
 VARIANTS = {
+    "feed_ustaz": "",
     "feed_dark": "",
     "feed_live": "",
     # Подбриф ленты под прогрессом (11.09.2026).
@@ -670,6 +671,10 @@ def page(variant):
                        "window.addEventListener('load',function(){"
                        "setTimeout(function(){var b=document.getElementById('dash-brief');"
                        "if(b)b.click();},2500);});</script>")
+    if variant == "feed_ustaz":
+        return html + ("<script>window.addEventListener('load',function(){"
+                       "setTimeout(function(){var b=document.getElementById('dash-brief');"
+                       "if(b)b.click();},2500);});</script>")
     if variant == "feed_live":
         # Настоящий экран ленты из index.html - открываем тапом по строке
         # дашборда. Ждём дольше настроек: строка появляется после первого
@@ -753,7 +758,8 @@ def main():
             "--window-size=%d,%d" % (WIDTH, SHOT_H.get(name, HEIGHT)),
             "--virtual-time-budget=16000",
             "--screenshot=%s" % png,
-            "http://127.0.0.1:%d/vframe?v=%s&h=%d" % (PORT, name, SHOT_H.get(name, HEIGHT)),
+            "http://127.0.0.1:%d/vframe?v=%s&h=%d%s" % (PORT, name, SHOT_H.get(name, HEIGHT),
+                                        "&as=ustaz" if name.endswith("_ustaz") else ""),
         ], check=True, capture_output=True)
         if not png.exists():
             raise SystemExit("вариант %s не снялся" % name)

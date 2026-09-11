@@ -180,7 +180,7 @@ def test_личное_от_бота_считается_адресованным(
     b = brief(ME)
 
     assert b["unread"] == 1
-    assert b["item"]["source"] == "личное"
+    assert b["item"]["source"] == "Моя"
 
 
 def test_свои_сообщения_себе_в_непрочитанное_не_идут(test_db):
@@ -238,3 +238,95 @@ def test_старое_удаляется_через_семь_дней(test_db):
     purge_feed()
 
     assert [i["text"] for i in list_feed(ME)] == ["свежее"]
+
+
+# ── общая группа (Тадаббур) и чипы ────────────────────────────────────────
+
+TADABBUR_CHAT = "-100777004"
+
+
+def _with_tadabbur():
+    mine, _other = _setup()
+    db.save_group(TADABBUR_CHAT, "Yassir Тадаббур", tasks="m,r,t")
+    db.update_group_type(TADABBUR_CHAT, "tadabbur")
+    db.add_student("Сатар", db.get_group(TADABBUR_CHAT)["id"], phone=ME)
+    return mine
+
+
+def test_в_общей_группе_обычный_человек_в_ленту_не_идёт(test_db):
+    """Тадаббур — самая большая группа (134 человека), и один разговорившийся
+    вечер затопил бы ленту всем."""
+    _with_tadabbur()
+    record_incoming({
+        "message_id": 3, "chat": {"id": TADABBUR_CHAT},
+        "from": {"id": FRIEND, "first_name": "Абдулла"}, "text": "джазакАллаху хайран",
+    })
+
+    assert [i["text"] for i in list_feed(ME)] == []
+
+
+def test_в_общей_группе_насыха_бота_остаётся(test_db):
+    _with_tadabbur()
+    record(TADABBUR_CHAT, text="Он видит тебя прямо сейчас", is_bot=1,
+           sender_name="Яссир")
+
+    assert [i["text"] for i in list_feed(ME)] == ["Он видит тебя прямо сейчас"]
+
+
+def test_в_общей_группе_супер_устаз_остаётся(test_db, monkeypatch):
+    import core.feed as feed_module
+    monkeypatch.setattr(feed_module, "SUPER_ADMIN_IDS", ["555009"])
+    _with_tadabbur()
+    record_incoming({
+        "message_id": 4, "chat": {"id": TADABBUR_CHAT},
+        "from": {"id": "555009", "first_name": "Умар"}, "text": "слово устаза",
+    })
+
+    assert [i["text"] for i in list_feed(ME)] == ["слово устаза"]
+
+
+def test_общая_группа_подписана_общая(test_db):
+    """Название «Тадаббур» в приложении не показываем — для человека это
+    общая группа (решение пользователя 11.09.2026)."""
+    _with_tadabbur()
+    record(TADABBUR_CHAT, text="насыха", is_bot=1, sender_name="Яссир")
+
+    assert list_feed(ME)[0]["source"] == "Общая"
+
+
+def test_порядок_чипов_личное_общая_учебная_устазовские(test_db):
+    from core.feed import feed_chats_detailed
+    _with_tadabbur()
+    # Та же группа, где человек ещё и устаз.
+    db.add_group_admin(db.get_group(OTHER_CHAT)["id"], ME)
+
+    chips = feed_chats_detailed(ME)
+
+    assert [c["kind"] for c in chips] == ["personal", "common", "study", "teaching"]
+    assert chips[0]["title"] == "Моя"
+    assert chips[1]["title"] == "Общая"
+    assert chips[2]["title"] == "N-2а"
+    assert chips[3]["title"] == "N-5"
+
+
+def test_вкладки_всё_нет(test_db):
+    """Она и была бы той кашей, ради ухода от которой чипы заводились."""
+    from core.feed import feed_chats_detailed
+    _with_tadabbur()
+
+    assert not [c for c in feed_chats_detailed(ME) if c["id"] in ("", "all", None)]
+
+
+def test_счётчик_на_чипе_считает_только_адресованное(test_db):
+    from core.feed import unread_by_chat
+    _setup()
+    for _ in range(9):
+        record(MY_CHAT, text="м р т", sender_id=FRIEND, sender_name="Абдулла")
+    record(MY_CHAT, text="приняли", sender_id="555009", sender_name="Умар устаз",
+           reply_to_user=ME)
+    record(ME, text="Задания на сегодня", is_bot=1, sender_name="Яссир")
+
+    n = unread_by_chat(ME)
+
+    assert n.get(MY_CHAT) == 1
+    assert n.get(ME) == 1

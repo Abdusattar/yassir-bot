@@ -794,11 +794,19 @@ async def handle_feed(request, user_id):
     """GET - лента человека: своя группа, Тадаббур и личная переписка с
     ботом, свежие сверху. Заодно отдаём, докуда он дочитал: непрочитанное
     экран отбивает сам, отдельного запроса на это не нужно."""
-    from core.feed import list_feed, last_read_id, my_group_link
+    from core.feed import (
+        feed_chats_detailed, last_read_id, list_feed, unread_by_chat,
+    )
+    # Чаты для чипов: порядок задаёт сервер (личное, общая, учебная, свои
+    # группы), счётчик на каждом - только адресованное тебе.
+    unread = unread_by_chat(user_id)
+    chats = feed_chats_detailed(user_id)
+    for c in chats:
+        c["unread"] = unread.get(c["id"], 0)
     return web.json_response({
         "items": list_feed(user_id),
+        "chats": chats,
         "seen": last_read_id(user_id),
-        "tg_link": my_group_link(user_id),
     })
 
 

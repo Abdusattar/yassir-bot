@@ -24,6 +24,7 @@
 """
 import logging
 
+from config import SUPER_ADMIN_IDS
 from core.db import db
 
 log = logging.getLogger(__name__)
@@ -108,6 +109,41 @@ def _is_staff_chat(chat_id):
     return val
 
 
+_tadabbur_cache = {}
+
+
+def _is_tadabbur_chat(chat_id):
+    cid = str(chat_id)
+    if not cid.startswith("-"):
+        return False
+    if cid in _tadabbur_cache:
+        return _tadabbur_cache[cid]
+    try:
+        with db() as c:
+            row = c.execute("SELECT group_type FROM groups WHERE chat_id=?",
+                            (cid,)).fetchone()
+        val = bool(row) and row["group_type"] == "tadabbur"
+    except Exception:
+        return False
+    _tadabbur_cache[cid] = val
+    return val
+
+
+def skip_in_feed(chat_id, sender_id, is_bot=False):
+    """В Тадаббуре лента показывает только бота и супер-устазов (решение
+    10.09.2026).
+
+    Тадаббур — самая большая группа в базе (134 человека на 11.09.2026), и
+    он не учебный: там пространство смыслов, а не отчёты. Пусти в ленту всех
+    подряд — один разговорившийся вечер затопит ленту каждому, у кого она
+    открыта, и разбор устаза утонет. Насыха и слово супер-устаза остаются."""
+    if not _is_tadabbur_chat(chat_id):
+        return False
+    if is_bot:
+        return False
+    return str(sender_id or "") not in SUPER_ADMIN_IDS
+
+
 def record_incoming(msg):
     """Сообщение человека из апдейта getUpdates.
 
@@ -125,6 +161,9 @@ def record_incoming(msg):
         name = (name + " " + frm["last_name"]).strip()
     if not name:
         name = frm.get("username") or "—"
+
+    if skip_in_feed(chat_id, frm.get("id")):
+        return
 
     kind, file_id = _kind_and_file(msg)
     reply = ((msg.get("reply_to_message") or {}).get("from") or {}).get("id")
@@ -191,6 +230,53 @@ def feed_chats_for(phone):
     return list(dict.fromkeys(chats))
 
 
+def feed_chats_detailed(phone):
+    """Чаты для чипов на экране ленты — с названием, видом и порядком.
+
+    Порядок задан пользователем 11.09.2026: личное, общая (Тадаббур), своя
+    учебная, дальше группы, где человек устаз. Личное первым потому, что там
+    самое адресное — задания, насыха, ответ по твоей сдаче.
+
+    Вкладки «Всё» нет намеренно: это единственный режим, где четыре группы
+    смешиваются в один поток, то есть ровно та каша, от которой чипы и
+    заводились. Найти новое помогают счётчики на самих чипах, а лента
+    открывается сразу на том чате, откуда сообщение в строке дашборда.
+
+    «Общая» — подпись Тадаббура в приложении (решение пользователя): для
+    человека это общая группа, а не отдельное учреждение."""
+    me = str(phone)
+    out = [{"id": me, "title": "Моя", "kind": "personal"}]
+    try:
+        with db() as c:
+            rows = c.execute("""
+                SELECT g.chat_id, g.title, COALESCE(g.group_type,'relaxed') gt, ug.role
+                FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                JOIN groups g ON ug.group_id=g.id
+                WHERE u.phone=? AND ug.active=1 AND g.active=1
+                  AND (g.group_type IS NULL OR g.group_type <> 'staff')
+            """, (me,)).fetchall()
+    except Exception as e:
+        log.error("feed_chats_detailed error: %s: %s", type(e).__name__, e)
+        return out
+
+    common, study, teaching = [], [], []
+    for r in rows:
+        if r["gt"] == "tadabbur":
+            common.append({"id": r["chat_id"], "title": "Общая", "kind": "common"})
+        elif r["role"] == "admin":
+            teaching.append({"id": r["chat_id"], "title": r["title"] or "Группа",
+                             "kind": "teaching"})
+        else:
+            study.append({"id": r["chat_id"], "title": r["title"] or "Группа",
+                          "kind": "study"})
+    # Человек может стоять в группе и студентом, и устазом - показываем один
+    # раз, учебная важнее (там он сдаёт, а не принимает).
+    seen = {c["id"] for c in study}
+    teaching = [c for c in teaching if c["id"] not in seen]
+    return out + common + study + teaching
+
+
 def _chat_titles(chats):
     """Подпись источника у каждой строки ленты. Для лички подписи нет —
     «личное» ставит уже экран, названия чата у неё не существует."""
@@ -198,9 +284,13 @@ def _chat_titles(chats):
         return {}
     q = ",".join("?" * len(chats))
     with db() as c:
-        rows = c.execute(f"SELECT chat_id, title FROM groups WHERE chat_id IN ({q})",
-                         chats).fetchall()
-    return {r["chat_id"]: r["title"] for r in rows}
+        rows = c.execute(
+            f"SELECT chat_id, title, group_type FROM groups WHERE chat_id IN ({q})",
+            chats).fetchall()
+    # Тадаббур подписан «Общая» и здесь тоже - иначе чип говорит одно, а
+    # рамка у сообщения другое.
+    return {r["chat_id"]: ("Общая" if r["group_type"] == "tadabbur" else r["title"])
+            for r in rows}
 
 
 def last_read_id(phone):
@@ -229,7 +319,7 @@ def _row_out(r, titles, me):
     return {
         "id": r["id"],
         "chat_id": r["chat_id"],
-        "source": titles.get(r["chat_id"]) or ("личное" if r["chat_id"] == me else ""),
+        "source": titles.get(r["chat_id"]) or ("Моя" if r["chat_id"] == me else ""),
         "who": r["sender_name"] or "—",
         "is_bot": bool(r["is_bot"]),
         "kind": r["kind"],
@@ -238,6 +328,26 @@ def _row_out(r, titles, me):
         "mine": r["sender_id"] == me,
         "at": r["created_at"],
     }
+
+
+def unread_by_chat(phone):
+    """Сколько адресованного тебе не прочитано в каждом чате — числа на
+    чипах. Правило то же, что у строки дашборда: считаем ответ на твоё
+    сообщение и личное от бота, а не всё подряд."""
+    me = str(phone)
+    chats = feed_chats_for(me)
+    if not chats:
+        return {}
+    q = ",".join("?" * len(chats))
+    seen = last_read_id(me)
+    with db() as c:
+        rows = c.execute(f"""
+            SELECT chat_id, count(*) n FROM feed_messages
+            WHERE chat_id IN ({q}) AND id > ?
+              AND (reply_to_user = ? OR (is_bot = 1 AND chat_id = ?))
+            GROUP BY chat_id
+        """, (*chats, seen, me, me)).fetchall()
+    return {r["chat_id"]: r["n"] for r in rows}
 
 
 def list_feed(phone, limit=200):
@@ -319,29 +429,6 @@ def brief(phone):
         "more": bool([r for r in others if r not in mine]),
         "top_id": rows[0]["id"],
     }
-
-
-def my_group_link(phone):
-    """Ссылка-приглашение своей учебной группы — для кнопки «Открыть группу»
-    в подвале ленты. Отвечают по-прежнему в Telegram, и путь туда должен быть
-    в один тап.
-
-    Ссылка есть не у каждой группы (`groups.invite_link` заполняется, когда
-    устаз её присылает) — тогда кнопки просто нет, остаётся фраза."""
-    try:
-        with db() as c:
-            row = c.execute("""
-                SELECT g.invite_link FROM users u
-                JOIN user_groups ug ON u.id=ug.user_id
-                JOIN groups g ON ug.group_id=g.id
-                WHERE u.phone=? AND ug.role='student' AND ug.active=1
-                  AND g.invite_link IS NOT NULL AND g.invite_link <> ''
-                LIMIT 1
-            """, (str(phone),)).fetchone()
-        return row["invite_link"] if row else None
-    except Exception as e:
-        log.error("my_group_link error: %s: %s", type(e).__name__, e)
-        return None
 
 
 def get_media(phone, feed_id):

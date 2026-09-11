@@ -1185,6 +1185,36 @@
     margin-left: auto; margin-right: auto;
     font-size: 15px; font-weight: 600; color: var(--ink);
   }
+  /* Ряд чипов прокручивается вбок: у Умар устаза их пять, и в 390 точек
+     они не помещаются. Полоса прокрутки скрыта - край последнего чипа сам
+     показывает, что ряд длиннее экрана. */
+  #feed .l-chips {
+    flex: 0 0 auto; display: flex; gap: 6px; padding: 0 14px 10px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  #feed .l-chips::-webkit-scrollbar { display: none; }
+  #feed .l-chips button {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 12.5px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card-bg);
+    color: var(--muted); border-radius: 14px; padding: 6px 11px;
+    max-width: 45vw; white-space: nowrap;
+  }
+  #feed .l-chips button > span.t { overflow: hidden; text-overflow: ellipsis; }
+  #feed .l-chips button.on {
+    border-color: var(--accent); background: var(--accent);
+    color: var(--accent-ink); font-weight: 600;
+  }
+  /* Счётчик на чипе - то же спокойное правило, что и на строке дашборда:
+     считается только адресованное тебе. */
+  #feed .l-chips button i {
+    font-style: normal; font-size: 11px; font-weight: 700;
+    background: var(--accent); color: var(--accent-ink);
+    border-radius: 9px; min-width: 18px; height: 18px; padding: 0 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+  #feed .l-chips button.on i { background: var(--accent-ink); color: var(--accent); }
   #feed .l-scroll { flex: 1; overflow-y: auto; padding: 0 14px 12px; }
   #feed .l-day {
     text-align: center; font-size: 11px; color: var(--muted);
@@ -1234,19 +1264,6 @@
   #feed .m-photo img { display: block; width: 100%; height: auto; }
   #feed .l-end { text-align: center; font-size: 11px; color: var(--muted); padding: 14px 0 4px; }
   #feed .l-empty { text-align: center; font-size: 12.5px; color: var(--muted); padding: 40px 20px; line-height: 1.5; }
-  /* Честная приписка внизу: лента только для чтения, отвечают в Telegram.
-     Без неё человек ищет поле ввода и не находит. */
-  #feed .l-foot {
-    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
-    padding: 10px 16px 16px; font-size: 11.5px; color: var(--muted);
-    border-top: 1px solid var(--card-border);
-  }
-  #feed .l-tg {
-    margin-left: auto; font: inherit; font-size: 12px; cursor: pointer;
-    border: 1px solid var(--card-border); background: var(--card-bg);
-    color: var(--accent); border-radius: 11px; padding: 7px 12px;
-    text-decoration: none; white-space: nowrap;
-  }
   /* "Сейчас онлайн" (30.08.2026) - ненавязчивая строка над карточками, не
      бейдж на конкретной карточке (не должна выглядеть как реклама одного
      раздела - решение пользователя). Пустая (не занимает места) до первого
@@ -2536,11 +2553,12 @@
     <button id="feed-back">← Дашборд</button>
     <span class="l-title">Лента</span>
   </div>
+  <!-- Чипы чатов (11.09.2026). Вкладки «Всё» намеренно нет: это
+       единственный режим, где группы смешиваются в один поток - ровно та
+       каша, от которой чипы и заводились. Где новое, видно по счётчикам, а
+       строка дашборда открывает ленту сразу на нужном чате. -->
+  <div class="l-chips" id="feed-chips"></div>
   <div class="l-scroll" id="feed-scroll"></div>
-  <div class="l-foot">
-    <span>Читать можно здесь, отвечать — в Telegram</span>
-    <a class="l-tg" id="feed-tg" href="#" target="_blank" rel="noopener">Открыть группу</a>
-  </div>
 </div>
 
 <div id="sett">
@@ -3700,6 +3718,9 @@
   var feedScroll = document.getElementById('feed-scroll');
   var feedTop = 0;          // самый свежий показанный id - его и шлём как прочитанное
   var feedPhotoObserver = null;
+  var feedItems = [];       // вся лента, разложить по чипам - дело клиента
+  var feedChats = [];       // чаты в порядке от сервера: личное, общая, учебная, свои
+  var feedChat = null;      // какой чат открыт сейчас
 
   function feedEsc(s) {
     return String(s == null ? '' : s)
@@ -3745,6 +3766,7 @@
     var box = document.getElementById('dash-brief');
     if (!f || !f.item) { box.classList.remove('on'); return; }
     var it = f.item;
+    briefChat = it.chat_id;
     document.getElementById('brief-ava').textContent = feedInitial(it.who);
     document.getElementById('brief-who').textContent = it.who;
     document.getElementById('brief-src').textContent = it.source || '';
@@ -3823,7 +3845,30 @@
     });
   }
 
-  function feedRender(items) {
+  function feedRenderChips() {
+    var box = document.getElementById('feed-chips');
+    if (feedChats.length < 2) { box.innerHTML = ''; return; }
+    box.innerHTML = feedChats.map(function (c) {
+      return '<button data-chat="' + feedEsc(c.id) + '"'
+        + (c.id === feedChat ? ' class="on"' : '') + '>'
+        + '<span class="t">' + feedEsc(c.title) + '</span>'
+        + (c.unread ? '<i>' + c.unread + '</i>' : '')
+        + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('[data-chat]'), function (b) {
+      b.addEventListener('click', function () {
+        feedChat = b.getAttribute('data-chat');
+        feedRenderChips();
+        feedRender();
+        b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      });
+    });
+  }
+
+  function feedRender() {
+    var items = feedItems.filter(function (it) {
+      return !feedChat || it.chat_id === feedChat;
+    });
     if (!items.length) {
       feedScroll.innerHTML = '<div class="l-empty">Пока пусто.<br>' +
         'Здесь появится то, что пишут в твоей группе и лично тебе.</div>';
@@ -3843,11 +3888,12 @@
       } else if (it.has_media) {
         media = '<button class="m-voice" data-voice="' + it.id + '">▶ голосовое</button>';
       }
+      // Источник у строки не подписываем: чат выбран чипом выше, и рамка
+      // «N-1» у каждого сообщения внутри N-1 - чистый шум.
       html += '<div class="l-row' + (it.is_bot ? ' bot' : '') + '">'
         + '<span class="l-ava">' + feedEsc(feedInitial(it.who)) + '</span>'
         + '<span class="l-body">'
         +   '<span class="l-top"><b>' + feedEsc(it.who) + '</b>'
-        +     (it.source ? '<i>' + feedEsc(it.source) + '</i>' : '')
         +     '<u>' + feedEsc(feedWhen(it.at)) + '</u></span>'
         +   (it.text ? '<span class="l-txt">' + feedEsc(it.text) + '</span>' : '')
         +   media
@@ -3863,16 +3909,28 @@
     feedScroll.scrollTop = feedScroll.scrollHeight;
   }
 
-  function feedOpen() {
+  // wantChat - чат, на котором открыть ленту. Приходит из строки дашборда:
+  // тапнул по разбору устаза - попал в свою учебную, а не в общий список,
+  // где его ещё надо найти.
+  function feedOpen(wantChat) {
     feedBox.classList.add('on');
     feedScroll.innerHTML = '<div class="l-empty">Загружаю…</div>';
+    document.getElementById('feed-chips').innerHTML = '';
     apiCall('/feed').then(function (res) {
       var d = res && res.data;
       if (!d || !d.items) { feedScroll.innerHTML = '<div class="l-empty">Не открылось.</div>'; return; }
-      feedRender(d.items);
-      var tg = document.getElementById('feed-tg');
-      if (d.tg_link) { tg.href = d.tg_link; tg.style.display = ''; }
-      else { tg.style.display = 'none'; }
+      feedItems = d.items;
+      feedChats = d.chats || [];
+      var ids = feedChats.map(function (c) { return c.id; });
+      // Чат из строки дашборда, иначе тот, где есть непрочитанное, иначе
+      // первый по порядку сервера (личное).
+      feedChat = (wantChat && ids.indexOf(wantChat) >= 0) ? wantChat : null;
+      if (!feedChat) {
+        var hot = feedChats.filter(function (c) { return c.unread; })[0];
+        feedChat = hot ? hot.id : (feedChats[0] ? feedChats[0].id : null);
+      }
+      feedRenderChips();
+      feedRender();
       // Прочитано до самого свежего, что показали. Сервер двигает отметку
       // только вперёд, так что повторное открытие ничего не портит.
       if (d.items.length) {
@@ -3890,9 +3948,13 @@
     feedPlayingId = null;
   }
 
-  document.getElementById('dash-brief').addEventListener('click', feedOpen);
+  // Чат из строки запоминаем при отрисовке - по нему лента и откроется.
+  var briefChat = null;
+  document.getElementById('dash-brief').addEventListener('click', function () {
+    feedOpen(briefChat);
+  });
   document.getElementById('dash-brief').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); feedOpen(); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); feedOpen(briefChat); }
   });
   document.getElementById('feed-back').addEventListener('click', feedClose);
   document.addEventListener('keydown', function (e) {

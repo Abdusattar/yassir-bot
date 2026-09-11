@@ -478,12 +478,27 @@ def dev_index(user_id=STUDENT, name="Абдулла"):
     return html + SCENE_SCRIPT
 
 
+TADABBUR = "-1009900001"
+
+
 def seed_feed():
     """Лента (11.09.2026): разбор устаза в ответ студенту, групповой шум,
-    насыха Тадаббура и личное от бота — ровно тот набор, на котором видно,
-    что строка дашборда берёт ВАЖНОЕ, а не последнее по времени."""
+    насыха общей группы и личное от бота — ровно тот набор, на котором видно,
+    что строка дашборда берёт ВАЖНОЕ, а не последнее по времени.
+
+    Чатов нарочно четыре: личное, общая, учебная и вторая группа — иначе не
+    посмотреть ряд чипов, ради которого всё и затевалось. Устаз стенда
+    (USTAZ) состоит во всех, как Умар устаз на проде."""
     from core import feed
+    if not db.get_group(TADABBUR):
+        db.save_group(TADABBUR, "Yassir Тадаббур", tasks="m,r,t")
+        db.update_group_type(TADABBUR, "tadabbur")
+        for phone, name in ((STUDENT, "Абдулла"), (USTAZ, "Устаз")):
+            db.add_student(name, db.get_group(TADABBUR)["id"], phone=phone)
     with sqlite3.connect(db.DB) as conn:
+        # Отметки «дочитано» сбрасываем всегда: снимок сам их и ставит, и
+        # второй прогон снимал бы ленту уже без счётчиков.
+        conn.execute("DELETE FROM feed_reads")
         if conn.execute("SELECT 1 FROM feed_messages LIMIT 1").fetchone():
             return
     feed.record(CHAT, text="Задания на сегодня: повторение, муфрадат, заучивание.",
@@ -494,9 +509,14 @@ def seed_feed():
     feed.record(CHAT, text="МашаАллах, приняли. Дальше 40+40 с 7 страницы.",
                 sender_id=USTAZ, sender_name="Умар устаз", reply_to_user=STUDENT)
     feed.record(CHAT, text="м р т", sender_id="777004", sender_name="Юсуф")
-    feed.record(STUDENT,
+    feed.record(CHAT2, text="м р т", sender_id="777005", sender_name="Билял")
+    feed.record(CHAT2, text="Кто не сдал вчера — сдайте сегодня, ин ша Аллах.",
+                sender_id=USTAZ, sender_name="Умар устаз")
+    feed.record(TADABBUR,
                 text="Он видит тебя прямо сейчас — посреди долгов и усталости. "
                      "И знает, что ты всё равно открыл мусхаф.",
+                is_bot=1, sender_name=feed.BOT_SENDER_NAME)
+    feed.record(STUDENT, text="Задания на сегодня: повторение, муфрадат, заучивание.",
                 is_bot=1, sender_name=feed.BOT_SENDER_NAME)
 
 
