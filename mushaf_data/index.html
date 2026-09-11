@@ -1262,7 +1262,6 @@
     background: var(--accent-soft); min-height: 40px;
   }
   #feed .m-photo img { display: block; width: 100%; height: auto; }
-  #feed .l-end { text-align: center; font-size: 11px; color: var(--muted); padding: 14px 0 4px; }
   #feed .l-empty { text-align: center; font-size: 12.5px; color: var(--muted); padding: 40px 20px; line-height: 1.5; }
   /* "Сейчас онлайн" (30.08.2026) - ненавязчивая строка над карточками, не
      бейдж на конкретной карточке (не должна выглядеть как реклама одного
@@ -3899,7 +3898,6 @@
         +   media
         + '</span></div>';
     });
-    html += '<div class="l-end">Сообщения хранятся семь дней</div>';
     feedScroll.innerHTML = html;
 
     Array.prototype.forEach.call(feedScroll.querySelectorAll('[data-photo]'), feedWatchPhoto);
