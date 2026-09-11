@@ -245,7 +245,7 @@ def feed_chats_detailed(phone):
     «Общая» — подпись Тадаббура в приложении (решение пользователя): для
     человека это общая группа, а не отдельное учреждение."""
     me = str(phone)
-    out = [{"id": me, "title": "Моя", "kind": "personal"}]
+    out = [{"id": me, "title": "Яссир бот", "kind": "personal"}]
     try:
         with db() as c:
             rows = c.execute("""
@@ -319,7 +319,7 @@ def _row_out(r, titles, me):
     return {
         "id": r["id"],
         "chat_id": r["chat_id"],
-        "source": titles.get(r["chat_id"]) or ("Моя" if r["chat_id"] == me else ""),
+        "source": titles.get(r["chat_id"]) or "",
         "who": r["sender_name"] or "—",
         "is_bot": bool(r["is_bot"]),
         "kind": r["kind"],

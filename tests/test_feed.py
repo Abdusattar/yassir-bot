@@ -180,7 +180,7 @@ def test_личное_от_бота_считается_адресованным(
     b = brief(ME)
 
     assert b["unread"] == 1
-    assert b["item"]["source"] == "Моя"
+    assert b["item"]["source"] == ""   # отправитель и так «Яссир»
 
 
 def test_свои_сообщения_себе_в_непрочитанное_не_идут(test_db):
@@ -303,7 +303,7 @@ def test_порядок_чипов_личное_общая_учебная_уст
     chips = feed_chats_detailed(ME)
 
     assert [c["kind"] for c in chips] == ["personal", "common", "study", "teaching"]
-    assert chips[0]["title"] == "Моя"
+    assert chips[0]["title"] == "Яссир бот"
     assert chips[1]["title"] == "Общая"
     assert chips[2]["title"] == "N-2а"
     assert chips[3]["title"] == "N-5"
