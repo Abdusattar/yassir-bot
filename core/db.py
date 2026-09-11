@@ -240,6 +240,39 @@ def init():
                 created_at TEXT DEFAULT (datetime('now'))
             );
             CREATE INDEX IF NOT EXISTS idx_vl_date ON verify_log(date);
+            /* Лента (11.09.2026) - что пишут в твоей группе, в Тадаббуре и
+               тебе лично, чтобы читать это в приложении, не уходя в Telegram.
+               Только чтение: из приложения сюда никто не пишет.
+
+               Хранение - семь дней (purge_feed в core/feed.py). Это не архив
+               переписки, а «что было на неделе»; держать больше значит
+               собирать у себя чужие разговоры без нужды.
+
+               chat_id личной переписки равен telegram-id человека - на этом
+               и стоит проверка доступа, отдельного признака «личное» нет. */
+            CREATE TABLE IF NOT EXISTS feed_messages(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT NOT NULL,
+                message_id INTEGER,
+                sender_id TEXT,
+                sender_name TEXT,
+                is_bot INTEGER NOT NULL DEFAULT 0,
+                kind TEXT NOT NULL DEFAULT 'text',
+                text TEXT,
+                file_id TEXT,
+                reply_to_user TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_feed_chat ON feed_messages(chat_id, id);
+            CREATE INDEX IF NOT EXISTS idx_feed_at ON feed_messages(created_at);
+            /* Докуда человек дочитал. Одной строки на человека хватает:
+               лента совмещённая и читается сверху вниз целиком, а id сквозной
+               по всем чатам - значит «всё до этого id прочитано». */
+            CREATE TABLE IF NOT EXISTS feed_reads(
+                user_id TEXT PRIMARY KEY,
+                last_id INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
         """)
         _run_migrations(c)
     # Свой вход в приложение вне Telegram (10.09.2026). Импорт внутри функции:
@@ -945,6 +978,12 @@ def update_group_lang(chat_id, lang):
 def update_group_type(chat_id, group_type):
     with db() as c:
         c.execute("UPDATE groups SET group_type=? WHERE chat_id=?", (group_type, chat_id))
+    # Лента держит тип группы в памяти (служебные в неё не пишутся) - после
+    # /settype он обязан перечитаться, иначе рабочий чат устазов продолжил бы
+    # писаться в ленту до рестарта. Импорт внутри функции: core.feed берёт
+    # db() отсюда, на верхнем уровне вышел бы цикл.
+    from core.feed import forget_chat_type
+    forget_chat_type(chat_id)
 
 
 def update_group_fallback(chat_id, fallback_chat_id):

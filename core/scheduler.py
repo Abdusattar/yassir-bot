@@ -1756,6 +1756,14 @@ async def quarterly_leaders_report():
 
 # ── Главный планировщик ────────────────────────────────────────────────────────
 
+async def _purge_feed_job():
+    """Обёртка: maybe_run ждёт корутину, а purge_feed - обычная функция."""
+    from core.feed import purge_feed
+    removed = purge_feed()
+    if removed:
+        log.info("Лента: удалено старых сообщений — %d", removed)
+
+
 async def scheduler():
     """Бесконечный цикл планировщика. Запускается как asyncio Task из bot.py."""
     log.info("Scheduler started")
@@ -1840,6 +1848,13 @@ async def scheduler():
             # от того, что попало в elif-цепочку.
             if m == 0 and h in (6, 10, 15, 19, 22):
                 await maybe_run("ustaz_waiting_digest", ustaz_waiting_digest)
+
+            # Ретеншен ленты (11.09.2026): держим неделю, см. core/feed.py.
+            # Отдельным if по той же причине, что и дайджест выше - свой час,
+            # независимый от elif-цепочки. 4 утра: чистка задевает таблицу,
+            # которую весь день пишет приём сообщений.
+            if h == 4 and m == 0:
+                await maybe_run("purge_feed", _purge_feed_job)
 
             await asyncio.sleep(30)
 

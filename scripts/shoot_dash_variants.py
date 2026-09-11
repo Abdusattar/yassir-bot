@@ -196,10 +196,12 @@ PULSE_SIDE = """
 """
 
 # Пульс живёт ниже сгиба - для его вариантов снимаем кадр повыше.
-SHOT_H = {"pulse58": 1180, "pulse66": 1180, "feed_low": 1180,
+SHOT_H = {"brief1": 980, "brief_smart": 980, "brief2": 1020,
+          "brief_bare": 980, "feed_open": 844,
+          "pulse58": 1180, "pulse66": 1180, "feed_low": 1180,
           "ticker": 1180, "ticker_both": 1180, "ticker_smart": 1180,
           "myday_top": 1180, "myday_lab": 1180,
-          "settings": 900, "sett_live": 900, "dark": 900, "online": 900, "sett_dark": 900}
+          "feed_live": 844, "feed_dark": 844, "settings": 900, "sett_live": 900, "dark": 900, "online": 900, "sett_dark": 900}
 
 
 MYDAY_CSS = """
@@ -342,7 +344,251 @@ SETTINGS_CSS = """
   }
 """
 
+# -- подбриф ленты под прогрессом + экран ленты (11.09.2026) ---------------
+# Предложение пользователя: не блок в три строки под дверями, а СТРОКА сразу
+# под "Моим днём" - свежее сообщение и счётчик непрочитанных, тап открывает
+# ленту.
+#
+# Лента открывается полноэкранным слоем, как #sett и #learn, а НЕ попапом:
+# попап здесь - это #word-popup и #confirm-overlay, мелочь на пару строк.
+# Лента - длинный список с прокруткой, медиа и неделей истории.
+#
+# Два варианта наполнения строки:
+#   brief1 - самое свежее по времени и счётчик ВСЕХ непрочитанных;
+#   brief_smart - самое важное непрочитанное (устаз тебе > Тадаббур >
+#     остальное) и счётчик только АДРЕСОВАННОГО тебе, остальное - точкой.
+FEED_ITEMS = """
+window.__FEED = [
+  {a:'\u0419', who:'\u042f\u0441\u0441\u0438\u0440', src:'\u0422\u0430\u0434\u0430\u0431\u0431\u0443\u0440', at:'14:00', bot:1,
+   txt:'\u041e\u043d \u0432\u0438\u0434\u0438\u0442 \u0442\u0435\u0431\u044f \u043f\u0440\u044f\u043c\u043e \u0441\u0435\u0439\u0447\u0430\u0441 \u2014 \u043f\u043e\u0441\u0440\u0435\u0434\u0438 \u0434\u043e\u043b\u0433\u043e\u0432 \u0438 \u0443\u0441\u0442\u0430\u043b\u043e\u0441\u0442\u0438. \u0418 \u0437\u043d\u0430\u0435\u0442, \u0447\u0442\u043e \u0442\u044b \u0432\u0441\u0451 \u0440\u0430\u0432\u043d\u043e \u043e\u0442\u043a\u0440\u044b\u043b \u043c\u0443\u0441\u0445\u0430\u0444.'},
+  {a:'\u0410', who:'\u0410\u0431\u0434\u0443\u043b\u043b\u0430', src:'N-2\u0430', at:'13:12', txt:'\u043c \u0440 \u0442'},
+  {a:'\u0423', who:'\u0423\u043c\u0430\u0440 \u0443\u0441\u0442\u0430\u0437', src:'N-2\u0430', at:'12:48', mine:1,
+   txt:'\u041c\u0430\u0448\u0430\u0410\u043b\u043b\u0430\u0445, \u043f\u0440\u0438\u043d\u044f\u043b\u0438. \u0414\u0430\u043b\u044c\u0448\u0435 40+40 \u0441 7 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b.'},
+  {a:'\u0422', who:'\u0422\u0430\u043b\u0430\u0441', src:'N-2\u0430', at:'11:30', voice:'0:42'},
+  {a:'\u0419', who:'\u042f\u0441\u0441\u0438\u0440', src:'\u043b\u0438\u0447\u043d\u043e\u0435', at:'09:00', bot:1,
+   txt:'\u0417\u0430\u0434\u0430\u043d\u0438\u044f \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f: \u043f\u043e\u0432\u0442\u043e\u0440\u0435\u043d\u0438\u0435, \u043c\u0443\u0444\u0440\u0430\u0434\u0430\u0442, \u0437\u0430\u0443\u0447\u0438\u0432\u0430\u043d\u0438\u0435.'},
+  {a:'\u0421', who:'\u0421\u0443\u043b\u0435\u0439\u043c\u0430\u043d', src:'N-2\u0430', at:'\u0432\u0447\u0435\u0440\u0430', photo:1}
+];
+"""
+
+BRIEF_JS = """
+<script>
+%s
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    var doors = document.getElementById('dash-doors');
+    if (!doors) return;
+    // brief1 - первое по времени; brief_smart - разбор устаза (mine).
+    var f = window.__SMART ? window.__FEED[2] : window.__FEED[0];
+
+    var tail = window.__SMART
+      ? '<span class="b-n one">1</span>'
+      : '<span class="b-n">47</span>';
+    if (window.__SMART) tail += '<span class="b-dot"></span>';
+
+    var box = document.createElement('div');
+    box.id = 'dash-brief';
+    box.setAttribute('role', 'button');
+    box.innerHTML =
+      '<span class="b-ava">' + f.a + '</span>'
+      + '<span class="b-body"><span class="b-who">' + f.who
+      +   '<i>' + f.src + '</i></span>'
+      + '<span class="b-txt">' + (f.txt || '') + '</span></span>'
+      + tail;
+    doors.parentNode.insertBefore(box, doors);
+
+    if (window.__BRIEF2) {
+      var g = window.__FEED[0];
+      var row = document.createElement('div');
+      row.id = 'dash-brief2';
+      row.innerHTML =
+        '<span class="b-ava">' + g.a + '</span>'
+        + '<span class="b-body"><span class="b-who">' + g.who
+        +   '<i>' + g.src + '</i></span>'
+        + '<span class="b-txt">' + (g.txt || '') + '</span></span>';
+      box.parentNode.insertBefore(row, box.nextSibling);
+    }
+  }, 1200);
+});
+</script>
+""" % FEED_ITEMS
+
+BRIEF_CSS = """
+  /* direction: ltr - страница целиком RTL ради арабского текста мусхафа,
+     без него аватар уезжает вправо, а счётчик влево. Та же ловушка, что
+     записана в wiki/mushaf_yassirapp.md. */
+  #dash-brief, #dash-brief2 {
+    direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; box-shadow: var(--shadow-sm);
+    padding: 8px 12px 8px 8px; margin-bottom: 10px; cursor: pointer;
+  }
+  #dash-brief .b-ava, #dash-brief2 .b-ava {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  #dash-brief .b-body, #dash-brief2 .b-body {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;
+  }
+  #dash-brief .b-who, #dash-brief2 .b-who {
+    font-size: 12.5px; font-weight: 600; color: var(--ink);
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  #dash-brief .b-who i, #dash-brief2 .b-who i {
+    font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--muted);
+  }
+  #dash-brief .b-txt, #dash-brief2 .b-txt {
+    font-size: 12px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Счётчик спокойный (var(--accent), не var(--no)): непрочитанное в ленте -
+     не долг. Красным в приложении помечены только сдачи. */
+  #dash-brief .b-n {
+    flex: 0 0 auto; background: var(--accent); color: var(--accent-ink);
+    border-radius: 11px; min-width: 22px; height: 22px; padding: 0 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  /* Точка "есть и другое новое" - без числа, чтобы групповой шум не
+     превращался в несбрасываемую цифру. */
+  #dash-brief .b-dot {
+    flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--card-border); margin-left: -4px;
+  }
+  #dash-brief2 { margin-top: -4px; }
+"""
+
+BRIEF_BARE = BRIEF_CSS + """
+  #dash-brief {
+    background: none; border: none; box-shadow: none;
+    border-bottom: 1px solid var(--card-border);
+    border-radius: 0; padding: 6px 2px 10px;
+  }
+"""
+
+# -- экран ленты (макет) --------------------------------------------------
+FEED_SCREEN_HTML = """
+<script>
+%s
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    function row(f) {
+      var media = '';
+      if (f.voice) media = '<span class="m-voice">\u25b6 \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u043e\u0435 &middot; ' + f.voice + '</span>';
+      if (f.photo) media = '<span class="m-photo">\u0444\u043e\u0442\u043e \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b</span>';
+      return '<div class="l-row' + (f.bot ? ' bot' : '') + '">'
+        + '<span class="l-ava">' + f.a + '</span>'
+        + '<span class="l-body">'
+        +   '<span class="l-top"><b>' + f.who + '</b><i>' + f.src + '</i>'
+        +     '<u>' + f.at + '</u></span>'
+        +   (f.txt ? '<span class="l-txt">' + f.txt + '</span>' : '')
+        +   media
+        + '</span></div>';
+    }
+    var F = window.__FEED;
+    var d = document.createElement('div');
+    d.id = 'feed';
+    d.innerHTML =
+      '<div class="l-head">'
+      +   '<button class="l-back">\u2190 \u0414\u0430\u0448\u0431\u043e\u0440\u0434</button>'
+      +   '<span class="l-title">\u041b\u0435\u043d\u0442\u0430</span>'
+      + '</div>'
+      + '<div class="l-scroll">'
+      +   '<div class="l-day">\u0421\u0435\u0433\u043e\u0434\u043d\u044f</div>'
+      +   F.slice(0, 5).map(function (f) { return row(f); }).join('')
+      +   '<div class="l-day">\u0412\u0447\u0435\u0440\u0430</div>'
+      +   row(F[5])
+      +   '<div class="l-end">\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f \u0441\u0435\u043c\u044c \u0434\u043d\u0435\u0439</div>'
+      + '</div>'
+      + '<div class="l-foot">\u0427\u0438\u0442\u0430\u0442\u044c \u043c\u043e\u0436\u043d\u043e \u0437\u0434\u0435\u0441\u044c, \u043e\u0442\u0432\u0435\u0447\u0430\u0442\u044c \u2014 \u0432 Telegram'
+      +   '<button class="l-tg">\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0433\u0440\u0443\u043f\u043f\u0443</button></div>';
+    document.body.appendChild(d);
+  }, 1200);
+});
+</script>
+""" % FEED_ITEMS
+
+FEED_SCREEN_CSS = BRIEF_CSS + """
+  #feed {
+    position: fixed; inset: 0; z-index: 90;
+    direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    display: flex; flex-direction: column;
+  }
+  #feed .l-head {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+    min-height: 38px; padding: 14px 16px 10px;
+  }
+  #feed .l-back {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font: inherit; font-size: 14px; color: var(--accent);
+  }
+  #feed .l-title {
+    margin-left: auto; margin-right: auto;
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+  #feed .l-scroll { flex: 1; overflow-y: auto; padding: 0 14px 12px; }
+  #feed .l-day {
+    text-align: center; font-size: 11px; color: var(--muted);
+    margin: 10px 0 8px; letter-spacing: .04em;
+  }
+  #feed .l-row {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; box-shadow: var(--shadow-sm);
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  /* Бот отличается фоном, а не подписью "бот": имя у него своё, как в
+     Telegram, и лишнее слово в каждой строке только шумит. */
+  #feed .l-row.bot { background: var(--accent-soft); border-color: transparent; }
+  #feed .l-ava {
+    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13.5px; font-weight: 600;
+  }
+  #feed .l-row.bot .l-ava { background: var(--card-bg); }
+  #feed .l-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  #feed .l-top { display: flex; align-items: baseline; gap: 7px; }
+  #feed .l-top b { font-size: 13px; font-weight: 600; color: var(--ink); }
+  #feed .l-top i {
+    font-style: normal; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--card-border); border-radius: 6px; padding: 1px 5px;
+  }
+  #feed .l-top u { margin-left: auto; text-decoration: none; font-size: 10.5px; color: var(--muted); }
+  #feed .l-txt { font-size: 13px; line-height: 1.42; color: var(--ink); }
+  #feed .m-voice, #feed .m-photo {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    font-size: 12px; color: var(--accent);
+    background: var(--accent-soft); border-radius: 9px; padding: 6px 10px;
+  }
+  #feed .m-photo { color: var(--muted); background: var(--card-bg); border: 1px dashed var(--card-border); }
+  #feed .l-end { text-align: center; font-size: 11px; color: var(--muted); padding: 14px 0 4px; }
+  #feed .l-foot {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px 16px; font-size: 11.5px; color: var(--muted);
+    border-top: 1px solid var(--card-border);
+  }
+  #feed .l-tg {
+    margin-left: auto; font: inherit; font-size: 12px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card-bg);
+    color: var(--accent); border-radius: 11px; padding: 7px 12px;
+  }
+"""
+
+
 VARIANTS = {
+    "feed_dark": "",
+    "feed_live": "",
+    # Подбриф ленты под прогрессом (11.09.2026).
+    "brief1": BRIEF_CSS,
+    "brief_smart": BRIEF_CSS,
+    "brief2": BRIEF_CSS,
+    "brief_bare": BRIEF_BARE,
+    "feed_open": FEED_SCREEN_CSS,
     "now": "",
     "sett_live": "",
     "dark": "",
@@ -419,6 +665,18 @@ def page(variant):
             js += ("window.addEventListener('load',function(){setTimeout(function(){"
                    "document.getElementById('btn-profile').click();},1500);});")
         return html + js + "</script>"
+    if variant == "feed_dark":
+        return html + ("<script>document.documentElement.setAttribute('data-theme','dark');"
+                       "window.addEventListener('load',function(){"
+                       "setTimeout(function(){var b=document.getElementById('dash-brief');"
+                       "if(b)b.click();},2500);});</script>")
+    if variant == "feed_live":
+        # Настоящий экран ленты из index.html - открываем тапом по строке
+        # дашборда. Ждём дольше настроек: строка появляется после первого
+        # ответа heartbeat, а не сразу при отрисовке.
+        return html + ("<script>window.addEventListener('load',function(){"
+                       "setTimeout(function(){var b=document.getElementById('dash-brief');"
+                       "if(b)b.click();},2500);});</script>")
     if variant == "sett_live":
         # Настоящий экран настроек из index.html: открываем его тем же
         # тапом по шестерёнке, что и человек.
@@ -427,6 +685,15 @@ def page(variant):
                        "</script>")
     if variant == "settings":
         return html + SETTINGS_HTML + "<style>%s</style>" % SETTINGS_CSS
+    if variant.startswith("brief"):
+        pre = ""
+        if variant == "brief_smart":
+            pre = "<script>window.__SMART=1;</script>"
+        if variant == "brief2":
+            pre = "<script>window.__BRIEF2=1;</script>"
+        return html + pre + BRIEF_JS + "<style>%s</style>" % css
+    if variant == "feed_open":
+        return html + FEED_SCREEN_HTML + "<style>%s</style>" % css
     body = ADD_FEED.replace("SKIP", skip).replace("MYDAY_TOP", top)
     return html + body + ("<style>%s</style>" % css if css else "")
 

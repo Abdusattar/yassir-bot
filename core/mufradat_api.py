@@ -765,7 +765,72 @@ async def handle_heartbeat(request, user_id):
         # сколько сдач ждёт устаза. Едут этим же ответом, а не тремя новыми
         # запросами: heartbeat и так ходит каждые 20 секунд.
         "facts": _dashboard_facts(user_id),
+        # Строка ленты на дашборде (11.09.2026) - этим же ответом, а не
+        # отдельным запросом: heartbeat и так ходит каждые 20 секунд, а
+        # строка обязана оживать без перезагрузки экрана.
+        "feed": _feed_brief(user_id),
     })
+
+
+def _feed_brief(user_id):
+    """Строка ленты для heartbeat. Ошибку глотаем: из-за ленты дашборд
+    остаться без дверей и счётчиков не должен."""
+    try:
+        from core.feed import brief
+        return brief(user_id)
+    except Exception as e:
+        log.error("feed brief error: %s: %s", type(e).__name__, e)
+        return None
+
+
+# ── Лента (11.09.2026) ────────────────────────────────────────────────────
+#
+# Только чтение: из приложения в группу не уходит ничего. Доступ считается на
+# сервере по членству в группах - клиент не называет, какие чаты ему показать
+# (см. core/feed.py).
+
+@with_auth
+async def handle_feed(request, user_id):
+    """GET - лента человека: своя группа, Тадаббур и личная переписка с
+    ботом, свежие сверху. Заодно отдаём, докуда он дочитал: непрочитанное
+    экран отбивает сам, отдельного запроса на это не нужно."""
+    from core.feed import list_feed, last_read_id, my_group_link
+    return web.json_response({
+        "items": list_feed(user_id),
+        "seen": last_read_id(user_id),
+        "tg_link": my_group_link(user_id),
+    })
+
+
+@with_auth
+async def handle_feed_read(request, user_id):
+    """POST {last_id} - докуда дочитано. Экран шлёт id самого свежего, что
+    показал; отметка двигается только вперёд (см. mark_read)."""
+    from core.feed import mark_read
+    body = await request.json()
+    try:
+        mark_read(user_id, int(body.get("last_id", 0)))
+    except (TypeError, ValueError):
+        return web.json_response({"error": "bad_id"}, status=400)
+    return web.json_response({"ok": True})
+
+
+@with_auth
+async def handle_feed_media(request, user_id):
+    """GET ?id=<запись ленты> - вложение через нас.
+
+    Номер записи, а не file_id с клиента: file_id - это ключ к файлу в
+    Telegram, и принимать его от клиента значило бы отдавать любой файл
+    любому, кто ключ подобрал."""
+    from core.feed import get_media
+    try:
+        feed_id = int(request.query.get("id", ""))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    file_id, _kind = get_media(user_id, feed_id)
+    if not file_id:
+        return web.json_response({"error": "not_found"}, status=404)
+    return await _telegram_file_response(file_id)
 
 
 def _my_day(user):
@@ -1006,6 +1071,37 @@ def _ustaz_submission(user_id, submission_id):
     # сдачу чужой группы, даже пока та свёрнута.
     visible, _own, _is_super, _hidden = _visible_ustaz_groups(user_id, "all")
     return sub if sub["group_id"] in [g["id"] for g in visible] else None
+
+
+async def _telegram_file_response(file_id, content_type=None):
+    """Файл из Telegram через нас. То же, что _telegram_audio_response, но
+    тип не зашит: ленте нужны и картинки (11.09.2026).
+
+    Тип берём по расширению из file_path, который отдаёт getFile - у
+    Telegram своего Content-Type в ответе нет."""
+    async with aiohttp.ClientSession() as session:
+        api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+        async with session.get(f"{api}/getFile", params={"file_id": file_id}) as r:
+            meta = await r.json()
+        path = (meta.get("result") or {}).get("file_path")
+        if not meta.get("ok") or not path:
+            return web.json_response({"error": "no_file"}, status=404)
+        url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{path}"
+        async with session.get(url) as r:
+            if r.status != 200:
+                return web.json_response({"error": "no_file"}, status=404)
+            body = await r.read()
+    if len(body) > TELEGRAM_FILE_MAX_BYTES:
+        return web.json_response({"error": "too_big"}, status=413)
+    if not content_type:
+        ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+        content_type = {
+            "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+            "webp": "image/webp", "gif": "image/gif",
+            "ogg": "audio/ogg", "oga": "audio/ogg", "mp3": "audio/mpeg",
+            "m4a": "audio/mp4", "mp4": "video/mp4",
+        }.get(ext, "application/octet-stream")
+    return web.Response(body=body, content_type=content_type)
 
 
 async def _telegram_audio_response(file_id):
@@ -1364,6 +1460,9 @@ def build_app():
     app.router.add_post("/api/muf/ustaz/verdict", handle_ustaz_verdict)
     app.router.add_post("/api/muf/ustaz/comment", handle_ustaz_comment)
     app.router.add_get("/api/muf/pulse", handle_pulse)
+    app.router.add_get("/api/muf/feed", handle_feed)
+    app.router.add_post("/api/muf/feed/read", handle_feed_read)
+    app.router.add_get("/api/muf/feed/media", handle_feed_media)
     app.router.add_get("/api/muf/submissions", handle_submissions)
     app.router.add_get("/api/muf/submissions/audio", handle_submission_audio)
     return app

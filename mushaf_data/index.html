@@ -1106,6 +1106,147 @@
     border-color: var(--accent); color: var(--accent-ink);
     background: var(--accent); font-weight: 600;
   }
+
+  /* ── Лента (11.09.2026) ──────────────────────────────────────────────
+     Строка под шапкой: что нового в группе, в Тадаббуре и лично. Не блок в
+     три сообщения (так было в макете 10.09) - строка не отодвигает двери за
+     первый экран, а за вторым сообщением проще открыть саму ленту.
+
+     direction: ltr обязателен - страница целиком RTL ради арабского текста
+     мусхафа, без него аватар уезжает вправо, а счётчик влево (та же ловушка,
+     что записана в wiki/mushaf_yassirapp.md). */
+  #dash-brief {
+    display: none; align-items: center; gap: 10px;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; box-shadow: var(--shadow-sm);
+    padding: 8px 12px 8px 8px; margin-bottom: 10px; cursor: pointer;
+  }
+  #dash-brief.on { display: flex; }
+  #dash-brief .b-ava {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  #dash-brief .b-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  #dash-brief .b-who {
+    font-size: 12.5px; font-weight: 600; color: var(--ink);
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  #dash-brief .b-who i {
+    font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #dash-brief .b-txt {
+    font-size: 12px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Счётчик спокойный (--accent, не --no): непрочитанное в ленте - не долг.
+     Красным в этом приложении помечены только сдачи. Считается в нём ТОЛЬКО
+     адресованное тебе (см. brief в core/feed.py): групповой шум превратил бы
+     цифру в несбрасываемое пятно. */
+  #dash-brief .b-n {
+    flex: 0 0 auto; background: var(--accent); color: var(--accent-ink);
+    border-radius: 11px; min-width: 22px; height: 22px; padding: 0 6px;
+    display: none; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  #dash-brief .b-n.on { display: flex; }
+  /* Точка «есть и другое новое» - без числа. */
+  #dash-brief .b-dot {
+    flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--card-border); display: none;
+  }
+  #dash-brief .b-dot.on { display: block; }
+  #dash-brief .b-go { flex: 0 0 auto; color: var(--muted); font-size: 15px; line-height: 1; }
+
+  /* Экран ленты. Полноэкранный слой с возвратом «← Дашборд» - как #sett и
+     #learn, а не попап: попап здесь (#word-popup, #confirm-overlay) - это
+     две строки текста, а лента листается, носит медиа и хранит неделю. */
+  #feed {
+    position: fixed; inset: 0; z-index: 90; display: none;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    flex-direction: column;
+  }
+  #feed.on { display: flex; }
+  #feed .l-head {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+    min-height: 38px; padding: 14px 16px 10px;
+  }
+  #feed-back {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font: inherit; font-size: 14px; color: var(--accent);
+  }
+  #feed .l-title {
+    margin-left: auto; margin-right: auto;
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+  #feed .l-scroll { flex: 1; overflow-y: auto; padding: 0 14px 12px; }
+  #feed .l-day {
+    text-align: center; font-size: 11px; color: var(--muted);
+    margin: 10px 0 8px; letter-spacing: .04em;
+  }
+  #feed .l-row {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; box-shadow: var(--shadow-sm);
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  /* Бот отличается фоном, а не подписью «бот»: имя у него своё, как в
+     Telegram, и лишнее слово в каждой строке только шумит. */
+  #feed .l-row.bot { background: var(--accent-soft); border-color: transparent; }
+  #feed .l-ava {
+    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13.5px; font-weight: 600;
+  }
+  #feed .l-row.bot .l-ava { background: var(--card-bg); }
+  #feed .l-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  #feed .l-top { display: flex; align-items: baseline; gap: 7px; }
+  #feed .l-top b { font-size: 13px; font-weight: 600; color: var(--ink); }
+  /* Откуда сообщение - в совмещённой ленте без этого не понять, группа это,
+     Тадаббур или личное. */
+  #feed .l-top i {
+    font-style: normal; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--card-border); border-radius: 6px; padding: 1px 5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%;
+  }
+  #feed .l-top u {
+    margin-left: auto; text-decoration: none;
+    font-size: 10.5px; color: var(--muted); white-space: nowrap;
+  }
+  #feed .l-txt { font-size: 13px; line-height: 1.42; color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+  #feed .m-voice {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    font-size: 12px; color: var(--accent); cursor: pointer;
+    background: var(--accent-soft); border: none; border-radius: 9px; padding: 6px 10px;
+    font-family: inherit;
+  }
+  #feed .m-photo {
+    margin-top: 2px; border-radius: 10px; overflow: hidden;
+    background: var(--accent-soft); min-height: 40px;
+  }
+  #feed .m-photo img { display: block; width: 100%; height: auto; }
+  #feed .l-end { text-align: center; font-size: 11px; color: var(--muted); padding: 14px 0 4px; }
+  #feed .l-empty { text-align: center; font-size: 12.5px; color: var(--muted); padding: 40px 20px; line-height: 1.5; }
+  /* Честная приписка внизу: лента только для чтения, отвечают в Telegram.
+     Без неё человек ищет поле ввода и не находит. */
+  #feed .l-foot {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px 16px; font-size: 11.5px; color: var(--muted);
+    border-top: 1px solid var(--card-border);
+  }
+  #feed .l-tg {
+    margin-left: auto; font: inherit; font-size: 12px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card-bg);
+    color: var(--accent); border-radius: 11px; padding: 7px 12px;
+    text-decoration: none; white-space: nowrap;
+  }
   /* "Сейчас онлайн" (30.08.2026) - ненавязчивая строка над карточками, не
      бейдж на конкретной карточке (не должна выглядеть как реклама одного
      раздела - решение пользователя). Пустая (не занимает места) до первого
@@ -2297,6 +2438,19 @@
       <button id="btn-profile" title="Настройки" aria-label="Настройки">⚙</button>
     </div>
   </div>
+  <!-- Строка ленты (11.09.2026). Стоит между шапкой и дверями: свежее перед
+       глазами, но двери остаются на первом экране. В строке НЕ последнее по
+       времени, а самое важное непрочитанное - см. brief в core/feed.py. -->
+  <div id="dash-brief" tabindex="0" role="button">
+    <span class="b-ava" id="brief-ava"></span>
+    <span class="b-body">
+      <span class="b-who"><span id="brief-who"></span><i id="brief-src"></i></span>
+      <span class="b-txt" id="brief-txt"></span>
+    </span>
+    <span class="b-n" id="brief-n"></span>
+    <span class="b-dot" id="brief-dot"></span>
+    <span class="b-go">›</span>
+  </div>
   <div id="dash-doors" class="three">
   <!-- Своя дверь студента (04.09.2026, экран "Сдачи" из макета 01.09): свои
        сдачи, ответ устаза и пересдача. Видна всем - у кого сдач ещё нет,
@@ -2372,6 +2526,23 @@
      Кнопки «Сохранить» нет намеренно: поле сохраняется, когда с него уходят,
      и подтверждает это тихой строкой - так устроены настройки на телефоне,
      а кнопку легко не заметить и уйти, думая что сохранил. -->
+<!-- Экран ленты (11.09.2026). Только чтение: из приложения в группу ничего
+     не уходит, отвечают по-прежнему в Telegram - об этом прямо сказано в
+     подвале, иначе человек ищет поле ввода и не находит.
+     Тексты пока только по-русски (правило «сначала ru, локализация одним
+     проходом позже»), T() сам откатывается на русский. -->
+<div id="feed">
+  <div class="l-head">
+    <button id="feed-back">← Дашборд</button>
+    <span class="l-title">Лента</span>
+  </div>
+  <div class="l-scroll" id="feed-scroll"></div>
+  <div class="l-foot">
+    <span>Читать можно здесь, отвечать — в Telegram</span>
+    <a class="l-tg" id="feed-tg" href="#" target="_blank" rel="noopener">Открыть группу</a>
+  </div>
+</div>
+
 <div id="sett">
   <div class="s-head">
     <button id="sett-back">← Дашборд</button>
@@ -3518,6 +3689,216 @@
     }).catch(function () {});
   }
 
+  /* ── Лента (11.09.2026) ───────────────────────────────────────────────
+     Только чтение. Строка на дашборде живёт от heartbeat (каждые 20 секунд),
+     сам экран грузится по открытию - держать ленту в памяти незачем, она
+     нужна ровно в тот момент, когда её открыли.
+
+     Тексты пока по-русски: правило «сначала ru, локализация одним проходом,
+     когда отшлифуется». */
+  var feedBox = document.getElementById('feed');
+  var feedScroll = document.getElementById('feed-scroll');
+  var feedTop = 0;          // самый свежий показанный id - его и шлём как прочитанное
+  var feedPhotoObserver = null;
+
+  function feedEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function feedInitial(name) {
+    return (name || '—').trim().charAt(0).toUpperCase();
+  }
+
+  // «14:00» для сегодняшних, «вчера», дальше - число и месяц. created_at
+  // приходит из SQLite как UTC без зоны - отдаём его в Date явным UTC,
+  // иначе браузер прочитает его как местное и собьёт время на часовой пояс
+  // (та же ловушка, что записана в памяти про score_events).
+  function feedWhen(at) {
+    if (!at) return '';
+    var d = new Date(at.replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return '';
+    var now = new Date();
+    var sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) {
+      return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    }
+    var y = new Date(now.getTime() - 86400000);
+    if (d.toDateString() === y.toDateString()) return 'вчера';
+    return d.getDate() + '.' + ('0' + (d.getMonth() + 1)).slice(-2);
+  }
+
+  function feedDayLabel(at) {
+    var d = new Date((at || '').replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return '';
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) return 'Сегодня';
+    var y = new Date(now.getTime() - 86400000);
+    if (d.toDateString() === y.toDateString()) return 'Вчера';
+    return d.getDate() + '.' + ('0' + (d.getMonth() + 1)).slice(-2);
+  }
+
+  // Строка дашборда. item выбирает сервер (важнейшее непрочитанное, а не
+  // последнее по времени) - здесь только рисуем.
+  function feedBrief(f) {
+    var box = document.getElementById('dash-brief');
+    if (!f || !f.item) { box.classList.remove('on'); return; }
+    var it = f.item;
+    document.getElementById('brief-ava').textContent = feedInitial(it.who);
+    document.getElementById('brief-who').textContent = it.who;
+    document.getElementById('brief-src').textContent = it.source || '';
+    var txt = it.text;
+    if (!txt) txt = it.kind === 'voice' ? 'голосовое' : it.kind === 'photo' ? 'фото' : 'вложение';
+    document.getElementById('brief-txt').textContent = txt;
+    var n = document.getElementById('brief-n');
+    n.textContent = f.unread || '';
+    n.classList.toggle('on', !!f.unread);
+    document.getElementById('brief-dot').classList.toggle('on', !!f.more);
+    box.classList.add('on');
+  }
+
+  // Фото грузится, когда до него долистали: в ленте их может быть много, и
+  // тянуть все сразу значит жечь чужой трафик ради того, что не увидят.
+  function feedWatchPhoto(el) {
+    if (!feedPhotoObserver) {
+      feedPhotoObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          feedPhotoObserver.unobserve(e.target);
+          feedLoadPhoto(e.target);
+        });
+      }, { rootMargin: '200px' });
+    }
+    feedPhotoObserver.observe(el);
+  }
+
+  function feedLoadPhoto(box) {
+    fetch(apiBase() + '/feed/media?id=' + box.getAttribute('data-id'), {
+      headers: authHeaders()
+    }).then(function (r) {
+      if (!r.ok) throw new Error('media');
+      return r.blob();
+    }).then(function (blob) {
+      var img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      img.alt = '';
+      box.appendChild(img);
+    }).catch(function () {
+      box.textContent = '';
+    });
+  }
+
+  var feedAudio = new Audio();
+  var feedPlayingId = null;
+  function feedPlay(id, btn) {
+    if (feedPlayingId === id) {
+      feedAudio.pause(); feedPlayingId = null; btn.textContent = '▶ голосовое';
+      return;
+    }
+    feedAudio.pause();
+    btn.disabled = true;
+    fetch(apiBase() + '/feed/media?id=' + id, { headers: authHeaders() })
+      .then(function (r) {
+        if (!r.ok) throw new Error('media');
+        return r.blob();
+      }).then(function (blob) {
+        feedAudio.src = URL.createObjectURL(blob);
+        feedPlayingId = id;
+        btn.disabled = false;
+        btn.textContent = '⏸ голосовое';
+        return feedAudio.play();
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'не открылось';
+      });
+  }
+  feedAudio.addEventListener('ended', function () {
+    feedPlayingId = null;
+    feedRenderVoiceLabels();
+  });
+  function feedRenderVoiceLabels() {
+    Array.prototype.forEach.call(feedScroll.querySelectorAll('.m-voice'), function (b) {
+      b.textContent = '▶ голосовое';
+    });
+  }
+
+  function feedRender(items) {
+    if (!items.length) {
+      feedScroll.innerHTML = '<div class="l-empty">Пока пусто.<br>' +
+        'Здесь появится то, что пишут в твоей группе и лично тебе.</div>';
+      return;
+    }
+    // Свежие сверху приходят с сервера; на экране читаем как в чате -
+    // сверху вниз по дням, самое свежее внизу, и туда же сразу прокручиваем.
+    var rows = items.slice().reverse();
+    var html = '';
+    var day = '';
+    rows.forEach(function (it) {
+      var d = feedDayLabel(it.at);
+      if (d !== day) { day = d; html += '<div class="l-day">' + feedEsc(d) + '</div>'; }
+      var media = '';
+      if (it.has_media && it.kind === 'photo') {
+        media = '<div class="m-photo" data-photo="' + it.id + '" data-id="' + it.id + '"></div>';
+      } else if (it.has_media) {
+        media = '<button class="m-voice" data-voice="' + it.id + '">▶ голосовое</button>';
+      }
+      html += '<div class="l-row' + (it.is_bot ? ' bot' : '') + '">'
+        + '<span class="l-ava">' + feedEsc(feedInitial(it.who)) + '</span>'
+        + '<span class="l-body">'
+        +   '<span class="l-top"><b>' + feedEsc(it.who) + '</b>'
+        +     (it.source ? '<i>' + feedEsc(it.source) + '</i>' : '')
+        +     '<u>' + feedEsc(feedWhen(it.at)) + '</u></span>'
+        +   (it.text ? '<span class="l-txt">' + feedEsc(it.text) + '</span>' : '')
+        +   media
+        + '</span></div>';
+    });
+    html += '<div class="l-end">Сообщения хранятся семь дней</div>';
+    feedScroll.innerHTML = html;
+
+    Array.prototype.forEach.call(feedScroll.querySelectorAll('[data-photo]'), feedWatchPhoto);
+    Array.prototype.forEach.call(feedScroll.querySelectorAll('[data-voice]'), function (b) {
+      b.addEventListener('click', function () { feedPlay(b.getAttribute('data-voice'), b); });
+    });
+    feedScroll.scrollTop = feedScroll.scrollHeight;
+  }
+
+  function feedOpen() {
+    feedBox.classList.add('on');
+    feedScroll.innerHTML = '<div class="l-empty">Загружаю…</div>';
+    apiCall('/feed').then(function (res) {
+      var d = res && res.data;
+      if (!d || !d.items) { feedScroll.innerHTML = '<div class="l-empty">Не открылось.</div>'; return; }
+      feedRender(d.items);
+      var tg = document.getElementById('feed-tg');
+      if (d.tg_link) { tg.href = d.tg_link; tg.style.display = ''; }
+      else { tg.style.display = 'none'; }
+      // Прочитано до самого свежего, что показали. Сервер двигает отметку
+      // только вперёд, так что повторное открытие ничего не портит.
+      if (d.items.length) {
+        feedTop = d.items[0].id;
+        apiCall('/feed/read', { method: 'POST', body: { last_id: feedTop } })
+          .then(function () { sendHeartbeat(); }).catch(function () {});
+      }
+    }).catch(function () {
+      feedScroll.innerHTML = '<div class="l-empty">Не открылось.</div>';
+    });
+  }
+  function feedClose() {
+    feedBox.classList.remove('on');
+    feedAudio.pause();
+    feedPlayingId = null;
+  }
+
+  document.getElementById('dash-brief').addEventListener('click', feedOpen);
+  document.getElementById('dash-brief').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); feedOpen(); }
+  });
+  document.getElementById('feed-back').addEventListener('click', feedClose);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && feedBox.classList.contains('on')) feedClose();
+  });
+
   function settOpen() {
     settBox.classList.add('on');
     markLang();
@@ -3642,6 +4023,10 @@
       document.getElementById('dash-doors').classList.toggle('three', !isUstaz);
       // Факты на дверях (07.09.2026): раздел сам говорит, что у него внутри.
       if (res.data && res.data.facts) dashFacts(res.data.facts);
+      // Строка ленты (11.09.2026) - тем же ответом, чтобы она оживала без
+      // перезагрузки экрана. null значит «писать пока нечего» - тогда
+      // строки просто нет, пустой карточки не показываем.
+      if (res.data) feedBrief(res.data.feed);
     });
   }
   /* Подписи дверей: вместо вечного описания раздела - его сегодняшнее

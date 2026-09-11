@@ -4,6 +4,7 @@ import logging
 import os
 import aiohttp
 from config import TG_API, SHADOW_CHAT_IDS
+from core.feed import record_outgoing
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +35,14 @@ async def tg_call(method, payload=None, timeout=35):
                 data = await r.json()
                 if data and not data.get("ok"):
                     log.error("tg_call %s failed: %s", method, data.get("description", data))
+                # Лента (11.09.2026): свои сообщения бот через getUpdates не
+                # получает - пишем их здесь, в общей точке. Выше tg_call
+                # десяток send_*, и перехватывать каждую значило бы забыть
+                # следующую. Метод фильтруем: через tg_call ходят и
+                # getUpdates, и getMe, и баны.
+                if method == "sendMessage" and data and data.get("ok"):
+                    p = payload or {}
+                    record_outgoing(p.get("chat_id"), result=data, text=p.get("text"))
                 return data
     except Exception as e:
         log.error("tg_call %s error: %s: %s", method, type(e).__name__, e)
@@ -102,6 +111,8 @@ async def _raw_send_photo(cid, photo_path, caption=None, reply_markup=None):
                     result = await r.json()
                     if result and not result.get("ok"):
                         log.error("sendPhoto failed: %s", result.get("description", result))
+                    if result and result.get("ok"):
+                        record_outgoing(cid, result=result, text=caption, kind="photo")
                     return result
     except Exception as e:
         log.error("sendPhoto error: %s: %s", type(e).__name__, e)
@@ -166,6 +177,8 @@ async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_
                 result = await r.json()
                 if result and not result.get("ok"):
                     log.error("sendPhoto(bytes) failed: %s", result.get("description", result))
+                if result and result.get("ok"):
+                    record_outgoing(cid, result=result, text=caption, kind="photo")
                 return result
     except Exception as e:
         log.error("sendPhoto(bytes) error: %s: %s", type(e).__name__, e)
@@ -218,6 +231,8 @@ async def send_voice_bytes(chat_id, voice_bytes, caption=None, reply_to_message_
                 result = await r.json()
                 if result and not result.get("ok"):
                     log.error("sendVoice failed: %s", result.get("description", result))
+                if result and result.get("ok"):
+                    record_outgoing(cid, result=result, text=caption, kind="voice")
                 return result
     except Exception as e:
         log.error("sendVoice error: %s: %s", type(e).__name__, e)

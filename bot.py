@@ -17,6 +17,7 @@ from core.tg import tg_call, send_message, answer_callback_query, remove_message
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
+from core.feed import record_incoming
 from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_juz_answer, handle_juz_confirm, handle_prep_onboarding_next
@@ -375,6 +376,13 @@ async def main():
 
                 if frm.get("is_bot"):
                     continue
+
+                # Лента (11.09.2026) - до всякой обработки и независимо от
+                # неё: в ленту идёт ВСЁ, что человек написал, а не только то,
+                # что бот счёл отчётом. Передаём весь msg, а не разобранные
+                # поля: ленте нужны ещё id сообщения, file_id вложения и то,
+                # на чьё сообщение отвечают.
+                record_incoming(msg)
 
                 if frm.get("username") and sender:
                     cache_username(frm["username"], sender)
