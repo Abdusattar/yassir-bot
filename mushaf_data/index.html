@@ -5419,7 +5419,22 @@
     var keep = el.style.fontSize;
     var r = clampFontToFit(true);
     if (!r) return;
-    if (r.maxW) mushafFitLearn(r.maxW / predicted.w);
+    r.k = r.maxW ? r.maxW / predicted.w : 0;
+    /* Замер, разошедшийся с таблицей больше, чем бывает между движками,
+       - сломанный замер, а не другой телефон (13.09.2026, Муслим из Н-1,
+       Safari 18.7.5): таблица дала верные 22.3/22.4, а сверка через
+       полторы секунды - 34 (потолок) на стр. 51, 5 и 6, и текст ушёл за
+       край. Замер scrollWidth строк на этом айфоне врёт и после раскладки,
+       так что причина не во времени. Таблица остаётся, в отчёт уходит
+       вторая мерка - по прямоугольникам самих слов (mushafRectWidth), чтобы
+       по журналу было видно, что именно врёт. */
+    if (!(r.k >= MUSHAF_FIT_K_MIN && r.k <= MUSHAF_FIT_K_MAX)) {
+      r.rect = mushafRectWidth();
+      el.style.fontSize = keep;
+      mushafFitReport(predicted, r, why + ' bad');
+      return;
+    }
+    mushafFitLearn(r.k);
     if (Math.abs(r.font - predicted.font) <= MUSHAF_FIT_AGREE) {
       el.style.fontSize = keep;
       // Согласие - только если табличный кегль правда влезает: запас
@@ -5428,6 +5443,30 @@
       el.style.fontSize = r.font.toFixed(1) + 'px';
     }
     mushafFitReport(predicted, r, why);
+  }
+
+  // Ширина самой длинной строки при MUSHAF_MEASURE_BASE - не по scrollWidth,
+  // а от левого края крайнего слова до правого края другого. Только для
+  // отчёта: проверить на живом айфоне, какая из двух мерок врёт.
+  function mushafRectWidth() {
+    var el = document.getElementById('ayah-text');
+    var lines = el.querySelectorAll('.mushaf-line');
+    var keep = el.style.fontSize;
+    el.classList.add('measuring');
+    el.style.fontSize = MUSHAF_MEASURE_BASE + 'px';
+    var maxW = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var kids = lines[i].children, lo = Infinity, hi = -Infinity;
+      for (var j = 0; j < kids.length; j++) {
+        var b = kids[j].getBoundingClientRect();
+        if (b.left < lo) lo = b.left;
+        if (b.right > hi) hi = b.right;
+      }
+      if (hi - lo > maxW) maxW = hi - lo;
+    }
+    el.classList.remove('measuring');
+    el.style.fontSize = keep;
+    return Math.round(maxW);
   }
 
   // Отчёт на сервер (13.09.2026): поздняя перепроверка поправила кегль -
@@ -5440,7 +5479,10 @@
       page: currentPage, lines: first.lines, avail: first.avail,
       first: Math.round(first.font * 10) / 10, first_why: first.why,
       first_capped: !!first.capped,
-      final: Math.round(final.font * 10) / 10, final_why: why
+      final: Math.round(final.font * 10) / 10, final_why: why,
+      // Сырые мерки при 40px: таблица, scrollWidth, прямоугольники слов.
+      table: first.w, scroll: final.maxW, rect: final.rect,
+      k: final.k ? Math.round(final.k * 1000) / 1000 : undefined
     } }).catch(function () {});
   }
 

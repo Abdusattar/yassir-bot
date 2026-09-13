@@ -879,13 +879,21 @@ async def handle_fit_log(request, user_id):
         final = float(body.get("final", 0))
     except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
         return web.json_response({"error": "bad_body"}, status=400)
+    # Сырые мерки при 40px (13.09.2026): таблица, scrollWidth строк и ширина
+    # по прямоугольникам слов - по ним видно, какая мерка врёт на телефоне.
+    raw = []
+    for key in ("table", "scroll", "rect", "k"):
+        value = body.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            raw.append("%s=%s" % (key, round(value, 3)))
     ua = request.headers.get("User-Agent", "")
     log.info("fitlog user=%s page=%d lines=%d avail=%d first=%.1f/%s%s "
-             "final=%.1f/%s %s | %s",
+             "final=%.1f/%s%s %s | %s",
              user_id, page, lines, avail,
-             first, str(body.get("first_why", ""))[:16],
+             first, str(body.get("first_why", ""))[:20],
              " capped" if body.get("first_capped") else "",
-             final, str(body.get("final_why", ""))[:16],
+             final, str(body.get("final_why", ""))[:20],
+             (" " + " ".join(raw)) if raw else "",
              _ua_short(ua), ua[:90])
     return web.json_response({"ok": True})
 

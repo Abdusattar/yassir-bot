@@ -48,6 +48,22 @@ def test_fitlog_writes_one_journal_line(test_db, monkeypatch, caplog):
     assert "first=34.0/frame capped final=22.4/500ms iOS 18.7" in lines[0]
 
 
+def test_fitlog_logs_raw_measures(test_db, monkeypatch, caplog):
+    """Сломанный замер на айфоне (13.09.2026, Муслим из Н-1): таблица 659,
+    scrollWidth дал ширину экрана. В строке журнала - все три мерки."""
+    make_app = _setup(monkeypatch)
+    with caplog.at_level(logging.INFO, logger="core.mufradat_api"):
+        status, _ = _post(make_app, "/api/muf/fitlog", "201", {
+            "page": 6, "lines": 15, "avail": 374,
+            "first": 22.4, "first_why": "table k1.000",
+            "final": 34.0, "final_why": "1500ms bad",
+            "table": 659, "scroll": 374, "rect": 661, "k": 0.5675,
+        })
+    assert status == 200
+    line = [r.getMessage() for r in caplog.records if "fitlog" in r.getMessage()][0]
+    assert "final=34.0/1500ms bad table=659 scroll=374 rect=661 k=0.568 iOS 18.7" in line
+
+
 def test_fitlog_rejects_garbage(test_db, monkeypatch):
     make_app = _setup(monkeypatch)
     status, data = _post(make_app, "/api/muf/fitlog", "201", {"page": "six"})
