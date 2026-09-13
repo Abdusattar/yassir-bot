@@ -5264,6 +5264,55 @@
   var mushafFitRun = 0;         // номер отрисовки: поздние проверки чужой страницы молчат
   var mushafFitTrusted = null;  // кегль последнего полного листа, вышедший не в потолок
 
+  // Размер известен заранее (13.09.2026, решение пользователя: «чтобы при
+  // последующих открытиях страниц дёрганий не было»). Повторы выше чинили
+  // неверный замер, но поздно: текст появлялся не того размера и через
+  // полсекунды подтягивался. Теперь кегль ставится ДО первого кадра по
+  // таблице естественных ширин листов, а замер только проверяет.
+  //
+  // MUSHAF_FIT_W[стр.] - ширина самой длинной строки листа при кегле
+  // MUSHAF_MEASURE_BASE, без растягивания (та же мерка, что в
+  // clampFontToFit). Свойство текста и шрифта, не телефона; снимается на
+  // машине скриптом scripts/measure_mushaf_widths.py (--apply вписывает
+  // сюда). Разницу движков - Safari шейпит тот же шрифт на 1-2% иначе, чем
+  // Chrome - ловит mushafFitK: отношение настоящего замера к таблице, берётся
+  // только из поздней проверки (шрифт уже лёг) и помнится на телефоне.
+  /* FIT_WIDTHS:BEGIN */
+  var MUSHAF_FIT_W = [0,570,534,660,663,669,659,672,653,664,647,664,647,645,664,649,645,649,650,664,652,649,658,650,667,649,650,652,645,652,651,643,648,647,673,654,654,677,651,665,650,644,660,648,670,652,665,649,643,645,659,661,649,651,662,647,667,651,651,666,645,647,667,649,663,647,650,652,646,656,644,649,661,644,658,645,644,662,645,646,646,643,647,644,657,650,646,660,642,657,648,644,672,638,662,644,641,648,641,645,651,645,651,649,651,645,650,655,647,664,645,648,659,647,656,643,650,661,647,664,652,665,653,645,670,651,650,659,650,668,652,651,655,650,665,652,648,653,647,648,656,647,650,650,661,642,663,643,668,640,647,651,654,648,657,650,662,647,668,645,644,644,654,643,668,647,640,670,643,647,649,642,652,657,650,669,662,648,649,668,648,648,650,656,668,652,652,647,646,659,647,646,658,650,665,646,664,649,647,670,647,661,642,652,661,650,665,647,652,663,647,648,659,653,664,646,650,652,657,664,647,668,655,650,667,647,668,645,660,647,646,669,650,658,649,651,667,643,662,656,630,647,651,640,665,649,649,666,643,672,647,665,656,649,665,640,654,642,653,662,651,641,655,646,653,650,653,646,640,644,664,647,671,647,649,662,639,660,643,645,649,646,637,647,665,660,646,655,652,662,647,651,659,661,658,663,649,668,655,669,646,646,652,659,670,642,667,653,654,681,649,654,653,663,652,663,657,670,650,665,648,649,642,653,660,648,666,649,768,662,644,645,682,649,681,643,665,648,648,662,652,652,681,650,660,657,652,658,645,680,687,658,652,652,666,653,663,647,650,650,648,648,652,651,670,653,639,656,656,670,658,671,661,655,669,654,658,660,654,683,657,653,649,649,665,646,659,655,657,657,646,650,653,649,664,653,652,650,649,664,646,649,651,649,649,643,646,663,644,650,667,648,649,662,646,686,660,645,650,649,669,651,645,645,650,655,667,649,650,669,647,664,643,667,650,651,663,659,648,666,656,646,650,647,664,681,681,665,650,669,659,708,682,692,660,657,671,663,656,661,661,646,653,650,659,640,643,655,648,667,657,653,650,645,662,642,643,666,646,665,651,650,647,649,664,645,668,654,676,647,647,663,645,664,651,652,667,658,648,681,639,653,650,648,655,651,647,672,654,640,666,646,647,663,649,649,652,675,654,671,667,659,652,653,672,649,676,658,688,672,666,657,649,662,660,668,664,664,657,669,642,654,655,648,664,649,646,659,644,660,673,653,654,651,670,640,658,639,652,656,652,652,662,665,661,668,672,679,678,694,653,657,648,651,661,664,679,677,665,679,666,664,661,665,654,680,667,661,664,668,673,665,669,667,658,666,661,664,660,657,669,650,676,675,631];
+  /* FIT_WIDTHS:END */
+  var MUSHAF_FIT_K_KEY = 'yassir_fit_k';
+  var MUSHAF_FIT_K_MIN = 0.9, MUSHAF_FIT_K_MAX = 1.1; // вне - замер кривой, не учимся
+  var MUSHAF_FIT_AGREE = 0.5;   // px: расхождение меньше - замер согласен, кегль не трогаем
+  var mushafFitK = 1;
+  try {
+    var savedK = parseFloat(localStorage.getItem(MUSHAF_FIT_K_KEY));
+    if (savedK >= MUSHAF_FIT_K_MIN && savedK <= MUSHAF_FIT_K_MAX) mushafFitK = savedK;
+  } catch (e) {}
+
+  // Ставит кегль листа из таблицы. Лист берётся из data-page самого
+  // #ayah-text (его ставит reveal), а не из currentPage: при быстром листании
+  // currentPage уже следующий, а на экране ещё предыдущий текст.
+  function mushafFitPredict() {
+    var el = document.getElementById('ayah-text');
+    var page = parseInt(el.getAttribute('data-page'), 10);
+    var w = MUSHAF_FIT_W && MUSHAF_FIT_W[page];
+    if (!w) return null;
+    var lines = el.querySelectorAll('.mushaf-line').length;
+    var avail = el.clientWidth;
+    if (!lines || !avail) return null;
+    var font = MUSHAF_MEASURE_BASE * avail / (w * mushafFitK) * MUSHAF_FIT_SAFETY;
+    font = Math.min(MUSHAF_MAX_FONT_SIZE, Math.max(MUSHAF_MIN_FONT_SIZE, font));
+    el.style.fontSize = font.toFixed(1) + 'px';
+    return { font: font, capped: false, lines: lines, avail: avail, w: w,
+             why: 'table k' + mushafFitK.toFixed(3) };
+  }
+
+  function mushafFitLearn(k) {
+    if (!(k >= MUSHAF_FIT_K_MIN && k <= MUSHAF_FIT_K_MAX)) return;
+    mushafFitK = Math.round(k * 1000) / 1000;
+    try { localStorage.setItem(MUSHAF_FIT_K_KEY, String(mushafFitK)); } catch (e) {}
+  }
+
   // Худшее отношение "нужно / есть" среди строк. <= 1 - всё влезло.
   function mushafWorstOverflowRatio(lines) {
     var worst = 1;
@@ -5318,18 +5367,31 @@
       fitted = Math.max(MUSHAF_MIN_FONT_SIZE, fitted * shrink);
       el.style.fontSize = fitted.toFixed(1) + 'px';
     }
-    return { font: fitted, capped: capped, lines: lines.length, avail: avail };
+    return { font: fitted, capped: capped, lines: lines.length, avail: avail, maxW: maxW };
   }
 
   // Подгонка с повторами (см. MUSHAF_REFIT_DELAYS). Каждый вызов - новая
   // отрисовка: повторы предыдущей замолкают, чтобы не мерить чужую страницу.
-  // Первый удавшийся замер запоминается; если поздний дал другой размер (или
-  // первый упёрся в потолок и так и не поправился) - уходит отчёт.
+  //
+  // Есть лист в таблице - кегль ставится сразу, ранние повторы его не
+  // трогают (на айфоне шрифт мог ещё не лечь, им не верим), а последний
+  // сверяет: согласен - кегль остаётся тем же числом, картинка не дёргается;
+  // не согласен (таблица устарела, чужой движок на первом листе) - правит и
+  // шлёт отчёт. Он же учит mushafFitK.
+  //
+  // Листа в таблице нет - как до неё: первый удавшийся замер запоминается;
+  // если поздний дал другой размер (или первый упёрся в потолок и так и не
+  // поправился) - уходит отчёт.
   function mushafFitSchedule() {
     var run = ++mushafFitRun;
-    var first = null, reported = false;
+    var predicted = mushafFitPredict();
+    var first = predicted, reported = false;
     var tick = function (why, last) {
       if (run !== mushafFitRun) return;
+      if (predicted) {
+        if (last) mushafFitVerify(predicted, why);
+        return;
+      }
       var r = clampFontToFit(last);
       if (!r) return;
       if (!first) { first = r; first.why = why; return; }
@@ -5347,6 +5409,25 @@
         tick(ms + 'ms', i === MUSHAF_REFIT_DELAYS.length - 1);
       }, ms);
     });
+  }
+
+  // Поздняя сверка кегля из таблицы с настоящим замером. Всё внутри одной
+  // задачи, без кадра между записями: даже если замер временно поставил
+  // своё число, а мы вернули табличное, на экран попадает только итог.
+  function mushafFitVerify(predicted, why) {
+    var el = document.getElementById('ayah-text');
+    var keep = el.style.fontSize;
+    var r = clampFontToFit(true);
+    if (!r) return;
+    if (r.maxW) mushafFitLearn(r.maxW / predicted.w);
+    if (Math.abs(r.font - predicted.font) <= MUSHAF_FIT_AGREE) {
+      el.style.fontSize = keep;
+      // Согласие - только если табличный кегль правда влезает: запас
+      // MUSHAF_FIT_SAFETY полтора процента, допуск в полпикселя больше.
+      if (mushafWorstOverflowRatio(el.querySelectorAll('.mushaf-line')) <= 1) return;
+      el.style.fontSize = r.font.toFixed(1) + 'px';
+    }
+    mushafFitReport(predicted, r, why);
   }
 
   // Отчёт на сервер (13.09.2026): поздняя перепроверка поправила кегль -
@@ -5446,6 +5527,8 @@
     });
     var reveal = function () {
       document.getElementById('ayah-text').innerHTML = html;
+      // Номер листа на самом тексте - по нему mushafFitPredict берёт ширину.
+      document.getElementById('ayah-text').setAttribute('data-page', data.page);
       if (typeof hifzApply === 'function') hifzApply();
       // Пометки слов рисуем ЗДЕСЬ, когда страница реально отрисована, а не
       // по таймеру после loadPage: страница приходит с сервера, и угадывать
@@ -5715,7 +5798,7 @@
        (защита с другой стороны): в режим заучивания попадают не только
        отсюда — есть ещё разбор устаза и пересдача. */
     document.getElementById('btn-hifz').style.display = name === 'page' ? '' : 'none';
-    if (name === 'page') clampFontToFit();
+    if (name === 'page') mushafFitSchedule();
     if (name === 'mywords') loadMyWords();
   }
   document.getElementById('tab-meaning').addEventListener('click', function () { switchTab('meaning'); });
@@ -7483,7 +7566,7 @@
 
   window.addEventListener('resize', function () {
     var keys = Object.keys(cache);
-    if (keys.length) clampFontToFit();
+    if (keys.length) mushafFitSchedule();
   });
 
   var startPage = FIRST_PAGE;
