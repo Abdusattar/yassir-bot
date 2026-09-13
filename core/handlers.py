@@ -32,7 +32,7 @@ from core.db import (
     get_missing_students, get_date, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
     looks_like_plain_name,
-    save_voice_submission, mark_voice_reviewed, save_submission_review,
+    save_voice_submission, has_app_submissions, mark_voice_reviewed, save_submission_review,
     save_curriculum_part, get_next_part_for_review, set_curriculum_review_message,
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
@@ -1837,7 +1837,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # сдавший голосом прямо в группе, откроет приложение и увидит ту же
         # строчку - будто сдачи не было. Тем, кто в режим заучивания ни разу
         # не заходил, двигать нечего - advance_hifz_pointer молча выходит.
-        advance_hifz_pointer(phone)
+        #
+        # Кроме тех, кто сдаёт из приложения (13.09.2026, решение
+        # пользователя: «откуда тебе знать, что он сдавал»). Их голосовое в
+        # группе - ответ устазу на замечание, и Ибрахима из Н-1 такое
+        # голосовое увело с первой половины листа на вторую.
+        if not has_app_submissions(s["id"]):
+            advance_hifz_pointer(phone)
 
     # ── Явный узр: слово "узр"/"uzr" первым в сообщении, дальше причина ──────
     uzr_match = re.match(r"^(узр|uzr)\b[:\s]*(.*)", text.strip(), re.IGNORECASE | re.DOTALL)

@@ -882,7 +882,10 @@ async def handle_fit_log(request, user_id):
     # Сырые мерки при 40px (13.09.2026): таблица, scrollWidth строк и ширина
     # по прямоугольникам слов - по ним видно, какая мерка врёт на телефоне.
     raw = []
-    for key in ("table", "scroll", "rect", "k"):
+    # fs/w1/w1n (13.09, вечер): кегль по getComputedStyle в момент замера и
+    # ширина первого слова при 40px и при обычном кегле - дошёл ли 40px до
+    # раскладки вообще.
+    for key in ("table", "scroll", "rect", "fs", "w1", "w1n", "k"):
         value = body.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             raw.append("%s=%s" % (key, round(value, 3)))

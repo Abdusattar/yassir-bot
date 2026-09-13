@@ -1746,6 +1746,20 @@ def get_open_retakes(student_id, group_id):
     return [dict(r) for r in rows if not r["redone"]]
 
 
+def has_app_submissions(student_id):
+    """Сдавал ли студент хоть раз из приложения (у таких сдач есть место на
+    листе). Нужно голосовому в группе (13.09.2026, Ибрахим из Н-1): у того,
+    кто сдаёт через приложение, голосовое в группе - ответ устазу на
+    замечание, а не новая единица, и указатель 40+40 двигать по нему нельзя -
+    Ибрахима так увело с первой половины листа на вторую."""
+    with db() as c:
+        row = c.execute(
+            "SELECT 1 FROM voice_submissions WHERE student_id=? AND hifz_page IS NOT NULL LIMIT 1",
+            (student_id,)
+        ).fetchone()
+    return row is not None
+
+
 def has_submission_for_unit(student_id, group_id, page, line, stage):
     """Сдавал ли студент ровно эту единицу. Нужно, чтобы понять, что он стоит
     на МЁСТЕ, где работать уже нечего (13.09.2026).

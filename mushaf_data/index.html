@@ -696,6 +696,14 @@
   #app.hifz-pick #hifz-units { display: flex; }
   #app.hifz-pick #hifz-big-btn,
   #app.hifz-pick #hifz-submit { display: none; }
+  /* Плашка «Место не изменено» после ✕ посреди выбора (13.09.2026). */
+  #hifz-note {
+    position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 8px);
+    padding: 9px 14px; border-radius: 12px; background: var(--ink); color: var(--card-bg);
+    font: 500 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60;
+  }
+  #hifz-note.visible { opacity: 1; transform: translate(-50%, 0); }
   #hifz-units button {
     flex: 1; padding: 9px 6px; border-radius: 9px; cursor: pointer;
     border: 1px solid var(--chrome-border); background: transparent;
@@ -3580,6 +3588,7 @@
       hifz_pick_sub_elsewhere: 'твоё место осталось на стр. %N%',
       hifz_pick_half: 'Верхняя или нижняя?',
       hifz_pick_half_sub: 'тапни по половине',
+      hifz_pick_cancel: 'Место не изменено',
       hifz_unit_line: 'Строка',
       hifz_unit_half: 'Половина',
       hifz_unit_page: 'Страница',
@@ -5424,7 +5433,8 @@
        вторая мерка - по прямоугольникам самих слов (mushafRectWidth), чтобы
        по журналу было видно, что именно врёт. */
     if (!(r.k >= MUSHAF_FIT_K_MIN && r.k <= MUSHAF_FIT_K_MAX)) {
-      r.rect = mushafRectWidth();
+      var d = mushafRectWidth();
+      r.rect = d.rect; r.fs = d.fs; r.w1 = d.w1; r.w1n = d.w1n;
       el.style.fontSize = keep;
       mushafFitReport(predicted, r, why + ' bad');
       return;
@@ -5446,9 +5456,18 @@
   function mushafRectWidth() {
     var el = document.getElementById('ayah-text');
     var lines = el.querySelectorAll('.mushaf-line');
+    var first = lines[0] && lines[0].children[0];
     var keep = el.style.fontSize;
+    // Ширина первого слова ДО замера - сравнить с ним же при 40px: если
+    // отношение ~1, кегль 40px до раскладки не дошёл; если ~40/кегль, дошёл,
+    // и тогда врёт что-то другое (отчёт Муслима 13.09: rect=369 при таблице
+    // 659 - это ровно 659 × 22.4 / 40, но и «слова ужались в контейнер»
+    // дало бы те же 369; по одному числу не различить).
+    var w1n = first ? first.getBoundingClientRect().width : 0;
     el.classList.add('measuring');
     el.style.fontSize = MUSHAF_MEASURE_BASE + 'px';
+    var fs = parseFloat(getComputedStyle(el).fontSize);
+    var w1 = first ? first.getBoundingClientRect().width : 0;
     var maxW = 0;
     for (var i = 0; i < lines.length; i++) {
       var kids = lines[i].children, lo = Infinity, hi = -Infinity;
@@ -5461,7 +5480,8 @@
     }
     el.classList.remove('measuring');
     el.style.fontSize = keep;
-    return Math.round(maxW);
+    return { rect: Math.round(maxW), fs: Math.round(fs * 10) / 10,
+             w1: Math.round(w1 * 10) / 10, w1n: Math.round(w1n * 10) / 10 };
   }
 
   // Отчёт на сервер (13.09.2026): поздняя перепроверка поправила кегль -
@@ -5477,6 +5497,7 @@
       final: Math.round(final.font * 10) / 10, final_why: why,
       // Сырые мерки при 40px: таблица, scrollWidth, прямоугольники слов.
       table: first.w, scroll: final.maxW, rect: final.rect,
+      fs: final.fs, w1: final.w1, w1n: final.w1n,
       k: final.k ? Math.round(final.k * 1000) / 1000 : undefined
     } }).catch(function () {});
   }
@@ -6190,11 +6211,13 @@
       where.textContent = half ? T('hifz_pick_half') : T('hifz_pick');
       // Место осталось на другом листе — без этой строки студент не поймёт,
       // куда делся его прогресс, и решит, что приложение забыло (02.09.2026).
-      // Она важнее инструкции «тапни по…»: та и так видна по тому, что
-      // страница откликается на тап.
+      // Но НЕ вместо «тапни по…» (13.09.2026, Муслим из Н-1): на стр. 51 он
+      // нажал «Половина», увидел только «место осталось на стр. 6», по листу
+      // не тапнул и вышел через ✕ — ничего не сохранилось. Обе строки.
+      var tapHint = half ? T('hifz_pick_half_sub') : T('hifz_pick_sub');
       sub.textContent = (hifzPointerPage && hifzPointerPage !== currentPage)
-        ? T('hifz_pick_sub_elsewhere', { N: hifzPointerPage })
-        : (half ? T('hifz_pick_half_sub') : T('hifz_pick_sub'));
+        ? tapHint + ' · ' + T('hifz_pick_sub_elsewhere', { N: hifzPointerPage })
+        : tapHint;
     } else if (hifz.stage === 1) {
       var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
       where.textContent = T('page_n', { N: currentPage }) + ' · ' +
@@ -6367,10 +6390,30 @@
         hifzRetakeSaved = null;
       }
     }
+    // Вышел ✕ посреди выбора места - место осталось прежним, и об этом надо
+    // сказать (13.09.2026, Муслим из Н-1): молчаливый выход читался как
+    // «сохранилось», а 📖 потом вёл на старую страницу.
+    var cancelled = hifz.picking && hifzPointerPage;
     hifz.on = false; hifz.picking = false; hifz.unit = 'line';
     hifzListenStop();
     document.getElementById('hifz-big').classList.remove('visible');
     hifzApply();
+    if (cancelled) hifzNote(T('hifz_pick_cancel'));
+  }
+
+  // Короткая плашка внизу листа, сама уходит. Одна на всё приложение.
+  var hifzNoteTimer = null;
+  function hifzNote(text) {
+    var el = document.getElementById('hifz-note');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'hifz-note';
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add('visible');
+    if (hifzNoteTimer) clearTimeout(hifzNoteTimer);
+    hifzNoteTimer = setTimeout(function () { el.classList.remove('visible'); }, 2500);
   }
 
   /* Следующий шаг методики. Порядок жёсткий, отказа нет: метод 40+40 не
