@@ -1564,21 +1564,16 @@
     flex: 1; min-width: 0; margin: 0;
     padding: 7px 13px 6px; border-radius: 16px;
     display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "bars num" "names num";
-    /* 18px, а не 12: третья полоска упиралась прямо в «0 из 3», и строка
-       читалась как каша (10.09.2026). */
-    column-gap: 18px; row-gap: 3px; align-items: center;
+    grid-template-columns: 1fr;
+    grid-template-areas: "bars" "names";
+    row-gap: 3px; align-items: center;
   }
-  #dash-head #my-day .cap { grid-area: num; }
-  #dash-head #my-day .cap span { display: none; }
-  /* Легче подписей, а не тяжелее: главное в строке - полоски, число лишь
-     подводит итог. Было 14/700 и перетягивало строку на себя. */
-  /* Перенос запрещён (13.09.2026, поймал пользователь). При шести заданиях
-     «0 из 6» ломалось на «0 из» и «6», от этого росла вся полоса, а подписи
-     под полосками сжимались до слипания. Длинные наборы редки - на 13.09
-     таких групп три из тридцати, - но выглядело сломанным именно у них. */
-  #dash-head #my-day .cap b { font-size: 13px; font-weight: 600; white-space: nowrap; }
+  /* Числа «0 из 3» справа больше нет (13.09.2026, решение пользователя):
+     полоски и подписи под ними говорят то же самое, а при шести заданиях
+     «6 из 6» отнимало место у подписей - «Заучивание Повторение» стояли
+     вплотную. Одна логика на все группы, а не «при трёх показываем, при
+     шести прячем». Разметка .cap остаётся для карточки вне шапки. */
+  #dash-head #my-day .cap { display: none; }
   #dash-head #my-day .bars i { height: 7px; border-radius: 4px; }
   #dash-head #my-day .bars { grid-area: bars; }
   #dash-head #my-day .names { grid-area: names; }
