@@ -1,0 +1,413 @@
+"""Макеты кабинета устаза (13.09.2026) — по разбору удобства.
+
+Зачем: разбор показал, что половина устазов проверяет сдачи из приложения
+реплаем в группе, мимо кабинета, а сам кабинет требует лишних шагов. Прежде
+чем писать код — посмотреть предложения глазами.
+
+Как у shoot_retake_gate: поднимается тот же стенд (настоящее приложение,
+подменённая авторизация), вход под устазом, а поверх НАСТОЯЩИХ экранов
+накладывается только предлагаемая разметка. Варианты *_now — честный ноль,
+без единой инъекции (см. feedback «Сверять мокапы с реальным кодом»).
+
+    python scripts/shoot_ustaz_cabinet.py           # снять всё + сравнения
+    python scripts/shoot_ustaz_cabinet.py --serve   # покрутить руками
+
+База своя (yassir_ustaz_stand), а не общая со стендом онбординга: здесь в
+очередь досеяны голосовые из группы и вторая попытка той же строки, и снимки
+«Как работаем» не должны их унаследовать.
+"""
+import argparse
+import pathlib
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from datetime import timedelta
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+import shoot_onboarding as stand            # noqa: E402  (поднимает стенд целиком)
+from aiohttp import web                     # noqa: E402
+
+TMP = pathlib.Path(tempfile.gettempdir()) / "yassir_ustaz_stand"
+TMP.mkdir(exist_ok=True)
+stand.db.DB = str(TMP / "dev.db")            # db() читает путь при каждом вызове
+
+OUT = ROOT / "logs" / "ustaz_cabinet"
+PORT = 8803
+WIDTH, HEIGHT = 390, 844
+
+
+# ─── данные ───────────────────────────────────────────────────────────────
+
+def seed_extra():
+    """Очередь, похожая на живую N-1: сдач из приложения меньше, чем
+    голосовых прямо в группу (13.09 на проде — 9 против 76)."""
+    db = stand.db
+    group = db.get_group(stand.CHAT)
+    now = db.get_now()
+    today = db.get_date()
+    yday = (now.date() - timedelta(days=1)).isoformat()
+    # msg, телефон, дата, часов назад, стр., строка, этап
+    rows = [
+        # Абдулла пересдаёт стр. 3, строчку 3 (line=2): её вернули (msg 102),
+        # это вторая попытка той же строки.
+        (104, stand.STUDENT, today, 2, 3, 2, 1),
+        (113, "777003", yday, 20, 2, 5, 1),
+        # Голосовые прямо в группу — места на листе у них нет.
+        (301, "777002", today, 1, None, None, None),
+        (302, "777003", today, 3, None, None, None),
+        (303, stand.STUDENT, today, 5, None, None, None),
+        (304, "777002", today, 6, None, None, None),
+        (305, "777003", today, 8, None, None, None),
+        (306, stand.STUDENT, yday, 18, None, None, None),
+        (307, "777002", yday, 22, None, None, None),
+        (308, "777003", yday, 26, None, None, None),
+    ]
+    with sqlite3.connect(db.DB) as conn:
+        have = {r[0] for r in conn.execute(
+            "SELECT message_id FROM voice_submissions WHERE chat_id=?", (stand.CHAT,))}
+    for msg, phone, date, _h, page, line, stage in rows:
+        if msg in have:
+            continue
+        db.save_voice_submission(db.find_user_by_phone(phone)["id"], group["id"],
+                                 stand.CHAT, msg, date, file_id="dev%d" % msg,
+                                 hifz_page=page, hifz_line=line, hifz_stage=stage)
+    # Возраст ожидания: на свежей базе всё «ждёт 0 мин», так очередь не читается.
+    ages = {103: 4, 111: 7}
+    ages.update({r[0]: r[3] for r in rows})
+    with sqlite3.connect(db.DB) as conn:
+        for msg, hours in ages.items():
+            conn.execute("UPDATE voice_submissions SET sent_at=? WHERE chat_id=? AND message_id=?",
+                         ((now - timedelta(hours=hours)).isoformat(), stand.CHAT, msg))
+
+
+# ─── предлагаемая разметка ────────────────────────────────────────────────
+
+MOCK_CSS = """
+<style>
+/* Свёрнутые голосовые из группы: одна строка вместо простыни. Пунктир и
+   серый — это не долг и не работа кабинета, а напоминание. */
+.mk-fold {
+  display: flex; align-items: center; gap: 10px; direction: ltr;
+  border: 1px dashed var(--card-border); border-radius: 12px;
+  padding: 11px 14px; color: var(--muted);
+}
+.mk-fold .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mk-fold b { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+.mk-fold span { font-size: 12px; }
+.mk-fold .go { flex: 0 0 auto; color: var(--accent); font-size: 13px; font-weight: 600; }
+
+/* Полоса записи в проверке — тот же плеер, что у студента в разборе
+   (#look-foot .player), только со своей отмоткой справа. */
+#review-foot .mk-player { display: flex; align-items: center; gap: 10px; }
+#review-foot .mk-player .pp {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; padding: 0;
+  background: var(--accent); border: none; color: #fff; font-size: 14px;
+}
+#review-foot .mk-player .bar { flex: 1 1 auto; }
+#review-foot .mk-player .tr {
+  height: 4px; border-radius: 999px; background: var(--card-border); position: relative;
+}
+#review-foot .mk-player .tr i {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent);
+}
+#review-foot .mk-player .t {
+  display: flex; justify-content: space-between; font-size: 10.5px;
+  color: var(--muted); margin-top: 5px; font-variant-numeric: tabular-nums;
+}
+#review-foot .mk-player .b10 { flex: 0 0 auto; padding: 8px 10px; }
+
+/* После вердикта — не выход в список, а следующая сдача. */
+#review-foot .mk-list { flex: 0 0 auto; }
+#review-foot .mk-ok { color: var(--accent); font-weight: 700; }
+#review-foot .mk-left { font-size: 11.5px; color: var(--muted); text-align: center; }
+
+/* Замечание записано — вердикт ещё нет: без этого сдача молча остаётся в
+   «Ждут», хотя устаз уверен, что закончил. */
+#review-foot .mk-done { color: var(--accent); font-weight: 600; }
+#review-foot .row.mk-glow button { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* Прошлые попытки той же строки. */
+#review-foot .mk-hist {
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--no-soft); border-radius: 10px; padding: 8px 10px;
+}
+#review-foot .mk-hist .h { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); }
+#review-foot .mk-hist .h b { color: var(--no); font-size: 12.5px; }
+#review-foot .mk-hist .chips { display: flex; gap: 6px; }
+#review-foot .mk-hist .chips button { flex: 1 1 0; padding: 7px 4px; font-size: 11.5px; }
+.mk-prev { outline: 1.5px dashed var(--no); outline-offset: 1px; border-radius: 4px; }
+
+/* Сдачи студента под его календарём. */
+.mk-subs { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; direction: ltr; }
+.mk-subs .ustaz-group-title { margin: 0 2px 0; }
+</style>
+"""
+
+MOCK_JS = """
+<script>
+(function () {
+  var v = new URLSearchParams(location.search).get('v');
+  if (!v) return;
+  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var $ = function (id) { return document.getElementById(id); };
+  var all = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+
+  async function openQueue() { $('dash-ustaz').click(); await wait(2200); }
+
+  async function openReview(name, place) {
+    await openQueue();
+    var row = all('[data-review]').filter(function (el) {
+      return el.textContent.indexOf(name) >= 0 && el.textContent.indexOf(place) >= 0;
+    })[0];
+    if (!row) throw new Error('нет сдачи ' + name + ' ' + place);
+    row.click(); await wait(2800);
+  }
+
+  function mark(ln, idx) {
+    var row = document.querySelector('#ayah-text .mushaf-line[data-line="' + ln + '"]');
+    if (row && row.children[idx]) row.children[idx].click();
+  }
+
+  // Голосовые из группы уходят из списка. mode: 'fold' - одной строкой внизу,
+  // 'tabs' - отдельным срезом рядом со сдачами из приложения.
+  function foldGroupVoices(mode) {
+    var body = $('ustaz-body');
+    var voice = all('.ustaz-row', body).filter(function (el) { return !el.hasAttribute('data-review'); });
+    var n = voice.length;
+    voice.forEach(function (el) { el.remove(); });
+    all('.ustaz-group-title', body).forEach(function (t) {
+      var nx = t.nextElementSibling;
+      if (!nx || !nx.classList.contains('ustaz-row')) t.remove();
+    });
+    var rows = all('[data-review]', body);
+    // Метка «через апп» больше ничего не различает - в списке только они.
+    all('.sub-pill.app', body).forEach(function (p) { p.remove(); });
+    var lab = body.querySelector('#ustaz-picker span');
+    if (lab) lab.textContent = lab.textContent.replace(/ждут \\d+/, 'ждут ' + rows.length);
+    if (mode === 'fold') {
+      var box = document.createElement('div');
+      box.className = 'mk-fold';
+      box.innerHTML = '<div class="t"><b>Ещё ' + n + ' голосовых в группе</b>'
+        + '<span>без места на листе — ответить реплаем в Telegram</span></div>'
+        + '<span class="go">Открыть ›</span>';
+      var last = rows[rows.length - 1];
+      last.parentNode.insertBefore(box, last.nextSibling);
+    } else {
+      var f = document.createElement('div');
+      f.className = 'ustaz-filter';
+      f.innerHTML = '<button class="on">из приложения · ' + rows.length + '</button>'
+        + '<button>голосовые в группе · ' + n + '</button>';
+      body.querySelector('.ustaz-head').appendChild(f);
+    }
+    // Вторая попытка той же строки - видно ещё в очереди.
+    rows.forEach(function (el) {
+      if (el.textContent.indexOf('Абдулла') >= 0 && el.textContent.indexOf('строчка 3') >= 0) {
+        el.querySelector('.name').insertAdjacentHTML('beforeend',
+          '<span class="sub-pill retake">2-я попытка</span>');
+      }
+    });
+  }
+
+  function playerBar() {
+    var foot = $('review-foot');
+    var p = document.createElement('div');
+    p.className = 'mk-player';
+    p.innerHTML = '<button class="pp">❚❚</button>'
+      + '<div class="bar"><div class="tr"><i style="width:38%"></i></div>'
+      + '<div class="t"><span>0:41</span><span>1:48</span></div></div>'
+      + '<button class="b10">↺ 10</button>';
+    foot.insertBefore(p, foot.querySelector('.row'));
+    $('review-play').style.display = 'none';
+    $('review-back10').style.display = 'none';
+  }
+
+  var scenes = {
+    queue_now: openQueue,
+    queue_fold: async function () { await openQueue(); foldGroupVoices('fold'); },
+    queue_tabs: async function () { await openQueue(); foldGroupVoices('tabs'); },
+
+    review_now: async function () { await openReview('Абдулла', 'строчка 4'); mark(3, 2); },
+    review_bar: async function () {
+      await openReview('Абдулла', 'строчка 4'); mark(3, 2); await wait(300); playerBar();
+    },
+    comment_then: async function () {
+      await openReview('Абдулла', 'строчка 4'); mark(3, 2); await wait(300); playerBar();
+      $('review-hint').innerHTML = '<span class="mk-done">Замечание записано ✓</span> Теперь вердикт — сдача ещё в «Ждут»';
+      var rows = all('#review-foot .row');
+      rows[rows.length - 1].classList.add('mk-glow');
+    },
+    review_next: async function () {
+      await openReview('Абдулла', 'строчка 4'); mark(3, 2); await wait(300);
+      $('review-hint').innerHTML = '<span class="mk-ok">Принято ✅</span> Абдулла · стр. 3, строчка 4';
+      var rows = all('#review-foot .row');
+      rows[0].style.display = 'none';
+      rows[1].innerHTML = '<button class="mk-list">К списку</button>'
+        + '<button class="ok">Дальше: Хамза · стр. 4 ›</button>';
+      $('review-foot').insertAdjacentHTML('beforeend',
+        '<div class="mk-left">в N-1 ждут ещё 2 · группа не меняется</div>');
+    },
+
+    history_now: async function () { await openReview('Абдулла', 'строчка 3'); },
+    history: async function () {
+      await openReview('Абдулла', 'строчка 3');
+      // Пометка с прошлой попытки (seed_submissions: строка 2, слово 4).
+      var ln = document.querySelector('#ayah-text .mushaf-line[data-line="2"]');
+      if (ln && ln.children[4]) ln.children[4].classList.add('mk-prev');
+      var s = document.createElement('div');
+      s.className = 'mk-hist';
+      s.innerHTML = '<div class="h"><b>2-я попытка</b><span>пунктир — отмечено в прошлый раз</span></div>'
+        + '<div class="chips"><button>▶ Прошлая запись</button><button>▶ Мой разбор тогда</button></div>';
+      var foot = $('review-foot');
+      foot.insertBefore(s, foot.firstChild);
+    },
+
+    student_now: async function () {
+      await openQueue();
+      document.querySelector('.ustaz-zones [data-zone="students"]').click(); await wait(2200);
+      var r = all('.stu-row').filter(function (el) { return el.textContent.indexOf('Абдулла') >= 0; })[0];
+      if (r) { r.click(); await wait(2000); }
+    },
+    student_subs: async function () {
+      await scenes.student_now();
+      var row = function (place, pill, meta, note) {
+        return '<div class="sub-row open"><div class="top"><span class="place">' + place + '</span>'
+          + '<span class="sub-pill ' + pill[0] + '">' + pill[1] + '</span></div>'
+          + (meta ? '<div class="meta">' + meta + '</div>' : '')
+          + (note || '') + '</div>';
+      };
+      $('ustaz-body').insertAdjacentHTML('beforeend',
+        '<div class="mk-subs"><div class="ustaz-group-title">Сдачи за 7 дней</div>'
+        + row('стр. 3, строчка 3', ['wait', 'ждёт'], 'сегодня · 2-я попытка')
+        + row('стр. 3, строчка 4', ['wait', 'ждёт'], 'сегодня')
+        + row('стр. 3, строчка 3', ['retake', 'на пересдачу'], 'Отмечено слов: 1 · разбор голосом',
+              '<div class="note answered">пересдал — новая запись в «Ждут»</div>')
+        + row('стр. 3, строчка 2', ['done', 'принято'], 'Отмечено слов: 2 · разбор голосом')
+        + '</div>');
+    }
+  };
+
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var fn = scenes[v];
+      if (!fn) throw new Error('нет такого варианта: ' + v);
+      fn();
+    }, 1200);
+  });
+})();
+</script>
+"""
+
+VARIANTS = ["queue_now", "queue_fold", "queue_tabs",
+            "review_now", "review_bar", "comment_then", "review_next",
+            "history_now", "history",
+            "student_now", "student_subs"]
+
+# Сравнения: первым всегда «как сейчас».
+COMPARE = {
+    "queue": [("queue_now", "Сейчас"), ("queue_fold", "А · голосовые одной строкой"),
+              ("queue_tabs", "Б · голосовые отдельным срезом")],
+    "review": [("review_now", "Сейчас"), ("review_bar", "Полоса записи"),
+               ("comment_then", "Замечание есть — ждём вердикт"),
+               ("review_next", "После вердикта — дальше")],
+    "history": [("history_now", "Сейчас · 2-я попытка"), ("history", "Прошлая попытка рядом")],
+    "student": [("student_now", "Сейчас"), ("student_subs", "Календарь + его сдачи")],
+}
+
+
+def page(variant):
+    # Стили макета безвредны и для *_now: их классы появляются только из
+    # сцен-предложений, «как сейчас» ничего не дорисовывает.
+    return stand.dev_index(stand.USTAZ, "Устаз") + MOCK_CSS + MOCK_JS
+
+
+def build():
+    app = stand.build_app()
+    seed_extra()
+
+    async def variant_page(request):
+        return web.Response(text=page(request.query.get("v", "queue_now")),
+                            content_type="text/html")
+
+    async def variant_frame(request):
+        v = request.query.get("v", "queue_now")
+        w = int(request.query.get("w", WIDTH))
+        return web.Response(content_type="text/html", text=(
+            "<style>html,body{margin:0;background:#fff}"
+            "iframe{border:0;display:block;width:%dpx;height:%dpx}</style>"
+            "<iframe src='/v?v=%s&bot=male'></iframe>" % (w, HEIGHT, v)))
+
+    app.router.add_get("/v", variant_page)
+    app.router.add_get("/vframe", variant_frame)
+    return app
+
+
+def compose():
+    from PIL import Image, ImageDraw, ImageFont
+    font = None
+    for path in (r"C:\Windows\Fonts\segoeuib.ttf", r"C:\Windows\Fonts\arialbd.ttf"):
+        if pathlib.Path(path).exists():
+            font = ImageFont.truetype(path, 17)
+            break
+    font = font or ImageFont.load_default()
+    band, gap = 40, 14
+    for name, items in COMPARE.items():
+        shots = [Image.open(OUT / ("u_%s.png" % v)).convert("RGB") for v, _ in items]
+        w = sum(s.width for s in shots) + gap * (len(shots) - 1)
+        h = band + max(s.height for s in shots)
+        canvas = Image.new("RGB", (w, h), (236, 232, 222))
+        draw = ImageDraw.Draw(canvas)
+        x = 0
+        for shot, (_v, label) in zip(shots, items):
+            draw.text((x + 12, 10), label, fill=(40, 40, 40), font=font)
+            canvas.paste(shot, (x, band))
+            x += shot.width + gap
+        jpg = OUT / ("cmp_%s.jpg" % name)
+        canvas.save(jpg, "JPEG", quality=82, optimize=True)
+        print("  cmp_%-8s %4d КБ" % (name, jpg.stat().st_size // 1024))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--serve", action="store_true")
+    ap.add_argument("--only", default="")
+    args = ap.parse_args()
+
+    app = build()
+    if args.serve:
+        print("стенд: http://127.0.0.1:%d/vframe?v=queue_fold" % PORT)
+        web.run_app(app, host="127.0.0.1", port=PORT, print=None)
+        return
+
+    chrome = stand.find_chrome()
+    threading.Thread(
+        target=lambda: web.run_app(app, host="127.0.0.1", port=PORT, print=None,
+                                   handle_signals=False),
+        daemon=True).start()
+    time.sleep(3)
+
+    OUT.mkdir(parents=True, exist_ok=True)
+    only = [s.strip() for s in args.only.split(",") if s.strip()]
+    for name in VARIANTS:
+        if only and name not in only:
+            continue
+        png = OUT / ("u_%s.png" % name)
+        subprocess.run([
+            chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
+            "--window-size=%d,%d" % (WIDTH, HEIGHT),
+            "--virtual-time-budget=17000", "--screenshot=%s" % png,
+            "http://127.0.0.1:%d/vframe?v=%s" % (PORT, name),
+        ], check=True, capture_output=True)
+        if not png.exists():
+            raise SystemExit("вариант %s не снялся" % name)
+        print("  %-13s %4d КБ" % (name, png.stat().st_size // 1024))
+    compose()
+    print("снимки в %s" % OUT)
+
+
+if __name__ == "__main__":
+    main()
