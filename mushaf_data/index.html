@@ -7737,7 +7737,7 @@
     catch (e) { pendingErrorMarks = null; }
     look.on = true;
     look.item = item;
-    look.saved = { line: hifz.line, stage: hifz.stage, on: hifz.on };
+    look.saved = { line: hifz.line, stage: hifz.stage, on: hifz.on, page: currentPage };
     hifz.on = true;
     hifz.picking = false;
     hifz.stage = item.hifz_stage || 1;
@@ -7868,8 +7868,8 @@
     lookStopAudio();
     look.on = false;
     document.getElementById('app').classList.remove('look');
-    look.saved = null;      // место вернёт уже пересдача (hifzRetakeFinish)
     subsRetake(item, true);
+    look.saved = null;      // место вернёт уже пересдача (hifzRetakeFinish)
   }
 
   // Пересдача: открываем заучивание РОВНО на том месте, что сдавали, и
@@ -7893,8 +7893,12 @@
     // Лист запоминаем вместе с местом (13.09.2026): без него возврат чинил
     // только шапку, а currentPage оставался на странице долга - и следующая
     // сдача уходила с чужой страницей (она берёт currentPage, см. hifzRecSend).
-    hifzRetakeSaved = { line: hifz.line, stage: hifz.stage, on: hifz.on,
-                        page: currentPage };
+    /* Из разбора - место берём из look.saved (13.09.2026, поймал
+       пользователь): lookOpen уже поставил hifz.line/stage и лист на место
+       долга, и здесь запоминалось бы оно само. После пересдачи первой строки
+       студент, стоявший на третьей, оказывался снова на первой. */
+    hifzRetakeSaved = (fromLook && look.saved) ? look.saved
+      : { line: hifz.line, stage: hifz.stage, on: hifz.on, page: currentPage };
     hifzRetakeMode = true;
     hifz.on = true;
     hifz.picking = false;
