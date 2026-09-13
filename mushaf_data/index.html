@@ -1808,6 +1808,8 @@
   }
   #review-foot button:disabled { opacity: .5; cursor: default; }
   #review-foot .hint { font-size: 12px; color: var(--muted); text-align: center; }
+  /* «К списку» по своему тексту, остальное - «Дальше»: это главный ход. */
+  #review-foot #review-to-list { flex: 0 0 auto; }
 
   /* Разбор устаза глазами студента (07.09.2026). Та же нижняя полоса, что
      и у проверки, только вместо вердикта - голос устаза. В ПОТОКЕ колонки
@@ -2962,6 +2964,13 @@
        видит студент, но снизу - вердикт. Тап по слову отмечает ошибку. -->
   <div id="review-foot">
     <div class="hint" id="review-hint"></div>
+    <!-- После вердикта (13.09.2026): следующая сдача той же группы, не выходя
+         в список, см. reviewAfterVerdict. Стоит ПЕРВЫМ рядом, а не последним:
+         снимки онбординга подсвечивают вердикт как .row:last-child. -->
+    <div class="row" id="review-after" style="display:none">
+      <button id="review-to-list">К списку</button>
+      <button id="review-next" class="ok"></button>
+    </div>
     <div class="row">
       <button id="review-play">▶ Прослушать сдачу</button>
       <button id="review-mine" style="display:none">▶ Мой разбор</button>
@@ -3464,6 +3473,9 @@
       review_play: '▶ Прослушать сдачу',
       review_play_mine: '▶ Мой разбор',
       review_frozen: 'Студент уже пересдал — новая запись ждёт разбора в «Ждут»',
+      review_next: 'Дальше: %N% · стр. %P% ›',
+      review_to_list: 'К списку',
+      review_left: 'в группе ждут ещё %N%',
       review_stop: '⏸ Стоп',
       review_back10: '↺ 10 сек',
       subs_verdict_ok: 'принято',
@@ -8689,13 +8701,20 @@
       if (!res.data || res.status !== 200) return;
       var sub = res.data;
       if (sub.hifz_page == null) return;   // старая сдача без места - проверять нечего
+      // Прежнее состояние заучивания устаза - он и сам студент, его место
+      // не должно съехать от того, что он кого-то проверил. «Дальше»
+      // (13.09.2026) открывает сдачу, уже стоя в проверке: hifz здесь -
+      // место ПРОШЛОЙ сдачи, и запомнить его значило бы вернуть устазу
+      // чужую строку (та же ловушка, что была у пересдачи из разбора).
+      if (!review.on) {
+        review.saved = { on: hifz.on, line: hifz.line, stage: hifz.stage, picking: hifz.picking };
+      } else {
+        reviewStopAudio();
+      }
       review.on = true;
       review.sub = sub;
       review.words = {};
       (sub.error_words || []).forEach(function (m) { review.words[reviewKey(m.line, m.word)] = true; });
-      // Прежнее состояние заучивания устаза - он и сам студент, его место
-      // не должно съехать от того, что он кого-то проверил.
-      review.saved = { on: hifz.on, line: hifz.line, stage: hifz.stage, picking: hifz.picking };
       hifz.on = true;
       hifz.picking = false;
       hifz.stage = sub.hifz_stage || 1;
@@ -8713,6 +8732,7 @@
 
   function reviewAfterRender() {
     if (!review.on) return;
+    reviewAfterShow(null);   // ряд «Дальше» - только после вердикта
     var frozen = !!(review.sub && review.sub.redone);
     ['review-accept', 'review-retake', 'review-comment'].forEach(function (id) {
       document.getElementById(id).style.display = frozen ? 'none' : '';
@@ -8766,8 +8786,9 @@
       body: { id: review.sub.id, verdict: verdict, words: reviewMarkedList() }
     }).then(function (res) {
       if (res.data && res.data.ok) {
-        hint.textContent = T(verdict === 'accepted' ? 'review_done_ok' : 'review_done_retake');
-        setTimeout(reviewClose, 900);
+        var done = T(verdict === 'accepted' ? 'review_done_ok' : 'review_done_retake');
+        hint.textContent = done;
+        reviewAfterVerdict(done);
         return;
       }
       if (res.data && res.data.error === 'needs_comment') {
@@ -8777,6 +8798,64 @@
       }
       hint.textContent = T('review_failed');
     }).catch(function () { hint.textContent = T('review_failed'); });
+  }
+
+  /* «Дальше» после вердикта (13.09.2026, макет из разбора удобства). Раньше
+     каждый вердикт выбрасывал в список: вернуться, дождаться загрузки,
+     найти следующую строку, открыть. Теперь следующая сдача той же группы -
+     одним тапом прямо из панели.
+
+     Какая «следующая»: та, что в «Ждут» стояла НИЖЕ проверенной (тот же
+     порядок, что видит устаз, см. ustazSortBySource), а если ниже ничего -
+     первая из оставшихся. Список берём заново, а не из памяти: сдачу мог
+     уже разобрать другой устаз или подхвативший супер-админ. Голосовые из
+     группы пропускаем - открыть их нечем.
+
+     Только для проверки из «Ждут»: из «Проверено» устаз пересматривает
+     старое, у него свой возврат. Ждать больше нечего - как раньше, назад в
+     список. */
+  var ustazQueueData = null;   // последний отрисованный список «Ждут», см. ustazRenderList
+  var reviewNextId = null;
+
+  function ustazOpenable(items, groupId) {
+    return ustazSortBySource((items || []).filter(function (it) {
+      return it.hifz_page != null && (groupId == null || it.group_id === groupId);
+    }));
+  }
+
+  // next - сдача для «Дальше» или null: тогда обычные ряды проверки.
+  function reviewAfterShow(next) {
+    var after = document.getElementById('review-after');
+    Array.prototype.forEach.call(document.querySelectorAll('#review-foot > .row'), function (r) {
+      r.style.display = (r === after) === !!next ? '' : 'none';
+    });
+    reviewNextId = next ? next.id : null;
+    if (!next) return;
+    document.getElementById('review-to-list').textContent = T('review_to_list');
+    document.getElementById('review-next').textContent =
+      T('review_next', { N: next.student_name || '', P: next.hifz_page });
+  }
+
+  function reviewAfterVerdict(doneText) {
+    var cur = review.sub;
+    var old = ustazQueueData;
+    if (ustazZone !== 'queue' || !old || !cur) { setTimeout(reviewClose, 900); return; }
+    var groupId = old.shown;
+    var oldIds = ustazOpenable(old.items, groupId).map(function (it) { return it.id; });
+    var pos = oldIds.indexOf(cur.id);
+    apiCall('/ustaz/waiting' + (ustazShowAll ? '?all=1' : '')).then(function (res) {
+      if (!review.on || review.sub !== cur) return;   // устаз уже ушёл сам
+      var data = res.data;
+      if (!data || !data.items) throw new Error('queue');
+      data.shown = groupId;
+      ustazQueueData = data;
+      var fresh = ustazOpenable(data.items, groupId).filter(function (it) { return it.id !== cur.id; });
+      if (!fresh.length) { setTimeout(reviewClose, 900); return; }
+      var next = fresh.filter(function (it) { return oldIds.indexOf(it.id) > pos; })[0] || fresh[0];
+      document.getElementById('review-hint').textContent =
+        doneText + ' · ' + T('review_left', { N: fresh.length });
+      reviewAfterShow(next);
+    }).catch(function () { setTimeout(reviewClose, 900); });
   }
 
   // Замечание голосом пишем той же панелью, что и сдачу у студента - у устаза
@@ -8833,6 +8912,10 @@
   document.getElementById('review-comment').addEventListener('click', reviewComment);
   document.getElementById('review-accept').addEventListener('click', function () { reviewVerdict('accepted'); });
   document.getElementById('review-retake').addEventListener('click', function () { reviewVerdict('retake'); });
+  document.getElementById('review-to-list').addEventListener('click', function () { reviewClose(); });
+  document.getElementById('review-next').addEventListener('click', function () {
+    if (reviewNextId) reviewOpen(reviewNextId);
+  });
 
   // Подпись времени сдачи: "сегодня 09:14" / "вчера 21:03" / "02.09 19:22".
   // Сегодняшнюю дату берём У СЕРВЕРА (поле today) - у телефона устаза может
@@ -9063,6 +9146,7 @@
     if (ustazGroupId === null) ustazGroupId = byDefault;
     var shown = ustazPickGroup(groups, byDefault);
     data.shown = shown;   // хвост «ещё N старше» фильтруется по ней же
+    ustazQueueData = data;   // от него считается «Дальше», см. reviewAfterVerdict
     var items = all.filter(function (it) {
       return shown === null || it.group_id === shown;
     });
