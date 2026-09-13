@@ -5087,7 +5087,7 @@
     // #app стал видимым (28.08.2026, тот самый баг с обрезкой текста на
     // телефоне: у уже открывавших мусхаф раньше страница подгружается
     // ИЗ localStorage ещё до клика по карточке).
-    document.fonts.ready.then(clampFontToFit);
+    mushafFitSchedule();
   }
   // Дашборд YassirApp (28.08.2026/29.08.2026) - первый экран. "Мусхаф" и
   // "Тренажёр" оба теперь переключают вид ВНУТРИ этого же приложения (до
@@ -5169,9 +5169,10 @@
   //
   // Фикс - ОДНОРАЗОВОЕ измерение (не цикл/бинарный поиск): базовый размер,
   // натуральная ширина самой длинной строки, один прямой пересчёт
-  // font-size. Вызывается из reveal() - ПОСЛЕ document.fonts.ready (шрифт
-  // гарантированно применён к тексту, гонки нет, см. комментарий у reveal
-  // ниже); из клика по карточке "Мусхаф" на дашборде (см. dash-mushaf выше -
+  // font-size. Вызывается из reveal() - через mushafFitSchedule, повторами
+  // после раскладки (до 13.09.2026 ждали document.fonts.ready - в WebKit он
+  // приходит раньше раскладки, см. MUSHAF_REFIT_DELAYS);
+  // из клика по карточке "Мусхаф" на дашборде (см. dash-mushaf выше -
   // у вернувшегося студента страница уже отрендерена ИЗ localStorage, пока
   // #app был display:none и .clientWidth врал нулём, здесь первый реальный
   // шанс измерить); и на resize/поворот экрана (см. addEventListener('resize')
@@ -5238,6 +5239,31 @@
   // не видна и на глаз тоже (реальный срез был в десятки пикселей).
   var MUSHAF_VERIFY_TOLERANCE = 1;
 
+  // Перепроверка ПОСЛЕ раскладки (13.09.2026: Муслим из Н-1, iPhone 14,
+  // стр. 6 - кегль 34 вместо 22, текст на полторы ширины; та же картина
+  // 04.09 на iPhone 15). Причина в самом WebKit: document.fonts.ready там
+  // резолвится ДО раскладки (bugs.webkit.org 174030, 225790, 217047), у
+  // Blink/Gecko - после первой раскладки. На айфоне замер видит строки ещё
+  // без шрифта страницы, «короткие», и уводит кегль в потолок; самопроверка
+  // успевает раньше, чем шрифт лёг, и вылезания не видит. На стенде не
+  // ловится: настольный WebKit (Playwright) здесь ведёт себя как Chrome.
+  //
+  // Поэтому на fonts.ready больше не полагаемся: подгонка повторяется через
+  // два кадра, через полсекунды и через полторы (см. mushafFitSchedule).
+  // Где шрифт лёг сразу (Android, компьютер), повторы дают тот же размер и
+  // ничего не дёргают.
+  var MUSHAF_REFIT_DELAYS = [500, 1500];
+  // «Не верить потолку»: на полном листе (в Мединском 15 строк) кегль до
+  // MUSHAF_MAX_FONT_SIZE не доходит даже при колонке в 520px - если дошёл,
+  // замер шёл по тексту без шрифта. Тогда держим последний размер полного
+  // листа, которому верили, и ждём перепроверки: иначе студент на секунду
+  // видит гигантские буквы, потом сжатие. Последняя перепроверка потолку
+  // верит: к полутора секундам шрифт лёг, и если лист правда рыхлый, пусть
+  // будет крупным.
+  var MUSHAF_FULL_PAGE_LINES = 10;
+  var mushafFitRun = 0;         // номер отрисовки: поздние проверки чужой страницы молчат
+  var mushafFitTrusted = null;  // кегль последнего полного листа, вышедший не в потолок
+
   // Худшее отношение "нужно / есть" среди строк. <= 1 - всё влезло.
   function mushafWorstOverflowRatio(lines) {
     var worst = 1;
@@ -5252,12 +5278,15 @@
     return worst;
   }
 
-  function clampFontToFit() {
+  // Возвращает, что вышло ({font, capped, lines, avail}), или null, если
+  // мерить было нечего. trustCap - принять потолок на полном листе (см.
+  // MUSHAF_FULL_PAGE_LINES).
+  function clampFontToFit(trustCap) {
     var el = document.getElementById('ayah-text');
     var lines = el.querySelectorAll('.mushaf-line');
-    if (!lines.length) return;
+    if (!lines.length) return null;
     var avail = el.clientWidth;
-    if (!avail) return;   // #app ещё display:none - меряем позже, см. dash-mushaf
+    if (!avail) return null;   // #app ещё display:none - меряем позже, см. dash-mushaf
 
     // .measuring снимает space-between: строка перестаёт растягиваться,
     // и scrollWidth становится настоящей суммой ширин слов.
@@ -5268,10 +5297,14 @@
       if (lines[i].scrollWidth > maxW) maxW = lines[i].scrollWidth;
     }
     el.classList.remove('measuring');
-    if (!maxW) return;
+    if (!maxW) return null;
 
     var fitted = MUSHAF_MEASURE_BASE * (avail / maxW) * MUSHAF_FIT_SAFETY;
     fitted = Math.min(MUSHAF_MAX_FONT_SIZE, Math.max(MUSHAF_MIN_FONT_SIZE, fitted));
+    var full = lines.length >= MUSHAF_FULL_PAGE_LINES;
+    var capped = full && fitted >= MUSHAF_MAX_FONT_SIZE;
+    if (capped && !trustCap && mushafFitTrusted) fitted = mushafFitTrusted;
+    else if (full && !capped) mushafFitTrusted = fitted;
     el.style.fontSize = fitted.toFixed(1) + 'px';
 
     // Самопроверка (см. MUSHAF_VERIFY_* выше). Меряем УЖЕ ОТРИСОВАННЫЕ
@@ -5285,6 +5318,49 @@
       fitted = Math.max(MUSHAF_MIN_FONT_SIZE, fitted * shrink);
       el.style.fontSize = fitted.toFixed(1) + 'px';
     }
+    return { font: fitted, capped: capped, lines: lines.length, avail: avail };
+  }
+
+  // Подгонка с повторами (см. MUSHAF_REFIT_DELAYS). Каждый вызов - новая
+  // отрисовка: повторы предыдущей замолкают, чтобы не мерить чужую страницу.
+  // Первый удавшийся замер запоминается; если поздний дал другой размер (или
+  // первый упёрся в потолок и так и не поправился) - уходит отчёт.
+  function mushafFitSchedule() {
+    var run = ++mushafFitRun;
+    var first = null, reported = false;
+    var tick = function (why, last) {
+      if (run !== mushafFitRun) return;
+      var r = clampFontToFit(last);
+      if (!r) return;
+      if (!first) { first = r; first.why = why; return; }
+      var moved = Math.abs(r.font - first.font) > 0.5;
+      if (!reported && (moved || (last && first.capped))) {
+        reported = true;
+        mushafFitReport(first, r, why);
+      }
+    };
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { tick('frame', false); });
+    });
+    MUSHAF_REFIT_DELAYS.forEach(function (ms, i) {
+      setTimeout(function () {
+        tick(ms + 'ms', i === MUSHAF_REFIT_DELAYS.length - 1);
+      }, ms);
+    });
+  }
+
+  // Отчёт на сервер (13.09.2026): поздняя перепроверка поправила кегль -
+  // значит, первый замер соврал. Айфон с машины не воспроизвести, а так после
+  // выкладки по журналу видно, на каких телефонах и насколько, без снимков.
+  // Тихо: сбой отчёта студента не касается, баннер «нет связи» не трогаем.
+  function mushafFitReport(first, final, why) {
+    if (typeof apiCall !== 'function') return;
+    apiCall('/fitlog', { method: 'POST', quiet: true, body: {
+      page: currentPage, lines: first.lines, avail: first.avail,
+      first: Math.round(first.font * 10) / 10, first_why: first.why,
+      first_capped: !!first.capped,
+      final: Math.round(final.font * 10) / 10, final_why: why
+    } }).catch(function () {});
   }
 
   // Шрифт QPC V4 Tajweed - свой файл НА КАЖДУЮ страницу (604 разных
@@ -5376,16 +5452,16 @@
       // задержку - тот же класс гонки, что уже ловили со шрифтом (27.08).
       if (typeof review !== 'undefined' && review.on) reviewAfterRender();
       else if (pendingErrorMarks) { applyErrorMarks(pendingErrorMarks); pendingErrorMarks = null; }
-      // document.fonts.ready, не сразу clampFontToFit() - у loadV4Font()
-      // .load() резолвится, как только байты шрифта скачаны и распаршены,
-      // но браузеру ещё нужно применить его к УЖЕ ВСТАВЛЕННОМУ тексту
-      // (шейпинг/layout) - если мерить scrollWidth/clientWidth синхронно
-      // сразу после innerHTML, в редких случаях попадаешь в кадр с ещё не
-      // до конца применённым шрифтом и подгонка считает по чужим метрикам
-      // (тот самый класс бага 27.08, только с других обеих сторон гонки -
-      // теперь про сам подбор, а не про домешивание текста). fonts.ready
-      // ждёт именно готовности к раскладке, а не просто загрузки байтов.
-      document.fonts.ready.then(clampFontToFit);
+      // Не сразу clampFontToFit() - у loadV4Font() .load() резолвится, как
+      // только байты шрифта скачаны и распаршены, но браузеру ещё нужно
+      // применить его к УЖЕ ВСТАВЛЕННОМУ тексту (шейпинг/layout) - если
+      // мерить scrollWidth/clientWidth синхронно сразу после innerHTML,
+      // попадаешь в кадр с ещё не применённым шрифтом и подгонка считает по
+      // чужим метрикам (тот самый класс бага 27.08). До 13.09.2026 здесь
+      // ждали document.fonts.ready - в WebKit он приходит ДО раскладки, и на
+      // айфонах замер всё равно шёл по тексту без шрифта (см.
+      // MUSHAF_REFIT_DELAYS). Теперь - кадры и повторы по времени.
+      mushafFitSchedule();
     };
     // Если шрифт не загрузился (сеть) - всё равно показываем текст, а не
     // висим бесконечно; PUA-глифы без своего шрифта покажутся "тофу"-
@@ -7498,8 +7574,10 @@
            - приложение ещё ни разу ничего не получило (тот самый случай
              "открывается и висит" - здесь молчать нельзя);
            - либо сбой повторился подряд.
-         Пока вкладка скрыта, не считаем вовсе: там обрывы ожидаемы. */
-      if (!document.hidden) {
+         Пока вкладка скрыта, не считаем вовсе: там обрывы ожидаемы.
+         quiet (13.09.2026) - служебные отчёты (mushafFitReport): их сбой
+         человека не касается и в счёт баннера не идёт. */
+      if (!document.hidden && !opts.quiet) {
         apiFailStreak++;
         if (!apiEverOk || apiFailStreak >= 2) showOffline();
       }

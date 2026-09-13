@@ -23,6 +23,7 @@ Telegram.WebApp.initData на фронтенде) - см. validate_init_data. us
 import hashlib
 import hmac
 import json
+import re
 import logging
 import os
 import pathlib
@@ -847,6 +848,48 @@ async def handle_heartbeat(request, user_id):
     })
 
 
+def _ua_short(ua):
+    """«iOS 18.7» / «Android 14» / «other» - чтобы строку журнала читать
+    глазами; полный User-Agent идёт следом, обрезанный."""
+    m = re.search(r"OS (\d+)_(\d+)", ua)
+    if m and ("iPhone" in ua or "iPad" in ua):
+        return "iOS %s.%s" % m.groups()
+    m = re.search(r"Android (\d+)", ua)
+    if m:
+        return "Android " + m.group(1)
+    return "other"
+
+
+@with_auth
+async def handle_fit_log(request, user_id):
+    """POST - приложение сообщает, что поздняя перепроверка кегля мусхафа
+    изменила размер, или что первый замер упёрся в потолок и не поправился
+    (13.09.2026, Муслим из Н-1, iPhone 14: текст на полторы ширины, см.
+    mushafFitSchedule в index.html). Айфон с машины не воспроизвести, а по
+    журналу после выкладки видно, на каких телефонах замер врёт и насколько.
+
+    Только строка в журнал, без таблицы: это проверка фикса, не данные
+    продукта. Смотреть: journalctl -u yassir-bot | grep fitlog."""
+    try:
+        body = await request.json()
+        page = int(body.get("page", 0))
+        lines = int(body.get("lines", 0))
+        avail = int(body.get("avail", 0))
+        first = float(body.get("first", 0))
+        final = float(body.get("final", 0))
+    except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
+        return web.json_response({"error": "bad_body"}, status=400)
+    ua = request.headers.get("User-Agent", "")
+    log.info("fitlog user=%s page=%d lines=%d avail=%d first=%.1f/%s%s "
+             "final=%.1f/%s %s | %s",
+             user_id, page, lines, avail,
+             first, str(body.get("first_why", ""))[:16],
+             " capped" if body.get("first_capped") else "",
+             final, str(body.get("final_why", ""))[:16],
+             _ua_short(ua), ua[:90])
+    return web.json_response({"ok": True})
+
+
 # ── Уроки в «Знаниях» (11.09.2026) ────────────────────────────────────────
 
 @with_auth
@@ -1605,6 +1648,7 @@ def build_app():
     app.router.add_post("/api/muf/hifz/submit", handle_hifz_submit)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
+    app.router.add_post("/api/muf/fitlog", handle_fit_log)
     app.router.add_get("/api/muf/ustaz/waiting", handle_ustaz_waiting)
     app.router.add_get("/api/muf/ustaz/groups", handle_ustaz_groups)
     app.router.add_get("/api/muf/ustaz/reviewed", handle_ustaz_reviewed)
