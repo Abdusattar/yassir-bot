@@ -42,3 +42,20 @@ def test_mark_twice_keeps_one_row(test_db):
     with db() as c:
         rows = c.execute("SELECT COUNT(*) AS n FROM miss_nasihas WHERE phone='777'").fetchone()
     assert rows["n"] == 1
+
+
+def test_shared_miss_nasiha_prompt_has_no_gender():
+    """Личная насыха за несданный день - ОДИН текст на оба бота: кэш лежит в
+    общей hadiths.db и ключуется датой с языком, без профиля бота
+    (см. _miss_nasiha_text). Пол же зашивается в системный промпт при запуске
+    процесса, поэтому текст, сочинённый женским ботом, уходил мужскому
+    дословно - 13.09.2026 Имран получил личную насыху со словом «Сестра».
+
+    Лечение (решение пользователя): общий текст пишется по БЕСПОЛОМУ
+    системному промпту. Тест сторожит именно это - что у общего промпта пола
+    нет, а у обычного он остался."""
+    import core.ai as ai
+
+    gendered = ("Брат", "Сестра", "Братья", "Сёстры")
+    assert not any(w in ai._MOTIVATIONAL_SYSTEM_NEUTRAL for w in gendered)
+    assert any(w in ai._MOTIVATIONAL_SYSTEM for w in gendered)

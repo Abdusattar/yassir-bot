@@ -42,6 +42,12 @@ _GENDER_ADDR = (
     f"ЗАПРЕЩЕНО писать «братья и сёстры» — группа {'женская' if _IS_FEMALE else 'мужская'}."
 )
 
+_NEUTRAL_ADDR = (
+    "Обращение — БЕЗ указания пола: не пиши «брат», не пиши «сестра», "
+    "не пиши «братья и сёстры». Обращайся нейтрально или обходись вовсе без "
+    "прямого обращения."
+)
+
 _MOTIVATIONAL_SYSTEM = (
     "Ты пишешь насыха (наставление) для студентов, заучивающих Коран, "
     "в стиле учёных и таалибуль-'ильм: искренне, тепло, используя переданный аят "
@@ -58,6 +64,12 @@ _MOTIVATIONAL_SYSTEM = (
     "фамильярных выражений, неисламских приветствий. "
     "Для ду'а — только 🤲, не 🙏."
 )
+
+# Тот же системный промпт, но БЕЗ указания пола. Нужен там, где текст один на
+# оба бота: пол зашивается в _GENDER_ADDR при запуске процесса, а общий кэш
+# отдаёт готовый текст второму боту дословно. Живой случай 13.09.2026: личная
+# насыха ушла Имрану со словом «Сестра» - её в то утро сочинил женский бот.
+_MOTIVATIONAL_SYSTEM_NEUTRAL = _MOTIVATIONAL_SYSTEM.replace(_GENDER_ADDR, _NEUTRAL_ADDR)
 
 
 async def _or_call(messages, max_tokens=1024, retries=3, model=None):
@@ -658,9 +670,15 @@ async def morning_miss_nasiha(lang="ru", hadith=None, ayah=None):
         + "Encourage them warmly to open the Quran today, "
         + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
         + "end with a brief dua. No names, no blame, no guilt.\n"
+        + "Do NOT address the reader by gender: no «брат», no «сестра».\n"
         + lang_instruction(lang) + " Tone: very soft. 3-4 lines."
     )
-    return await _keep("morning_miss", prompt, lang)
+    # Текст один на оба бота (см. _miss_nasiha_text: кэш в общей hadiths.db,
+    # ключ без профиля), поэтому и система бесполая - решение пользователя
+    # 13.09.2026. Второй путь, развести кэш по ботам, отклонён: лишний вызов
+    # ИИ каждое утро ради одного слова.
+    return await _keep("morning_miss", prompt, lang,
+                       system=_MOTIVATIONAL_SYSTEM_NEUTRAL)
 
 
 async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
