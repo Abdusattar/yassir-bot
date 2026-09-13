@@ -5080,7 +5080,7 @@
   });
   // Через обёртку, не напрямую: слушатель передал бы объект события
   // первым аргументом, и openUstaz принял бы его за withAll.
-  document.getElementById('dash-ustaz').addEventListener('click', function () { openUstaz(); });
+  document.getElementById('dash-ustaz').addEventListener('click', function () { ustazEnter(); });
   document.getElementById('ustaz-back').addEventListener('click', function () {
     document.getElementById('ustaz').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
@@ -8740,7 +8740,11 @@
     hifzApply();
     document.getElementById('app').style.display = 'none';
     document.getElementById('ustaz').style.display = 'flex';
-    openUstaz();
+    // Обратно на ту вкладку, откуда сдачу открыли (13.09.2026): из
+    // «Проверено» - в «Проверено», а не в «Ждут». Группа не меняется -
+    // см. ustazGroupId.
+    if (ustazZone === 'done') openReviewed();
+    else openUstaz();
   }
 
   function reviewVerdict(verdict) {
@@ -8954,10 +8958,32 @@
       '</div></div>';
   }
 
-  // Фильтр по группе: null - все. Переключается тапом по строке группы,
-  // повторный тап снимает фильтр (тот же жест, что выбор суры в мусхафе -
-  // тап по названию, без отдельной кнопки "сбросить").
-  var ustazGroupFilter = null;
+  /* Выбранная группа - ОДНА на весь кабинет (13.09.2026, поймано на разборе
+     удобства и повторено на стенде). Раньше их было две: своя у «Ждут» и
+     своя у «Студентов» с «Проверено», а openUstaz обнулял первую при каждом
+     открытии. Проверил сдачу в N-2a, вернулся - снова N-1; перешёл во
+     вкладку - там опять N-1.
+
+     Сбрасывает выбор только вход с дашборда (ustazEnter): там по-прежнему
+     открывается группа, где ждут больше всего, - не прятать работу
+     (решение 04.09.2026). Внутри кабинета выбор держится.
+
+     Списки групп у вкладок разные: в «Ждут» только свои (у супер-админа -
+     плюс развёрнутые чужие), в «Студентах» и «Проверено» - все. Если
+     выбранной группы в списке вкладки нет, вкладка показывает свою группу
+     по умолчанию, но сам выбор не затирает (ustazPickGroup). */
+  var ustazGroupId = null;
+  // Чужие группы супер-админа развёрнуты («показать остальные»). Держится
+  // так же, как выбор группы: иначе после проверки сдачи в чужой группе
+  // список сворачивался, и группа пропадала из выбора.
+  var ustazShowAll = false;
+
+  function ustazPickGroup(groups, fallback) {
+    for (var i = 0; i < (groups || []).length; i++) {
+      if (groups[i].id === ustazGroupId) return ustazGroupId;
+    }
+    return fallback;
+  }
 
   // Полоса вкладок: своя группа первой, число ждущих красным (это долг).
   // Ноль не красим - красить нечего.
@@ -9006,8 +9032,8 @@
       '<div class="ustaz-groups" id="ustaz-group-list">' + list + '</div>';
   }
 
-  function ustazGroupTabs(groups) {
-    return ustazGroupListHTML(groups, ustazGroupFilter, true);
+  function ustazGroupTabs(groups, shownId) {
+    return ustazGroupListHTML(groups, shownId, true);
   }
 
   // Какая группа открыта по умолчанию: та, где ждут дольше всего дел, а из
@@ -9033,14 +9059,15 @@
     // (08.09.2026): пока это шло наоборот, самый первый рендер отдавал
     // сдачи всех групп сразу, хотя вкладка сверху уже называла одну -
     // поймано на съёмке онбординга, у устаза с двумя группами.
-    if (ustazGroupFilter === null && groups.length) {
-      ustazGroupFilter = ustazDefaultGroup(groups);
-    }
+    var byDefault = ustazDefaultGroup(groups);
+    if (ustazGroupId === null) ustazGroupId = byDefault;
+    var shown = ustazPickGroup(groups, byDefault);
+    data.shown = shown;   // хвост «ещё N старше» фильтруется по ней же
     var items = all.filter(function (it) {
-      return ustazGroupFilter === null || it.group_id === ustazGroupFilter;
+      return shown === null || it.group_id === shown;
     });
-    var current = groups.filter(function (g) { return g.id === ustazGroupFilter; })[0] || null;
-    var html = '<div class="ustaz-head">' + ustazZones() + ustazGroupTabs(groups) + '</div>';
+    var current = groups.filter(function (g) { return g.id === shown; })[0] || null;
+    var html = '<div class="ustaz-head">' + ustazZones() + ustazGroupTabs(groups, shown) + '</div>';
     if (!items.length) {
       html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
     } else {
@@ -9067,7 +9094,7 @@
 
     Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
       el.addEventListener('click', function () {
-        ustazGroupFilter = parseInt(el.getAttribute('data-gid'), 10);
+        ustazGroupId = parseInt(el.getAttribute('data-gid'), 10);
         document.getElementById('ustaz-body').scrollTop = 0;
         ustazRenderList(data);
       });
@@ -9092,7 +9119,7 @@
     if (olderEl) olderEl.textContent = T('ustaz_loading');
     apiCall('/ustaz/waiting?older=1').then(function (res) {
       var items = ((res.data && res.data.items) || []).filter(function (it) {
-        return ustazGroupFilter === null || it.group_id === ustazGroupFilter;
+        return data.shown == null || it.group_id === data.shown;
       });
       var el = document.getElementById('ustaz-older');
       if (!el) return;
@@ -9118,7 +9145,7 @@
   var ustazZone = 'queue';          // 'queue' | 'students' | 'done'
   var doneFilter = 'all';           // срез зоны "Проверено": 'all' | 'retake'
   var stuGroups = null;             // все группы, грузим один раз за сессию
-  var stuGroupId = null;
+  var stuShown = null;              // группа на экране «Студентов»/«Проверено», см. ustazGroupId
   var stuData = null;
 
   function ustazZones() {
@@ -9164,7 +9191,7 @@
   }
 
   function stuGroupTabs() {
-    return ustazGroupListHTML(stuGroups, stuGroupId, false);
+    return ustazGroupListHTML(stuGroups, stuShown, false);
   }
 
   // Сколько дней в месяце и какой день сегодня - чтобы будущие дни не
@@ -9211,8 +9238,8 @@
       : apiCall('/ustaz/groups');
     groupsReady.then(function (res) {
       stuGroups = (res.data && res.data.groups) || [];
-      if (!stuGroupId && stuGroups.length) stuGroupId = stuGroups[0].id;
-      return apiCall('/ustaz/reviewed?group=' + stuGroupId);
+      stuShown = ustazPickGroup(stuGroups, stuGroups.length ? stuGroups[0].id : null);
+      return apiCall('/ustaz/reviewed?group=' + stuShown);
     }).then(function (res) {
       var all = (res.data && res.data.items) || [];
       var today = (res.data && res.data.today) || '';
@@ -9286,7 +9313,7 @@
       });
       Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
         el.addEventListener('click', function () {
-          stuGroupId = parseInt(el.getAttribute('data-gid'), 10);
+          ustazGroupId = parseInt(el.getAttribute('data-gid'), 10);
           body.scrollTop = 0;
           openReviewed();
         });
@@ -9313,10 +9340,9 @@
         ustazBindZones(body);
         return;
       }
-      if (!stuGroupId || !stuGroups.some(function (g) { return g.id === stuGroupId; })) {
-        stuGroupId = stuGroups[0].id;   // своя группа первая, см. сортировку на сервере
-      }
-      return apiCall('/ustaz/students?group=' + stuGroupId).then(function (r) {
+      // Своя группа первая, см. сортировку на сервере.
+      stuShown = ustazPickGroup(stuGroups, stuGroups[0].id);
+      return apiCall('/ustaz/students?group=' + stuShown).then(function (r) {
         stuData = r.data || {};
         stuRenderList();
       });
@@ -9351,7 +9377,7 @@
     ustazBindZones(body);
     Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
       el.addEventListener('click', function () {
-        stuGroupId = parseInt(el.getAttribute('data-gid'), 10);
+        ustazGroupId = parseInt(el.getAttribute('data-gid'), 10);
         body.scrollTop = 0;
         openStudents();
       });
@@ -9368,7 +9394,7 @@
   function stuOpenStudent(studentId) {
     var body = document.getElementById('ustaz-body');
     body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
-    apiCall('/ustaz/student?id=' + studentId + '&group=' + stuGroupId).then(function (res) {
+    apiCall('/ustaz/student?id=' + studentId + '&group=' + stuShown).then(function (res) {
       var d = res.data || {};
       var info = stuMonthInfo(d.month, d.today);
       // Пустые клетки до первого дня месяца - чтобы столбцы попали на свои
@@ -9400,16 +9426,25 @@
     });
   }
 
+  // Вход с дашборда - единственное место, где выбор группы и развёрнутые
+  // чужие группы сбрасываются (см. ustazGroupId).
+  function ustazEnter() {
+    ustazGroupId = null;
+    ustazShowAll = false;
+    openUstaz();
+  }
+
   // withAll - развернуть чужие группы (только у супер-устаза, см.
-  // core/mufradat_api.py:_visible_ustaz_groups).
+  // core/mufradat_api.py:_visible_ustaz_groups). Развёрнутыми они остаются
+  // до выхода на дашборд.
   function openUstaz(withAll) {
+    if (withAll) ustazShowAll = true;
     ustazZone = 'queue';
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('ustaz').style.display = 'flex';
     var body = document.getElementById('ustaz-body');
     body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
-    ustazGroupFilter = null;   // выберется по данным, см. ustazDefaultGroup
-    apiCall('/ustaz/waiting' + (withAll ? '?all=1' : '')).then(function (res) {
+    apiCall('/ustaz/waiting' + (ustazShowAll ? '?all=1' : '')).then(function (res) {
       if (res.status === 401 || res.status === 403 || !res.data) {
         body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_empty') + '</div>';
         return;
