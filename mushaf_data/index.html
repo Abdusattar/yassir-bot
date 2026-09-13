@@ -4369,6 +4369,18 @@
   });
   setTimeout(function () { appVersionCheck(true); }, 1500);
 
+  // «След» (13.09.2026, идея пользователя): действия на экране копятся здесь
+  // и уезжают пачкой вместе с heartbeat - отдельного запроса нет. Только то,
+  // чего сервер иначе не видит (тапы, выбор единицы, ✕, попытки сохранить
+  // место с ответом); сдачи и текущее место у него и так есть. Разбирать -
+  // scripts/user_trail.py. Хранится 3 дня.
+  var trailBuf = [];
+  function trail(e, d) {
+    d = d || {};
+    trailBuf.push({ t: Date.now(), e: e, p: d.p, l: d.l, s: d.s, n: d.n });
+    if (trailBuf.length > 200) trailBuf.splice(0, trailBuf.length - 200);
+  }
+
   var HEARTBEAT_INTERVAL_MS = 20000;
   // Роль из heartbeat: по ней же показывается раздел онбординга
   // «Проверка сдач» (см. LEARN).
@@ -4376,7 +4388,12 @@
   var ONLINE_BADGE_MIN = 3; // меньше - не показываем совсем (решение
   // пользователя 30.08.2026 - 1-2 "онлайн" выглядит бедно, не украшает)
   function sendHeartbeat() {
-    apiCall('/heartbeat', { method: 'POST' }).then(function (res) {
+    var opts = { method: 'POST' };
+    var batch = null;
+    if (trailBuf.length) { batch = trailBuf; trailBuf = []; opts.body = { trail: batch }; }
+    apiCall('/heartbeat', opts).then(function (res) {
+      // Не дошло - вернём пачку в буфер, следующий heartbeat заберёт.
+      if (batch && res.status === 0) trailBuf = batch.concat(trailBuf).slice(-200);
       if (res.status === 401) return;
       var el = document.getElementById('dash-online');
       if (res.data && typeof res.data.online === 'number' && res.data.online >= ONLINE_BADGE_MIN) {
@@ -5938,6 +5955,7 @@
 
   function loadPage(n) {
     if (n < FIRST_PAGE || n > LAST_PAGE) return;
+    if (n !== currentPage) trail('page', { p: n });
     currentPage = n;
     // Кэш - по паре "страница + язык" (30.08.2026): при переключении языка
     // та же страница должна перечитаться с другими переводами, а не отдаться
@@ -6260,6 +6278,8 @@
     apiCall('/hifz', { method: 'POST', body: {
       page: currentPage, line: hifz.line, stage: hifz.stage
     } }).then(function (res) {
+      trail('save', { p: currentPage, l: hifz.line, s: hifz.stage,
+                      n: String(res.status) + (res.data && res.data.error ? ' ' + res.data.error : '') });
       // Шаг упёрся в стену пересдачи на сервере (устаревшая страница, или
       // долг прилетел прямо сейчас). Указатель там не сдвинулся - и здесь
       // ему двигаться незачем: ведём человека к долгам.
@@ -6394,6 +6414,7 @@
     // сказать (13.09.2026, Муслим из Н-1): молчаливый выход читался как
     // «сохранилось», а 📖 потом вёл на старую страницу.
     var cancelled = hifz.picking && hifzPointerPage;
+    trail('exit', { p: currentPage, n: cancelled ? 'cancel' : (hifz.picking ? 'pick' : '') });
     hifz.on = false; hifz.picking = false; hifz.unit = 'line';
     hifzListenStop();
     document.getElementById('hifz-big').classList.remove('visible');
@@ -6466,6 +6487,7 @@
   }
   document.getElementById('btn-hifz').addEventListener('click', function () {
     if (hifz.on) { hifzExit(); return; }
+    trail('enter', { p: currentPage });
     // Указатель тянется с сервера асинхронно (см. apiCall('/hifz') ниже) -
     // если тапнуть по 📖 быстро после открытия приложения, ответ может ещё
     // не прийти: hifz.line всё ещё null, и режим решит, что указателя нет
@@ -6486,6 +6508,7 @@
   document.getElementById('hifz-fix').addEventListener('click', function () {
     // «Поправить» — тот же экран выбора, значит и та же панель единиц:
     // менять можно не только строку, но и этап (02.09.2026).
+    trail('fix', { p: currentPage, l: hifz.line, s: hifz.stage });
     hifz.picking = true; hifz.unit = 'line'; hifzApply(); hifzHead();
   });
 
@@ -6515,6 +6538,7 @@
       hifz.line = idx;
       hifz.stage = 1;
     }
+    trail('pick', { p: currentPage, l: hifz.line, s: hifz.stage });
     hifzPickDone();
   }, true);
 
@@ -6532,6 +6556,7 @@
     var b = e.target.closest ? e.target.closest('button[data-unit]') : null;
     if (!b || !hifz.picking) return;
     var unit = b.getAttribute('data-unit');
+    trail('unit', { p: currentPage, n: unit });
     if (unit === 'page') {
       // Вся страница — выбирать больше нечего, место уже однозначно.
       hifz.line = 0;
@@ -6988,6 +7013,8 @@
     }).then(function (r) {
       return r.json().then(function (d) { return { ok: r.ok, data: d }; });
     }).then(function (res) {
+      trail('submit', { p: currentPage, l: hifz.line, s: hifz.stage,
+                        n: (res.ok && res.data.ok) ? 'ok' : String(res.data && res.data.error) });
       if (res.ok && res.data.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
         // Пересдача (см. subsRetake): та же единица уходит устазу заново, но
@@ -7663,6 +7690,8 @@
     if (saved >= FIRST_PAGE && saved <= LAST_PAGE) startPage = saved;
   } catch (e) {}
   loadPage(startPage);
+  trail('open', { p: startPage,
+                  n: ((tg && tg.initData) ? 'tg' : 'web') + ' ' + window.innerWidth + 'x' + window.innerHeight });
 
   // ── Тренажёр муфрадата в вебе (29.08.2026) ────────────────────────────
   // API - в ТОМ ЖЕ процессе бота (core/mufradat_api.py), свой порт на
@@ -8162,6 +8191,7 @@
      свёрнутым (см. #rec-review). */
   function subsRetake(item, fromLook) {
     subsStopAudio();
+    trail('retake', { p: item.hifz_page, l: item.hifz_line, s: item.hifz_stage });
     // Слова, отмеченные устазом, студент должен увидеть НА СТРАНИЦЕ - ради
     // этого пересдача и открывается прямо здесь, а не отдельным списком.
     if (!fromLook) {

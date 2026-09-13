@@ -34,6 +34,7 @@ import aiohttp
 from aiohttp import web
 
 from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
+from core.app_trail import add_trail, ua_short
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, get_all_groups,
@@ -815,6 +816,16 @@ async def handle_heartbeat(request, user_id):
     точка для дашборда узнать, показывать ли 4-ю дверь "Устаз" и красный
     счётчик на ней, без отдельного запроса на каждое открытие."""
     _last_seen[user_id] = time.time()
+    # «След» (13.09.2026, core/app_trail.py): накопленные действия едут этим
+    # же запросом, отдельного нет. Тела у heartbeat раньше не было - без
+    # JSON всё как прежде.
+    if request.content_type == "application/json":
+        try:
+            body = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            body = None
+        if isinstance(body, dict) and body.get("trail"):
+            add_trail(user_id, PROFILE, body["trail"], request.headers.get("User-Agent", ""))
     admin_groups = get_admin_groups(user_id)
     # Счётчик считаем ПО ОКНУ (04.09.2026), не по всей истории: красный
     # счётчик на двери в этом проекте всегда означает долг, а хвост
@@ -849,15 +860,7 @@ async def handle_heartbeat(request, user_id):
 
 
 def _ua_short(ua):
-    """«iOS 18.7» / «Android 14» / «other» - чтобы строку журнала читать
-    глазами; полный User-Agent идёт следом, обрезанный."""
-    m = re.search(r"OS (\d+)_(\d+)", ua)
-    if m and ("iPhone" in ua or "iPad" in ua):
-        return "iOS %s.%s" % m.groups()
-    m = re.search(r"Android (\d+)", ua)
-    if m:
-        return "Android " + m.group(1)
-    return "other"
+    return ua_short(ua)
 
 
 @with_auth
