@@ -63,6 +63,16 @@ def test_onboarding_group_message_needs_start_when_dm_not_ok(test_db, monkeypatc
     assert len(sent) == 1
     assert "Start" in sent[0][2]
     assert "testbot" in sent[0][2]
+    _assert_prep_rule(sent[0][2])
+
+
+def _assert_prep_rule(text):
+    """Правило подготовительной — прямо в приветствии (13.09.2026, решение
+    пользователя): до лички доходят не все, а в группе его видит каждый.
+    Срок, порог и что день засчитывается только со всеми тремя заданиями."""
+    assert "14 дней" in text
+    assert "5 полных дней" in text
+    assert "все три задания" in text
 
 
 def test_onboarding_group_message_skips_link_when_dm_ok(test_db, monkeypatch):
@@ -71,6 +81,7 @@ def test_onboarding_group_message_skips_link_when_dm_ok(test_db, monkeypatch):
 
     assert len(sent) == 1
     assert "личные сообщения" in sent[0][2]
+    _assert_prep_rule(sent[0][2])
 
 
 def test_onboarding_dm_sends_only_first_screen_with_button(test_db, monkeypatch):
