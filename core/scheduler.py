@@ -282,7 +282,11 @@ async def ustaz_waiting_digest():
         if not bot_leads_group(group["group_type"]):
             continue
         try:
-            pending = get_pending_voice_reviews([group["id"]])
+            # Только сдачи из приложения (13.09.2026, решение пользователя) -
+            # то же число, что на двери кабинета: сводка зовёт В КАБИНЕТ, а
+            # голосовое прямо в группу там не открыть. Раньше устаза звали
+            # на 24 «сдачи», из которых в кабинете не было ни одной.
+            pending = get_pending_voice_reviews([group["id"]], app_only=True)
             if not pending:
                 continue
             title = group["title"] or str(group["chat_id"])
@@ -291,7 +295,7 @@ async def ustaz_waiting_digest():
                     continue
                 await send_message(
                     admin_phone,
-                    "🎙 В «" + title + "» ждут проверки " + str(len(pending)) + " голосовых сдач."
+                    "🎙 В «" + title + "» ждут проверки в приложении: " + str(len(pending))
                 )
                 await asyncio.sleep(0.3)
         except Exception as e:

@@ -91,6 +91,24 @@ def test_place_empty_for_voice_sent_straight_to_group(test_db):
     assert row["hifz_page"] is None
 
 
+def test_app_only_counts_just_submissions_with_a_place(test_db):
+    """app_only (13.09.2026): дверь, числа групп и сводка устазу считают только
+    сдачи из приложения — голосовое прямо в группу кабинет не откроет. Без
+    флага — всё как раньше."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    _submission(sid, group, 1, _days_ago(0), hifz_page=6, hifz_line=7, hifz_stage=1)
+    _submission(sid, group, 2, _days_ago(0))
+    _submission(sid, group, 3, _days_ago(0))
+    _submission(sid, group, 4, _days_ago(10))
+
+    assert db.count_pending_voice_reviews([group["id"]]) == 3
+    assert db.count_pending_voice_reviews([group["id"]], app_only=True) == 1
+    assert db.count_pending_voice_reviews([group["id"]], recent=False, app_only=True) == 0
+    rows = db.get_pending_voice_reviews([group["id"]], app_only=True)
+    assert [r["hifz_page"] for r in rows] == [6]
+
+
 # ── Дыры в отметке «проверено» (04.09.2026) ───────────────────────────────
 
 def test_reaction_on_the_picture_closes_submission(test_db):

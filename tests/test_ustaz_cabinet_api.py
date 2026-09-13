@@ -55,10 +55,14 @@ def _group(chat_id, title):
     return db.get_group(chat_id)
 
 
-def _submission(group, chat_id, msg_id, phone, days_ago=0):
+def _submission(group, chat_id, msg_id, phone, days_ago=0, app=True):
+    """app=True - сдача из приложения (есть место на листе), False -
+    голосовое прямо в группу. Кабинет открывает и считает только первые
+    (13.09.2026)."""
     sid = db.add_student("Сатар", group["id"], phone=phone)
     date = (db.get_now() - timedelta(days=days_ago)).date().isoformat()
-    db.save_voice_submission(sid, group["id"], chat_id, msg_id, date)
+    place = {"hifz_page": 6, "hifz_line": 0, "hifz_stage": 1} if app else {}
+    db.save_voice_submission(sid, group["id"], chat_id, msg_id, date, **place)
 
 
 def test_ustaz_sees_only_his_group(test_db, monkeypatch):
@@ -161,3 +165,27 @@ def test_door_counter_scope(test_db, monkeypatch):
 
     assert ustaz["is_ustaz"] is True and ustaz["waiting_count"] == 1
     assert sup["is_ustaz"] is True and sup["waiting_count"] == 2
+
+
+def test_group_voice_is_listed_but_not_counted(test_db, monkeypatch):
+    """Голосовое прямо в группу (13.09.2026, решение пользователя): в списке
+    «Ждут» оно есть — кабинет сворачивает его в одну строку, — но ни дверь,
+    ни число у группы, ни хвост его не считают. Открыть его в кабинете
+    нечем, и число на двери обязано значить работу, которую там можно
+    сделать."""
+    app = _setup(monkeypatch, ["999"])
+    grp = _group("-100901", "N-1")
+    db.add_group_admin(grp["id"], "555")
+    _submission(grp, "-100901", 1, "777001")                        # из приложения
+    _submission(grp, "-100901", 2, "777002", app=False)             # в группу, свежее
+    _submission(grp, "-100901", 3, "777003", days_ago=30, app=False)  # в группу, старое
+
+    _, beat = _post(app, "/api/muf/heartbeat", "555")
+    _, data = _get(app, "/api/muf/ustaz/waiting", "555")
+    _, tail = _get(app, "/api/muf/ustaz/waiting?older=1", "555")
+
+    assert beat["waiting_count"] == 1
+    assert data["groups"][0]["waiting"] == 1
+    assert data["groups"][0]["older"] == 0 and data["older"] == 0
+    assert sorted(it["hifz_page"] is None for it in data["items"]) == [False, True]
+    assert tail["items"] == []

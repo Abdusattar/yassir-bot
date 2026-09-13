@@ -1894,9 +1894,15 @@ def get_submission_audio(submission_id, student_id, kind):
 USTAZ_WINDOW_DAYS = 3
 
 
-def _pending_reviews_sql(group_ids, recent):
+def _pending_reviews_sql(group_ids, recent, app_only=False):
     """recent=True - внутри окна, False - хвост старше окна. Граница одна на
-    оба запроса, чтобы сумма показанного и свёрнутого сходилась ровно."""
+    оба запроса, чтобы сумма показанного и свёрнутого сходилась ровно.
+
+    app_only (13.09.2026, решение пользователя) - только сдачи из приложения,
+    у которых есть место на листе. Их одних кабинет и открывает: голосовое,
+    присланное прямо в группу, разбирается реплаем в Telegram. Счётчик на
+    двери считал и такие - у устазы на двери стояло 24, а открыть было
+    нечего; и каждый кусок записи шёл отдельной единицей."""
     since = (get_now().date() - timedelta(days=USTAZ_WINDOW_DAYS - 1)).isoformat()
     placeholders = ",".join("?" * len(group_ids))
     cmp_op = ">=" if recent else "<"
@@ -1905,12 +1911,13 @@ def _pending_reviews_sql(group_ids, recent):
         f" JOIN users u ON u.id = vs.student_id"
         f" JOIN groups g ON g.id = vs.group_id"
         f" WHERE vs.group_id IN ({placeholders}) AND vs.reviewed_at IS NULL"
-        f" AND vs.date {cmp_op} ?",
+        f" AND vs.date {cmp_op} ?"
+        + (" AND vs.hifz_page IS NOT NULL" if app_only else ""),
         (*group_ids, since),
     )
 
 
-def get_pending_voice_reviews(group_ids, recent=True):
+def get_pending_voice_reviews(group_ids, recent=True, app_only=False):
     """Голосовые сдачи без реплая устаза, по заданным group_id сразу -
     вход в кабинет устаза (03.09.2026), пункт 13 старого макета режима
     заучивания (logs/terminal/2026-09-01.md). Только чтение: сам приём/
@@ -1925,7 +1932,7 @@ def get_pending_voice_reviews(group_ids, recent=True):
     не как архив - устазу нужнее вчерашняя сдача, чем позавчерашняя."""
     if not group_ids:
         return []
-    where, params = _pending_reviews_sql(group_ids, recent)
+    where, params = _pending_reviews_sql(group_ids, recent, app_only)
     with db() as c:
         rows = c.execute(
             "SELECT vs.id, vs.sent_at, vs.date, vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
@@ -1962,12 +1969,12 @@ def _minutes_since(now, sent_at):
     return max(0, int((now - sent).total_seconds() // 60))
 
 
-def count_pending_voice_reviews(group_ids, recent=True):
+def count_pending_voice_reviews(group_ids, recent=True, app_only=False):
     """Столько же, сколько вернул бы get_pending_voice_reviews, но без самих
     строк - для счётчика на двери и для свёрнутого хвоста."""
     if not group_ids:
         return 0
-    where, params = _pending_reviews_sql(group_ids, recent)
+    where, params = _pending_reviews_sql(group_ids, recent, app_only)
     with db() as c:
         return c.execute("SELECT COUNT(*)" + where, params).fetchone()[0]
 

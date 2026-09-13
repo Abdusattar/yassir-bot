@@ -832,7 +832,9 @@ async def handle_heartbeat(request, user_id):
         # Дверь видна и супер-админу без единой роли устаза: иначе, сняв с
         # себя роль в подготовительной, он терял кабинет целиком.
         "is_ustaz": bool(admin_groups) or user_id in SUPER_ADMIN_IDS,
-        "waiting_count": count_pending_voice_reviews(counted),
+        # Только сдачи из приложения (13.09.2026): дверь зовёт в кабинет, а
+        # голосовое прямо в группу там не открыть (см. _pending_reviews_sql).
+        "waiting_count": count_pending_voice_reviews(counted, app_only=True),
         # Факты для дверей дашборда (07.09.2026): раздел должен сам говорить,
         # что там внутри — на какой странице стоишь, сколько слов сделал,
         # сколько сдач ждёт устаза. Едут этим же ответом, а не тремя новыми
@@ -1029,22 +1031,25 @@ async def handle_ustaz_waiting(request, user_id):
     # запросом, а не одним списком: у устаза таких сдач могут быть сотни, и
     # тянуть их на каждое открытие кабинета незачем.
     older = request.query.get("older") == "1"
-    items = get_pending_voice_reviews(group_ids, recent=not older)
+    # Окно отдаёт и голосовые из группы - кабинет сворачивает их в одну
+    # строку. Хвост и все числа - только сдачи из приложения (13.09.2026):
+    # старые голосовые без места открыть нечем, а число здесь значит долг.
+    items = get_pending_voice_reviews(group_ids, recent=not older, app_only=older)
     if older:
         return web.json_response({"items": items, "older": 0, "groups": []})
     # Группы отдаём всегда - устаз ведёт несколько (Умар устаз: три), и
     # кабинету надо показать, где именно скопилось.
     groups = [
         {"id": g["id"], "title": g["title"],
-         "waiting": count_pending_voice_reviews([g["id"]]),
-         "older": count_pending_voice_reviews([g["id"]], recent=False),
+         "waiting": count_pending_voice_reviews([g["id"]], app_only=True),
+         "older": count_pending_voice_reviews([g["id"]], recent=False, app_only=True),
          "mine": g["id"] in own_ids}
         for g in visible
     ]
     return web.json_response({
         "items": items,
         "groups": groups,
-        "older": count_pending_voice_reviews(group_ids, recent=False),
+        "older": count_pending_voice_reviews(group_ids, recent=False, app_only=True),
         "window_days": USTAZ_WINDOW_DAYS,
         # Сегодняшняя дата СЕРВЕРА (Бишкек) - фронтенд по ней подписывает
         # "сегодня"/"вчера", не спрашивая часовой пояс устройства.
@@ -1054,7 +1059,8 @@ async def handle_ustaz_waiting(request, user_id):
         # "показать остальные" должна говорить, есть ли там работа.
         "hidden": {
             "groups": len(hidden),
-            "waiting": count_pending_voice_reviews([g["id"] for g in hidden]) if hidden else 0,
+            "waiting": count_pending_voice_reviews([g["id"] for g in hidden], app_only=True)
+                       if hidden else 0,
         },
     })
 

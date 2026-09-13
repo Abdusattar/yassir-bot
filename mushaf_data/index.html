@@ -2391,6 +2391,18 @@
     text-align: center; font-size: 13px; color: var(--accent);
     padding: 10px; cursor: pointer;
   }
+  /* Голосовые из группы одной строкой (13.09.2026). Пунктир и серый: это не
+     работа кабинета и не долг на двери, а напоминание, что в группе тоже
+     ждут. */
+  .ustaz-fold {
+    display: flex; align-items: center; gap: 10px; cursor: pointer; direction: ltr;
+    border: 1px dashed var(--card-border); border-radius: 12px;
+    padding: 11px 14px; color: var(--muted);
+  }
+  .ustaz-fold .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .ustaz-fold b { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+  .ustaz-fold span { font-size: 12px; }
+  .ustaz-fold .go { flex: 0 0 auto; color: var(--accent); font-size: 13px; font-weight: 600; }
 
   /* Бейдж фидбека - закрашенная пилюля, не просто цветной текст (25.08 ->
      29.08.2026, "высший класс дизайнера": верный/неверный ответ должен
@@ -3526,6 +3538,11 @@
       ustaz_student_back: '← Студенты',
       ustaz_day_tasks: '%D% — %T%',
       ustaz_window_empty: 'За последние дни никто не ждёт проверки 🤲',
+      ustaz_app_empty: 'Из приложения никто не ждёт проверки 🤲',
+      ustaz_voices_fold: 'Голосовые в группе · %N%',
+      ustaz_voices_hint: 'места на листе нет — ответ реплаем в Telegram',
+      ustaz_voices_show: 'показать ›',
+      ustaz_voices_title: 'Голосовые в группе',
       ustaz_waits: 'ждёт %N%',
       ustaz_older: 'Ещё %N% старше — показать',
       ustaz_older_title: 'Старше последних дней',
@@ -9028,10 +9045,10 @@
     // такая строка остаётся просто напоминанием.
     var fromApp = item.hifz_page != null;
     var open = item.id && fromApp ? ' data-review="' + item.id + '"' : '';
-    // Метка источника рядом с именем: акцентная у сдач из приложения (их и
-    // можно открыть на разбор), приглушённая у голосовых из группы.
-    var src = '<span class="sub-pill ' + (fromApp ? 'app' : 'audio') + '">' +
-      T(fromApp ? 'ustaz_src_app' : 'ustaz_src_audio') + '</span>';
+    // Метка источника - только у голосовых из группы (13.09.2026): сдачи из
+    // приложения идут своим списком, и «через апп» на каждой строке ничего
+    // не различало. Голосовые видны, лишь когда их строку развернули.
+    var src = fromApp ? '' : '<span class="sub-pill audio">' + T('ustaz_src_audio') + '</span>';
     return '<div class="ustaz-row"' + open + '><div class="name">' +
       '<span>' + ustazEsc(item.student_name) + '</span>' + src + '</div>' +
       '<div class="meta">' + ustazPlace(item) +
@@ -9147,17 +9164,32 @@
     var shown = ustazPickGroup(groups, byDefault);
     data.shown = shown;   // хвост «ещё N старше» фильтруется по ней же
     ustazQueueData = data;   // от него считается «Дальше», см. reviewAfterVerdict
-    var items = all.filter(function (it) {
+    var inGroup = all.filter(function (it) {
       return shown === null || it.group_id === shown;
     });
+    /* Голосовые, присланные прямо в группу, - одной строкой внизу (13.09.2026,
+       решение пользователя, вариант А макета). Открыть их в кабинете нечем:
+       места на листе нет, разбираются они реплаем в Telegram. Вперемешку со
+       сдачами из приложения они занимали половину списка. Спрятать совсем
+       нельзя - это всё ещё непроверенная работа, поэтому строка
+       разворачивается тапом. */
+    var items = inGroup.filter(function (it) { return it.hifz_page != null; });
+    var voices = inGroup.filter(function (it) { return it.hifz_page == null; });
     var current = groups.filter(function (g) { return g.id === shown; })[0] || null;
     var html = '<div class="ustaz-head">' + ustazZones() + ustazGroupTabs(groups, shown) + '</div>';
     if (!items.length) {
-      html += '<div class="ustaz-empty">' + T('ustaz_window_empty') + '</div>';
+      html += '<div class="ustaz-empty">' +
+        T(voices.length ? 'ustaz_app_empty' : 'ustaz_window_empty') + '</div>';
     } else {
-      html += ustazDaySections(ustazSortBySource(items), today,
+      html += ustazDaySections(items, today,
         function (it) { return it.date; },
         function (it) { return ustazRow(it, today, false); });
+    }
+    if (voices.length) {
+      html += '<div class="ustaz-fold" id="ustaz-voices"><div class="t"><b>' +
+        T('ustaz_voices_fold', { N: voices.length }) + '</b><span>' +
+        T('ustaz_voices_hint') + '</span></div><span class="go">' +
+        T('ustaz_voices_show') + '</span></div>';
     }
     var olderCount = current ? current.older : data.older;
     if (olderCount) {
@@ -9188,6 +9220,13 @@
       el.addEventListener('click', function () {
         reviewOpen(parseInt(el.getAttribute('data-review'), 10));
       });
+    });
+    var voicesEl = document.getElementById('ustaz-voices');
+    if (voicesEl) voicesEl.addEventListener('click', function () {
+      voicesEl.outerHTML = '<div class="ustaz-group-title">' + T('ustaz_voices_title') + '</div>' +
+        ustazDaySections(voices, today,
+          function (it) { return it.date; },
+          function (it) { return ustazRow(it, today, false); });
     });
     var olderEl = document.getElementById('ustaz-older');
     if (olderEl) olderEl.addEventListener('click', function () { ustazLoadOlder(data); });
