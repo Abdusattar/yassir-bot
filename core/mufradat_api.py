@@ -37,6 +37,7 @@ from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, get_all_groups,
     get_student_submissions, get_submission_audio, find_user_by_phone,
+    get_open_retakes, has_submission_for_unit,
     get_submission, VERDICT_ACCEPTED, VERDICT_RETAKE,
     get_group_month_progress, get_student_month_days, group_miss_threshold,
     get_group_by_id, get_students, get_reviewed_submissions,
@@ -55,14 +56,14 @@ from core.mufradat_bot import (
     submit_ustaz_verdict, send_ustaz_comment,
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
-    submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES,
+    submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES, _hifz_place,
 )
 from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
     get_reading_bookmark, set_reading_bookmark,
     get_hifz_pointer, set_hifz_pointer,
     get_hifz_progress, add_hifz_progress, HIFZ_PROGRESS_TARGET,
-    check_new_words_for_line,
+    check_new_words_for_line, page_text_line_count,
 )
 from core.pulse import get_pulse
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
@@ -512,12 +513,54 @@ async def handle_bookmark_set(request, user_id):
     return web.json_response({"page": page})
 
 
+def _hifz_retakes(user_id):
+    """Незакрытые пересдачи студента и признак «ход закрыт» (13.09.2026).
+
+    Отдаём приложению вместе с указателем: по списку рисуется пилюля в шапке
+    заучивания, а по `wall` решается, куда вести человека при входе в режим -
+    на своё место или в «Работу с устазом», где блок «ПЕРЕСДАТЬ».
+
+    `done` - работать на своём месте уже нечего. На этапе 1 строку закрывает
+    одна сдача: если указатель всё ещё на сданной строке, значит шаг вперёд не
+    состоялся, его держит долг. На этапах 2/3 единицу закрывает не сдача, а
+    счётчик 40+40 - там и смотрим счётчик."""
+    user = find_user_by_phone(user_id)
+    group = get_learning_group(user_id, include_prep=True) if user else None
+    if not user or not group:
+        return {"retakes": [], "done": False}
+    retakes = get_open_retakes(user["id"], group["id"])
+    pointer = get_hifz_pointer(user_id)
+    done = False
+    if pointer and retakes:
+        if pointer["stage"] == 1:
+            done = has_submission_for_unit(user["id"], group["id"], pointer["page"],
+                                           pointer["line"], pointer["stage"])
+        else:
+            # Половина листа считается по ЧИСЛУ ТЕКСТОВЫХ строк этой страницы,
+            # той же формулой, что и в приложении (hifzHalf): листы с названием
+            # суры короче, и зашитая пятнадцатка увела бы счётчик не туда.
+            half = 0 if pointer["stage"] == 3 else (
+                0 if pointer["line"] < page_text_line_count(pointer["page"]) // 2 else 1)
+            done = get_hifz_progress(user_id, pointer["page"], pointer["stage"],
+                                     half) >= HIFZ_PROGRESS_TARGET
+    return {
+        "retakes": [{"page": r["hifz_page"], "line": r["hifz_line"],
+                     "stage": r["hifz_stage"],
+                     "place": _hifz_place(r["hifz_page"], r["hifz_line"] or 0,
+                                          r["hifz_stage"] or 1)}
+                    for r in retakes],
+        "done": done,
+    }
+
+
 @with_auth
 async def handle_hifz_get(request, user_id):
     """GET - указатель режима заучивания 40+40: где студент сейчас.
     null, если он ещё ни разу не входил в режим (тогда фронтенд один раз
     спрашивает строчку)."""
-    return web.json_response({"pointer": get_hifz_pointer(user_id)})
+    data = {"pointer": get_hifz_pointer(user_id)}
+    data.update(_hifz_retakes(user_id))
+    return web.json_response(data)
 
 
 @with_auth
@@ -536,6 +579,22 @@ async def handle_hifz_set(request, user_id):
         return web.json_response({"error": "bad_page"}, status=400)
     if not (0 <= line <= 15) or stage not in (1, 2, 3):
         return web.json_response({"error": "bad_pointer"}, status=400)
+    # Стена пересдачи (13.09.2026, решение пользователя). Долг не мешает
+    # доделать этап, в котором студент стоит, - строки половины идут свободно.
+    # Закрыт вход в СЛЕДУЮЩИЙ этап: смена этапа или переход на другую страницу.
+    # Держим это здесь, у указателя, а не на отправке записи: человек не должен
+    # узнавать о запрете, уже начитав 40+40.
+    #
+    # Первая постановка места (указателя ещё нет) не блокируется никогда -
+    # иначе новичок с долгом не смог бы вообще начать.
+    current = get_hifz_pointer(user_id)
+    if current and (current["page"], current["stage"]) != (page, stage):
+        blocking = _hifz_retakes(user_id)["retakes"]
+        if blocking:
+            return web.json_response({
+                "error": "retake_pending", "retakes": blocking,
+                "place": blocking[0]["place"], "pointer": current,
+            }, status=409)
     set_hifz_pointer(user_id, page, line, stage)
     if stage == 1:
         # "Новые" слова в "Мои слова" (03.09.2026) - только на этапе 1: это

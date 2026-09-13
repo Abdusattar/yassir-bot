@@ -17,6 +17,7 @@ import asyncio
 
 import core.db as db
 import core.mufradat_bot as bot
+import core.mushaf_words as mushaf_words
 
 
 CHAT = "-100444001"
@@ -179,13 +180,20 @@ def test_error_words_reach_the_student(test_db):
         '[{"line": 7, "word": 2}, {"line": 7, "word": 5}]'
 
 
-def test_submit_refuses_other_unit_while_retake_pending(test_db, monkeypatch):
-    """Главная проверка гейта: сдать ДРУГУЮ единицу нельзя, ту же — можно."""
+def test_submit_inside_stage_allowed_while_retake_pending(
+        test_db, test_hadiths_db, monkeypatch):
+    """Главная проверка новой стены (13.09.2026, решение пользователя):
+    внутри своего этапа студент сдаёт СВОБОДНО, даже с открытым долгом, а
+    прыжок на другой этап отбивается. Пересдать сам долг можно всегда."""
     group = _group()
     db.update_group_type(CHAT, "pro")
     sid = db.add_student("Сатар", group["id"], phone="777001")
     sub_id = _submission(sid, group, 1, 6, 7, 1)
+    _with_comment(sid, 1)
     db.set_submission_verdict(sub_id, db.VERDICT_RETAKE, "888002")
+
+    # Студент стоит на стр. 6, этап 1 - там же, где и долг.
+    mushaf_words.set_hifz_pointer("777001", 6, 8, 1)
 
     sent = {}
 
@@ -207,15 +215,45 @@ def test_submit_refuses_other_unit_while_retake_pending(test_db, monkeypatch):
     monkeypatch.setattr(bot, "send_photo_bytes", fake_send_photo)
     monkeypatch.setattr(bot, "send_message", fake_send_message)
 
-    blocked = asyncio.run(bot.submit_hifz_recording(
+    # Соседняя строка того же этапа - раньше её отбивало, теперь проходит.
+    inside = asyncio.run(bot.submit_hifz_recording(
         "777001", b"audio", None, page=6, line=8, stage=1))
+    assert inside["ok"] is True
+
+    # Другой этап - хода нет.
+    blocked = asyncio.run(bot.submit_hifz_recording(
+        "777001", b"audio", None, page=6, line=8, stage=2))
     assert blocked["ok"] is False
     assert blocked["error"] == "retake_pending"
     assert blocked["retake"] == {"page": 6, "line": 7, "stage": 1}
 
+    # Сам долг - всегда.
     same = asyncio.run(bot.submit_hifz_recording(
         "777001", b"audio", None, page=6, line=7, stage=1))
     assert same["ok"] is True
+
+
+def test_open_retakes_ordered_by_place(test_db):
+    """Стеной считается ЛЮБОЙ незакрытый долг, а не только самый свежий, и
+    сверху - самый ранний по мусхафу, а не по дате разбора (13.09.2026)."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    late = _submission(sid, group, 2, 7, 1, 1)      # стр. 7 разобрали раньше
+    _with_comment(sid, 2)
+    db.set_submission_verdict(late, db.VERDICT_RETAKE, "888002")
+    early = _submission(sid, group, 1, 6, 4, 1)     # стр. 6 - позже, но раньше по Корану
+    _with_comment(sid, 1)
+    db.set_submission_verdict(early, db.VERDICT_RETAKE, "888002")
+
+    places = [(r["hifz_page"], r["hifz_line"]) for r
+              in db.get_open_retakes(sid, group["id"])]
+    assert places == [(6, 4), (7, 1)]
+    assert db.get_blocking_retake(sid, group["id"])["hifz_page"] == 6
+
+    # Пересдал свежий долг - старый всё равно держит.
+    _submission(sid, group, 3, 7, 1, 1)
+    assert db.get_blocking_retake(sid, group["id"])["hifz_page"] == 6
+
 
 
 def test_verdict_notifies_group_and_dm(test_db, monkeypatch):

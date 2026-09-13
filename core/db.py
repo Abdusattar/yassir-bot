@@ -1715,10 +1715,62 @@ def set_submission_verdict(submission_id, verdict, verdict_by, error_words=None)
         )
 
 
+def get_open_retakes(student_id, group_id):
+    """ВСЕ незакрытые пересдачи студента, сверху - самая ранняя по мусхафу.
+
+    13.09.2026, решение пользователя. Раньше гейт смотрел на ОДНУ запись -
+    последний вердикт `retake`, - и, пересдав её, студент проходил мимо более
+    старого непересданного долга. Теперь стеной считается любой незакрытый.
+
+    Порядок - по МЕСТУ (страница, строка, этап), а не по дате разбора.
+    Устаз мог разобрать стр. 7 в понедельник, а стр. 6 во вторник: по дате
+    "старше" стр. 7, хотя по Корану она позже, и закрывать вразнобой со своим
+    же движением по листам человеку незачем. Тем же порядком блок "ПЕРЕСДАТЬ"
+    в кабинете студента отвечает на вопрос "которую первой" - верхнюю.
+
+    Считаем только долги С МЕСТОМ (hifz_page). Сдача голосом прямо в группу
+    места не несёт, пересдать её из приложения нечем (см. subsRow: двери у
+    такой карточки нет), и стеной она стать не может - иначе студент запёрт
+    навсегда.
+
+    Закрытым считается то же, что снимает гейт: запись той же единицы, пришед-
+    шая после verdict_after_id (см. _REDONE_EXISTS и is_retake_answered)."""
+    with db() as c:
+        rows = c.execute(
+            f"SELECT vs.*, ({_REDONE_EXISTS}) AS redone FROM voice_submissions vs"
+            " WHERE vs.student_id=? AND vs.group_id=? AND vs.verdict=?"
+            "   AND vs.hifz_page IS NOT NULL"
+            " ORDER BY vs.hifz_page, vs.hifz_line, vs.hifz_stage",
+            (student_id, group_id, VERDICT_RETAKE)
+        ).fetchall()
+    return [dict(r) for r in rows if not r["redone"]]
+
+
+def has_submission_for_unit(student_id, group_id, page, line, stage):
+    """Сдавал ли студент ровно эту единицу. Нужно, чтобы понять, что он стоит
+    на МЁСТЕ, где работать уже нечего (13.09.2026).
+
+    На этапе 1 строку закрывает одна сдача, и указатель сразу идёт дальше.
+    Если он всё-таки стоит на сданной строке, значит шаг вперёд не состоялся -
+    его держит долг. Тогда открывать человеку лист бессмысленно: он намотает
+    40+40 на том, что уже сдал, и упрётся только в конце (случай пользователя
+    13.09: "а он уже поработал над новым")."""
+    with db() as c:
+        row = c.execute(
+            "SELECT 1 FROM voice_submissions"
+            " WHERE student_id=? AND group_id=?"
+            " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ? LIMIT 1",
+            (student_id, group_id, page, line, stage)
+        ).fetchone()
+    return row is not None
+
+
 def get_blocking_retake(student_id, group_id):
-    """Непринятая пересдача студента - та, из-за которой он стоит на месте
-    (гейт, решение пользователя 04.09.2026: "не пересдал - следующий этап
-    закрыт", строка -> полстраницы -> страница -> строка следующей страницы).
+    """Долг, который студенту закрывать первым - самый ранний по мусхафу из
+    незакрытых (см. get_open_retakes). None, если долгов нет.
+
+    Стена стоит, пока не закрыты ВСЕ; этот долг - лишь тот, чьё место мы
+    называем человеку, и тот, что стоит в блоке "ПЕРЕСДАТЬ" сверху.
 
     Блокирует ТОЛЬКО вердикт retake. "Ещё не проверено" не блокирует: иначе
     забывчивость устаза останавливала бы студента насовсем, а методика про
@@ -1732,34 +1784,9 @@ def get_blocking_retake(student_id, group_id):
     полутора тысяч, и разбирают их неровно: студент, честно перечитавший в
     тот же вечер, мог стоять днями — не по своей вине и не имея возможности
     что-либо сделать. Устаз всё равно посмотрит новую запись и, если снова
-    плохо, вернёт её обратно.
-
-    Засчитываем только сдачу той же единицы, пришедшую ПОСЛЕ вердикта. Одного
-    id самой сдачи мало: устаз может пометить на пересдачу старую запись,
-    когда более новая по тому же месту уже лежит, - гейт снялся бы мгновенно,
-    хотя студент на замечание не ответил. Поэтому в момент вердикта
-    запоминаем последнюю сдачу этой единицы (verdict_after_id) и сравниваем с
-    ней. По времени (sent_at > verdict_at) это делать нельзя: часы дают
-    одинаковую метку двум соседним записям."""
-    with db() as c:
-        row = c.execute(
-            "SELECT * FROM voice_submissions"
-            " WHERE student_id=? AND group_id=? AND verdict=?"
-            " ORDER BY verdict_at DESC, id DESC LIMIT 1",
-            (student_id, group_id, VERDICT_RETAKE)
-        ).fetchone()
-        if not row:
-            return None
-        redone = c.execute(
-            "SELECT 1 FROM voice_submissions"
-            " WHERE student_id=? AND group_id=?"
-            " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
-            " AND id > ? LIMIT 1",
-            (student_id, group_id,
-             row["hifz_page"], row["hifz_line"], row["hifz_stage"],
-             row["verdict_after_id"] or row["id"])
-        ).fetchone()
-    return None if redone else dict(row)
+    плохо, вернёт её обратно."""
+    retakes = get_open_retakes(student_id, group_id)
+    return retakes[0] if retakes else None
 
 
 def is_retake_answered(submission):

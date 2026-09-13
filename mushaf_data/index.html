@@ -178,6 +178,18 @@
   }
   html, body {
     margin: 0; padding: 0;
+    /* Автоувеличение текста в iOS Safari — ВЫКЛ (13.09.2026).
+       Без этого iOS сам раздувает шрифт, оценивая ширину блока относительно
+       экрана, и коэффициент считает для КАЖДОЙ страницы свой. Отсюда жалоба
+       пользователя: «в мусхафе шрифты то меньше, то больше при листании, и
+       текст выходит за горизонтальные края». Лист рушится вдвойне: наш
+       clampFontToFit подбирает кегль и строит justify под один размер, а
+       Safari рисует другим. Настольные Chrome и WebKit этого не делают —
+       функция только для iOS, потому и не ловилась замерами с машины
+       (scripts/measure_mushaf_fit.py: ноль вылезаний на 39 страницах в обоих
+       движках). 100%, а не none: пользовательский зум остаётся. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     /* Порядок важен: побеждает последнее объявление, и это должен быть dvh
        (10.09.2026, поймал пользователь: «нижнюю часть в вебе не могу
        сдвинуть пальцем»).
@@ -341,6 +353,12 @@
      display, а инлайн бьёт обычное правило. */
   #app.hifz #page-nav,
   #app.hifz #tabbar { display: none !important; }
+  /* Исключение — «поправить» (13.09.2026, просьба пользователя). В обычном
+     заучивании страница идёт за указателем, уходить с неё незачем и нельзя
+     (см. pageTurnBlocked). А когда человек ставит место заново, перескок
+     нужен: его строка может быть в тридцати листах отсюда, и тридцать
+     свайпов вместо ввода номера страницы — это не выбор, а наказание. */
+  #app.hifz.hifz-pick #page-nav { display: flex !important; }
   /* Топбар (← Дашборд, название суры, 📖/🔁) тоже прячем (02.09.2026,
      пожелание пользователя): выход и так есть через ✕ в #hifz-head, а
      навигация по сурам во время заучивания не нужна. Без этого над текстом
@@ -374,6 +392,21 @@
   }
   #hifz-head .where b { display: inline; }
   #hifz-head .where small::before { content: '· '; }
+
+  /* Долг пересдачи в шапке. Красная точка, а не красная плашка: пока ход
+     открыт, это напоминание, а не укор, и рядом с текстом Корана кричать
+     нечему. Красное придёт позже - в блоке «ПЕРЕСДАТЬ». */
+  #hifz-debt {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--card-border); background: var(--card-bg);
+    color: var(--ink); border-radius: 999px; padding: 3px 10px;
+    font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1.35;
+    direction: ltr; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #hifz-debt::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--no); flex: 0 0 auto;
+  }
 
   /* Счётчик 40+40 у кнопки Хусари. */
   #hifz-count, #big-count {
@@ -535,6 +568,14 @@
   }
   #hifz-rec .actions button.primary {
     background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  /* «Стоп» НЕ зелёная (13.09.2026). Зелёная главная кнопка в приложении
+     значит «хорошее итоговое действие» - сдать, отправить. Остановка записи
+     таким действием не является, а стояла ровно на месте «Отправить» и того
+     же цвета: палец, летящий вторым тапом, попадал в отправку (жалоба
+     студента 2б, 12.09: «3 записи, которые не собирался отправлять, ушли»). */
+  #hifz-rec .actions button.stop {
+    background: var(--no-soft); border-color: var(--no); color: var(--no);
   }
   #hifz-rec .actions button:disabled { opacity: .45; cursor: default; }
 
@@ -1533,11 +1574,19 @@
   #dash-head #my-day .cap span { display: none; }
   /* Легче подписей, а не тяжелее: главное в строке - полоски, число лишь
      подводит итог. Было 14/700 и перетягивало строку на себя. */
-  #dash-head #my-day .cap b { font-size: 13px; font-weight: 600; }
+  /* Перенос запрещён (13.09.2026, поймал пользователь). При шести заданиях
+     «0 из 6» ломалось на «0 из» и «6», от этого росла вся полоса, а подписи
+     под полосками сжимались до слипания. Длинные наборы редки - на 13.09
+     таких групп три из тридцати, - но выглядело сломанным именно у них. */
+  #dash-head #my-day .cap b { font-size: 13px; font-weight: 600; white-space: nowrap; }
   #dash-head #my-day .bars i { height: 7px; border-radius: 4px; }
   #dash-head #my-day .bars { grid-area: bars; }
   #dash-head #my-day .names { grid-area: names; }
   #dash-head #my-day .names span { font-size: 9.5px; }
+  /* Пять-шесть заданий: те же подписи, но мельче на полтора пункта - иначе
+     «Заучивание» и «Повторение» смыкаются без просвета. Убирать их нельзя,
+     по ним человек и понимает, ЧТО именно не сдано. */
+  #dash-head #my-day.many .names span { font-size: 9px; letter-spacing: -.02em; }
 
   /* Двери (07.09.2026, новый стиль). Были четыре одинаковые плитки с
      цветными эмодзи - четыре равных пятна, между которыми глазу не за что
@@ -1782,19 +1831,26 @@
     align-items: baseline; }
   #look-foot .who b { color: var(--ink); font-size: 12.5px; font-weight: 600; }
   #look-foot .who span.dur { margin-left: auto; font-variant-numeric: tabular-nums; }
-  #look-foot .player { display: flex; align-items: center; gap: 10px; }
-  #look-play {
+  #look-foot .player,
+  #hifz-rec .player { display: flex; align-items: center; gap: 10px; }
+  #look-play,
+  #hifz-rec-play {
     width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%;
     background: var(--accent); border: none; color: #fff; font-size: 15px;
     cursor: pointer; font-family: inherit;
   }
-  #look-play:disabled { opacity: .5; cursor: default; }
-  #look-foot .bar { flex: 1 1 auto; }
-  #look-track { height: 4px; border-radius: 999px; background: var(--card-border);
+  #look-play:disabled,
+  #hifz-rec-play:disabled { opacity: .5; cursor: default; }
+  #look-foot .bar,
+  #hifz-rec .bar { flex: 1 1 auto; }
+  #look-track,
+  #hifz-rec-track { height: 4px; border-radius: 999px; background: var(--card-border);
     position: relative; cursor: pointer; }
-  #look-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0;
+  #look-fill,
+  #hifz-rec-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0;
     border-radius: 999px; background: var(--accent); }
-  #look-foot .t { display: flex; justify-content: space-between; font-size: 10.5px;
+  #look-foot .t,
+  #hifz-rec .t { display: flex; justify-content: space-between; font-size: 10.5px;
     color: var(--muted); margin-top: 5px; font-variant-numeric: tabular-nums; }
   #look-foot .row { display: flex; gap: 8px; }
   #look-foot .row button {
@@ -2855,6 +2911,10 @@
        вместо #tabbar. Место не отнимается — обе панели просто подменяются. -->
   <div id="hifz-head">
     <button id="hifz-close" title="Выйти из режима">✕</button>
+    <!-- Долг пересдачи (13.09.2026). Стоит в пустой середине шапки: ✕ слева,
+         место справа, между ними ничего не было. Вторую строку в шапку не
+         возвращаем - её свели в одну 11.09, она отъедала место у мусхафа. -->
+    <button id="hifz-debt" style="display:none"></button>
     <div class="where">
       <b><span id="hifz-where">—</span><span class="fix" id="hifz-fix">поправить</span></b>
       <small id="hifz-sub">—</small>
@@ -2967,7 +3027,17 @@
       <div class="place" id="hifz-rec-place">—</div>
       <div class="timer" id="hifz-rec-timer">0:00</div>
       <div class="hint" id="hifz-rec-hint"></div>
-      <audio id="hifz-rec-audio" controls style="display:none"></audio>
+      <!-- Свой плеер, тот же что в разборе устаза (13.09.2026). Системный
+           <audio controls> выглядит по-своему на каждом телефоне и спорит со
+           всем остальным в приложении; тег остаётся, но только как мотор. -->
+      <div id="hifz-rec-player" class="player" style="display:none">
+        <button id="hifz-rec-play" title="Слушать">▶</button>
+        <div class="bar">
+          <div id="hifz-rec-track"><div id="hifz-rec-fill"></div></div>
+          <div class="t"><span id="hifz-rec-cur">0:00</span><span id="hifz-rec-total">0:00</span></div>
+        </div>
+      </div>
+      <audio id="hifz-rec-audio" style="display:none"></audio>
       <div class="actions" id="hifz-rec-actions"></div>
 
       <!-- Захват прогресса 40+40 (03.09.2026) - только этапы 2/3, после
@@ -3378,7 +3448,7 @@
       look_sub: 'разбор устаза',
       rec_review_text: 'Замечание устаза — переслушать',
       subs_todo_title: 'ПЕРЕСДАТЬ — %N%',
-      subs_todo_hint: 'Послушай замечание и начитай заново. Отправишь — пойдёшь дальше, устаз посмотрит потом.',
+      subs_todo_hint: 'Пересдай — путь открыт.',
       subs_waiting_quiet: 'на проверке %N% — ждёт устаза, от тебя ничего не нужно',
       subs_review_from: 'Ответил %N%',
       subs_review_voice: 'голосовой разбор',
@@ -3401,6 +3471,8 @@
       subs_verdict_redone: 'пересдал — ждёт устаза',
       subs_marked_words: 'Отмечено слов: %N%',
       hifz_retake_pending: 'Сначала пересдай: %P%',
+      hifz_debt: 'пересдать',
+      hifz_debt_n: 'пересдать · %N%',
       subs_retake_hint: 'Пересдаётся ровно то, что сдавал: та же строчка, половина или страница.',
       dash_ustaz_sub: 'Сдачи на проверке',
       ustaz_title: 'Устаз',
@@ -3510,6 +3582,7 @@
       hifz_rec_hint_done: 'Послушай себя. Всё хорошо — отправляй устазу',
       hifz_rec_hint_left: 'Осталось %N% мин записи',
       hifz_rec_hint_limit: 'Достигнут предел 30 минут — запись остановлена. Отправь эту часть, остальное запиши отдельно',
+      hifz_rec_too_short: 'Слишком коротко — прочитай ещё раз',
       hifz_rec_hint_sending: 'Отправляю…',
       hifz_rec_no_mic: 'Не получилось включить микрофон. Разреши доступ в настройках Telegram',
       hifz_rec_sent: 'Отправлено устазу в группу 🤲',
@@ -4335,6 +4408,9 @@
     document.getElementById('my-day-names').innerHTML = day.tasks.map(function (t) {
       return '<span class="' + (t.done ? 'on' : '') + '">' + dayTaskName(t.k) + '</span>';
     }).join('');
+    // Длинный набор (таджвид, нахв, хадис) - подписям нужен свой размер,
+    // см. #dash-head #my-day.many.
+    box.classList.toggle('many', day.tasks.length >= 5);
     box.classList.add('on');
   }
 
@@ -5122,7 +5198,11 @@
   // при кривом единичном замере не обвалить размер целиком. У кого всё и так
   // влезает (Pixel), цикл выходит на первой же проверке, не отняв ни
   // процента - в этом весь смысл проверки вместо общего запаса побольше.
-  var MUSHAF_VERIFY_STEPS = 20;      // 20 x 1% - хватает и на грубый промах замера
+  // 40 x 1% (было 20, 13.09.2026): двадцати хватало только на промах в 18%,
+  // а если замер соврал сильнее - цикл выходил, оставив текст за краем. Там,
+  // где всё влезает, цикл по-прежнему выходит на первой проверке и не отнимает
+  // ни процента, так что запас ничего не стоит.
+  var MUSHAF_VERIFY_STEPS = 40;
   var MUSHAF_VERIFY_MAX_STEP = 0.99; // не больше 1% за один проход
   var MUSHAF_VERIFY_SAFETY = 0.998;  // чтобы не встать ровно в край и не зациклиться
   // Допуск 1px: scrollWidth/clientWidth - целые, субпиксельная разница в них
@@ -5918,6 +5998,7 @@
        уходила бы не туда, а указатель на сервере успевал сдвинуться
        (hifzSave), и возврат hifzRetakeFinish чинил бы только экран. */
     fix.style.display = (hifz.picking || hifzRetakeMode) ? 'none' : '';
+    hifzDebtRender();
     var units = document.querySelectorAll('#hifz-units button');
     Array.prototype.forEach.call(units, function (b) {
       b.textContent = T('hifz_unit_' + b.getAttribute('data-unit'));
@@ -5930,7 +6011,17 @@
     hifzPointerPage = currentPage;
     apiCall('/hifz', { method: 'POST', body: {
       page: currentPage, line: hifz.line, stage: hifz.stage
-    } }).catch(function () {});
+    } }).then(function (res) {
+      // Шаг упёрся в стену пересдачи на сервере (устаревшая страница, или
+      // долг прилетел прямо сейчас). Указатель там не сдвинулся - и здесь
+      // ему двигаться незачем: ведём человека к долгам.
+      if (res.data && res.data.error === 'retake_pending') {
+        hifzDebt = { retakes: res.data.retakes || [], done: true };
+        hifzDebtRender();
+        hifzExit();
+        openSubs();
+      }
+    }).catch(function () {});
   }
 
   function hifzEnter() {
@@ -6060,26 +6151,47 @@
   /* Следующий шаг методики. Порядок жёсткий, отказа нет: метод 40+40 не
      предусматривает возврата (решение пользователя 01.09.2026). */
   function hifzNext() {
-    hifzListenStop();  // единица меняется - старая запись больше не подходит
-    var n = hifzTextLines().length;
+    /* Куда шагнём. Считаем ДО того, как двинуть указатель: от этого зависит,
+       не упрётся ли шаг в стену пересдачи. */
+    var to = { line: hifz.line, stage: hifz.stage, page: currentPage };
     if (hifz.stage === 1) {
       var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
-      if (hifz.line < r[1]) hifz.line += 1;
-      else hifz.stage = 2;                       // строчки половины закончились
+      if (hifz.line < r[1]) to.line = hifz.line + 1;
+      else to.stage = 2;                           // строчки половины закончились
     } else if (hifz.stage === 2) {
-      if (hifzHalf(hifz.line) === 0) {           // первая половина сдана
-        hifz.line = hifzHalfRange(1)[0];
-        hifz.stage = 1;
+      if (hifzHalf(hifz.line) === 0) {             // первая половина сдана
+        to.line = hifzHalfRange(1)[0];
+        to.stage = 1;
       } else {
-        hifz.stage = 3;                          // обе половины сданы
+        to.stage = 3;                              // обе половины сданы
       }
-    } else {
-      if (currentPage < LAST_PAGE) {             // страница закрыта — дальше
-        hifz.stage = 1; hifz.line = 0;
-        loadPage(currentPage + 1);
-        hifzSave();
-        return;
-      }
+    } else if (currentPage < LAST_PAGE) {          // страница закрыта — дальше
+      to.stage = 1; to.line = 0; to.page = currentPage + 1;
+    }
+
+    /* Стена пересдачи (13.09.2026, решение пользователя). Внутри этапа строки
+       идут свободно - долг не мешает доделать то, что начал. Закрыта СМЕНА
+       этапа (1->2, 2->3, 3->следующая страница): пока висит долг, вперёд хода
+       нет. Проверяем ДО шага, потому что блок должен встречать человека до
+       работы, а не после начитанных 40+40 (случай пользователя 12.09).
+
+       Настоящую стену держит сервер (handle_hifz_set): локальное состояние
+       можно перезагрузить. Здесь - чтобы не вести к заведомо мёртвому шагу. */
+    if (hifzDebt.retakes.length &&
+        (to.stage !== hifz.stage || to.page !== currentPage)) {
+      hifzDebt.done = true;       // своё место доработано, дальше только долг
+      hifzExit();
+      openSubs();
+      return;
+    }
+
+    hifzListenStop();  // единица меняется - старая запись больше не подходит
+    hifz.line = to.line;
+    hifz.stage = to.stage;
+    if (to.page !== currentPage) {
+      loadPage(to.page);
+      hifzSave();
+      return;
     }
     hifzApply();
     hifzSave();
@@ -6093,7 +6205,14 @@
     // Залкар): один раз указал строку, в другой раз открыл — снова
     // спросило. Ждём ответ (с потолком на случай плохой связи), и только
     // потом решаем, спрашивать строку или нет.
-    hifzPointerReady().then(hifzEnter);
+    hifzPointerReady().then(function () {
+      /* Ход закрыт - вести человека на его место незачем: работать там уже
+         нечего, он намотает 40+40 на сданной единице и упрётся только в
+         конце (случай пользователя 13.09: «а он уже поработал над новым»).
+         Ведём сразу туда, где долги лежат по порядку и объяснены. */
+      if (hifzWall()) { openSubs(); return; }
+      hifzEnter();
+    });
   });
   document.getElementById('hifz-close').addEventListener('click', hifzExit);
   document.getElementById('hifz-fix').addEventListener('click', function () {
@@ -6213,6 +6332,9 @@
   // За сколько до предела предупредить. Молчаливый обрыв - это потерянная
   // работа: студент дочитывает, не зная, что его уже не пишут.
   var HIFZ_REC_WARN_MS = 2 * 60 * 1000;
+  /* Короче двух секунд - это не сдача, а промах по кнопке (13.09.2026).
+     Устазу такие обрывки уходили как полноценная работа. */
+  var HIFZ_REC_MIN_MS = 2000;
   var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null };
 
   function hifzSubmitLines() {
@@ -6305,6 +6427,55 @@
     if (rec.stream) { rec.stream.getTracks().forEach(function (t) { t.stop(); }); rec.stream = null; }
   }
 
+  /* ─── Плеер своей записи (13.09.2026) ──────────────────────────────────
+     Тот же, что слушает разбор устаза (#look-play и соседи - стили общие).
+     До этого тут стоял системный <audio controls>: серая полоса, которая на
+     каждом телефоне своя и ни на что в приложении не похожа. Тег остался
+     мотором, наружу торчит наш круг с дорожкой. */
+  var recAudio = document.getElementById('hifz-rec-audio');
+
+  function hifzRecPlayerShow(on) {
+    document.getElementById('hifz-rec-player').style.display = on ? 'flex' : 'none';
+    document.getElementById('hifz-rec-play').textContent = '▶';
+    document.getElementById('hifz-rec-fill').style.width = '0';
+    document.getElementById('hifz-rec-cur').textContent = '0:00';
+    document.getElementById('hifz-rec-total').textContent =
+      on && rec.ms ? lookFmt(rec.ms / 1000) : '0:00';
+  }
+
+  document.getElementById('hifz-rec-play').addEventListener('click', function () {
+    if (recAudio.paused) { recAudio.play().catch(function () {}); }
+    else { recAudio.pause(); }
+  });
+  recAudio.addEventListener('play', function () {
+    document.getElementById('hifz-rec-play').textContent = '❚❚';
+  });
+  ['pause', 'ended'].forEach(function (ev) {
+    recAudio.addEventListener(ev, function () {
+      document.getElementById('hifz-rec-play').textContent = '▶';
+    });
+  });
+  recAudio.addEventListener('timeupdate', function () {
+    /* Длительность только что записанного blob браузер часто отдаёт как
+       Infinity (webm без длины в заголовке) - тогда считаем по своему
+       замеру rec.ms, он у нас точнее и всё равно уже есть. */
+    var d = isFinite(recAudio.duration) && recAudio.duration > 0
+      ? recAudio.duration : (rec.ms ? rec.ms / 1000 : 0);
+    document.getElementById('hifz-rec-cur').textContent = lookFmt(recAudio.currentTime);
+    if (d > 0) {
+      document.getElementById('hifz-rec-total').textContent = lookFmt(d);
+      document.getElementById('hifz-rec-fill').style.width =
+        Math.min(100, recAudio.currentTime / d * 100) + '%';
+    }
+  });
+  document.getElementById('hifz-rec-track').addEventListener('click', function (e) {
+    var d = isFinite(recAudio.duration) && recAudio.duration > 0
+      ? recAudio.duration : (rec.ms ? rec.ms / 1000 : 0);
+    if (d <= 0) return;
+    var box = e.currentTarget.getBoundingClientRect();
+    recAudio.currentTime = Math.min(d, Math.max(0, (e.clientX - box.left) / box.width * d));
+  });
+
   function hifzRecReset() {
     if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
     // Микрофон здесь НЕ отпускаем: hifzRecReset зовётся и при "перезаписать",
@@ -6313,9 +6484,14 @@
     rec.mr = null; rec.chunks = []; rec.blob = null;
     rec.accMs = 0; rec.paused = false;
     var a = document.getElementById('hifz-rec-audio');
-    a.pause(); a.removeAttribute('src'); a.style.display = 'none';
+    a.pause(); a.removeAttribute('src');
+    hifzRecPlayerShow(false);
+    // Таймер прячем до старта (13.09.2026): «0:00» на экране ничего не
+    // значит и просит взгляд впустую. Время появляется вместе с записью,
+    // и тогда же становится крупным и красным.
     document.getElementById('hifz-rec-timer').classList.remove('rec');
     document.getElementById('hifz-rec-timer').textContent = '0:00';
+    document.getElementById('hifz-rec-timer').style.display = 'none';
     // Захват прогресса (см. hifzProgressOpen) прячет запись на время
     // выбора чипов - при новом открытии панели или закрытии обе стороны
     // возвращаем в исходное состояние.
@@ -6360,23 +6536,28 @@
     var canPause = rec.mr && typeof rec.mr.pause === 'function';
     var recRow = [];
     if (canPause) {
-      recRow.push(['hifz-rec-pause', rec.paused ? 'hifz_rec_resume' : 'hifz_rec_pause', false]);
+      recRow.push(['hifz-rec-pause', rec.paused ? 'hifz_rec_resume' : 'hifz_rec_pause', '']);
     }
-    recRow.push(['hifz-rec-stop', 'hifz_rec_stop', true]);
+    recRow.push(['hifz-rec-stop', 'hifz_rec_stop', 'stop']);
     var defs = {
-      idle:   [['hifz-rec-go', 'hifz_rec_start', true]],
+      idle:   [['hifz-rec-go', 'hifz_rec_start', 'primary']],
       rec:    recRow,
-      done:   [['hifz-rec-again', 'hifz_rec_again', false],
-               ['hifz-rec-send', 'hifz_rec_send', true]],
+      done:   [['hifz-rec-again', 'hifz_rec_again', ''],
+               ['hifz-rec-send', 'hifz_rec_send', 'primary']],
       sending: []
     };
     (defs[state] || []).forEach(function (d) {
       var b = document.createElement('button');
       b.id = d[0];
       b.textContent = T(d[1]);
-      if (d[2]) b.className = 'primary';
+      if (d[2]) b.className = d[2];
       box.appendChild(b);
     });
+    /* Защита от тапа, летящего в только что появившуюся кнопку (13.09.2026).
+       Ряд подменяется мгновенно, и второй тап по «Стоп» попадал уже в
+       «Отправить». Цвет кнопки развели выше, но место осталось тем же, а
+       палец быстрее глаза. Полсекунды тишины - и промах уходит в пустоту. */
+    if (state === 'done') rec.guardUntil = Date.now() + 600;
     hifzRecPad();   // высота карточки поменялась вместе с кнопками
   }
 
@@ -6398,6 +6579,7 @@
       rec.t0 = Date.now();
       rec.paused = false;
       rec.mr.resume();
+      document.getElementById('hifz-rec-timer').style.display = '';
       document.getElementById('hifz-rec-timer').classList.add('rec');
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');
     } else {
@@ -6460,10 +6642,13 @@
         // Дорожку здесь НЕ глушим (см. hifzRecStream): иначе "перезаписать"
         // снова вызовет вопрос про микрофон. Микрофон отпускается при
         // закрытии панели.
+        // Длину берём ДО того, как погасим тик: она нужна порогу в hifzRecSend.
+        rec.ms = hifzRecElapsed();
         if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
         rec.url = URL.createObjectURL(rec.blob);
         var a = document.getElementById('hifz-rec-audio');
-        a.src = rec.url; a.style.display = '';
+        a.src = rec.url;
+        hifzRecPlayerShow(true);
         document.getElementById('hifz-rec-timer').classList.remove('rec');
         // Если запись остановил предел, а не студент - сказать прямо. Иначе
         // он видит "всё хорошо, отправляй" и не догадывается, что его
@@ -6503,6 +6688,10 @@
 
   function hifzRecSend() {
     if (!rec.blob) return;
+    if (rec.ms && rec.ms < HIFZ_REC_MIN_MS) {
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_too_short');
+      return;
+    }
     hifzRecButtons('sending');
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
     hifzLinesToPng(hifzSubmitLines()).then(function (png) {
@@ -6583,6 +6772,9 @@
 
   // Один слушатель на всю панель: кнопки пересобираются под состояние.
   document.getElementById('hifz-rec-actions').addEventListener('click', function (e) {
+    // см. hifzRecButtons: кнопки только что перерисовались, тап по ним сейчас
+    // почти наверняка не их, а предыдущих.
+    if (rec.guardUntil && Date.now() < rec.guardUntil) return;
     var id = e.target && e.target.id;
     if (id === 'hifz-rec-go') hifzRecStart();
     else if (id === 'hifz-rec-pause') hifzRecPause();
@@ -6844,6 +7036,65 @@
      подставляем сохранённую строку, только если студент на этой же
      странице; на любой другой — честно спрашиваем, где он (и подсказываем
      в подзаголовке, где осталось его место). */
+  /* ─── Долг пересдачи (13.09.2026) ──────────────────────────────────────
+     Решение пользователя. Долг больше НЕ запирает всё подряд: этап, в котором
+     студент стоит, он доделывает и сдаёт («внутри первого этапа 7 или 8
+     строк сдаёшь, даже если долги не закрыты»). Закрыт вход в СЛЕДУЮЩИЙ этап.
+
+     Главное - блок ДО действия, а не после. Раньше стена стояла на отправке,
+     и человек узнавал о ней, уже начитав 40+40 (случай пользователя 12.09).
+     Теперь до записи дело не доходит: при закрытом ходе вход в заучивание
+     ведёт в «Работу с устазом», к блоку «ПЕРЕСДАТЬ».
+
+     Держит стену сервер (handle_hifz_set): локальное состояние можно
+     перезагрузить, поэтому здесь только то, что видно на экране. */
+  var hifzDebt = { retakes: [], done: false };
+
+  function hifzSetDebt(data) {
+    hifzDebt = {
+      retakes: (data && data.retakes) || [],
+      done: !!(data && data.done)
+    };
+    hifzDebtRender();
+  }
+
+  function hifzDebtRefresh() {
+    return apiCall('/hifz').then(function (res) {
+      if (res.data) hifzSetDebt(res.data);
+    }).catch(function () {});
+  }
+
+  // Ход закрыт: долги есть и на своём месте работать уже нечего (единицу
+  // указателя студент закрыл, а шаг вперёд не состоялся). Считает сервер -
+  // ему видно и сдачи, и счётчик 40+40.
+  function hifzWall() {
+    return !!(hifzDebt.retakes.length && hifzDebt.done);
+  }
+
+  function hifzDebtRender() {
+    var pill = document.getElementById('hifz-debt');
+    if (!pill) return;
+    // Пилюля живёт, пока ход ОТКРЫТ. Закрылся - человека уже ведут в «Работу
+    // с устазом», и двух дверей в одно место разом не бывает. В разборе,
+    // пересдаче и проверке устаза её тоже нет: там свой экран.
+    var busy = (typeof look !== 'undefined' && look.on)
+      || (typeof review !== 'undefined' && review.on)
+      || (typeof hifzRetakeMode !== 'undefined' && hifzRetakeMode);
+    var show = hifz.on && !hifz.picking && !busy
+      && hifzDebt.retakes.length && !hifzWall();
+    pill.style.display = show ? '' : 'none';
+    if (show) pill.textContent = hifzDebt.retakes.length > 1
+      ? T('hifz_debt_n', { N: hifzDebt.retakes.length })
+      : T('hifz_debt');
+  }
+
+  // Тап по пилюле - туда же, куда ведёт закрытый ход: в свой список, где
+  // блок «ПЕРЕСДАТЬ» со всеми долгами по порядку.
+  document.getElementById('hifz-debt').addEventListener('click', function () {
+    hifzExit();
+    openSubs();
+  });
+
   var hifzPointerPage = null;
   // setTimeout(...,0) оставлен как есть (безвредно) - причина ("var
   // API_BASE присваивается ниже по файлу") закрыта отдельно: apiBase()
@@ -6854,7 +7105,9 @@
   var hifzPointerLoaded = new Promise(function (resolve) {
     setTimeout(function () {
       apiCall('/hifz').then(function (res) {
-        if (res.status === 401 || !res.data || !res.data.pointer) return;
+        if (res.status === 401 || !res.data) return;
+        hifzSetDebt(res.data);
+        if (!res.data.pointer) return;
         hifz.line = res.data.pointer.line;
         hifz.stage = res.data.pointer.stage;
         hifzPointerPage = res.data.pointer.page;
@@ -7030,7 +7283,7 @@
        (строка, слово) без номера страницы, и на соседней она ляжет на
        ДРУГИЕ слова - а вердикт уйдёт с этими координатами. У студента
        пересдаётся ровно то место, что сдавал, уходить с него некуда. */
-    if ((typeof review !== 'undefined' && review.on) || hifzRetakeMode) return;
+    if (pageTurnBlocked()) return;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       justSwiped = true;
       loadPage(dx < 0 ? currentPage - 1 : currentPage + 1);
@@ -7053,9 +7306,15 @@
   var WHEEL_STEP = 110, WHEEL_PAUSE = 420, WHEEL_IDLE = 350;
 
   function pageTurnBlocked() {
-    // Та же оговорка, что у свайпа: проверка и пересдача привязаны к одной
-    // странице, уходить с неё нельзя.
-    return (typeof review !== 'undefined' && review.on) || hifzRetakeMode;
+    // Проверка и пересдача привязаны к одной странице, уходить с неё нельзя.
+    //
+    // Заучивание — тоже (13.09.2026). Свайп уводил лист, а место НЕ уезжало:
+    // hifzApply подсвечивал ту же строку уже на новой странице, шапка писала
+    // новый номер, и сдача уходила с чужой страницей — она берёт currentPage
+    // (см. hifzRecSend). Выглядело всё при этом совершенно нормально.
+    // В режиме выбора места (hifz.picking) листать, наоборот, НУЖНО.
+    return (typeof review !== 'undefined' && review.on) || hifzRetakeMode
+      || (hifz.on && !hifz.picking);
   }
 
   pageWrap.addEventListener('wheel', function (e) {
@@ -7631,7 +7890,11 @@
       try { pendingErrorMarks = JSON.parse(item.error_words || '[]'); }
       catch (e) { pendingErrorMarks = null; }
     }
-    hifzRetakeSaved = { line: hifz.line, stage: hifz.stage, on: hifz.on };
+    // Лист запоминаем вместе с местом (13.09.2026): без него возврат чинил
+    // только шапку, а currentPage оставался на странице долга - и следующая
+    // сдача уходила с чужой страницей (она берёт currentPage, см. hifzRecSend).
+    hifzRetakeSaved = { line: hifz.line, stage: hifz.stage, on: hifz.on,
+                        page: currentPage };
     hifzRetakeMode = true;
     hifz.on = true;
     hifz.picking = false;
@@ -7675,10 +7938,18 @@
     look.item = null;
     applyErrorMarks([]);
     if (hifzRetakeSaved) {
-      hifz.line = hifzRetakeSaved.line;
-      hifz.stage = hifzRetakeSaved.stage;
-      hifz.on = hifzRetakeSaved.on;
+      var back = hifzRetakeSaved;
+      hifz.line = back.line;
+      hifz.stage = back.stage;
+      hifz.on = back.on;
       hifzRetakeSaved = null;
+      // Долг закрыт самим фактом отправки - стена снимается сразу, ждать
+      // приёма устаза не надо (см. get_open_retakes).
+      hifzDebtRefresh();
+      if (back.page && back.page !== currentPage) {
+        loadPage(back.page);   // renderPage сама позовёт hifzApply/hifzHead
+        return;
+      }
     }
     hifzApply();
     hifzHead();
@@ -8225,6 +8496,11 @@
 
   function openSubs() {
     document.getElementById('dashboard').style.display = 'none';
+    // Раньше сюда приходили только с дашборда, и мусхаф гасить было не нужно.
+    // С 13.09.2026 сюда же ведёт закрытый ход пересдачи - прямо из заучивания,
+    // а #app лежит поверх и оставил бы человека на листе (поймано на стенде).
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('trainer').style.display = 'none';
     document.getElementById('subs').style.display = 'flex';
     var body = document.getElementById('subs-body');
     body.innerHTML = '<div class="subs-empty">' + T('subs_loading') + '</div>';
@@ -8257,6 +8533,17 @@
          карточка уходит в ленту, отдельной «пересдачи» никто не ждёт. Признак
          redone считает сервер тем же правилом, что снимает гейт. */
       var todo = items.filter(function (it) { return it.verdict === 'retake' && !it.redone; });
+      /* Сверху - самый ранний по МУСХАФУ, а не по дате разбора (13.09.2026,
+         решение пользователя). Устаз мог разобрать стр. 7 в понедельник, а
+         стр. 6 во вторник: по дате «старше» стр. 7, хотя по Корану она позже,
+         и закрывать вразнобой со своим же движением по листам человеку
+         незачем. Тем же порядком список отвечает «которую первой» - верхнюю.
+         Порядок, а не запрет: стена стоит, пока не закрыты все. */
+      todo.sort(function (a, b) {
+        return (a.hifz_page - b.hifz_page)
+          || ((a.hifz_line || 0) - (b.hifz_line || 0))
+          || ((a.hifz_stage || 1) - (b.hifz_stage || 1));
+      });
       var waiting = items.filter(function (it) { return !it.reviewed_at; }).length;
       var html = '';
       if (todo.length) {

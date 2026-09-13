@@ -33,7 +33,7 @@ import re
 from core.content import SHORT_TASKS
 from core.db import (
     find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
-    get_today_report, save_voice_submission, get_blocking_retake, get_submission,
+    get_today_report, save_voice_submission, get_open_retakes, get_submission,
     set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
     VERDICT_RETAKE, is_retake_answered,
 )
@@ -44,6 +44,7 @@ from core.mufradat import (
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
     get_starred_question_pool,
 )
+from core.mushaf_words import get_hifz_pointer
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.tg import (
     send_message, send_message_with_button_rows, edit_message_with_button_rows,
@@ -384,21 +385,34 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     if not user:
         return {"ok": False, "error": "no_user"}
 
-    # Гейт пересдачи (04.09.2026, решение пользователя): пока устаз вернул
-    # единицу на пересдачу и не принял её заново, вперёд хода нет - строка,
-    # половина, страница идут строго по порядку. Проверяем ЗДЕСЬ, на сервере,
-    # а не в интерфейсе: локальное состояние можно перезагрузить, сдачу -
-    # нет. Пересдать саму эту единицу можно всегда, для того гейт и стоит.
-    blocking = get_blocking_retake(user["id"], group["id"])
-    if blocking and (blocking["hifz_page"], blocking["hifz_line"], blocking["hifz_stage"]) \
-            != (page, line, stage):
-        return {
-            "ok": False, "error": "retake_pending",
-            "place": _hifz_place(blocking["hifz_page"], blocking["hifz_line"],
-                                 blocking["hifz_stage"], page_lines),
-            "retake": {"page": blocking["hifz_page"], "line": blocking["hifz_line"],
-                       "stage": blocking["hifz_stage"]},
-        }
+    # Гейт пересдачи. 13.09.2026, решение пользователя: стена переехала с
+    # ОТПРАВКИ на ПРОДВИЖЕНИЕ. Долг больше не запирает всё подряд - этап, в
+    # котором студент стоит, он доделывает и сдаёт ("внутри первого этапа 7
+    # или 8 строк сдаёшь, даже если долги не закрыты"). Закрыт вход в
+    # СЛЕДУЮЩИЙ этап, и держит его handle_hifz_set, куда пишется указатель.
+    #
+    # Здесь остаётся страховка на случай устаревшей страницы: принимаем
+    # только то, что стоит на указателе (та же страница и тот же этап; строка
+    # внутри этапа гуляет - hifzSave мог не долететь), либо сам долг.
+    # Пересдать долг можно всегда, для того стена и стоит.
+    #
+    # Проверяем ЗДЕСЬ, а не только в интерфейсе: локальное состояние можно
+    # перезагрузить, сдачу - нет.
+    retakes = get_open_retakes(user["id"], group["id"])
+    if retakes:
+        pointer = get_hifz_pointer(user_id) or {}
+        on_pointer = (pointer.get("page"), pointer.get("stage")) == (page, stage)
+        is_retake = any((r["hifz_page"], r["hifz_line"], r["hifz_stage"])
+                        == (page, line, stage) for r in retakes)
+        if not (on_pointer or is_retake):
+            first = retakes[0]
+            return {
+                "ok": False, "error": "retake_pending",
+                "place": _hifz_place(first["hifz_page"], first["hifz_line"],
+                                     first["hifz_stage"], page_lines),
+                "retake": {"page": first["hifz_page"], "line": first["hifz_line"],
+                           "stage": first["hifz_stage"]},
+            }
 
     ogg = await transcode_to_ogg(audio_bytes)
     if not ogg:
