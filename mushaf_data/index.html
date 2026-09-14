@@ -8049,6 +8049,13 @@
     subsStopAudio();
     try { pendingErrorMarks = JSON.parse(item.error_words || '[]'); }
     catch (e) { pendingErrorMarks = null; }
+    /* Голос устаза держится в памяти на один разбор (lookLoadAudio), а
+       закрытие экрана его не отпускало. Открыв вторую пересдачу, студент
+       слышал замечание от ПЕРВОЙ: «уже загружено» - и старый blob играл
+       под новыми пометками (14.09.2026, поймано пользователем на двух своих
+       пересдачах). Отпускаем при смене сдачи; повторное открытие той же -
+       из памяти, как и было. */
+    if (!look.item || look.item.id !== item.id) lookFreeAudio();
     look.on = true;
     look.item = item;
     look.saved = { line: hifz.line, stage: hifz.stage, on: hifz.on, page: currentPage };
