@@ -151,6 +151,32 @@ MOCK_CSS = """
 .mk-dur { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sub-pill.mk-durpill { font-variant-numeric: tabular-nums; }
 
+/* Отметка онлайн-урока (14.09.2026). У студента - строка под полосой
+   пропусков: название слева, действие справа, как у свёрнутых голосовых. */
+.mk-lesson {
+  display: flex; align-items: center; gap: 10px; direction: ltr;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 12px; padding: 10px 12px; margin: 10px 0 12px;
+}
+.mk-lesson .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mk-lesson b { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+.mk-lesson span { font-size: 12px; color: var(--muted); }
+.mk-lesson button {
+  flex: 0 0 auto; border: 0; border-radius: 10px; padding: 9px 14px;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+}
+.mk-lesson .ok { flex: 0 0 auto; color: var(--accent); font-size: 13px; font-weight: 600; }
+/* У устаза - строка дат под календарём студента, дата снимается тапом. */
+.mk-les-u { direction: ltr; margin-top: 12px; text-align: center; }
+.mk-les-u .h { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+.mk-les-u .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.mk-les-u .chip {
+  font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.mk-les-u .chip i { font-style: normal; opacity: .55; margin-left: 5px; }
+.mk-les-u .none { font-size: 12.5px; color: var(--muted); }
+
 /* Сдачи студента под его календарём. */
 .mk-subs { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; direction: ltr; }
 .mk-subs .ustaz-group-title { margin: 0 2px 0; }
@@ -249,6 +275,48 @@ MOCK_JS = """
     });
   }
 
+  // Экран «Работа с устазом» у студента: ждём, пока догрузится полоса месяца.
+  async function openSubsStudent() {
+    $('dash-subs').click();
+    for (var i = 0; i < 30; i++) {
+      var m = $('subs-month');
+      if (m && m.children.length) break;
+      await wait(200);
+    }
+    await wait(400);
+  }
+
+  function lessonCard(state) {
+    var html = state === 'done'
+      ? '<div class="t"><b>🕌 Онлайн-урок</b><span>отмечен сегодня · 14.09</span></div>'
+        + '<span class="ok">✓ был</span>'
+      : '<div class="t"><b>🕌 Онлайн-урок</b><span>на этой неделе не отмечен</span></div>'
+        + '<button>Я был</button>';
+    var box = document.createElement('div');
+    box.className = 'mk-lesson';
+    box.innerHTML = html;
+    var m = $('subs-month');
+    m.parentNode.insertBefore(box, m.nextSibling);
+  }
+
+  // Общее окно подтверждения приложения; showConfirm живёт в замыкании
+  // приложения, поэтому открываем его разметкой - вид тот же.
+  function openConfirm(text) {
+    $('confirm-text').textContent = text;
+    $('confirm-overlay').classList.add('visible');
+  }
+
+  function lessonUstaz() {
+    var legends = all('#ustaz-body .stu-legend');
+    var last = legends[legends.length - 1];
+    var box = document.createElement('div');
+    box.className = 'mk-les-u';
+    box.innerHTML = '<div class="h">онлайн-уроки за месяц · тап по дате — снять</div>'
+      + '<div class="chips"><span class="chip">пн 07.09<i>✕</i></span>'
+      + '<span class="chip">вс 13.09<i>✕</i></span></div>';
+    last.parentNode.insertBefore(box, last.nextSibling);
+  }
+
   function playerBar() {
     var foot = $('review-foot');
     var p = document.createElement('div');
@@ -312,6 +380,19 @@ MOCK_JS = """
       foot.insertBefore(s, foot.firstChild);
     },
 
+    les_stu_now: openSubsStudent,
+    les_stu_card: async function () { await openSubsStudent(); lessonCard('todo'); },
+    les_stu_confirm: async function () {
+      await openSubsStudent(); lessonCard('todo');
+      openConfirm('Сегодня был онлайн-урок, и ты на нём был?');
+    },
+    les_stu_done: async function () { await openSubsStudent(); lessonCard('done'); },
+    les_u: async function () { await scenes.student_now(); lessonUstaz(); },
+    les_u_confirm: async function () {
+      await scenes.student_now(); lessonUstaz();
+      openConfirm('Снять отметку урока за вс 13.09 у Абдуллы?');
+    },
+
     student_now: async function () {
       await openQueue();
       document.querySelector('.ustaz-zones [data-zone="students"]').click(); await wait(2200);
@@ -348,13 +429,18 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["queue_now", "queue_fold", "queue_tabs", "dur_meta", "dur_pill", "dur_two", "review_dur",
+VARIANTS = ["les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_u", "les_u_confirm",
+            "queue_now", "queue_fold", "queue_tabs", "dur_meta", "dur_pill", "dur_two", "review_dur",
             "review_now", "review_bar", "comment_then", "review_next",
             "history_now", "history",
             "student_now", "student_subs"]
 
 # Сравнения: первым всегда «как сейчас».
 COMPARE = {
+    "lesson_student": [("les_stu_now", "Сейчас"), ("les_stu_card", "Строка урока"),
+                       ("les_stu_confirm", "Тап · переспрос"), ("les_stu_done", "Отмечено")],
+    "lesson_ustaz": [("student_now", "Сейчас"), ("les_u", "Отметки урока"),
+                     ("les_u_confirm", "Тап по дате · снять")],
     "duration": [("queue_now", "Сейчас"), ("dur_meta", "А · в строке времени"),
                  ("dur_pill", "Б · плашкой у имени"), ("dur_two", "В · две строки")],
     "review_dur": [("review_now", "Сейчас"), ("review_dur", "Длина в шапке разбора")],
@@ -371,6 +457,8 @@ COMPARE = {
 def page(variant):
     # Стили макета безвредны и для *_now: их классы появляются только из
     # сцен-предложений, «как сейчас» ничего не дорисовывает.
+    if variant.startswith("les_stu"):
+        return stand.dev_index(stand.STUDENT, "Абдулла") + MOCK_CSS + MOCK_JS
     return stand.dev_index(stand.USTAZ, "Устаз") + MOCK_CSS + MOCK_JS
 
 
