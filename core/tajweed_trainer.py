@@ -34,26 +34,33 @@ OPTIONS = 8
 SAME_ZONE_DISTRACTORS = 2
 
 # 17 частных мест выхода (урок «Сколько всего мест выхода» и итог главы).
+# Порядок - анатомический, от горла к губам: в нём же стоят варианты на
+# экране (14.09.2026), чтобы порядок сам был картой рта.
+#
+# Надписи - эталон лекций, ужатый без потери смысла (сверено пользователем
+# 14.09.2026 с тем, как пишут студенты): «дальше всего от рта» = «ближе к
+# груди», «сразу под местом ляма» = «под лямом». До трёх строк на кнопке.
 MAKHARIJ = (
-    {"id": "jawf",          "zone": "jawf",     "ru": "Полость рта и горла"},
-    {"id": "halq_aqsa",     "zone": "halq",     "ru": "Начало горла, глубже всего"},
+    {"id": "halq_aqsa",     "zone": "halq",     "ru": "Начало горла, ближе к груди"},
     {"id": "halq_wasat",    "zone": "halq",     "ru": "Середина горла"},
     {"id": "halq_adna",     "zone": "halq",     "ru": "Конец горла, ближе ко рту"},
-    {"id": "lisan_qaf",     "zone": "lisan",    "ru": "Корень языка, глубже"},
-    {"id": "lisan_kaf",     "zone": "lisan",    "ru": "Корень языка, ближе ко рту"},
-    {"id": "lisan_wasat",   "zone": "lisan",    "ru": "Середина языка и твёрдое нёбо"},
-    {"id": "lisan_hafa",    "zone": "lisan",    "ru": "Боковой край языка и коренные зубы"},
-    {"id": "lisan_lam",     "zone": "lisan",    "ru": "Край языка до кончика и дёсны"},
-    {"id": "lisan_nun",     "zone": "lisan",    "ru": "Кончик языка, чуть ниже ляма"},
-    {"id": "lisan_ra",      "zone": "lisan",    "ru": "Кончик языка, спинка подтянута"},
-    {"id": "lisan_nit",     "zone": "lisan",    "ru": "Кончик языка и корни верхних зубов"},
-    {"id": "lisan_safir",   "zone": "lisan",    "ru": "Кончик языка у нижних зубов, свист"},
-    {"id": "lisan_lithawi", "zone": "lisan",    "ru": "Кончик языка между зубами"},
-    {"id": "shafa_fa",      "zone": "shafatan", "ru": "Нижняя губа и верхние зубы"},
+    {"id": "lisan_qaf",     "zone": "lisan",    "ru": "Корень языка у глотки + мягкое нёбо"},
+    {"id": "lisan_kaf",     "zone": "lisan",    "ru": "Корень языка ближе ко рту + мягкое нёбо"},
+    {"id": "lisan_wasat",   "zone": "lisan",    "ru": "Середина языка + твёрдое нёбо"},
+    {"id": "lisan_hafa",    "zone": "lisan",    "ru": "Бок языка (левый или правый) + верхние коренные зубы"},
+    {"id": "lisan_lam",     "zone": "lisan",    "ru": "Край языка до кончика + дёсны верхних передних зубов"},
+    {"id": "lisan_nun",     "zone": "lisan",    "ru": "Кончик языка + дёсны над верхними зубами, под лямом"},
+    {"id": "lisan_ra",      "zone": "lisan",    "ru": "Почти как нун, но спинка языка подтянута внутрь"},
+    {"id": "lisan_nit",     "zone": "lisan",    "ru": "Кончик языка + основание верхних передних зубов изнутри"},
+    {"id": "lisan_safir",   "zone": "lisan",    "ru": "Кончик языка над краем нижних передних зубов, со свистом"},
+    {"id": "lisan_lithawi", "zone": "lisan",    "ru": "Кончик языка между зубами + край верхних передних зубов"},
+    {"id": "shafa_fa",      "zone": "shafatan", "ru": "Нижняя губа + кончики верхних передних зубов"},
     {"id": "shafatan",      "zone": "shafatan", "ru": "Обе губы"},
-    {"id": "khayshum",      "zone": "khayshum", "ru": "Нос — гунна"},
+    {"id": "jawf",          "zone": "jawf",     "ru": "Пустота рта и горла"},
+    {"id": "khayshum",      "zone": "khayshum", "ru": "Нос (хайшум)"},
 )
 _MAKHRAJ = {m["id"]: m for m in MAKHARIJ}
+_ORDER = {m["id"]: i for i, m in enumerate(MAKHARIJ)}
 
 # Урок — по началу названия темы: id частей у баз разные, названия одни.
 # Буквы урока «Сколько всего мест выхода» здесь не берутся: полость в нём
@@ -135,7 +142,8 @@ def _pick_session(user_id, cards):
 
 
 def _options(card):
-    """Восемь мест выхода: верное, два из той же зоны, остальные из всей карты."""
+    """Восемь мест выхода: верное, два из той же зоны, остальные из всей карты.
+    На экране - в анатомическом порядке, не вразброс."""
     right = _MAKHRAJ[card["makhraj"]]
     same = [m["id"] for m in MAKHARIJ if m["zone"] == right["zone"] and m["id"] != right["id"]]
     random.shuffle(same)
@@ -144,8 +152,7 @@ def _options(card):
     random.shuffle(rest)
     picked += rest[:OPTIONS - 1 - len(picked)]
     picked.append(right["id"])
-    random.shuffle(picked)
-    return picked
+    return sorted(picked, key=_ORDER.get)
 
 
 def daily_count(user_id):
@@ -188,7 +195,7 @@ def start(user_id):
         return None
     queue = _pick_session(user_id, cards)
     session = {"queue": queue, "retry": [], "current": None, "retry_now": False,
-               "size": len(queue), "first_right": 0}
+               "size": len(queue), "first_right": 0, "results": []}
     _next(session)
     _sessions[str(user_id)] = session
     return session
@@ -204,7 +211,13 @@ def state(user_id, feedback=None):
         return out
     cur = session["current"]
     if cur is None:
-        out["finished"] = {"size": session["size"], "first_right": session["first_right"]}
+        # Буквы захода с исходом первой попытки - итог называет их, а не
+        # счёт «0 из 4», который звучит как оценка.
+        out["finished"] = {
+            "size": session["size"], "first_right": session["first_right"],
+            "letters": [{"glyph": _CARD[cid]["glyph"], "note": _CARD[cid]["note"], "first": ok}
+                        for cid, ok in session["results"]],
+        }
         return out
     card = _CARD[cur["card"]]
     out["card"] = {
@@ -229,6 +242,8 @@ def answer(user_id, card_id, slot):
     first_try = not session["retry_now"]
     before = daily_count(user_id)
     _record(user_id, card_id, correct, first_try)
+    if first_try:
+        session["results"].append((card_id, correct))
     if first_try and correct:
         session["first_right"] += 1
     if not correct:

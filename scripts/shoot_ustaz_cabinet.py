@@ -460,18 +460,20 @@ MOCK_JS = """
     tj_card: async function () {
       await scenes.tj_hub(); $('trh-tajweed').click(); await wait(1500);
     },
-    // Тап по первому варианту: чаще всего мимо - видно плашку ошибки.
+    // Тап по первому варианту: чаще всего мимо - красная нажатая, зелёная
+    // верная и «Дальше».
     tj_answer: async function () {
       await scenes.tj_card();
-      document.querySelector('.tj-opt').click(); await wait(1200);
+      document.querySelector('.tj-opt').click(); await wait(700);
     },
-    // Итог захода: тапаем, пока заход не кончится (ошибки уходят в конец).
+    // Итог захода: тапаем по кругу, «Дальше» после ошибки, пока не кончится.
     tj_done: async function () {
       await scenes.tj_card();
-      for (var i = 0; i < 120 && !$('tj-more'); i++) {
-        var opts = document.querySelectorAll('.tj-opt');
-        if (!opts.length) break;
-        opts[i % opts.length].click(); await wait(180);
+      for (var i = 0; i < 90 && !$('tj-more'); i++) {
+        if ($('tj-next')) { $('tj-next').click(); await wait(250); continue; }
+        var opts = document.querySelectorAll('.tj-opt:not(:disabled)');
+        if (opts.length) opts[i % opts.length].click();
+        await wait(1000);
       }
     },
     tj_words: async function () {
@@ -678,7 +680,8 @@ def main():
         subprocess.run([
             chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
             "--window-size=%d,%d" % (WIDTH, HEIGHT),
-            "--virtual-time-budget=17000", "--screenshot=%s" % png,
+            "--virtual-time-budget=%d" % (90000 if name == "tj_done" else 17000),
+            "--screenshot=%s" % png,
             "http://127.0.0.1:%d/vframe?v=%s" % (PORT, name),
         ], check=True, capture_output=True)
         if not png.exists():

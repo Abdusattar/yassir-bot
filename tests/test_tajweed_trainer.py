@@ -85,6 +85,7 @@ def test_options_are_eight_real_places_with_the_right_one():
         opts = tt._options(card)
         assert len(opts) == 8 and len(set(opts)) == 8
         assert card["makhraj"] in opts and set(opts) <= ids
+        assert opts == sorted(opts, key=tt._ORDER.get)      # от горла к губам
 
 
 def test_letters_come_evenly(test_db):
@@ -114,7 +115,10 @@ def test_mistake_is_repeated_at_the_end_until_right(test_db):
         data, _ = tt.answer("777", cur, slot)
     # три новые, повтор ошибки (снова мимо), ещё раз повтор - верно
     assert order[3] == missed and order[4] == missed and len(order) == 5
-    assert data["finished"] == {"size": 4, "first_right": 3}
+    fin = data["finished"]
+    assert fin["size"] == 4 and fin["first_right"] == 3
+    assert [x["first"] for x in fin["letters"]] == [False, True, True, True]
+    assert fin["letters"][0]["glyph"] == tt._CARD[missed]["glyph"]
     assert tt._shown_counts("777")[missed] == 1
     assert data["daily_count"] == 4
 

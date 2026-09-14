@@ -1813,13 +1813,34 @@
     font-family: 'Scheherazade New', serif; font-size: 88px; line-height: 1.2;
     color: var(--ink);
   }
+  /* Сдвиг по вертикали ставит tajweedCenterGlyph: у ي и ج хвост ниже строки,
+     у ا и ل буква тянется вверх, а у шрифта ещё и запас над буквой под
+     харакаты - по строке центр не совпадает с «чернилами» (замер 14.09.2026:
+     от -16 до +39 px). Высота строки прежняя, карточка не прыгает. */
+  .tj-glyph span { display: inline-block; }
   .tj-note { font-size: 15px; color: var(--muted); margin-top: 2px; }
-  /* Арабское слово в подписи - только крупнее, без direction/unicode-bidi
-     (та же ловушка, что с .k-ar в уроках). */
-  .tj-note .tj-ar, .trainer-feedback .tj-ar { font-size: 1.3em; }
+  /* Арабское слово-пример - главное в подписи: крупнее и тёмным. Только
+     размер и цвет, без direction/unicode-bidi (та же ловушка, что с .k-ar). */
+  .tj-note .tj-ar { font-size: 1.35em; color: var(--ink); }
   .tj-q { font-size: 15px; font-weight: 600; color: var(--ink); }
-  .trainer-opt.tj-opt { font-size: 15px; line-height: 1.3; min-height: 64px; padding: 10px 8px; }
-  .trainer-opt.tj-opt:disabled { opacity: .6; }
+  /* До трёх строк на кнопке: надпись - ужатый эталон лекции. */
+  .trainer-opt.tj-opt { font-size: 15px; line-height: 1.28; min-height: 64px; padding: 9px 8px; }
+  .trainer-opt.tj-opt:disabled { opacity: .55; }
+  /* Итог ответа - на самих кнопках (14.09.2026): нажатая краснеет при
+     ошибке, верная зеленеет всегда. Плашка сверху сдвигала карточку, а
+     взгляд в момент ответа - на кнопках. */
+  .trainer-opt.tj-opt.ok, .trainer-opt.tj-opt.no { opacity: 1; font-weight: 600; }
+  .trainer-opt.tj-opt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .trainer-opt.tj-opt.no { background: var(--no-soft); border-color: var(--no); color: var(--no); }
+  /* Ход захода точками: число в шапке - норма дня, второй счётчик рядом
+     путал бы, что к чему. */
+  .tj-dots { display: flex; gap: 7px; justify-content: center; align-items: center; min-height: 18px; }
+  .tj-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--card-border); }
+  .tj-dots i.on { background: var(--accent); }
+  .tj-dots i.cur { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .tj-dots span { font-size: 13px; color: var(--muted); margin-left: 4px; }
+  .tj-sum { font-size: 15px; color: var(--ink); line-height: 1.5; }
+  .tj-sum b { font-family: 'Scheherazade New', serif; font-size: 1.6em; font-weight: 400; }
   .tj-go {
     background: var(--accent); color: #fff; border: 0; border-radius: 14px;
     padding: 13px 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
@@ -3552,11 +3573,11 @@
       tajweed_title: 'Таджвид',
       dash_trainers_both: 'Слова %N%/%M% · Таджвид %A%/%B%',
       tajweed_question: 'Откуда выходит буква?',
-      tajweed_pos: 'Буква %N% из %M%',
-      tajweed_retry: 'Повторяем букву',
-      tajweed_again: 'Эта буква вернётся в конце захода',
+      tajweed_retry: 'повторяем',
+      tajweed_next: 'Дальше',
       tajweed_done_title: 'Заход окончен 🤲',
-      tajweed_first_right: 'С первого раза верно: %N% из %M%',
+      tajweed_first_letters: 'Сразу верно: %L%',
+      tajweed_retry_letters: 'Запомнили с повтора: %L%',
       tajweed_task_done: 'Таджвид на сегодня засчитан ✅',
       tajweed_task_left: 'До нормы дня ещё %N%',
       tajweed_today: 'Сегодня верно: %N% из %M%',
@@ -10175,6 +10196,36 @@
     withAuthCheck(apiCall('/tajweed'), renderTajweed);
   }
 
+  /* Центр буквы по её контуру, а не по строке (14.09.2026, поймал
+     пользователь: «буква ниже, не по центру»). measureText даёт, насколько
+     чернила уходят вверх и вниз от базовой линии, fontBoundingBox - где сама
+     базовая линия внутри строки. Сдвигаем span так, чтобы середина чернил
+     совпала с серединой строки. Шрифт ждём: до загрузки мерили бы запасной. */
+  function tajweedCenterGlyph() {
+    var box = document.querySelector('#tajweed-body .tj-glyph');
+    if (!box) return;
+    var glyph = box.textContent;
+    box.innerHTML = '<span></span>';
+    var span = box.firstChild;
+    span.textContent = glyph;
+    var place = function () {
+      var cs = getComputedStyle(box);
+      var ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = cs.fontSize + ' ' + cs.fontFamily;
+      var m = ctx.measureText(glyph);
+      if (!m || m.actualBoundingBoxAscent == null || m.fontBoundingBoxAscent == null) return;
+      var lh = parseFloat(cs.lineHeight);
+      var baseline = (lh - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 + m.fontBoundingBoxAscent;
+      var inkMid = baseline - (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+      span.style.transform = 'translateY(' + (lh / 2 - inkMid).toFixed(1) + 'px)';
+    };
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load(getComputedStyle(box).fontSize + " 'Scheherazade New'", glyph).then(place, place);
+    } else {
+      place();
+    }
+  }
+
   // Арабское слово в подписи крупнее - обёрткой только по размеру.
   function tajweedArabic(text) {
     return String(text || '').replace(/[\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)*/g, function (m) {
@@ -10194,31 +10245,24 @@
     pill.textContent = T('daily_n', { N: Math.min(d.daily_count, d.daily_target), M: d.daily_target });
     pill.classList.toggle('done', d.daily_count >= d.daily_target);
 
-    var html = '';
-    var fb = d.feedback;
-    if (fb) {
-      html += '<div class="trainer-feedback ' + (fb.correct ? 'ok' : 'no') + '">' +
-        (fb.correct ? '✅ ' : '❌ ') + '<span class="trainer-feedback-ar">' + fb.glyph + '</span> — ' +
-        fb.answer + '</div>';
-      if (!fb.correct) html += '<div class="trainer-hint">' + T('tajweed_again') + '</div>';
-    }
-
     if (d.empty) {
-      body.innerHTML = html + '<div class="trainer-msg">' + T('tajweed_empty') + '</div>';
+      body.innerHTML = '<div class="trainer-msg">' + T('tajweed_empty') + '</div>';
       return;
     }
 
     if (d.finished) {
-      html += '<div class="trainer-msg">' + T('tajweed_done_title') + '</div>';
-      html += '<div class="trainer-info">' +
-        T('tajweed_first_right', { N: d.finished.first_right, M: d.finished.size }) + '</div>';
+      var first = d.finished.letters.filter(function (x) { return x.first; });
+      var again = d.finished.letters.filter(function (x) { return !x.first; });
+      var glyphs = function (xs) { return xs.map(function (x) { return '<b>' + x.glyph + '</b>'; }).join(' '); };
+      var html = '<div class="trainer-msg">' + T('tajweed_done_title') + '</div>';
+      if (first.length) html += '<div class="tj-sum">' + T('tajweed_first_letters', { L: glyphs(first) }) + '</div>';
+      if (again.length) html += '<div class="tj-sum">' + T('tajweed_retry_letters', { L: glyphs(again) }) + '</div>';
       var left = Math.max(0, d.daily_target - d.daily_count);
-      var line = !d.task ? T('tajweed_today', { N: d.daily_count, M: d.daily_target })
-        : d.task.done ? T('tajweed_task_done')
-        : T('tajweed_task_left', { N: left });
-      html += '<div class="trainer-info">' + line + '</div>';
+      html += '<div class="trainer-info">' + (!d.task ? T('tajweed_today', { N: d.daily_count, M: d.daily_target })
+        : d.task.done ? T('tajweed_task_done') : T('tajweed_task_left', { N: left })) + '</div>';
       html += '<button class="tj-go" id="tj-more">' + T('tajweed_more') + '</button>';
       body.innerHTML = html;
+      body.scrollTop = 0;
       document.getElementById('tj-more').addEventListener('click', function () {
         this.disabled = true;
         withAuthCheck(apiCall('/tajweed/new', { method: 'POST' }), renderTajweed);
@@ -10227,8 +10271,12 @@
     }
 
     var c = d.card;
-    html += '<div class="trainer-info">' + (c.retry ? T('tajweed_retry')
-      : T('tajweed_pos', { N: c.pos, M: c.size })) + '</div>';
+    var dots = '';
+    for (var i = 0; i < c.size; i++) {
+      dots += '<i class="' + (c.retry || i < c.pos - 1 ? 'on' : i === c.pos - 1 ? 'cur' : '') + '"></i>';
+    }
+    if (c.retry) dots += '<span>' + T('tajweed_retry') + '</span>';
+    var html = '<div class="tj-dots">' + dots + '</div>';
     html += '<div class="trainer-word-card"><div class="tj-glyph">' + c.glyph + '</div>' +
       (c.note ? '<div class="tj-note">' + tajweedArabic(c.note) + '</div>' : '') + '</div>';
     html += '<div class="tj-q">' + T('tajweed_question') + '</div>';
@@ -10236,15 +10284,30 @@
     d.options.forEach(function (opt, i) {
       html += '<button class="trainer-opt tj-opt" data-slot="' + i + '">' + opt + '</button>';
     });
-    html += '</div>';
+    html += '</div><div id="tj-after"></div>';
     body.innerHTML = html;
     body.scrollTop = 0;
-    Array.prototype.forEach.call(body.querySelectorAll('.tj-opt'), function (btn) {
+    tajweedCenterGlyph();
+    var buttons = body.querySelectorAll('.tj-opt');
+    Array.prototype.forEach.call(buttons, function (btn) {
       btn.addEventListener('click', function () {
         // Двойной тап не должен ответить за следующую карточку.
-        Array.prototype.forEach.call(body.querySelectorAll('.tj-opt'), function (b) { b.disabled = true; });
+        Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
         withAuthCheck(apiCall('/tajweed/answer', { method: 'POST',
-          body: { card: c.id, slot: parseInt(btn.getAttribute('data-slot'), 10) } }), renderTajweed);
+          body: { card: c.id, slot: parseInt(btn.getAttribute('data-slot'), 10) } }), function (next) {
+          var fb = next && next.feedback;
+          if (!fb) { renderTajweed(next); return; }
+          // Итог на тех же кнопках: верная - зелёная всегда, нажатая мимо - красная.
+          Array.prototype.forEach.call(buttons, function (b) {
+            if (b.textContent === fb.answer) b.classList.add('ok');
+          });
+          if (!fb.correct) btn.classList.add('no');
+          if (fb.correct) { setTimeout(function () { renderTajweed(next); }, 900); return; }
+          // Мимо - ждём «Дальше»: верный ответ надо успеть прочитать.
+          var after = document.getElementById('tj-after');
+          after.innerHTML = '<button class="tj-go" id="tj-next">' + T('tajweed_next') + '</button>';
+          document.getElementById('tj-next').addEventListener('click', function () { renderTajweed(next); });
+        });
       });
     });
   }
