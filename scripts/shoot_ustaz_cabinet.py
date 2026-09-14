@@ -88,6 +88,19 @@ def seed_extra():
         for msg, sec in {104: 108, 103: 52, 111: 135, 113: 63}.items():
             conn.execute("UPDATE voice_submissions SET duration=? WHERE chat_id=? AND message_id=?",
                          (sec, stand.CHAT, msg))
+    # Отметки онлайн-урока (14.09.2026) - точки в полосе и в месяце настоящим
+    # кодом. Время записи сдвинуто на 30 часов назад: иначе правило «сутки
+    # между отметками» спрячет кнопку «Я был» и снимок покажет не то.
+    for phone, days_ago in ((stand.STUDENT, 1), (stand.STUDENT, 7), ("777002", 1)):
+        user = db.find_user_by_phone(phone)
+        if not user:
+            continue
+        day = (now.date() - timedelta(days=days_ago)).isoformat()
+        if day[:7] == today[:7]:
+            db.add_bonus(user["id"], group["id"], day, 5, "attendance", "online")
+    with sqlite3.connect(db.DB) as conn:
+        conn.execute("UPDATE score_events SET created_at=datetime('now','-30 hours')"
+                     " WHERE category='attendance'")
 
 
 # ─── предлагаемая разметка ────────────────────────────────────────────────
@@ -437,6 +450,25 @@ MOCK_JS = """
     },
     les_stu_done: async function () { await openSubsStudent(); lessonCard('done'); },
     les_list_now: openStudentsList,
+    // Настоящие экраны после выкладки - без единой инъекции.
+    les_stu_real_month: async function () {
+      await openSubsStudent(); $('subs-month').click(); await wait(600);
+    },
+    real_lesson: async function () {
+      $('dash-learn').click(); await wait(1500);
+      var tile = document.querySelector('[data-subj="j"]');
+      if (tile) { tile.click(); await wait(1500); }
+      var item = document.querySelector('[data-lesson]');
+      if (item) { item.click(); await wait(1800); }
+    },
+    // «Было»: прежние размеры поверх того же урока - для сравнения.
+    real_lesson_old: async function () {
+      await scenes.real_lesson();
+      var st = document.createElement('style');
+      st.textContent = '#learn-body .k-text{font-size:14px;line-height:1.55;padding:14px 16px 18px}'
+        + '#learn-body .k-text .k-chapter{font-size:11.5px}#learn-body .k-text .k-ar{font-size:1em}';
+      document.head.appendChild(st);
+    },
     les_list: async function () {
       await openStudentsList();
       var plan = [[7, 13], [7], [], [13]];
@@ -501,7 +533,8 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
+VARIANTS = ["les_stu_real_month", "real_lesson", "real_lesson_old",
+            "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
             "les_list_now", "les_list", "les_cal", "les_cal_confirm",
             "queue_now", "queue_fold", "queue_tabs", "dur_meta", "dur_pill", "dur_two", "review_dur",
             "review_now", "review_bar", "comment_then", "review_next",
@@ -510,6 +543,9 @@ VARIANTS = ["les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "l
 
 # Сравнения: первым всегда «как сейчас».
 COMPARE = {
+    "lesson_real": [("les_stu_now", "Студент"), ("les_stu_real_month", "Свой месяц"),
+                    ("les_list_now", "Устаз · список"), ("student_now", "Устаз · месяц")],
+    "lesson_font": [("real_lesson_old", "Было · 14px"), ("real_lesson", "Стало · 17px")],
     "lesson_student": [("les_stu_now", "Сейчас"), ("les_stu_card", "Строка урока"),
                        ("les_stu_confirm", "Тап · переспрос"), ("les_stu_done", "Отмечено"),
                        ("les_stu_month", "Свой месяц · точки")],

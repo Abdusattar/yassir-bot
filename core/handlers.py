@@ -24,7 +24,7 @@ from core.db import (
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
     get_streak_days, get_group_streaks, get_full_task_days_count, get_skip_count_month,
     get_excuse_count_month, add_bonus,
-    has_attendance_this_week, mark_dm_ok_by_phone, get_dm_ok_by_phone, is_active_prep_student,
+    credit_lesson_attendance, mark_dm_ok_by_phone, get_dm_ok_by_phone, is_active_prep_student,
     get_survey_stage, save_survey_location, save_survey_age, survey_answer_in_window,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
@@ -821,6 +821,20 @@ async def handle_reaction(chat_id, user_id, message_id, anon_admin=False):
     # Запрос уже привязан к конкретному review_chat_id+review_message_id, который
     # мы сами присвоили при отправке — доп. проверка на админство не нужна.
     mark_curriculum_approved(chat_id, message_id)
+
+
+# Отказ по «у» (14.09.2026): отвечаем один раз в день на студента, а не на
+# каждое повторное «у». Молчание было хуже - 13.09 сёстры решили, что бот
+# сломался, и слали «у» по семь раз; Асма просила писать «+».
+_lesson_refusal_told = {}
+
+
+def _first_lesson_refusal_today(student_id):
+    today = get_date()
+    if _lesson_refusal_told.get(student_id) == today:
+        return False
+    _lesson_refusal_told[student_id] = today
+    return True
 
 
 async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None, voice_file_id=None, voice_duration=None):
@@ -1794,17 +1808,18 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # 18.08.2026: часть уроков проходит офлайн, устаз не всегда в курсе и не
     # успевает вовремя подтвердить (механизм подтверждения через кнопки
     # Да/Нет введён 31.07.2026, отменён 18.08.2026 - "многие задания у нас на
-    # доверии, так как не все устазы вовремя подтверждали"). Единственная
-    # защита от повторного начисления - не чаще раза в календарную неделю
-    # (урок проходит раз в неделю, has_attendance_this_week), та же, что была
-    # и при механизме подтверждения.
+    # доверии, так как не все устазы вовремя подтверждали"). Правило
+    # «сколько раз в неделю» - в core/db.py credit_lesson_attendance (14.09.2026:
+    # до двух отметок за неделю, сутки между ними), то же для кнопки в
+    # приложении.
     text_lower = text.strip().lower()
     if text_lower in ("u", "у"):
         s_self = find_by_phone(phone, group_id)
         if s_self:
-            if not has_attendance_this_week(s_self["id"], group_id):
-                add_bonus(s_self["id"], group_id, get_date(), 5, "attendance", "online")
+            if credit_lesson_attendance(s_self["id"], group_id):
                 await send_message(chat_id, T("present", glang, name=s_self["name"]))
+            elif _first_lesson_refusal_today(s_self["id"]):
+                await send_message(chat_id, T("lesson_already_marked", glang, name=s_self["name"]))
         elif is_group_admin(phone, group_id):
             # Устаз отмечает, что урок состоялся, даже если ни один студент не отметился —
             # без бонусных баллов, только факт для еженедельного отчёта (scheduler._week_ops_stats).

@@ -36,8 +36,12 @@ SUBJECTS = (
 )
 
 
-def subjects_overview():
-    """Предметы со счётом «открыто из всего» — для блока «Уроки»."""
+def subjects_overview(keys=None):
+    """Предметы со счётом «открыто из всего» — для блока «Уроки».
+
+    keys — буквы заданий группы студента (14.09.2026): показываем только те
+    предметы, что четверговая рассылка шлёт в его группу. None — все
+    (устазу и супер-админу)."""
     try:
         with db() as c:
             rows = c.execute("""
@@ -52,6 +56,8 @@ def subjects_overview():
     by_id = {r["subject"]: r for r in rows}
     out = []
     for s in SUBJECTS:
+        if keys is not None and s["id"] not in keys:
+            continue                      # в группе нет этого задания
         r = by_id.get(s["id"])
         if not r or not r["total"]:
             continue                      # предмета в базе нет — и раздела нет

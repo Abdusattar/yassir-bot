@@ -1984,8 +1984,8 @@
     font: inherit; color: var(--ink); -webkit-tap-highlight-color: transparent;
   }
   #learn-body .k-tile .t-mk { font-size: 19px; line-height: 1.1; margin-bottom: 2px; }
-  #learn-body .k-tile .t-nm { font-size: 15px; font-weight: 640; }
-  #learn-body .k-tile .t-ds { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+  #learn-body .k-tile .t-nm { font-size: 17px; font-weight: 640; }
+  #learn-body .k-tile .t-ds { font-size: 13px; color: var(--muted); line-height: 1.3; }
   #learn-body .k-tile .t-cnt {
     margin-top: 6px; font-size: 11.5px; color: var(--accent); font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -2005,12 +2005,20 @@
     max-width: 520px; width: 100%; align-self: center; direction: ltr;
     background: var(--card-bg); border: 1px solid var(--card-border);
     border-radius: 18px; box-shadow: var(--shadow-sm);
-    padding: 14px 16px 18px; font-size: 14px; line-height: 1.55;
+    /* 17px и межстрочный 1.65 (14.09.2026, пользователь: «мелковато для
+       чтения с телефона, оптимально для глаз 40-летних»). Было 14px. */
+    padding: 16px 18px 22px; font-size: 17px; line-height: 1.65;
     color: var(--ink); white-space: pre-wrap; word-break: break-word;
   }
   #learn-body .k-text .k-chapter {
-    margin: 0 0 10px; font-size: 11.5px; color: var(--muted); white-space: normal;
+    margin: 0 0 12px; font-size: 13px; color: var(--muted); white-space: normal;
   }
+  /* Арабские слова в уроке крупнее русского: буква с харакатами при том же
+     кегле, что кириллица, читается хуже всего. ТОЛЬКО размер: direction и
+     unicode-bidi здесь нельзя - изолированный каждый кусок раскладывался
+     слева направо, и «ا و ي» читалось задом наперёд (поймано снимком
+     14.09.2026). Без них порядок остаётся тем же, что и без span. */
+  #learn-body .k-text .k-ar { font-size: 1.3em; line-height: 1.4; }
   #learn-body .k-cap, #learn-body .learn-item .nm { direction: ltr; }
   .learn-item {
     display: flex; gap: 11px; align-items: flex-start; text-align: left;
@@ -2019,9 +2027,9 @@
     cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
   .learn-item .mk { font-size: 17px; color: var(--muted); line-height: 1.2; flex: 0 0 auto; }
-  .learn-item .nm { font-size: 14px; font-weight: 640; display: block; }
-  .learn-item .ds { font-size: 11.5px; color: var(--muted); display: block; margin-top: 2px; }
-  .learn-item .cnt { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; flex: 0 0 auto; }
+  .learn-item .nm { font-size: 16px; font-weight: 640; display: block; }
+  .learn-item .ds { font-size: 13px; color: var(--muted); display: block; margin-top: 2px; }
+  .learn-item .cnt { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; flex: 0 0 auto; }
   .learn-item .cnt.done { color: var(--ok); }
   /* Шаг: картинка сверху, под ней текст, внизу точки и кнопки. Картинка -
      реальный экран приложения, снятый скриптом (scripts/shoot_onboarding.py),
@@ -2279,6 +2287,40 @@
   .stu-cal .c.d3 { background: var(--accent); color: #fff; }
   .stu-cal .c.empty { background: none; }
   .stu-cal .c.future { background: var(--card-border); opacity: .45; }
+  /* Онлайн-урок (14.09.2026): точка под днём - под черточкой в полосе списка
+     и под числом в календаре месяца. Сами черточки не трогаем: они про сдачи
+     по заданиям, урок рядом, но отдельно (уточнение пользователя). */
+  .stu-strip.has-les { padding-bottom: 10px; }
+  .stu-strip i.les { position: relative; }
+  .stu-strip i.les::after {
+    content: ''; position: absolute; left: 50%; bottom: -9px;
+    width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .stu-cal .c.les { position: relative; }
+  .stu-cal .c.les::after {
+    content: ''; position: absolute; left: 50%; bottom: 5px;
+    width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .stu-cal .c.d3.les::after { background: #fff; }
+  .stu-cal .c.les.tap { cursor: pointer; }
+  /* Строка «Онлайн-урок» у студента. Кнопка контурная: сплошной зелёный на
+     этом экране занят «Разбором устаза», отметка раз в неделю не должна
+     перетягивать внимание. */
+  .lesson-row {
+    display: flex; align-items: center; gap: 10px; direction: ltr;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 10px 12px; margin: 10px 0 12px;
+  }
+  .lesson-row .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .lesson-row b { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+  .lesson-row span { font-size: 12px; color: var(--muted); }
+  .lesson-row button {
+    flex: 0 0 auto; border-radius: 10px; padding: 9px 14px; font: inherit;
+    font-size: 13px; font-weight: 600; background: transparent; cursor: pointer;
+    color: var(--accent); border: 1px solid var(--accent);
+  }
   .ustaz-row {
     background: var(--card-bg); border: 1px solid var(--card-border);
     border-radius: 12px; padding: 12px 14px;
@@ -3545,6 +3587,18 @@
       ustaz_misses_no_limit: 'пропусков %N%',
       ustaz_lesson_misses: 'пропущено онлайн-уроков: %N% из 3',
       ustaz_strip_legend: 'Месяц по дням: чем светлее столбик, тем меньше сдано',
+      lesson_title: '🕌 Онлайн-урок',
+      lesson_hint: 'отметь после урока',
+      lesson_btn: 'Я был',
+      lesson_btn_f: 'Я была',
+      lesson_confirm: 'Отметить, что ты был на онлайн-уроке?',
+      lesson_confirm_f: 'Отметить, что ты была на онлайн-уроке?',
+      lesson_marked_today: '✓ онлайн-урок отмечен сегодня',
+      lesson_marked_recent: '✓ онлайн-урок отмечен',
+      lesson_dot_legend: '• онлайн-урок',
+      ustaz_lesson_legend: '• под днём — был на онлайн-уроке',
+      ustaz_lesson_cal_legend: '• онлайн-урок, тап по дню — снять',
+      ustaz_lesson_remove: '%N%: снять отметку урока за %D%?',
       ustaz_student_back: '← Студенты',
       ustaz_day_tasks: '%D% — %T%',
       ustaz_window_empty: 'За последние дни никто не ждёт проверки 🤲',
@@ -8300,6 +8354,7 @@
     for (var day = 1; day <= info.days; day++) {
       var tasks = (d.days || {})[stuDayKey(d.month, day)] || [];
       var cls = day > info.today ? 'future' : (tasks.length ? 'd' + Math.min(3, tasks.length) : '');
+      if ((d.lessons || []).indexOf(stuDayKey(d.month, day)) >= 0) cls += ' les';
       cells += '<div class="c ' + cls + '">' + day + '</div>';
     }
     var miss = d.threshold
@@ -8308,7 +8363,8 @@
     return '<div class="ustaz-group-title" style="margin-top:12px">' +
       T('subs_month_title') + (d.group_title ? ' · ' + ustazEsc(d.group_title) : '') +
       '</div><div class="stu-cal">' + cells + '</div>' +
-      '<div class="stu-legend">' + miss + ' · ' + T('subs_month_legend') + '</div>';
+      '<div class="stu-legend">' + miss + ' · ' + T('subs_month_legend') +
+      ((d.lessons || []).length ? ' · ' + T('lesson_dot_legend') : '') + '</div>';
   }
 
   /* Вариант В (06.09.2026, выбор пользователя): ДВЕ строки черточек.
@@ -8389,6 +8445,44 @@
     return iso && iso.length >= 10 ? iso.slice(8, 10) + '.' + iso.slice(5, 7) : '';
   }
 
+  /* Онлайн-урок (14.09.2026, решение пользователя): студент отмечает сам,
+     без устаза. Правило на сервере - до двух отметок за неделю, сутки между
+     ними (core/db.py credit_lesson_attendance), то же у «у» в Telegram. */
+  function lessonFemale() { return apiBase().indexOf('/female') >= 0; }
+
+  function subsRenderLesson(d) {
+    var box = document.getElementById('subs-lesson');
+    if (!box || !d.lesson) return;
+    if (!d.lesson.can_mark) {
+      box.innerHTML = (d.lesson.marked_today || d.lesson.week_count)
+        ? '<div class="subs-quiet" style="margin:10px 0 12px">' +
+          T(d.lesson.marked_today ? 'lesson_marked_today' : 'lesson_marked_recent') + '</div>'
+        : '';
+      return;
+    }
+    box.innerHTML = '<div class="lesson-row"><div class="t"><b>' + T('lesson_title') +
+      '</b><span>' + T('lesson_hint') + '</span></div><button id="subs-lesson-btn">' +
+      T(lessonFemale() ? 'lesson_btn_f' : 'lesson_btn') + '</button></div>';
+    document.getElementById('subs-lesson-btn').addEventListener('click', function () {
+      showConfirm(T(lessonFemale() ? 'lesson_confirm_f' : 'lesson_confirm'), function () {
+        apiCall('/lesson/mark', { method: 'POST' }).then(function (res) {
+          var r = res && res.data;
+          if (!r || !r.lesson) return;
+          d.lesson = r.lesson;
+          d.lessons = r.lessons || d.lessons;
+          subsRenderLesson(d);
+          // Точка в месяце - сразу, без перезагрузки экрана.
+          var month = document.getElementById('subs-month');
+          if (month) {
+            var open = month.getAttribute('data-open') === '1';
+            month.innerHTML = subsMonthSummaryHTML(d);
+            if (open) month.insertAdjacentHTML('beforeend', subsCalendarHTML(d));
+          }
+        });
+      });
+    });
+  }
+
   function subsLoadMonth() {
     var box = document.getElementById('subs-month');
     if (!box) return;
@@ -8399,6 +8493,7 @@
       // нечего, а не "пропусков undefined".
       if (!d || d.group_title == null) return;
       box.innerHTML = subsMonthSummaryHTML(d);
+      subsRenderLesson(d);
       // Тап проваливает в месяц по дням - тот же жест и тот же календарь,
       // что у устаза в "Студентах". Полоски при этом никуда не деваются:
       // сворачивать их обратно незачем, они и так две строки.
@@ -8723,6 +8818,11 @@
     }).catch(function () { body.innerHTML = '<p class="k-empty">' + T('lessons_empty') + '</p>'; });
   }
 
+  var LESSON_AR_RUN = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+(?:[ \u00A0\u200C]+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+)*/g;
+  function lessonArabic(html) {
+    return html.replace(LESSON_AR_RUN, function (m) { return '<span class="k-ar">' + m + '</span>'; });
+  }
+
   function lessonsRenderOne(subject, id) {
     var body = document.getElementById('learn-body');
     body.innerHTML = '<p class="k-empty">…</p>';
@@ -8735,7 +8835,7 @@
         + (((lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {}).title || '');
       body.innerHTML = '<div class="k-text"><p class="k-chapter">' + feedEsc(d.chapter)
         + (d.parts > 1 ? ' · ' + T('lesson_part_of', { N: d.part, M: d.parts }) : '')
-        + '</p>' + feedEsc(d.content) + '</div>';
+        + '</p>' + lessonArabic(feedEsc(d.content)) + '</div>';
       body.scrollTop = 0;
     }).catch(function () { lessonsRenderList(subject); });
   }
@@ -8889,7 +8989,7 @@
       if (waiting) {
         html += '<div class="subs-quiet">' + T('subs_waiting_quiet', { N: waiting }) + '</div>';
       }
-      html += '<div id="subs-month"></div>' +
+      html += '<div id="subs-month"></div><div id="subs-lesson"></div>' +
         '<div id="subs-recent-rows">' +
         recent.map(function (it) { return subsRow(it, today); }).join('') +
         '</div>';
@@ -9652,14 +9752,15 @@
     return month + '-' + (day < 10 ? '0' : '') + day;
   }
 
-  function stuStrip(days, month, today) {
-    var info = stuMonthInfo(month, today), out = '';
+  function stuStrip(days, month, today, lessons) {
+    var info = stuMonthInfo(month, today), out = '', has = false;
     for (var d = 1; d <= info.days; d++) {
       var n = days[stuDayKey(month, d)] || 0;
       var cls = d > info.today ? 'future' : (n ? 'd' + Math.min(3, n) : '');
+      if ((lessons || []).indexOf(stuDayKey(month, d)) >= 0) { cls += ' les'; has = true; }
       out += '<i class="' + cls + '"></i>';
     }
-    return '<div class="stu-strip">' + out + '</div>';
+    return '<div class="stu-strip' + (has ? ' has-les' : '') + '">' + out + '</div>';
   }
 
   function stuMissLine(st, threshold) {
@@ -9814,11 +9915,11 @@
           '<div class="top"><span class="name">' + ustazEsc(st.name) + '</span>' +
           '<span class="miss' + (near ? ' near' : '') + '">' +
           stuMissLine(st, data.threshold) + '</span></div>' +
-          stuStrip(st.days || {}, data.month, data.today) +
-          (st.lesson_missed ? '<div class="stu-legend">' +
-            T('ustaz_lesson_misses', { N: st.lesson_missed }) + '</div>' : '') +
+          stuStrip(st.days || {}, data.month, data.today, st.lesson_days) +
           '</div>';
-      }).join('') + '<div class="stu-legend">' + T('ustaz_strip_legend') + '</div>';
+      }).join('') + '<div class="stu-legend">' + T('ustaz_strip_legend') +
+        (students.some(function (st) { return (st.lesson_days || []).length; })
+          ? '<br>' + T('ustaz_lesson_legend') : '') + '</div>';
     }
     body.innerHTML = html;
     ustazBindZones(body);
@@ -9853,7 +9954,9 @@
       for (var day = 1; day <= info.days; day++) {
         var tasks = (d.days || {})[stuDayKey(d.month, day)] || [];
         var cls = day > info.today ? 'future' : (tasks.length ? 'd' + Math.min(3, tasks.length) : '');
-        cells += '<div class="c ' + cls + '">' + day + '</div>';
+        var key = stuDayKey(d.month, day);
+        if ((d.lessons || []).indexOf(key) >= 0) cls += ' les' + (d.can_edit_lessons ? ' tap' : '');
+        cells += '<div class="c ' + cls + '" data-date="' + key + '">' + day + '</div>';
       }
       var missed = 0;
       for (var dd = 1; dd <= info.today; dd++) {
@@ -9866,8 +9969,23 @@
         '<div class="stu-cal">' + cells + '</div>' +
         '<div class="stu-legend">' +
         (d.threshold ? T('ustaz_misses', { N: missed, M: d.threshold })
-                     : T('ustaz_misses_no_limit', { N: missed })) + '</div>';
+                     : T('ustaz_misses_no_limit', { N: missed })) +
+        ((d.lessons || []).length
+          ? ' · ' + T(d.can_edit_lessons ? 'ustaz_lesson_cal_legend' : 'lesson_dot_legend') : '') +
+        '</div>';
       document.getElementById('stu-back').addEventListener('click', openStudents);
+      // Ошибочная отметка урока снимается тапом по дню с точкой, с
+      // подтверждением (14.09.2026). Ставить за студента устаз не может.
+      Array.prototype.forEach.call(body.querySelectorAll('.stu-cal .c.les.tap'), function (c) {
+        c.addEventListener('click', function () {
+          var date = c.getAttribute('data-date');
+          showConfirm(T('ustaz_lesson_remove', { D: subsShortDate(date), N: d.name }), function () {
+            apiCall('/ustaz/lesson/remove', {
+              method: 'POST', body: { student_id: studentId, group_id: stuShown, date: date }
+            }).then(function () { stuOpenStudent(studentId); });
+          });
+        });
+      });
     }).catch(function () {
       openStudents();
     });

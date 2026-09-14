@@ -2393,6 +2393,7 @@ def get_group_month_progress(group_id, month=None):
     for r in rows:
         by_student.setdefault(r["student_id"], {})[r["date"]] = r["n"]
 
+    lesson_dates = get_group_lesson_dates(group_id, month)
     out = []
     for st in students:
         detail = get_skip_count_month_detail(st["id"], group_id) or {}
@@ -2403,7 +2404,10 @@ def get_group_month_progress(group_id, month=None):
             "missed": detail.get("missed", 0),
             "submitted": detail.get("submitted", 0),
             "window_start": detail.get("start"),
-            "lesson_missed": get_lesson_skip_count_month(st["id"], group_id),
+            # Точки онлайн-урока под полосой (14.09.2026). Прежний счёт
+            # «пропущено уроков» читал таблицу online_lessons, которую не
+            # заполняют с 29.06 - он всегда был нулём и не показывался.
+            "lesson_days": lesson_dates.get(st["id"], []),
         })
     # Кому нужна помощь - тот выше: сортируем по пропускам, а не по алфавиту.
     out.sort(key=lambda x: (-x["missed"], x["name"]))
@@ -2883,16 +2887,134 @@ def mark_attendance(uid, lesson_id):
         c.execute("INSERT OR IGNORE INTO attendance(sid,lesson_id) VALUES(?,?)", (uid, lesson_id))
 
 
-def has_attendance_this_week(uid, group_id):
-    from datetime import date, timedelta
-    today = date.today()
-    week_start = str(today - timedelta(days=today.weekday()))
+# Отметка онлайн-урока (14.09.2026, решение пользователя). Было: одна
+# отметка за календарную неделю пн-вс. Сломалось на живом случае (2 группа
+# устаза Асмы): урок прошлой недели сёстры отмечали в понедельник 07.09, а
+# конференцию провели в воскресенье 13.09 - та же календарная неделя, и
+# вторую отметку бот молча отбросил. Урок за прошлую неделю в понедельник -
+# обычное дело, поэтому теперь до двух отметок в неделю.
+#
+# Сутки между отметками - против повтора за ТОТ ЖЕ урок: вечером 13.09 «у»
+# отбрасывалось, сёстры писали его снова, и после полуночи повтор засчитался
+# уже 14.09, заняв место следующей недели. created_at пишется в UTC
+# (datetime('now')), сравниваем в той же шкале.
+LESSON_MARKS_PER_WEEK = 2
+LESSON_MIN_GAP_HOURS = 24
+
+
+def _month_range(month):
+    y, m = int(month[:4]), int(month[5:7])
+    nxt = f"{y + 1}-01-01" if m == 12 else f"{y}-{m + 1:02d}-01"
+    return month + "-01", nxt
+
+
+def lesson_attendance_status(uid, group_id):
+    """Можно ли сейчас отметить онлайн-урок - одно правило для «у» в Telegram
+    и для кнопки в приложении."""
+    today = get_date()
+    d = datetime.strptime(today, "%Y-%m-%d").date()
+    week_start = (d - timedelta(days=d.weekday())).isoformat()
     with db() as c:
-        return c.execute(
-            "SELECT 1 FROM score_events"
-            " WHERE student_id=? AND group_id=? AND category='attendance' AND date>=?",
+        week = c.execute(
+            "SELECT date FROM score_events WHERE student_id=? AND group_id=?"
+            " AND category='attendance' AND subcategory='online' AND date>=?",
             (uid, group_id, week_start)
-        ).fetchone() is not None
+        ).fetchall()
+        last = c.execute(
+            "SELECT MAX(created_at) AS t FROM score_events WHERE student_id=? AND group_id=?"
+            " AND category='attendance' AND subcategory='online'",
+            (uid, group_id)
+        ).fetchone()
+    week_count = len(week)
+    marked_today = any(r["date"] == today for r in week)
+    gap_ok = True
+    if last and last["t"]:
+        try:
+            then = datetime.strptime(last["t"][:19], "%Y-%m-%d %H:%M:%S")
+            now_utc = datetime.now(pytz.utc).replace(tzinfo=None)
+            gap_ok = now_utc - then >= timedelta(hours=LESSON_MIN_GAP_HOURS)
+        except ValueError:
+            gap_ok = True
+    return {
+        "week_count": week_count,
+        "marked_today": marked_today,
+        "can_mark": week_count < LESSON_MARKS_PER_WEEK and gap_ok and not marked_today,
+    }
+
+
+def credit_lesson_attendance(uid, group_id):
+    """+5 за онлайн-урок, если правило пускает. True - засчитано сейчас.
+    INSERT OR IGNORE по UNIQUE(студент, группа, дата, ...) заодно гасит гонку
+    двух одновременных отметок из Telegram и приложения."""
+    if not lesson_attendance_status(uid, group_id)["can_mark"]:
+        return False
+    with db() as c:
+        cur = c.execute(
+            "INSERT OR IGNORE INTO score_events"
+            "(student_id,group_id,date,category,subcategory,points)"
+            " VALUES(?,?,?,?,?,?)",
+            (uid, group_id, get_date(), "attendance", "online", 5)
+        )
+        return cur.rowcount > 0
+
+
+def get_lesson_dates(uid, group_id, month=None):
+    """Даты отметок онлайн-урока за месяц - точки в календаре."""
+    start, nxt = _month_range(month or get_date()[:7])
+    with db() as c:
+        rows = c.execute(
+            "SELECT DISTINCT date FROM score_events WHERE student_id=? AND group_id=?"
+            " AND category='attendance' AND subcategory='online' AND date>=? AND date<?"
+            " ORDER BY date",
+            (uid, group_id, start, nxt)
+        ).fetchall()
+    return [r["date"] for r in rows]
+
+
+def get_group_lesson_dates(group_id, month=None):
+    """{student_id: [даты]} - точки под полосой в списке «Студенты»."""
+    start, nxt = _month_range(month or get_date()[:7])
+    with db() as c:
+        rows = c.execute(
+            "SELECT student_id, date FROM score_events WHERE group_id=?"
+            " AND category='attendance' AND subcategory='online' AND date>=? AND date<?"
+            " ORDER BY date",
+            (group_id, start, nxt)
+        ).fetchall()
+    out = {}
+    for r in rows:
+        out.setdefault(r["student_id"], []).append(r["date"])
+    return out
+
+
+def remove_lesson_attendance(uid, group_id, date):
+    """Устаз снимает ошибочную отметку. True - было что снимать."""
+    with db() as c:
+        cur = c.execute(
+            "DELETE FROM score_events WHERE student_id=? AND group_id=?"
+            " AND category='attendance' AND subcategory='online' AND date=?",
+            (uid, group_id, date)
+        )
+        return cur.rowcount > 0
+
+
+def move_lesson_attendance(uid, group_id, from_date, to_date):
+    """Перенести отметку на другой день (scripts/fix_lesson_attendance.py).
+    Если на целевой день отметка уже есть - ничего не делает."""
+    with db() as c:
+        taken = c.execute(
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=?"
+            " AND category='attendance' AND subcategory='online' AND date=?",
+            (uid, group_id, to_date)
+        ).fetchone()
+        if taken:
+            return False
+        cur = c.execute(
+            "UPDATE score_events SET date=? WHERE student_id=? AND group_id=?"
+            " AND category='attendance' AND subcategory='online' AND date=?",
+            (to_date, uid, group_id, from_date)
+        )
+        return cur.rowcount > 0
 
 
 def get_dm_ok(uid):

@@ -25,6 +25,9 @@ TR = {
         "en": "📡 {name} is present! +5 points ✅",
         "zh": "📡 {name} 已出席！+5 分 ✅",
     },
+    "lesson_already_marked": {
+        "ru": "📡 {name}, урок уже отмечен ✅",
+    },
     "lesson_marked": {
         "ru": "✅ Урок отмечен как проведённый",
         "ky": "✅ Сабак өтүлгөн деп белгиленди",

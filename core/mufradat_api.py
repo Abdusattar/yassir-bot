@@ -46,6 +46,8 @@ from core.db import (
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
     is_retake_answered, get_group_tasks, get_today_report, is_app_member,
     get_profile, update_profile,
+    lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
+    remove_lesson_attendance,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -911,12 +913,26 @@ async def handle_lessons(request, user_id):
     """GET — предметы со счётом «открыто из всего»; с ?subject=j|n — список
     частей этого предмета."""
     from core.lessons import lessons_of, subjects_overview
+    keys = _lesson_subject_keys(user_id)
     subject = request.query.get("subject")
     if subject:
         if subject not in ("j", "n"):
             return web.json_response({"error": "bad_subject"}, status=400)
+        if keys is not None and subject not in keys:
+            return web.json_response({"items": []})
         return web.json_response({"items": lessons_of(subject)})
-    return web.json_response({"subjects": subjects_overview()})
+    return web.json_response({"subjects": subjects_overview(keys)})
+
+
+def _lesson_subject_keys(user_id):
+    """Какие предметы показывать в «Знаниях» (14.09.2026, вопрос пользователя):
+    те, что четверговая рассылка шлёт в группу студента, - по буквам заданий
+    группы (_SUBJECT_TASK_KEY в core/scheduler.py). Устазу и супер-админу -
+    все: они ведут разные группы. None - без фильтра."""
+    if _is_ustaz(user_id):
+        return None
+    group = get_learning_group(user_id, include_prep=True)
+    return set(get_group_tasks(group)) if group else set()
 
 
 @with_auth
@@ -1179,6 +1195,9 @@ async def handle_my_month(request, user_id):
         "group_title": group["title"],
         "month": request.query.get("month") or get_date()[:7],
         "today": get_date(),
+        # Онлайн-урок (14.09.2026): точки в своём месяце и строка «Я был».
+        "lessons": get_lesson_dates(user["id"], group["id"], request.query.get("month")),
+        "lesson": lesson_attendance_status(user["id"], group["id"]),
     }
     # У подготовительной правило другое (см. core/prep.py): не «сколько
     # пропустил до перевода», а «сколько полных дней набрал до срока».
@@ -1186,6 +1205,33 @@ async def handle_my_month(request, user_id):
     if group["group_type"] == "prep":
         payload["prep"] = prep_progress(user["id"], group["id"])
     return web.json_response(payload)
+
+
+@with_auth
+async def handle_lesson_mark(request, user_id):
+    """POST - «Я был на онлайн-уроке» из «Работы с устазом» (14.09.2026).
+    Правило то же, что у «у» в Telegram (core/db.py credit_lesson_attendance),
+    и сообщение в группу то же: устаз видит отметку там, где привык."""
+    user = find_user_by_phone(user_id)
+    group = get_learning_group(user_id, include_prep=True)
+    if not user or not group:
+        return web.json_response({"error": "no_group"}, status=400)
+    credited = credit_lesson_attendance(user["id"], group["id"])
+    if credited and group["chat_id"]:
+        from core.i18n import T as bot_text
+        from core.tg import send_message
+        try:
+            await send_message(
+                group["chat_id"],
+                bot_text("present", group["lang"] or "ru", name=user["name"]) + " (через YassirApp)"
+            )
+        except Exception as e:
+            log.error("lesson mark notify error: %s: %s", type(e).__name__, e)
+    return web.json_response({
+        "credited": credited,
+        "lesson": lesson_attendance_status(user["id"], group["id"]),
+        "lessons": get_lesson_dates(user["id"], group["id"]),
+    })
 
 
 @with_auth
@@ -1225,13 +1271,39 @@ async def handle_ustaz_student(request, user_id):
     if not student:
         return web.json_response({"error": "not_found"}, status=404)
     group = get_group_by_id(group_id)
+    visible, _own, _is_super, _hidden = _visible_ustaz_groups(user_id, "all")
     return web.json_response({
         "name": student["name"],
+        "lessons": get_lesson_dates(student_id, group_id, request.query.get("month")),
+        # Снять ошибочную отметку урока - устаз этой группы или супер-админ.
+        "can_edit_lessons": group_id in [g["id"] for g in visible],
         "days": get_student_month_days(student_id, group_id, request.query.get("month")),
         "threshold": group_miss_threshold(group["group_type"] if group else None),
         "month": request.query.get("month") or get_date()[:7],
         "today": get_date(),
     })
+
+
+@with_auth
+async def handle_ustaz_lesson_remove(request, user_id):
+    """POST {student_id, group_id, date} - снять ошибочную отметку онлайн-урока
+    (14.09.2026). Ставить отметки за студента устаз не может - только снять."""
+    try:
+        body = await request.json()
+        student_id = int(body.get("student_id"))
+        group_id = int(body.get("group_id"))
+        date = str(body.get("date") or "")
+    except Exception:
+        return web.json_response({"error": "bad_request"}, status=400)
+    if len(date) != 10 or date[4] != "-" or date[7] != "-":
+        return web.json_response({"error": "bad_date"}, status=400)
+    visible, _own, _is_super, _hidden = _visible_ustaz_groups(user_id, "all")
+    if group_id not in [g["id"] for g in visible]:
+        return web.json_response({"error": "forbidden"}, status=403)
+    if not any(s["id"] == student_id for s in get_students(group_id)):
+        return web.json_response({"error": "not_found"}, status=404)
+    removed = remove_lesson_attendance(student_id, group_id, date)
+    return web.json_response({"ok": removed, "lessons": get_lesson_dates(student_id, group_id, date[:7])})
 
 
 def _ustaz_submission(user_id, submission_id):
@@ -1669,8 +1741,10 @@ def build_app():
     app.router.add_get("/api/muf/ustaz/groups", handle_ustaz_groups)
     app.router.add_get("/api/muf/ustaz/reviewed", handle_ustaz_reviewed)
     app.router.add_get("/api/muf/month", handle_my_month)
+    app.router.add_post("/api/muf/lesson/mark", handle_lesson_mark)
     app.router.add_get("/api/muf/ustaz/students", handle_ustaz_students)
     app.router.add_get("/api/muf/ustaz/student", handle_ustaz_student)
+    app.router.add_post("/api/muf/ustaz/lesson/remove", handle_ustaz_lesson_remove)
     app.router.add_get("/api/muf/ustaz/submission", handle_ustaz_submission)
     app.router.add_get("/api/muf/ustaz/audio", handle_ustaz_audio)
     app.router.add_post("/api/muf/ustaz/verdict", handle_ustaz_verdict)
