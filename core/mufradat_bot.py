@@ -443,13 +443,17 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
         return {"ok": False, "error": "send_failed"}
 
     voice_msg_id = res["result"]["message_id"]
-    file_id = (res["result"].get("voice") or {}).get("file_id")
+    voice_obj = res["result"].get("voice") or {}
+    file_id = voice_obj.get("file_id")
+    # Длину записи Telegram считает сам при приёме файла (14.09.2026) -
+    # свой ffprobe тут не нужен.
+    duration = voice_obj.get("duration")
     # Место сдачи кладём в саму запись (04.09.2026): кабинету устаза нужно
     # показать, ЧТО именно проверять, а из подписи в Telegram это не достать.
     save_voice_submission(user["id"], group["id"], group["chat_id"],
                           voice_msg_id, get_date(), file_id,
                           hifz_page=page, hifz_line=line, hifz_stage=stage,
-                          photo_message_id=photo_msg_id)
+                          photo_message_id=photo_msg_id, duration=duration)
     if credited:
         save_report(user["id"], group["id"], get_date(), {"m": True})
     return {"ok": True, "credited": credited, "place": place}

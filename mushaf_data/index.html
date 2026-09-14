@@ -2307,6 +2307,13 @@
   /* "Ждёт" краснеет само после суток (04.09.2026, макет 01.09): срочность
      должна считываться пятном, а не вычитанием дат в уме. */
   .ustaz-row .meta b.late { color: var(--no); font-weight: 600; }
+  /* Длина записи (14.09.2026, вариант В макета): справа от имени, без фона -
+     это не статус, а мера работы. Табличные цифры, чтобы столбик «1:48 /
+     0:52 / 2:15» не плясал по ширине. */
+  .sub-pill.dur {
+    padding: 0; background: transparent; color: var(--ink);
+    font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
   /* Заголовок группы внутри списка - устаз ведёт несколько групп (у Умар
      устаза их три), и "кто ждёт" без "где" читается плохо. */
   .ustaz-group-title {
@@ -8948,9 +8955,16 @@
     if (reviewAudio.src && reviewAudio.src.indexOf('blob:') === 0) URL.revokeObjectURL(reviewAudio.src);
     reviewAudio.removeAttribute('src');
     reviewPlaying = null;
-    document.getElementById('review-play').textContent = T('review_play');
+    document.getElementById('review-play').textContent = reviewPlayLabel();
     document.getElementById('review-mine').textContent = T('review_play_mine');
     document.getElementById('review-back10').style.display = 'none';
+  }
+
+  // «▶ Прослушать сдачу · 1:48» - длина записи прямо на кнопке (14.09.2026):
+  // подсказка над кнопками занята счётчиком пометок и перерисовывается.
+  function reviewPlayLabel() {
+    var dur = review.sub ? ustazDur(review.sub.duration) : '';
+    return T('review_play') + (dur ? ' · ' + dur.replace('⏱ ', '') : '');
   }
 
   reviewAudio.addEventListener('ended', reviewStopAudio);
@@ -8987,7 +9001,7 @@
       // Запись не пошла - отматывать нечего, кнопка не должна остаться.
       document.getElementById('review-back10').style.display = 'none';
       setTimeout(function () {
-        btn.textContent = T(kind === 'own' ? 'review_play' : 'review_play_mine');
+        btn.textContent = kind === 'own' ? reviewPlayLabel() : T('review_play_mine');
       }, 2000);
     });
   }
@@ -9009,6 +9023,7 @@
       }
       review.on = true;
       review.sub = sub;
+      document.getElementById('review-play').textContent = reviewPlayLabel();
       review.words = {};
       (sub.error_words || []).forEach(function (m) { review.words[reviewKey(m.line, m.word)] = true; });
       hifz.on = true;
@@ -9310,6 +9325,15 @@
 
   // Имя студента и название группы задаёт не наш код (Telegram-профиль,
   // название чата) - в отличие от остального текста в кабинете.
+  // Длина записи «1:48» из секунд (14.09.2026). Пусто, если сервер её не
+  // знает (старые сдачи, документ вместо голосового).
+  function ustazDur(sec) {
+    if (sec == null || !(sec >= 0)) return '';
+    sec = Math.round(sec);
+    var m = Math.floor(sec / 60), s2 = sec % 60;
+    return '⏱ ' + m + ':' + (s2 < 10 ? '0' : '') + s2;
+  }
+
   function ustazEsc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -9328,13 +9352,19 @@
     // приложения идут своим списком, и «через апп» на каждой строке ничего
     // не различало. Голосовые видны, лишь когда их строку развернули.
     var src = fromApp ? '' : '<span class="sub-pill audio">' + T('ustaz_src_audio') + '</span>';
+    // Длина записи справа от имени (14.09.2026, вариант В макета): по ней
+    // устаз видит, сколько займёт проверка, ещё до тапа. Карточка в две
+    // строки - место, время и «ждёт» в одной, третья строка была лишней.
+    var dur = ustazDur(item.duration);
+    var right = (dur ? '<span class="sub-pill dur">' + dur + '</span>' : '') + src;
+    var meta = [ustazPlace(item)];
+    if (withGroup) meta.push(ustazEsc(item.group_title));
+    var when = ustazTimeOnly(item.sent_at);
+    if (when) meta.push(when);
+    if (waited) meta.push('<b' + (late ? ' class="late"' : '') + '>' + waited + '</b>');
     return '<div class="ustaz-row"' + open + '><div class="name">' +
-      '<span>' + ustazEsc(item.student_name) + '</span>' + src + '</div>' +
-      '<div class="meta">' + ustazPlace(item) +
-      (withGroup ? ' · ' + ustazEsc(item.group_title) : '') + '</div>' +
-      '<div class="meta">' + ustazTimeOnly(item.sent_at) +
-      (waited ? ' · <b' + (late ? ' class="late"' : '') + '>' + waited + '</b>' : '') +
-      '</div></div>';
+      '<span>' + ustazEsc(item.student_name) + '</span>' + right + '</div>' +
+      '<div class="meta">' + meta.join(' · ') + '</div></div>';
   }
 
   /* Выбранная группа - ОДНА на весь кабинет (13.09.2026, поймано на разборе
@@ -9679,6 +9709,8 @@
             // Что внутри: без этого «принято» с разбором на пять слов и
             // «принято» молчком выглядят в списке одинаково.
             var what = [];
+            var dur = ustazDur(it.duration);
+            if (dur) what.push(dur);
             if (it.marks) what.push(T('subs_marked_words', { N: it.marks }));
             if (it.has_review_audio) what.push(T('ustaz_has_voice'));
             var note = '';

@@ -823,7 +823,7 @@ async def handle_reaction(chat_id, user_id, message_id, anon_admin=False):
     mark_curriculum_approved(chat_id, message_id)
 
 
-async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None, voice_file_id=None):
+async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None, voice_file_id=None, voice_duration=None):
     phone = extract_phone(sender)
     text = (text or "").strip()
     # Telegram в группах добавляет @botname к командам: /help@yassirquranbot → /help
@@ -1831,7 +1831,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     # ── Голосовая/аудио сдача заучивания — ждёт проверки устаза ───────────────
     if is_voice and message_id:
-        save_voice_submission(s["id"], group_id, chat_id, message_id, get_date(), voice_file_id)
+        save_voice_submission(s["id"], group_id, chat_id, message_id, get_date(), voice_file_id,
+                              duration=voice_duration)
         # Указатель 40+40 двигают ОБА канала сдачи (решение пользователя
         # 02.09.2026, было заложено ещё в макете 01.09): иначе студент,
         # сдавший голосом прямо в группе, откроет приложение и увидит ту же

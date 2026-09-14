@@ -34,7 +34,7 @@ log = logging.getLogger(__name__)
 _sender_locks: dict = {}
 
 
-async def queued_process_message(chat_id, sender, text, sender_name, is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None, voice_file_id=None):
+async def queued_process_message(chat_id, sender, text, sender_name, is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None, voice_file_id=None, voice_duration=None):
     key = (chat_id, sender)
     lock = _sender_locks.get(key)
     if lock is None:
@@ -42,7 +42,7 @@ async def queued_process_message(chat_id, sender, text, sender_name, is_media=Fa
         _sender_locks[key] = lock
     async with lock:
         try:
-            await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id, voice_file_id)
+            await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id, voice_file_id, voice_duration)
         except Exception as e:
             log.error("process_message error chat=%s sender=%s: %s", chat_id, sender, e)
         await asyncio.sleep(0.3)
@@ -369,6 +369,9 @@ async def main():
                                ("photo", "video", "document", "audio", "voice", "video_note"))
                 is_voice = "voice" in msg or "audio" in msg
                 voice_file_id = (msg.get("voice") or msg.get("audio") or {}).get("file_id")
+                # Длина записи в секундах - Telegram кладёт её в сам объект
+                # voice/audio (14.09.2026, кабинет устаза показывает её у сдачи).
+                voice_duration = (msg.get("voice") or msg.get("audio") or {}).get("duration")
                 reply_to = msg.get("reply_to_message", {})
                 reply_to_id = reply_to.get("from", {}).get("id") if reply_to else None
                 reply_to_text = reply_to.get("text", "") if reply_to else ""
@@ -436,7 +439,7 @@ async def main():
                 if (text or is_media) and chat_id:
                     message_id = msg.get("message_id")
                     asyncio.create_task(
-                        queued_process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id, voice_file_id)
+                        queued_process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id, voice_file_id, voice_duration)
                     )
 
         except Exception as e:

@@ -83,6 +83,11 @@ def seed_extra():
         for msg, hours in ages.items():
             conn.execute("UPDATE voice_submissions SET sent_at=? WHERE chat_id=? AND message_id=?",
                          ((now - timedelta(hours=hours)).isoformat(), stand.CHAT, msg))
+        # Длина записи (14.09.2026) - у сдач из приложения, чтобы *_now
+        # показывали её так, как рисует настоящий код.
+        for msg, sec in {104: 108, 103: 52, 111: 135, 113: 63}.items():
+            conn.execute("UPDATE voice_submissions SET duration=? WHERE chat_id=? AND message_id=?",
+                         (sec, stand.CHAT, msg))
 
 
 # ─── предлагаемая разметка ────────────────────────────────────────────────
@@ -141,6 +146,10 @@ MOCK_CSS = """
 #review-foot .mk-hist .chips { display: flex; gap: 6px; }
 #review-foot .mk-hist .chips button { flex: 1 1 0; padding: 7px 4px; font-size: 11.5px; }
 .mk-prev { outline: 1.5px dashed var(--no); outline-offset: 1px; border-radius: 4px; }
+
+/* Длина записи (14.09.2026): А - в строке времени, Б - плашкой у имени. */
+.mk-dur { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sub-pill.mk-durpill { font-variant-numeric: tabular-nums; }
 
 /* Сдачи студента под его календарём. */
 .mk-subs { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; direction: ltr; }
@@ -213,6 +222,33 @@ MOCK_JS = """
     });
   }
 
+  // Длина записи у каждой сдачи из приложения. mode: 'meta' - в строке
+  // времени после «ждёт», 'pill' - плашкой справа от имени.
+  var DUR = ['1:48', '0:52', '2:15', '1:03', '0:37', '1:21'];
+  function durations(mode) {
+    all('[data-review]', $('ustaz-body')).forEach(function (el, i) {
+      var d = DUR[i % DUR.length];
+      if (mode === 'meta') {
+        var metas = all('.meta', el);
+        metas[metas.length - 1].insertAdjacentHTML('beforeend',
+          ' · <span class="mk-dur">⏱ ' + d + '</span>');
+      } else {
+        el.querySelector('.name').insertAdjacentHTML('beforeend',
+          '<span class="sub-pill mk-durpill">⏱ ' + d + '</span>');
+      }
+    });
+  }
+
+  // Карточка в две строки: имя + длина, под ними место · время · ждёт.
+  function twoLines() {
+    all('[data-review]', $('ustaz-body')).forEach(function (el) {
+      var metas = all('.meta', el);
+      if (metas.length < 2) return;
+      metas[0].innerHTML = metas[0].innerHTML + ' · ' + metas[1].innerHTML;
+      metas[1].remove();
+    });
+  }
+
   function playerBar() {
     var foot = $('review-foot');
     var p = document.createElement('div');
@@ -230,6 +266,16 @@ MOCK_JS = """
     queue_now: openQueue,
     queue_fold: async function () { await openQueue(); foldGroupVoices('fold'); },
     queue_tabs: async function () { await openQueue(); foldGroupVoices('tabs'); },
+
+    dur_meta: async function () { await openQueue(); durations('meta'); },
+    dur_pill: async function () { await openQueue(); durations('pill'); },
+    dur_two: async function () { await openQueue(); durations('pill'); twoLines(); },
+    review_dur: async function () {
+      await openReview('Абдулла', 'строчка 4'); mark(3, 2);
+      // Подсказка перерисовывается после каждой пометки - длину кладём на кнопку.
+      var b = $('review-play');
+      b.innerHTML = b.textContent.trim() + ' <span class="mk-dur">· 1:48</span>';
+    },
 
     review_now: async function () { await openReview('Абдулла', 'строчка 4'); mark(3, 2); },
     review_bar: async function () {
@@ -302,13 +348,16 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["queue_now", "queue_fold", "queue_tabs",
+VARIANTS = ["queue_now", "queue_fold", "queue_tabs", "dur_meta", "dur_pill", "dur_two", "review_dur",
             "review_now", "review_bar", "comment_then", "review_next",
             "history_now", "history",
             "student_now", "student_subs"]
 
 # Сравнения: первым всегда «как сейчас».
 COMPARE = {
+    "duration": [("queue_now", "Сейчас"), ("dur_meta", "А · в строке времени"),
+                 ("dur_pill", "Б · плашкой у имени"), ("dur_two", "В · две строки")],
+    "review_dur": [("review_now", "Сейчас"), ("review_dur", "Длина в шапке разбора")],
     "queue": [("queue_now", "Сейчас"), ("queue_fold", "А · голосовые одной строкой"),
               ("queue_tabs", "Б · голосовые отдельным срезом")],
     "review": [("review_now", "Сейчас"), ("review_bar", "Полоса записи"),

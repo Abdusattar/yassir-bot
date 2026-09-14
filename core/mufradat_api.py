@@ -1320,6 +1320,8 @@ async def handle_ustaz_submission(request, user_id):
         "hifz_stage": sub["hifz_stage"],
         "has_audio": bool(sub["file_id"]),
         "has_review_audio": bool(sub["review_file_id"]),
+        # Длина записи в секундах - на кнопке «Прослушать сдачу» (14.09.2026).
+        "duration": sub["duration"],
         "verdict": sub["verdict"],
         # Пересдано - экран показывает разбор, но не даёт его переделать
         # (07.09.2026, см. core/db.py:is_retake_answered).

@@ -352,6 +352,14 @@ def _run_migrations(c):
     # не зависит - сравниваем по нему.
     if "verdict_after_id" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN verdict_after_id INTEGER")
+    # Длина записи в секундах (14.09.2026, просьба пользователя): устазу в
+    # кабинете видно, сколько времени займёт проверка, и с чего начать.
+    # Telegram отдаёт её сам - в ответе sendVoice у сдачи из приложения и в
+    # объекте voice/audio у голосового, присланного прямо в группу. У строк
+    # старше этой колонки пусто; ждущие проверки добиты разово скриптом
+    # scripts/backfill_voice_duration.py (ffprobe по скачанному файлу).
+    if "duration" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN duration INTEGER")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -1448,19 +1456,52 @@ def get_today_report(uid, group_id=None):
 
 def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_id=None,
                           hifz_page=None, hifz_line=None, hifz_stage=None,
-                          photo_message_id=None):
+                          photo_message_id=None, duration=None):
     """hifz_* (04.09.2026) - место сдачи 40+40: страница, строка (0-based, как
     на фронтенде) и этап. Есть только у сдач из приложения; у голосового,
-    присланного прямо в группу, места нет и быть не может."""
+    присланного прямо в группу, места нет и быть не может.
+
+    duration (14.09.2026) - длина записи в секундах, как её сообщил Telegram;
+    None, если он её не дал (документ вместо голосового и т.п.)."""
     with db() as c:
         c.execute(
             "INSERT OR IGNORE INTO voice_submissions"
             "(student_id,group_id,chat_id,message_id,date,sent_at,file_id,"
-            "hifz_page,hifz_line,hifz_stage,photo_message_id)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            "hifz_page,hifz_line,hifz_stage,photo_message_id,duration)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (student_id, group_id, chat_id, message_id, date, get_now().isoformat(), file_id,
-             hifz_page, hifz_line, hifz_stage, photo_message_id)
+             hifz_page, hifz_line, hifz_stage, photo_message_id, _as_seconds(duration))
         )
+
+
+def _as_seconds(value):
+    """Длина записи: целые секунды или None. Telegram шлёт int, ffprobe -
+    дробь строкой; всё остальное (пусто, мусор) - None, а не ошибка."""
+    try:
+        sec = int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+    return sec if sec >= 0 else None
+
+
+def set_submission_duration(submission_id, seconds):
+    """Разовое добивание длины у старых сдач (scripts/backfill_voice_duration.py)."""
+    with db() as c:
+        c.execute("UPDATE voice_submissions SET duration=? WHERE id=?",
+                  (_as_seconds(seconds), submission_id))
+
+
+def get_submissions_without_duration(pending_only=True):
+    """Сдачи с файлом, но без длины - кандидаты на добивание. По умолчанию
+    только те, что ещё ждут проверки: у давно разобранных длина уже ни к чему."""
+    where = " AND vs.reviewed_at IS NULL" if pending_only else ""
+    with db() as c:
+        rows = c.execute(
+            "SELECT vs.id, vs.file_id, vs.chat_id, vs.message_id FROM voice_submissions vs"
+            " WHERE vs.duration IS NULL AND vs.file_id IS NOT NULL AND vs.file_id != ''"
+            + where + " ORDER BY vs.id"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def mark_voice_reviewed(chat_id, message_id):
@@ -1538,7 +1579,7 @@ def get_student_submissions(student_id, limit=20):
     with db() as c:
         rows = c.execute(
             "SELECT vs.id, vs.date, vs.sent_at, vs.reviewed_at,"
-            " vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
+            " vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.duration,"
             " vs.file_id IS NOT NULL AS has_audio,"
             " vs.review_type, vs.review_text,"
             " vs.review_file_id IS NOT NULL AS has_review_audio,"
@@ -1854,7 +1895,7 @@ def get_reviewed_submissions(group_ids, limit=50):
         rows = c.execute(
             f"SELECT vs.id, vs.date, vs.reviewed_at, vs.verdict, vs.verdict_at,"
             f" vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.group_id,"
-            f" vs.error_words,"
+            f" vs.error_words, vs.duration,"
             f" vs.file_id IS NOT NULL AS has_audio,"
             f" vs.review_file_id IS NOT NULL AS has_review_audio,"
             f" ({_REDONE_EXISTS}) AS redone,"
@@ -1950,7 +1991,7 @@ def get_pending_voice_reviews(group_ids, recent=True, app_only=False):
     with db() as c:
         rows = c.execute(
             "SELECT vs.id, vs.sent_at, vs.date, vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
-            " vs.group_id, u.name AS student_name, g.title AS group_title"
+            " vs.group_id, vs.duration, u.name AS student_name, g.title AS group_title"
             # По date, а не только по sent_at: sent_at появился ALTER-ом
             # позже самой таблицы, у старых строк он пуст.
             + where + " ORDER BY vs.date DESC, vs.sent_at DESC, vs.id DESC",
