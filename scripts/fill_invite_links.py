@@ -14,7 +14,9 @@ createChatInviteLink (новая именованная ссылка, сущес
 
     python scripts/fill_invite_links.py --profile female --dry-run
     python scripts/fill_invite_links.py --profile female
-    python scripts/fill_invite_links.py --profile male --types pro,relaxed
+    python scripts/fill_invite_links.py --profile male --exclude 21,22
+        (21 «Отбор.», 22 «Группа для детей» — специальные, выпускников туда
+        не направляем; решение пользователя 14.09)
 
 Запускать на сервере из корня репозитория от владельца базы (stursunkul):
 токен берётся из .env / .env.female рядом с базой.
@@ -54,8 +56,11 @@ def main():
     ap.add_argument("--profile", default="male", choices=["male", "female"])
     ap.add_argument("--types", default="pro,relaxed",
                     help="типы групп через запятую (по умолчанию pro,relaxed)")
+    ap.add_argument("--exclude", default="",
+                    help="id групп через запятую, которые не трогать (специальные: отбор, дети)")
     ap.add_argument("--dry-run", action="store_true", help="только показать, где ссылки нет")
     args = ap.parse_args()
+    exclude = {int(x) for x in args.exclude.split(",") if x.strip()}
 
     os.environ["BOT_PROFILE"] = args.profile
     os.environ.setdefault("DB_PATH", str(ROOT / f"quran_{args.profile}.db"))
@@ -79,7 +84,12 @@ def main():
         ).fetchall()
 
     missing = [r for r in rows if not (r["invite_link"] or "").strip()]
-    print(f"учебных групп: {len(rows)}, без ссылки: {len(missing)}")
+    skipped = [r for r in missing if r["id"] in exclude]
+    missing = [r for r in missing if r["id"] not in exclude]
+    print(f"учебных групп: {len(rows)}, без ссылки: {len(missing) + len(skipped)}, "
+          f"исключено: {len(skipped)}")
+    for r in skipped:
+        print(f"  – [{r['id']}] «{r['title']}» — исключена, ссылку не завожу")
     if not missing:
         return 0
     for r in missing:
