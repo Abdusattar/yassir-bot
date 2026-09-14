@@ -454,6 +454,15 @@ MOCK_JS = """
     les_list_now: openStudentsList,
     // Тренажёры (14.09.2026) - настоящий код, без инъекций.
     tj_door: async function () { await wait(2500); },
+    // «Знания» по заданиям (14.09.2026): kn_* - Юсуф из группы без таджвида
+    // и нахва, tj_learn - Абдулла из группы с таджвидом.
+    kn_door: async function () { await wait(2500); },
+    kn_learn: async function () {
+      await wait(2500); $('dash-learn').click(); await wait(1800);
+    },
+    tj_learn: async function () {
+      await wait(2500); $('dash-learn').click(); await wait(1800);
+    },
     tj_hub: async function () {
       await wait(2500); $('dash-trainer').click(); await wait(700);
     },
@@ -562,7 +571,7 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
+VARIANTS = ["kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
             "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
             "les_list_now", "les_list", "les_cal", "les_cal_confirm",
@@ -573,6 +582,8 @@ VARIANTS = ["tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
 
 # Сравнения: первым всегда «как сейчас».
 COMPARE = {
+    "knowledge": [("kn_door", "Без предметов · дашборд"), ("kn_learn", "Без предметов · Знания"),
+                  ("tj_door", "С таджвидом · дашборд"), ("tj_learn", "С таджвидом · Знания")],
     "tajweed": [("tj_door", "Дашборд"), ("tj_hub", "Тренажёры"),
                 ("tj_card", "Карточка"), ("tj_answer", "После ответа"), ("tj_done", "Итог захода")],
     "lesson_real": [("les_stu_now", "Студент"), ("les_stu_real_month", "Свой месяц"),
@@ -601,6 +612,8 @@ COMPARE = {
 def page(variant):
     # Стили макета безвредны и для *_now: их классы появляются только из
     # сцен-предложений, «как сейчас» ничего не дорисовывает.
+    if variant.startswith("kn_"):
+        return stand.dev_index("777004", "Юсуф") + MOCK_CSS + MOCK_JS
     if variant.startswith(("les_stu", "tj_")):
         return stand.dev_index(stand.STUDENT, "Абдулла") + MOCK_CSS + MOCK_JS
     return stand.dev_index(stand.USTAZ, "Устаз") + MOCK_CSS + MOCK_JS

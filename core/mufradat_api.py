@@ -937,6 +937,11 @@ def _lesson_subject_keys(user_id):
 
 # ── Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py) ───────────────
 
+def _learn_subjects(user_id):
+    keys = _lesson_subject_keys(user_id)
+    return [k for k in ("j", "n") if keys is None or k in keys]
+
+
 def _tajweed_open(user_id):
     """Виден ли тренажёр. Решение пользователя: только группам с заданием
     «Таджвид», остальным скрыт, «потом решим, как открывать». Устазу и
@@ -1037,6 +1042,11 @@ async def handle_lesson(request, user_id):
         return web.json_response({"error": "bad_id"}, status=400)
     item = lesson(part_id)
     if not item:
+        return web.json_response({"error": "not_open"}, status=404)
+    # Предмета нет в заданиях группы - как закрытый (14.09.2026): список и
+    # плитки уже скрыты, а прямой запрос по номеру не должен их обходить.
+    keys = _lesson_subject_keys(user_id)
+    if keys is not None and item["subject"] not in keys:
         return web.json_response({"error": "not_open"}, status=404)
     return web.json_response(item)
 
@@ -1147,6 +1157,9 @@ def _dashboard_facts(user_id):
         # None - тренажёра таджвида у человека нет (группа без задания «j»):
         # тогда и строки о нём на двери и в «Тренажёрах» нет.
         "tajweed": _tajweed_facts(user_id),
+        # Какие предметы есть у человека в «Знаниях» (14.09.2026): по ним
+        # подпись двери и блок «Уроки» - у группы без таджвида и нахва их нет.
+        "learn": _learn_subjects(user_id),
         "subs": subs,
         "day": _my_day(user),
     }

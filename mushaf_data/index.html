@@ -2058,6 +2058,7 @@
     border-radius: 16px; padding: 12px 13px 11px; cursor: pointer;
     font: inherit; color: var(--ink); -webkit-tap-highlight-color: transparent;
   }
+  #learn-body .k-tile:only-child { grid-column: 1 / -1; }
   #learn-body .k-tile .t-mk { font-size: 19px; line-height: 1.1; margin-bottom: 2px; }
   #learn-body .k-tile .t-nm { font-size: 17px; font-weight: 640; }
   #learn-body .k-tile .t-ds { font-size: 13px; color: var(--muted); line-height: 1.3; }
@@ -2841,7 +2842,7 @@
        и через полгода. -->
   <div class="dash-row" id="dash-learn" tabindex="0" role="button">
     <span class="mark">✎</span>
-    <span class="text"><span class="label" data-i18n="dash_learn">Знания</span><span class="sub" data-i18n="dash_learn_sub">Как работаем, таджвид и нахв</span></span>
+    <span class="text"><span class="label" data-i18n="dash_learn">Знания</span><span class="sub" id="dash-learn-sub" data-i18n="dash_learn_how">Как работаем</span></span>
   </div>
   </div>
   <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
@@ -3593,6 +3594,9 @@
       // четвергам в группы.
       dash_learn: 'Знания',
       dash_learn_sub: 'Как работаем, таджвид и нахв',
+      dash_learn_how: 'Как работаем',
+      dash_learn_j: 'Как работаем и таджвид',
+      dash_learn_n: 'Как работаем и нахв',
       learn_title: 'Знания',
       learn_lead: '',
       learn_cap_how: 'КАК РАБОТАТЬ В ПРИЛОЖЕНИИ',
@@ -4060,6 +4064,7 @@
     if (document.getElementById('trainer').style.display !== 'none' && trainerState) renderTrainer();
     if (document.getElementById('trainers').style.display === 'flex') trainersRender();
     if (document.getElementById('tajweed').style.display === 'flex' && tajweedState) renderTajweed(tajweedState);
+    if (dashFactsLast) dashLearnSub(dashFactsLast);
     if (typeof loadMyWords === 'function' &&
         document.getElementById('view-mywords') &&
         document.getElementById('view-mywords').classList.contains('active')) loadMyWords();
@@ -4653,9 +4658,10 @@
         : T('ustaz_place', { P: page, L: (f.hifz.line || 0) + 1 });
     }
     dashFactsLast = f;
+    dashLearnSub(f);
     if (f.words) {
       document.getElementById('dash-trainer-sub').textContent = f.tajweed
-        ? T('dash_trainers_both', { N: f.words.done, M: f.words.target, A: Math.min(f.tajweed.done, f.tajweed.target), B: f.tajweed.target })
+        ? T('dash_trainers_both', { N: f.words.done, M: f.words.target, A: f.tajweed.done, B: f.tajweed.target })
         : T('dash_words_today', { N: f.words.done, M: f.words.target });
     }
     if (document.getElementById('trainers').style.display === 'flex') trainersRender();
@@ -7300,6 +7306,10 @@
       if (hifz.on && !hifz.picking && hifzProgressKey(currentPage, hifz.stage, hifzProgressHalf()) === key) {
         hifzHead();
       }
+      // Цифра у кнопки Хусари и в «Крупно» (14.09.2026, поймал пользователь:
+      // стояла на нуле, пока не тапнешь). Перерисовка своя проверяет, что
+      // счётчик виден и стоит на этой же единице.
+      if (typeof hifzCountRender === 'function' && hifzCountKey === key) hifzCountRender();
     }).catch(function () {});
   }
 
@@ -8821,7 +8831,11 @@
     // экран): за ними возвращаются каждую неделю, а объяснения приложения
     // читают один раз и потом заходят изредка. Блок рисуется заглушкой и
     // наполняется ответом — держать пустой экран, пока идёт сеть, незачем.
-    var html = '<div class="k-card" id="k-lessons"><p class="k-head">'
+    // Нет у группы таджвида и нахва (14.09.2026) - блока «Уроки» нет вовсе,
+    // а не пустая карточка. Знаем это из heartbeat ещё до запроса, поэтому
+    // карточка не появляется, чтобы тут же пропасть.
+    var noLessons = !!(dashFactsLast && dashFactsLast.learn && !dashFactsLast.learn.length);
+    var html = noLessons ? '' : '<div class="k-card" id="k-lessons"><p class="k-head">'
       + T('learn_cap_lessons') + '<i>' + T('learn_lessons_note') + '</i></p>'
       + '<div class="k-tiles" id="k-subjects"></div></div>';
 
@@ -8872,8 +8886,10 @@
     var box = document.getElementById('k-subjects');
     if (!box) return;                      // ушли с оглавления, пока грузилось
     if (!subjects.length) {
-      document.getElementById('k-lessons').innerHTML =
-        '<p class="k-empty">' + T('lessons_empty') + '</p>';
+      // Показывать нечего - убираем блок целиком, пустая карточка с
+      // обещанием «появятся» у группы без предметов вводит в заблуждение.
+      var card = document.getElementById('k-lessons');
+      if (card) card.parentNode.removeChild(card);
       return;
     }
     box.innerHTML = subjects.map(function (s) {
@@ -10157,6 +10173,15 @@
   var dashFactsLast = null;
   var tajweedState = null;
 
+  // Подпись двери «Знания» - по предметам группы (14.09.2026): у кого нет
+  // таджвида и нахва, про них и не пишем.
+  function dashLearnSub(f) {
+    var el = document.getElementById('dash-learn-sub');
+    if (!el || !f || !f.learn) return;
+    var j = f.learn.indexOf('j') >= 0, n = f.learn.indexOf('n') >= 0;
+    el.textContent = T(j && n ? 'dash_learn_sub' : j ? 'dash_learn_j' : n ? 'dash_learn_n' : 'dash_learn_how');
+  }
+
   function openTrainers() {
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('trainer').style.display = 'none';
@@ -10169,7 +10194,7 @@
     var cnt = '';
     if (fact && fact.target != null) {
       cnt = '<span class="cnt' + (fact.done >= fact.target ? ' done' : '') + '">' +
-        T('daily_n', { N: Math.min(fact.done, fact.target), M: fact.target }) + '</span>';
+        T('daily_n', { N: fact.done, M: fact.target }) + '</span>';
     }
     return '<button class="tr-hub" id="' + id + '"><span class="mk">' + mark + '</span>' +
       '<span><span class="nm">' + name + '</span><span class="ds">' + desc + '</span></span>' +
@@ -10242,7 +10267,7 @@
       body.innerHTML = '<div class="trainer-msg">' + T('tajweed_closed') + '</div>';
       return;
     }
-    pill.textContent = T('daily_n', { N: Math.min(d.daily_count, d.daily_target), M: d.daily_target });
+    pill.textContent = T('daily_n', { N: d.daily_count, M: d.daily_target });
     pill.classList.toggle('done', d.daily_count >= d.daily_target);
 
     if (d.empty) {
