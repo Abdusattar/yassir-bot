@@ -1713,14 +1713,14 @@
      Та же приглушённо-изумрудная палитра, что и у дашборда - единый
      фирменный акцент на всё приложение, не отдельный стиль под каждый
      экран. */
-  #trainer {
+  #trainer, #trainers, #tajweed {
     display: none;
     flex-direction: column;
     height: 100%;
     width: 100%;
     background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
-  #trainer-topbar {
+  #trainer-topbar, #trainers-topbar, #tajweed-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1734,7 +1734,7 @@
     direction: ltr;
     flex: 0 0 auto;
   }
-  #trainer-topbar button {
+  #trainer-topbar button, #trainers-topbar button, #tajweed-topbar button {
     background: none; border: none; color: var(--accent);
     font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
     font-family: inherit;
@@ -1746,7 +1746,7 @@
      утренний прогресс потерялся). Зелёная (--accent), когда задел ещё не
      закрыт; --ok, когда 40/40 уже набрано - тот же сигнал "готово", что и
      фидбек-пилюля верного ответа. */
-  #trainer-daily {
+  #trainer-daily, #tajweed-daily {
     font-size: 12px;
     font-weight: 700;
     padding: 4px 10px;
@@ -1755,8 +1755,8 @@
     color: var(--accent);
     white-space: nowrap;
   }
-  #trainer-daily.done { background: var(--ok-soft); color: var(--ok); }
-  #trainer-body {
+  #trainer-daily.done, #tajweed-daily.done { background: var(--ok-soft); color: var(--ok); }
+  #trainer-body, #tajweed-body {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -1771,6 +1771,60 @@
     text-align: center;
   }
   .trainer-msg { font-size: 15px; color: var(--ink); line-height: 1.5; }
+  /* «Тренажёры» (14.09.2026) - вход через одну дверь, внутри по строке на
+     тренажёр: «Слова», «Таджвид», позже «Нахв». Строка крупная, с тем же
+     золотым знаком, что у двери, и счётом дня справа - за ним и заходят. */
+  #trainers-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 18px 16px 24px;
+    display: flex; flex-direction: column; gap: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  .tr-hub {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; max-width: 520px; align-self: center; box-sizing: border-box;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; box-shadow: var(--shadow-sm);
+    padding: 16px; text-align: left; font: inherit; color: var(--ink);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .tr-hub:active { transform: scale(0.98); }
+  .tr-hub .mk {
+    width: 48px; height: 48px; border-radius: 14px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Scheherazade New', serif; font-size: 28px; line-height: 1;
+    color: var(--ink);
+    background: color-mix(in srgb, var(--marker-color) 20%, transparent);
+  }
+  .tr-hub .nm { font-size: 17px; font-weight: 640; display: block; }
+  .tr-hub .ds { font-size: 13px; color: var(--muted); display: block; margin-top: 2px; }
+  .tr-hub .cnt {
+    margin-left: auto; flex: 0 0 auto; white-space: nowrap;
+    font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .tr-hub .cnt.done { background: var(--ok-soft); color: var(--ok); }
+  /* Карточка таджвида: одна буква - крупнее слова в «Словах», её форму
+     надо узнать с расстояния руки. Подпись под буквой - только у و и ي,
+     которые выходят из двух мест (согласная и мадд). */
+  .tj-glyph {
+    font-family: 'Scheherazade New', serif; font-size: 88px; line-height: 1.2;
+    color: var(--ink);
+  }
+  .tj-note { font-size: 15px; color: var(--muted); margin-top: 2px; }
+  /* Арабское слово в подписи - только крупнее, без direction/unicode-bidi
+     (та же ловушка, что с .k-ar в уроках). */
+  .tj-note .tj-ar, .trainer-feedback .tj-ar { font-size: 1.3em; }
+  .tj-q { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .trainer-opt.tj-opt { font-size: 15px; line-height: 1.3; min-height: 64px; padding: 10px 8px; }
+  .trainer-opt.tj-opt:disabled { opacity: .6; }
+  .tj-go {
+    background: var(--accent); color: #fff; border: 0; border-radius: 14px;
+    padding: 13px 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    width: 100%; max-width: 320px;
+  }
   .trainer-info, .trainer-session { font-size: 13px; color: var(--muted); }
   .trainer-score { font-size: 13px; color: var(--muted); }
 
@@ -2759,7 +2813,7 @@
   </div>
   <div class="dash-row" id="dash-trainer" tabindex="0" role="button">
     <span class="mark">ن</span>
-    <span class="text"><span class="label" data-i18n="dash_trainer">Тренажёр</span><span class="sub" id="dash-trainer-sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</span></span>
+    <span class="text"><span class="label" data-i18n="dash_trainer">Тренажёры</span><span class="sub" id="dash-trainer-sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</span></span>
   </div>
   <!-- «Как работаем» (08.09.2026): объяснение по шагам на снимках самого
        приложения. Видна всем, не только новичку - за правилами возвращаются
@@ -3172,8 +3226,8 @@
 
 <div id="trainer">
   <div id="trainer-topbar">
-    <button id="trainer-back" data-i18n="back_dashboard">← Дашборд</button>
-    <span id="trainer-bookmark" data-i18n="dash_trainer">Тренажёр</span>
+    <button id="trainer-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span id="trainer-bookmark" data-i18n="trainers_words">Слова</span>
     <span id="trainer-daily"></span>
   </div>
   <div id="trainer-body"></div>
@@ -3183,6 +3237,28 @@
     <button id="trainer-tab-mywords" class="tab-btn" data-i18n="tab_mywords">⭐ Мои слова</button>
     <button id="trainer-tab-mushaf" class="tab-btn" data-i18n="tab_mushaf">📗 Мусхаф</button>
   </div>
+</div>
+
+<!-- «Тренажёры» (14.09.2026) - вход через одну дверь дашборда. Внутри пока
+     «Слова» и «Таджвид»; «Нахв» добавится третьей строкой. Таджвид виден
+     только группам с этим заданием (и устазам) - строку решает сервер. -->
+<div id="trainers">
+  <div id="trainers-topbar">
+    <button id="trainers-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span data-i18n="trainers_title">Тренажёры</span>
+    <span></span>
+  </div>
+  <div id="trainers-body"></div>
+</div>
+
+<!-- Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py). -->
+<div id="tajweed">
+  <div id="tajweed-topbar">
+    <button id="tajweed-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span data-i18n="tajweed_title">Таджвид</span>
+    <span id="tajweed-daily"></span>
+  </div>
+  <div id="tajweed-body"></div>
 </div>
 
 <!-- Кабинет устаза (03.09.2026, пункт 13 старого макета 40+40) - только
@@ -3466,8 +3542,27 @@
     ru: {
       dash_mushaf: 'Мусхаф',
       dash_mushaf_sub: 'Чтение с таджвидом и переводом',
-      dash_trainer: 'Тренажёр',
+      dash_trainer: 'Тренажёры',
       dash_trainer_sub: 'Муфрадат — учи слова Корана',
+      trainers_title: 'Тренажёры',
+      back_trainers: '← Тренажёры',
+      trainers_words: 'Слова',
+      trainers_words_sub: 'Смыслы слов Корана',
+      trainers_tajweed_sub: 'Места выхода букв',
+      tajweed_title: 'Таджвид',
+      dash_trainers_both: 'Слова %N%/%M% · Таджвид %A%/%B%',
+      tajweed_question: 'Откуда выходит буква?',
+      tajweed_pos: 'Буква %N% из %M%',
+      tajweed_retry: 'Повторяем букву',
+      tajweed_again: 'Эта буква вернётся в конце захода',
+      tajweed_done_title: 'Заход окончен 🤲',
+      tajweed_first_right: 'С первого раза верно: %N% из %M%',
+      tajweed_task_done: 'Таджвид на сегодня засчитан ✅',
+      tajweed_task_left: 'До нормы дня ещё %N%',
+      tajweed_today: 'Сегодня верно: %N% из %M%',
+      tajweed_more: 'Ещё заход',
+      tajweed_empty: 'Здесь появятся буквы из пройденных уроков таджвида.',
+      tajweed_closed: 'Тренажёр таджвида открыт группам, где сдают таджвид.',
       dash_ustaz: 'Устаз',
       // Дверь называется по тому, что за ней лежит (08.09.2026): сдают
       // заучивание в Мусхафе, а здесь - что я отправил и что ответил устаз.
@@ -3942,6 +4037,8 @@
     // Экраны, собранные в JS, перерисовываем - иначе язык применится
     // только после следующего действия студента.
     if (document.getElementById('trainer').style.display !== 'none' && trainerState) renderTrainer();
+    if (document.getElementById('trainers').style.display === 'flex') trainersRender();
+    if (document.getElementById('tajweed').style.display === 'flex' && tajweedState) renderTajweed(tajweedState);
     if (typeof loadMyWords === 'function' &&
         document.getElementById('view-mywords') &&
         document.getElementById('view-mywords').classList.contains('active')) loadMyWords();
@@ -4534,10 +4631,13 @@
         : st === 2 ? T('ustaz_place_half', { P: page })
         : T('ustaz_place', { P: page, L: (f.hifz.line || 0) + 1 });
     }
+    dashFactsLast = f;
     if (f.words) {
-      document.getElementById('dash-trainer-sub').textContent =
-        T('dash_words_today', { N: f.words.done, M: f.words.target });
+      document.getElementById('dash-trainer-sub').textContent = f.tajweed
+        ? T('dash_trainers_both', { N: f.words.done, M: f.words.target, A: Math.min(f.tajweed.done, f.tajweed.target), B: f.tajweed.target })
+        : T('dash_words_today', { N: f.words.done, M: f.words.target });
     }
+    if (document.getElementById('trainers').style.display === 'flex') trainersRender();
     var subsSub = document.getElementById('dash-subs-sub');
     var subsCount = document.getElementById('dash-subs-count');
     if (f.subs) {
@@ -5181,7 +5281,7 @@
   // Вход с дашборда - всегда вкладка "Страница" (30.08.2026, решение
   // пользователя), даже если в прошлый раз ушли со "Смысла"/"Мои слова".
   document.getElementById('dash-mushaf').addEventListener('click', function () { openMushaf('page'); });
-  document.getElementById('dash-trainer').addEventListener('click', openTrainer);
+  document.getElementById('dash-trainer').addEventListener('click', function () { openTrainers(); });
   document.getElementById('dash-subs').addEventListener('click', openSubs);
   document.getElementById('subs-back').addEventListener('click', function () {
     subsStopAudio();
@@ -10022,11 +10122,142 @@
 
   function openTrainer() {
     document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('trainers').style.display = 'none';
     document.getElementById('app').style.display = 'none';
     document.getElementById('trainer').style.display = 'flex';
     document.getElementById('trainer-body').innerHTML = '<div class="trainer-msg">' + T('loading') + '</div>';
     withAuthCheck(apiCall('/state'), function (data) { trainerState = data; renderTrainer(); });
   }
+
+  /* ── «Тренажёры» и тренажёр таджвида (14.09.2026) ───────────────────────
+     Хаб рисуется из фактов последнего heartbeat: счёт «Слов» и «Таджвида»
+     за день уже едет туда для дверей, отдельный запрос не нужен. Нет
+     facts.tajweed - у группы нет таджвида, строки нет. */
+  var dashFactsLast = null;
+  var tajweedState = null;
+
+  function openTrainers() {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('trainer').style.display = 'none';
+    document.getElementById('tajweed').style.display = 'none';
+    document.getElementById('trainers').style.display = 'flex';
+    trainersRender();
+  }
+
+  function trainersRow(id, mark, name, desc, fact) {
+    var cnt = '';
+    if (fact && fact.target != null) {
+      cnt = '<span class="cnt' + (fact.done >= fact.target ? ' done' : '') + '">' +
+        T('daily_n', { N: Math.min(fact.done, fact.target), M: fact.target }) + '</span>';
+    }
+    return '<button class="tr-hub" id="' + id + '"><span class="mk">' + mark + '</span>' +
+      '<span><span class="nm">' + name + '</span><span class="ds">' + desc + '</span></span>' +
+      cnt + '</button>';
+  }
+
+  function trainersRender() {
+    var f = dashFactsLast || {};
+    var html = trainersRow('trh-words', 'ن', T('trainers_words'), T('trainers_words_sub'), f.words);
+    if (f.tajweed) {
+      html += trainersRow('trh-tajweed', 'ض', T('tajweed_title'), T('trainers_tajweed_sub'), f.tajweed);
+    }
+    var body = document.getElementById('trainers-body');
+    body.innerHTML = html;
+    document.getElementById('trh-words').addEventListener('click', openTrainer);
+    var tj = document.getElementById('trh-tajweed');
+    if (tj) tj.addEventListener('click', openTajweed);
+  }
+
+  function openTajweed() {
+    document.getElementById('trainers').style.display = 'none';
+    document.getElementById('tajweed').style.display = 'flex';
+    document.getElementById('tajweed-body').innerHTML = '<div class="trainer-msg">' + T('loading') + '</div>';
+    withAuthCheck(apiCall('/tajweed'), renderTajweed);
+  }
+
+  // Арабское слово в подписи крупнее - обёрткой только по размеру.
+  function tajweedArabic(text) {
+    return String(text || '').replace(/[\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)*/g, function (m) {
+      return '<span class="tj-ar">' + m + '</span>';
+    });
+  }
+
+  function renderTajweed(d) {
+    tajweedState = d;
+    var body = document.getElementById('tajweed-body');
+    var pill = document.getElementById('tajweed-daily');
+    if (!d || d.error) {
+      pill.textContent = '';
+      body.innerHTML = '<div class="trainer-msg">' + T('tajweed_closed') + '</div>';
+      return;
+    }
+    pill.textContent = T('daily_n', { N: Math.min(d.daily_count, d.daily_target), M: d.daily_target });
+    pill.classList.toggle('done', d.daily_count >= d.daily_target);
+
+    var html = '';
+    var fb = d.feedback;
+    if (fb) {
+      html += '<div class="trainer-feedback ' + (fb.correct ? 'ok' : 'no') + '">' +
+        (fb.correct ? '✅ ' : '❌ ') + '<span class="trainer-feedback-ar">' + fb.glyph + '</span> — ' +
+        fb.answer + '</div>';
+      if (!fb.correct) html += '<div class="trainer-hint">' + T('tajweed_again') + '</div>';
+    }
+
+    if (d.empty) {
+      body.innerHTML = html + '<div class="trainer-msg">' + T('tajweed_empty') + '</div>';
+      return;
+    }
+
+    if (d.finished) {
+      html += '<div class="trainer-msg">' + T('tajweed_done_title') + '</div>';
+      html += '<div class="trainer-info">' +
+        T('tajweed_first_right', { N: d.finished.first_right, M: d.finished.size }) + '</div>';
+      var left = Math.max(0, d.daily_target - d.daily_count);
+      var line = !d.task ? T('tajweed_today', { N: d.daily_count, M: d.daily_target })
+        : d.task.done ? T('tajweed_task_done')
+        : T('tajweed_task_left', { N: left });
+      html += '<div class="trainer-info">' + line + '</div>';
+      html += '<button class="tj-go" id="tj-more">' + T('tajweed_more') + '</button>';
+      body.innerHTML = html;
+      document.getElementById('tj-more').addEventListener('click', function () {
+        this.disabled = true;
+        withAuthCheck(apiCall('/tajweed/new', { method: 'POST' }), renderTajweed);
+      });
+      return;
+    }
+
+    var c = d.card;
+    html += '<div class="trainer-info">' + (c.retry ? T('tajweed_retry')
+      : T('tajweed_pos', { N: c.pos, M: c.size })) + '</div>';
+    html += '<div class="trainer-word-card"><div class="tj-glyph">' + c.glyph + '</div>' +
+      (c.note ? '<div class="tj-note">' + tajweedArabic(c.note) + '</div>' : '') + '</div>';
+    html += '<div class="tj-q">' + T('tajweed_question') + '</div>';
+    html += '<div class="trainer-options">';
+    d.options.forEach(function (opt, i) {
+      html += '<button class="trainer-opt tj-opt" data-slot="' + i + '">' + opt + '</button>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+    body.scrollTop = 0;
+    Array.prototype.forEach.call(body.querySelectorAll('.tj-opt'), function (btn) {
+      btn.addEventListener('click', function () {
+        // Двойной тап не должен ответить за следующую карточку.
+        Array.prototype.forEach.call(body.querySelectorAll('.tj-opt'), function (b) { b.disabled = true; });
+        withAuthCheck(apiCall('/tajweed/answer', { method: 'POST',
+          body: { card: c.id, slot: parseInt(btn.getAttribute('data-slot'), 10) } }), renderTajweed);
+      });
+    });
+  }
+
+  document.getElementById('trainers-back').addEventListener('click', function () {
+    document.getElementById('trainers').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'flex';
+    if (typeof pulseIntroStart === 'function') pulseIntroStart();
+  });
+  document.getElementById('tajweed-back').addEventListener('click', function () {
+    document.getElementById('tajweed').style.display = 'none';
+    openTrainers();
+  });
 
   /* Шапка тренажёра подписана по экрану (09.09.2026, общее правило
      навигации): на карточке - "← Дашборд" и заголовок "Тренажёр", в
@@ -10039,16 +10270,16 @@
     trainerScreen = name;
     var rating = name === 'rating';
     document.getElementById('trainer-back').textContent =
-      rating ? T('back_trainer') : T('back_dashboard');
+      rating ? T('back_trainer') : T('back_trainers');
     document.getElementById('trainer-bookmark').textContent =
-      rating ? T('trainer_rating_title') : T('dash_trainer');
+      rating ? T('trainer_rating_title') : T('trainers_words');
   }
 
   document.getElementById('trainer-back').addEventListener('click', function () {
     if (trainerScreen === 'rating') { renderTrainer(); return; }
+    // С карточки «Слов» - в «Тренажёры», откуда и зашли (14.09.2026).
     document.getElementById('trainer').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'flex';
-    if (typeof pulseIntroStart === 'function') pulseIntroStart();
+    openTrainers();
   });
 
   // Название дивизиона приходит с сервера готовой РУССКОЙ строкой (она же

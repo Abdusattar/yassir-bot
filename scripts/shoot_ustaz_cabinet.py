@@ -91,6 +91,8 @@ def seed_extra():
     # Отметки онлайн-урока (14.09.2026) - точки в полосе и в месяце настоящим
     # кодом. Время записи сдвинуто на 30 часов назад: иначе правило «сутки
     # между отметками» спрячет кнопку «Я был» и снимок покажет не то.
+    # Тренажёр таджвида (14.09.2026) виден только группе с заданием «j».
+    db.update_group_tasks(stand.CHAT, "m,r,t,j")
     for phone, days_ago in ((stand.STUDENT, 1), (stand.STUDENT, 7), ("777002", 1)):
         user = db.find_user_by_phone(phone)
         if not user:
@@ -450,6 +452,31 @@ MOCK_JS = """
     },
     les_stu_done: async function () { await openSubsStudent(); lessonCard('done'); },
     les_list_now: openStudentsList,
+    // Тренажёры (14.09.2026) - настоящий код, без инъекций.
+    tj_door: async function () { await wait(2500); },
+    tj_hub: async function () {
+      await wait(2500); $('dash-trainer').click(); await wait(700);
+    },
+    tj_card: async function () {
+      await scenes.tj_hub(); $('trh-tajweed').click(); await wait(1500);
+    },
+    // Тап по первому варианту: чаще всего мимо - видно плашку ошибки.
+    tj_answer: async function () {
+      await scenes.tj_card();
+      document.querySelector('.tj-opt').click(); await wait(1200);
+    },
+    // Итог захода: тапаем, пока заход не кончится (ошибки уходят в конец).
+    tj_done: async function () {
+      await scenes.tj_card();
+      for (var i = 0; i < 120 && !$('tj-more'); i++) {
+        var opts = document.querySelectorAll('.tj-opt');
+        if (!opts.length) break;
+        opts[i % opts.length].click(); await wait(180);
+      }
+    },
+    tj_words: async function () {
+      await scenes.tj_hub(); $('trh-words').click(); await wait(1500);
+    },
     // Настоящие экраны после выкладки - без единой инъекции.
     les_stu_real_month: async function () {
       await openSubsStudent(); $('subs-month').click(); await wait(600);
@@ -533,7 +560,8 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["les_stu_real_month", "real_lesson", "real_lesson_old",
+VARIANTS = ["tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
+            "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
             "les_list_now", "les_list", "les_cal", "les_cal_confirm",
             "queue_now", "queue_fold", "queue_tabs", "dur_meta", "dur_pill", "dur_two", "review_dur",
@@ -543,6 +571,8 @@ VARIANTS = ["les_stu_real_month", "real_lesson", "real_lesson_old",
 
 # Сравнения: первым всегда «как сейчас».
 COMPARE = {
+    "tajweed": [("tj_door", "Дашборд"), ("tj_hub", "Тренажёры"),
+                ("tj_card", "Карточка"), ("tj_answer", "После ответа"), ("tj_done", "Итог захода")],
     "lesson_real": [("les_stu_now", "Студент"), ("les_stu_real_month", "Свой месяц"),
                     ("les_list_now", "Устаз · список"), ("student_now", "Устаз · месяц")],
     "lesson_font": [("real_lesson_old", "Было · 14px"), ("real_lesson", "Стало · 17px")],
@@ -569,7 +599,7 @@ COMPARE = {
 def page(variant):
     # Стили макета безвредны и для *_now: их классы появляются только из
     # сцен-предложений, «как сейчас» ничего не дорисовывает.
-    if variant.startswith("les_stu"):
+    if variant.startswith(("les_stu", "tj_")):
         return stand.dev_index(stand.STUDENT, "Абдулла") + MOCK_CSS + MOCK_JS
     return stand.dev_index(stand.USTAZ, "Устаз") + MOCK_CSS + MOCK_JS
 

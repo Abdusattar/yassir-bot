@@ -273,6 +273,25 @@ def init():
                 last_id INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT DEFAULT (datetime('now'))
             );
+            /* Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py).
+               Сколько раз букву показывали этому человеку - по нему колода
+               идёт равномерно; какие буквы он сегодня ответил верно - по ним
+               засчитывается норма дня. user_id - Telegram id, как у
+               тренажёра слов. */
+            CREATE TABLE IF NOT EXISTS tajweed_card_stats(
+                user_id TEXT NOT NULL,
+                card TEXT NOT NULL,
+                shown INTEGER NOT NULL DEFAULT 0,
+                correct INTEGER NOT NULL DEFAULT 0,
+                last_at TEXT,
+                PRIMARY KEY(user_id, card)
+            );
+            CREATE TABLE IF NOT EXISTS tajweed_daily(
+                user_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                card TEXT NOT NULL,
+                PRIMARY KEY(user_id, date, card)
+            );
         """)
         _run_migrations(c)
     # Свой вход в приложение вне Telegram (10.09.2026). Импорт внутри функции:

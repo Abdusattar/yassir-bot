@@ -44,7 +44,7 @@ from core.db import (
     get_group_month_progress, get_student_month_days, group_miss_threshold,
     get_group_by_id, get_students, get_reviewed_submissions,
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
-    is_retake_answered, get_group_tasks, get_today_report, is_app_member,
+    is_retake_answered, get_group_tasks, get_today_report, is_app_member, save_report,
     get_profile, update_profile,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
     remove_lesson_attendance,
@@ -935,6 +935,97 @@ def _lesson_subject_keys(user_id):
     return set(get_group_tasks(group)) if group else set()
 
 
+# ── Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py) ───────────────
+
+def _tajweed_open(user_id):
+    """Виден ли тренажёр. Решение пользователя: только группам с заданием
+    «Таджвид», остальным скрыт, «потом решим, как открывать». Устазу и
+    супер-админу - всегда, как и уроки в «Знаниях»: им надо видеть, что
+    сдают студенты."""
+    keys = _lesson_subject_keys(user_id)
+    return keys is None or "j" in keys
+
+
+def _tajweed_facts(user_id):
+    if not _tajweed_open(user_id):
+        return None
+    from core.tajweed_trainer import daily_count, DAILY_TARGET
+    try:
+        return {"done": daily_count(user_id), "target": DAILY_TARGET}
+    except Exception as e:
+        log.error("tajweed facts error: %s: %s", type(e).__name__, e)
+        return None
+
+
+async def _credit_tajweed_task(user_id):
+    """Норма дня набрана - засчитываем задание «Таджвид», если оно есть в
+    группе, и говорим группе тем же коротким форматом, что у «Слов» из
+    тренажёра. Возвращает True, если засчитано этим вызовом."""
+    group = get_learning_group(user_id, include_prep=True)
+    if not group or "j" not in get_group_tasks(group):
+        return False
+    user = find_user_by_phone(user_id)
+    if not user:
+        return False
+    if (get_today_report(user["id"], group["id"]) or {}).get("j"):
+        return False
+    save_report(user["id"], group["id"], get_date(), {"j": True})
+    if group["chat_id"]:
+        from core.tg import send_message
+        try:
+            await send_message(group["chat_id"], f"{user['name']}, Таджвид + (через тренажёр).")
+        except Exception as e:
+            log.error("tajweed credit notify error: %s: %s", type(e).__name__, e)
+    return True
+
+
+def _tajweed_task_state(user_id):
+    """Есть ли у группы задание «j» и сдано ли оно сегодня - для строки итога."""
+    group = get_learning_group(user_id, include_prep=True)
+    if not group or "j" not in get_group_tasks(group):
+        return None
+    user = find_user_by_phone(user_id)
+    done = bool(user and (get_today_report(user["id"], group["id"]) or {}).get("j"))
+    return {"done": done}
+
+
+@with_auth
+async def handle_tajweed_state(request, user_id):
+    """GET - текущая карточка, итог захода или «уроков пока нет»."""
+    if not _tajweed_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    from core.tajweed_trainer import state
+    return web.json_response(dict(state(user_id), task=_tajweed_task_state(user_id)))
+
+
+@with_auth
+async def handle_tajweed_answer(request, user_id):
+    """POST {card, slot} - ответ на текущую карточку."""
+    if not _tajweed_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "bad_json"}, status=400)
+    from core.tajweed_trainer import answer
+    try:
+        data, reached = answer(user_id, body.get("card"), body.get("slot"))
+    except ValueError:
+        return web.json_response({"error": "bad_slot"}, status=400)
+    if reached:
+        await _credit_tajweed_task(user_id)
+    return web.json_response(dict(data, task=_tajweed_task_state(user_id)))
+
+
+@with_auth
+async def handle_tajweed_new(request, user_id):
+    """POST - новый заход."""
+    if not _tajweed_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    from core.tajweed_trainer import new_session
+    return web.json_response(dict(new_session(user_id), task=_tajweed_task_state(user_id)))
+
+
 @with_auth
 async def handle_lesson(request, user_id):
     """GET ?id= — текст одного урока. Закрытый не отдаётся: программа вперёд
@@ -1051,6 +1142,9 @@ def _dashboard_facts(user_id):
             "done": get_daily_answered_count(user_id),
             "target": DAILY_WORDS_FOR_TASK_CREDIT,
         },
+        # None - тренажёра таджвида у человека нет (группа без задания «j»):
+        # тогда и строки о нём на двери и в «Тренажёрах» нет.
+        "tajweed": _tajweed_facts(user_id),
         "subs": subs,
         "day": _my_day(user),
     }
@@ -1752,6 +1846,9 @@ def build_app():
     app.router.add_get("/api/muf/pulse", handle_pulse)
     app.router.add_get("/api/muf/lessons", handle_lessons)
     app.router.add_get("/api/muf/lesson", handle_lesson)
+    app.router.add_get("/api/muf/tajweed", handle_tajweed_state)
+    app.router.add_post("/api/muf/tajweed/answer", handle_tajweed_answer)
+    app.router.add_post("/api/muf/tajweed/new", handle_tajweed_new)
     app.router.add_get("/api/muf/feed", handle_feed)
     app.router.add_post("/api/muf/feed/read", handle_feed_read)
     app.router.add_get("/api/muf/feed/media", handle_feed_media)
