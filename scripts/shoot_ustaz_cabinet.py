@@ -166,6 +166,9 @@ MOCK_CSS = """
   background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
 }
 .mk-lesson .ok { flex: 0 0 auto; color: var(--accent); font-size: 13px; font-weight: 600; }
+.mk-lesson button.ghost {
+  background: transparent; color: var(--accent); border: 1px solid var(--accent);
+}
 /* У устаза - строка дат под календарём студента, дата снимается тапом. */
 .mk-les-u { direction: ltr; margin-top: 12px; text-align: center; }
 .mk-les-u .h { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
@@ -180,11 +183,11 @@ MOCK_CSS = """
 /* Точка онлайн-урока (14.09.2026, мысль пользователя): под отрезком дня в
    полосе списка и под числом в календаре месяца. Одна и та же у устаза и у
    студента. */
-.stu-strip.mk-has { padding-bottom: 7px; }
+.stu-strip.mk-has { padding-bottom: 10px; }
 .stu-strip i.mk-les { position: relative; }
 .stu-strip i.mk-les::after {
-  content: ''; position: absolute; left: 50%; bottom: -7px;
-  width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
+  content: ''; position: absolute; left: 50%; bottom: -9px;
+  width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%;
   background: var(--accent);
 }
 .stu-cal .c.mk-les { position: relative; }
@@ -305,14 +308,16 @@ MOCK_JS = """
   }
 
   function lessonCard(state) {
-    var html = state === 'done'
-      ? '<div class="t"><b>🕌 Онлайн-урок</b><span>отмечен сегодня · 14.09</span></div>'
-        + '<span class="ok">✓ был</span>'
-      : '<div class="t"><b>🕌 Онлайн-урок</b><span>на этой неделе не отмечен</span></div>'
-        + '<button>Я был</button>';
     var box = document.createElement('div');
-    box.className = 'mk-lesson';
-    box.innerHTML = html;
+    if (state === 'done') {
+      box.className = 'subs-quiet';
+      box.style.margin = '10px 0 12px';
+      box.textContent = '✓ онлайн-урок отмечен сегодня';
+    } else {
+      box.className = 'mk-lesson';
+      box.innerHTML = '<div class="t"><b>🕌 Онлайн-урок</b><span>отметь после урока</span></div>'
+        + '<button class="ghost">Я был</button>';
+    }
     var m = $('subs-month');
     m.parentNode.insertBefore(box, m.nextSibling);
   }
@@ -428,7 +433,7 @@ MOCK_JS = """
     les_stu_card: async function () { await openSubsStudent(); lessonCard('todo'); },
     les_stu_confirm: async function () {
       await openSubsStudent(); lessonCard('todo');
-      openConfirm('Сегодня был онлайн-урок, и ты на нём был?');
+      openConfirm('Отметить, что ты был на онлайн-уроке?');
     },
     les_stu_done: async function () { await openSubsStudent(); lessonCard('done'); },
     les_list_now: openStudentsList,
@@ -438,21 +443,21 @@ MOCK_JS = """
       all('#ustaz-body .stu-row').forEach(function (row, i) { dotStrip(row, plan[i % plan.length]); });
       var legends = all('#ustaz-body > .stu-legend');
       var last = legends[legends.length - 1];
-      if (last) last.insertAdjacentHTML('beforeend', ' · точка — был на онлайн-уроке');
+      if (last) last.insertAdjacentHTML('beforeend', '<br>• под днём — был на онлайн-уроке');
     },
     les_cal: async function () {
       await scenes.student_now();
-      dotCal($('ustaz-body'), [7, 13], 'точка — онлайн-урок, тап — снять');
+      dotCal($('ustaz-body'), [7, 13], '• онлайн-урок, тап по дню — снять');
     },
     les_cal_confirm: async function () {
       await scenes.student_now();
-      dotCal($('ustaz-body'), [7, 13], 'точка — онлайн-урок, тап — снять');
+      dotCal($('ustaz-body'), [7, 13], '• онлайн-урок, тап по дню — снять');
       openConfirm('Снять отметку урока за вс 13.09 у Абдуллы?');
     },
     les_stu_month: async function () {
       await openSubsStudent(); lessonCard('done');
       $('subs-month').click(); await wait(500);
-      dotCal($('subs-month'), [7, 14], 'точка — онлайн-урок');
+      dotCal($('subs-month'), [7, 13], '• онлайн-урок');
     },
     les_u: async function () { await scenes.student_now(); lessonUstaz(); },
     les_u_confirm: async function () {
