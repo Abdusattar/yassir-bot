@@ -177,6 +177,24 @@ MOCK_CSS = """
 .mk-les-u .chip i { font-style: normal; opacity: .55; margin-left: 5px; }
 .mk-les-u .none { font-size: 12.5px; color: var(--muted); }
 
+/* Точка онлайн-урока (14.09.2026, мысль пользователя): под отрезком дня в
+   полосе списка и под числом в календаре месяца. Одна и та же у устаза и у
+   студента. */
+.stu-strip.mk-has { padding-bottom: 7px; }
+.stu-strip i.mk-les { position: relative; }
+.stu-strip i.mk-les::after {
+  content: ''; position: absolute; left: 50%; bottom: -7px;
+  width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
+  background: var(--accent);
+}
+.stu-cal .c.mk-les { position: relative; }
+.stu-cal .c.mk-les::after {
+  content: ''; position: absolute; left: 50%; bottom: 5px;
+  width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%;
+  background: var(--accent);
+}
+.stu-cal .c.d3.mk-les::after { background: #fff; }
+
 /* Сдачи студента под его календарём. */
 .mk-subs { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; direction: ltr; }
 .mk-subs .ustaz-group-title { margin: 0 2px 0; }
@@ -317,6 +335,32 @@ MOCK_JS = """
     last.parentNode.insertBefore(box, last.nextSibling);
   }
 
+  // Точки урока: в полосе строки студента (i по порядку дней) и в календаре.
+  function dotStrip(row, days) {
+    var strip = row.querySelector('.stu-strip');
+    if (!strip) return;
+    strip.classList.add('mk-has');
+    var cells = strip.querySelectorAll('i');
+    days.forEach(function (d) { if (cells[d - 1]) cells[d - 1].classList.add('mk-les'); });
+  }
+
+  function dotCal(root, days, legend) {
+    var cal = root.querySelector('.stu-cal');
+    if (!cal) return;
+    all('.c', cal).forEach(function (c) {
+      if (days.indexOf(parseInt(c.textContent, 10)) >= 0) c.classList.add('mk-les');
+    });
+    var legends = all('.stu-legend', root);
+    var last = legends[legends.length - 1];
+    if (last && legend) last.insertAdjacentHTML('beforeend', ' · ' + legend);
+  }
+
+  async function openStudentsList() {
+    await openQueue();
+    document.querySelector('.ustaz-zones [data-zone="students"]').click();
+    await wait(2200);
+  }
+
   function playerBar() {
     var foot = $('review-foot');
     var p = document.createElement('div');
@@ -387,6 +431,29 @@ MOCK_JS = """
       openConfirm('Сегодня был онлайн-урок, и ты на нём был?');
     },
     les_stu_done: async function () { await openSubsStudent(); lessonCard('done'); },
+    les_list_now: openStudentsList,
+    les_list: async function () {
+      await openStudentsList();
+      var plan = [[7, 13], [7], [], [13]];
+      all('#ustaz-body .stu-row').forEach(function (row, i) { dotStrip(row, plan[i % plan.length]); });
+      var legends = all('#ustaz-body > .stu-legend');
+      var last = legends[legends.length - 1];
+      if (last) last.insertAdjacentHTML('beforeend', ' · точка — был на онлайн-уроке');
+    },
+    les_cal: async function () {
+      await scenes.student_now();
+      dotCal($('ustaz-body'), [7, 13], 'точка — онлайн-урок, тап — снять');
+    },
+    les_cal_confirm: async function () {
+      await scenes.student_now();
+      dotCal($('ustaz-body'), [7, 13], 'точка — онлайн-урок, тап — снять');
+      openConfirm('Снять отметку урока за вс 13.09 у Абдуллы?');
+    },
+    les_stu_month: async function () {
+      await openSubsStudent(); lessonCard('done');
+      $('subs-month').click(); await wait(500);
+      dotCal($('subs-month'), [7, 14], 'точка — онлайн-урок');
+    },
     les_u: async function () { await scenes.student_now(); lessonUstaz(); },
     les_u_confirm: async function () {
       await scenes.student_now(); lessonUstaz();
@@ -429,7 +496,8 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_u", "les_u_confirm",
+VARIANTS = ["les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
+            "les_list_now", "les_list", "les_cal", "les_cal_confirm",
             "queue_now", "queue_fold", "queue_tabs", "dur_meta", "dur_pill", "dur_two", "review_dur",
             "review_now", "review_bar", "comment_then", "review_next",
             "history_now", "history",
@@ -438,9 +506,10 @@ VARIANTS = ["les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "l
 # Сравнения: первым всегда «как сейчас».
 COMPARE = {
     "lesson_student": [("les_stu_now", "Сейчас"), ("les_stu_card", "Строка урока"),
-                       ("les_stu_confirm", "Тап · переспрос"), ("les_stu_done", "Отмечено")],
-    "lesson_ustaz": [("student_now", "Сейчас"), ("les_u", "Отметки урока"),
-                     ("les_u_confirm", "Тап по дате · снять")],
+                       ("les_stu_confirm", "Тап · переспрос"), ("les_stu_done", "Отмечено"),
+                       ("les_stu_month", "Свой месяц · точки")],
+    "lesson_ustaz": [("les_list_now", "Сейчас · студенты"), ("les_list", "Точка в полосе"),
+                     ("les_cal", "Месяц · точка"), ("les_cal_confirm", "Тап по дню · снять")],
     "duration": [("queue_now", "Сейчас"), ("dur_meta", "А · в строке времени"),
                  ("dur_pill", "Б · плашкой у имени"), ("dur_two", "В · две строки")],
     "review_dur": [("review_now", "Сейчас"), ("review_dur", "Длина в шапке разбора")],
