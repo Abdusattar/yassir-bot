@@ -1121,7 +1121,9 @@ def _my_day(user):
     начнёт расходиться с реальностью."""
     if not user:
         return None
-    group = get_learning_group(user["phone"])
+    # include_prep: студент подготовительной сдаёт те же задания (14.09.2026 -
+    # без флага у всей подготовительной полосы «Мой день» не было).
+    group = get_learning_group(user["phone"], include_prep=True)
     if not group:
         return None
     done = get_today_report(user["id"], group["id"]) or {}
