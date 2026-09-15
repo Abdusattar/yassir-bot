@@ -178,6 +178,17 @@ def set_state(mode):
         # (11.09.2026): без сброса второй снимок показывал бы сумму двух.
         conn.execute(mushaf_words._HIFZ_PROGRESS_SCHEMA)
         conn.execute("DELETE FROM mushaf_hifz_progress WHERE user_id=?", (STUDENT,))
+        # Дневной счёт тренажёра слов тоже копится в базе стенда между
+        # прогонами - ставим явно (15.09.2026): для сцен тренажёра середина
+        # дня, 12 слов и 7 из них верно, чтобы пилюля «12/40 сегодня · ✅ 7/20»
+        # показывала оба порога; остальным сценам - чистый ноль.
+        _mufradat._ensure_daily_answered_schema(conn)
+        conn.execute("DELETE FROM mufradat_daily_answered_words WHERE user_id=?", (STUDENT,))
+        if mode == "words":
+            conn.executemany(
+                "INSERT INTO mufradat_daily_answered_words (user_id, date, word_id, correct) "
+                "VALUES (?,?,?,?)",
+                [(STUDENT, _mufradat._today(), 900000 + i, 1 if i < 7 else 0) for i in range(12)])
     if mode == "stage2":
         mushaf_words.set_hifz_pointer(STUDENT, 3, 0, 2)
         if mushaf_words.get_hifz_progress(STUDENT, 3, 2, 0) == 0:
