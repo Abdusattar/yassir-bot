@@ -86,6 +86,15 @@ SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs",
           "u_door", "u_queue", "u_open", "u_marks", "u_comment", "u_verdict",
           "u_done", "u_students"]
 
+# Какое состояние стенда нужно сцене ещё до загрузки страницы (см. frame);
+# state(...) внутри сцены остаётся как явная пометка, но уже не решает.
+PRE_STATE = {
+    "progress": "stage2",
+    "trainer_start": "trainer_fresh",
+    "trainer_q": "words", "trainer_daily": "words", "trainer_range": "words",
+    "trainer_answer": "words", "mywords": "words",
+}
+
 CHROME_CANDIDATES = [
     os.environ.get("CHROME"),
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -189,7 +198,16 @@ def set_state(mode):
                 "INSERT INTO mufradat_daily_answered_words (user_id, date, word_id, correct) "
                 "VALUES (?,?,?,?)",
                 [(STUDENT, _mufradat._today(), 900000 + i, 1 if i < 7 else 0) for i in range(12)])
+    # Стена пересдачи (13.09.2026, ffd5d29): с открытой пересдачей студент не
+    # пройдёт на этап 2, и сцена progress уезжала в «Работу с устазом». Для
+    # stage2 долг закрываем повторной записью той же единицы (message_id 199),
+    # остальным сценам её убираем - у них пересдача должна быть открыта.
+    with sqlite3.connect(db.DB) as conn:
+        conn.execute("DELETE FROM voice_submissions WHERE chat_id=? AND message_id=199", (CHAT,))
     if mode == "stage2":
+        user = db.find_user_by_phone(STUDENT)
+        db.save_voice_submission(user["id"], db.get_group(CHAT)["id"], CHAT, 199, db.get_date(),
+                                 file_id="dev199", hifz_page=3, hifz_line=2, hifz_stage=1)
         mushaf_words.set_hifz_pointer(STUDENT, 3, 0, 2)
         if mushaf_words.get_hifz_progress(STUDENT, 3, 2, 0) == 0:
             mushaf_words.add_hifz_progress(STUDENT, 3, 2, 0, 24)
@@ -333,7 +351,7 @@ SCENE_SCRIPT = """
       spot('#hifz-progress-chips');
     },
 
-    subs: async function () { $('dash-subs').click(); await wait(1800); },
+    subs: async function () { await state('fresh'); $('dash-subs').click(); await wait(1800); },
 
     // --- повторение ---
     // Повторение идёт с начала Аль-Бакары - показываем её начало, а не
@@ -362,6 +380,7 @@ SCENE_SCRIPT = """
     },
 
     look: async function () {
+      await state('fresh');
       $('dash-subs').click(); await wait(1800);
       var b = document.querySelector('[data-look]');
       if (b) { b.click(); await wait(1600); }
@@ -602,6 +621,12 @@ def build_app():
         h = request.query.get("h", "844")
         src = "/?bot=male"
         if request.query.get("scene"):
+            # Состояние ставим ДО загрузки приложения (15.09.2026): указатель
+            # заучивания и долги оно читает один раз на старте, и state() из
+            # сцены на них уже не влиял - сцена progress годами снимала
+            # «С какой строчки начинаем?» вместо этапа 2. Заодно каждая сцена
+            # начинает с чистого состояния, а не с хвоста предыдущей.
+            set_state(PRE_STATE.get(request.query["scene"], "fresh"))
             src += "&scene=" + request.query["scene"]
         if request.query.get("as"):
             src += "&as=" + request.query["as"]
