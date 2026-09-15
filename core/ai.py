@@ -681,9 +681,9 @@ async def morning_miss_nasiha(lang="ru", hadith=None, ayah=None):
     # ключ без профиля), поэтому и система бесполая - решение пользователя
     # 13.09.2026. Второй путь, развести кэш по ботам, отклонён: лишний вызов
     # ИИ каждое утро ради одного слова.
-    ready = nasiha_bank.pick("morning_miss", lang, template=False)
-    if ready:
-        return ready
+    # Выдача из банка для этого типа - в scheduler._miss_nasiha_text, не здесь:
+    # тексты банка профильные («брат»/«сестра»), а общий кэш на оба бота
+    # рассчитан на нейтральный сочинённый текст (15.09.2026).
     return await _keep("morning_miss", prompt, lang,
                        system=_MOTIVATIONAL_SYSTEM_NEUTRAL)
 
@@ -1055,7 +1055,9 @@ _NASIHA_SYSTEM = (
 
 
 async def morning_report_intro(hadith=None, ayah=None) -> str | None:
-    ready = nasiha_bank.pick("tadabbur_morning", "ru", template=False)
+    # Эпиграфы без обращения к человеку, по 7 на профиль накоплено - порог
+    # ниже общего (15.09.2026).
+    ready = nasiha_bank.pick("tadabbur_morning", "ru", template=False, min_count=5)
     if ready:
         return ready
     source_block = await _build_source_block(hadith, ayah, "ru")

@@ -28,6 +28,7 @@ from core.prep import check_prep_students, send_prep_reminders
 import random
 import core.ai as ai
 import core.sampler as sampler
+import core.nasiha_bank as nasiha_bank
 
 log = logging.getLogger(__name__)
 
@@ -102,9 +103,17 @@ async def _miss_nasiha_text(lang, date_str):
     текст. Теперь один вызов на день и язык, а кэш лежит в общем hadiths.db
     — значит мужской и женский боты берут оттуда же (тот же приём, что у
     тадаббур-насыхи, 17.08.2026)."""
-    cached = sampler.get_cached_nasiha(date_str, kind="miss:" + lang)
+    # Порядок (15.09.2026): сначала кэш СВОЕГО профиля (текст из банка - он
+    # уже с «брат»/«сестра» и другому боту не годится), потом общий кэш
+    # нейтрального сочинённого текста, потом банк, и только потом ИИ.
+    cached = (sampler.get_cached_nasiha(date_str, kind="miss:" + lang + ":" + PROFILE)
+              or sampler.get_cached_nasiha(date_str, kind="miss:" + lang))
     if cached:
         return cached
+    ready = nasiha_bank.pick("morning_miss", lang, template=False)
+    if ready:
+        sampler.save_cached_nasiha(date_str, ready, kind="miss:" + lang + ":" + PROFILE)
+        return ready
     if random.random() < 0.5:
         hadith, ayah = sampler.sample_hadith(), None
     else:

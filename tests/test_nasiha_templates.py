@@ -105,3 +105,16 @@ def test_generate_template_бракует_и_сохраняет(bank, monkeypatc
     assert asyncio.run(ai.generate_template("absent", "3-5", "ru")) is None
     assert asyncio.run(ai.generate_template("absent", "3-5", "ru")) == "Брат {name}, уже {days} тишины."
     assert nasiha_bank.count_templates("absent", "ru", "3-5") == 1
+
+
+def test_pick_не_отдаёт_тексты_другого_профиля(bank, monkeypatch):
+    """Мужской бот не должен получить «сестра»: строки другого профиля для него
+    не существуют, даже если их много."""
+    monkeypatch.setattr(nasiha_bank, "IS_FEMALE", True)
+    _fill("absent", "3-5", nasiha_bank.MIN_TEMPLATES, text="Сестра {name}, уже {days} №%d")
+    monkeypatch.setattr(nasiha_bank, "IS_FEMALE", False)
+
+    assert nasiha_bank.pick("absent", "ru", bucket="3-5") is None
+    monkeypatch.setattr(nasiha_bank, "IS_FEMALE", True)
+    assert nasiha_bank.pick("absent", "ru", bucket="3-5").startswith("Сестра")
+
