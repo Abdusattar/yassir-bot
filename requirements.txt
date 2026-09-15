@@ -3,6 +3,4 @@ pytz
 requests
 quran-transcript
 Pillow
-uharfbuzz
-freetype-py
 fonttools

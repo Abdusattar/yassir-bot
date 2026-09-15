@@ -156,7 +156,7 @@ async def send_photo_with_buttons(chat_id, photo_path, buttons, caption=None):
 async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_markup=None,
                                 reply_to_message_id=None):
     """Как _raw_send_photo, но принимает BytesIO вместо пути на диске -
-    для сгенерированных на лету картинок (core/mufradat_render.py),
+    для сгенерированных на лету картинок (снимок строки при сдаче хифза),
     не плодит временные файлы на сервере."""
     data = aiohttp.FormData()
     data.add_field("chat_id", str(cid))

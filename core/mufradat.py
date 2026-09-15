@@ -150,8 +150,10 @@ _PAGE_SCHEMA = """
 # Качество закрепления при пороге 3 не страдает: на большом пуле три верных
 # ответа идут с интервалом ~18 дней - это три вспоминания через недели, а не
 # зубрёжка за вечер. Проверялось и явное правило "серия растёт не чаще +1 в
-# день" - на всех пулах эффекта не дало (слово и так не выпадает дважды за
-# день), усложнение не внесено. Страховка от преждевременного отдыха -
+# день" - на всех пулах эффекта не дало (слово и так не выпадало дважды за
+# день; с корзиной закрепления 04.09.2026 стало выпадать, и с 15.09.2026
+# сегодняшние верные слова исключаются явно - exclude_keys в
+# pick_question_word). Страховка от преждевременного отдыха -
 # RECHECK_AFTER_DAYS: через 60 дней слово возвращается на перепроверку и при
 # ошибке падает обратно в пул.
 #
@@ -530,7 +532,7 @@ def _scaled_repeat_threshold(words):
     return max(3, round(n * 0.006))
 
 
-def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
+def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_keys=None):
     """words - результат get_words_in_range. Целью вопроса не может быть
     слово с пояснением в скобках (не проверяет знание слова, угадывается
     по форме ответа), слово с часто повторяющимся переводом (см. модульный
@@ -542,7 +544,19 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
     progress_by_id - словарь по progress_key (core/sampler.py), НЕ по id
     конкретной строки (26.08.2026) - если то же арабское слово с тем же
     переводом встречается на нескольких страницах, все его строки делят
-    ОДИН прогресс, "выученность" на одной странице сразу видна и на другой."""
+    ОДИН прогресс, "выученность" на одной странице сразу видна и на другой.
+
+    exclude_keys - progress_key слов, на которые студент СЕГОДНЯ уже ответил
+    верно (get_today_correct_keys, 15.09.2026): до конца дня они не
+    спрашиваются. Раньше верное слово тут же попадало в корзину закрепления
+    (стрик 1, CONSOLIDATION_SHARE) и выпадало по второму-третьему разу в тот
+    же вечер - пользователь: "у студентов много слов, зачем правильные за
+    день выводить по несколько раз". Старая заметка у MASTERY_STREAK
+    ("слово и так не выпадает дважды за день") мерилась ДО корзины
+    закрепления (04.09.2026) и с ней перестала быть верной. Слова с ошибкой
+    сегодня остаются в обороте - их возвращает квота «Моих слов». Если без
+    сегодняшних верных кандидатов не остаётся вовсе, исключение снимается:
+    лучше повтор, чем тупик «слова закончились»."""
     if min_repeat_exclude is None:
         min_repeat_exclude = _scaled_repeat_threshold(words)
     repeated = _repeated_glosses(words, min_repeat_exclude)
@@ -554,6 +568,10 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
         if is_mastered(progress) and not _is_stale(progress):
             continue
         candidates.append(w)
+    if exclude_keys:
+        fresh = [w for w in candidates if w["progress_key"] not in exclude_keys]
+        if fresh:
+            candidates = fresh
     if not candidates:
         return None
     # Равномерность охвата (30.08.2026, см. COVERAGE_WAVE_SHARE): большую
@@ -575,10 +593,11 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None):
     return random.choices(pool, weights=weights, k=1)[0]
 
 
-def generate_question(words, progress_by_id, n_options=8, starred_words=None):
+def generate_question(words, progress_by_id, n_options=8, starred_words=None, exclude_keys=None):
     """Возвращает {word, options} или None, если в диапазоне недостаточно
     слов для вопроса. options - список переводов (включая верный),
-    перемешанный.
+    перемешанный. exclude_keys - см. pick_question_word (сегодняшние верные
+    слова не спрашиваются повторно), действует и на «Мои слова».
 
     starred_words - результат get_starred_question_pool (29.08.2026),
     когда передан и не пуст, ЦЕЛЬ вопроса берётся из него, а не из words -
@@ -593,7 +612,10 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None):
     обычного пула (04.09.2026, см. комментарий у отката ниже). None означает
     ровно одно: пуст сам ОСНОВНОЙ пул - только тогда транспортам можно
     показывать "Сдвинь страницу дальше"."""
-    target = pick_question_word(starred_words, progress_by_id) if starred_words else None
+    target = (
+        pick_question_word(starred_words, progress_by_id, exclude_keys=exclude_keys)
+        if starred_words else None
+    )
     if target is None:
         # Откат на обычный пул (04.09.2026, жалоба студента: "слова на
         # закладке закончились" на 15-й странице, где пул за 1000 слов).
@@ -605,7 +627,7 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None):
         # None, и оба транспорта (чат core/mufradat_bot.py, веб
         # core/mufradat_api.py) показывали "Сдвинь страницу дальше" - при
         # полном основном пуле.
-        target = pick_question_word(words, progress_by_id)
+        target = pick_question_word(words, progress_by_id, exclude_keys=exclude_keys)
     if target is None:
         return None
 
@@ -1070,7 +1092,7 @@ def get_leaderboard():
 
     Итоговое число - НЕ вероятность, только внутренний ключ сортировки, не
     показывается студенту (на экране - accuracy% и n, см.
-    core/mufradat_bot.py:_render_leaderboard_text).
+    рейтинг в приложении, handle_leaderboard в core/mufradat_api.py).
 
     score_dict: wilson (промежуточный, для sort_key), accuracy (%, для
     показа), correct/wrong/n (сырые числа), attempted, page, language (какой
@@ -1124,11 +1146,42 @@ _DAILY_ANSWERED_SCHEMA = """
 # 28.08.2026.
 DAILY_WORDS_FOR_TASK_CREDIT = 40
 
+# Второе условие зачёта (15.09.2026, решение пользователя): из дневных слов
+# минимум столько отвечены ВЕРНО (хотя бы раз за день - ошибся, а позже
+# ответил верно, значит слово взято). Одних 40 «проработанных» мало: их
+# можно набрать, тапая наугад, задание же про смысл слов, не про тапы.
+DAILY_CORRECT_FOR_TASK_CREDIT = 20
 
-def record_daily_answered_word(user_id, word_id):
-    """Отмечает, что студент СЕГОДНЯ отвечал на это слово (не важно,
-    верно или нет - "поработал", не "выучил"). Возвращает число РАЗНЫХ
-    слов за сегодня после этой записи.
+
+def _ensure_daily_answered_schema(conn):
+    """Таблица + миграция ADD COLUMN correct (15.09.2026). У строк до
+    миграции correct=0: студент, который к моменту выкладки уже прошёл часть
+    дневной нормы, верные из оставшихся слов наберёт сам - потому и
+    выкладывать это лучше не посреди учебного дня."""
+    conn.execute(_DAILY_ANSWERED_SCHEMA)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(mufradat_daily_answered_words)")}
+    if "correct" not in cols:
+        conn.execute("ALTER TABLE mufradat_daily_answered_words ADD COLUMN correct INTEGER NOT NULL DEFAULT 0")
+
+
+def _daily_status_row(conn, user_id, today):
+    count, correct = conn.execute(
+        "SELECT COUNT(*), COALESCE(SUM(correct), 0) FROM mufradat_daily_answered_words "
+        "WHERE user_id=? AND date=?",
+        (user_id, today)
+    ).fetchone()
+    return {
+        "count": count, "target": DAILY_WORDS_FOR_TASK_CREDIT,
+        "correct": correct, "correct_target": DAILY_CORRECT_FOR_TASK_CREDIT,
+        "done": count >= DAILY_WORDS_FOR_TASK_CREDIT and correct >= DAILY_CORRECT_FOR_TASK_CREDIT,
+    }
+
+
+def record_daily_answered_word(user_id, word_id, correct=False):
+    """Отмечает, что студент СЕГОДНЯ отвечал на это слово; correct=True
+    помечает слово взятым (метка не снимается позднейшей ошибкой в тот же
+    день). Возвращает статус дня, как get_daily_words_status - зачёт задания
+    "t" даётся, когда в нём done.
 
     word_id - progress_key (см. record_answer) - если студент сегодня уже
     отвечал на ту же пару (arabic_text, перевод) на ДРУГОЙ странице, это тот
@@ -1136,28 +1189,39 @@ def record_daily_answered_word(user_id, word_id):
     ожидаемо: технически другая позиция, но по факту то же самое слово."""
     today = _today()
     with sqlite3.connect(HADITHS_DB) as conn:
-        conn.execute(_DAILY_ANSWERED_SCHEMA)
+        _ensure_daily_answered_schema(conn)
         conn.execute(
             "INSERT OR IGNORE INTO mufradat_daily_answered_words (user_id, date, word_id) VALUES (?,?,?)",
             (user_id, today, word_id)
         )
-        count = conn.execute(
-            "SELECT COUNT(*) FROM mufradat_daily_answered_words WHERE user_id=? AND date=?",
-            (user_id, today)
-        ).fetchone()[0]
-    return count
+        if correct:
+            conn.execute(
+                "UPDATE mufradat_daily_answered_words SET correct=1 WHERE user_id=? AND date=? AND word_id=?",
+                (user_id, today, word_id)
+            )
+        return _daily_status_row(conn, user_id, today)
 
 
-def get_daily_answered_count(user_id):
-    """Только чтение - сколько РАЗНЫХ слов сегодня уже отработано, без
-    записи нового ответа (в отличие от record_daily_answered_word). Нужно
-    для счётчика "X/40 сегодня" в шапке тренажёра (28.08.2026) - его нужно
-    показывать сразу при открытии, до первого ответа в этой сессии."""
+def get_daily_words_status(user_id):
+    """Только чтение - {count, target, correct, correct_target, done} за
+    сегодня, без записи нового ответа (в отличие от record_daily_answered_word).
+    Единственный источник истины «сдано ли задание «Слова» через тренажёр»
+    для API, шапки тренажёра и дашборда - раньше каждый из них сравнивал
+    count с порогом сам."""
     today = _today()
     with sqlite3.connect(HADITHS_DB) as conn:
-        conn.execute(_DAILY_ANSWERED_SCHEMA)
-        count = conn.execute(
-            "SELECT COUNT(*) FROM mufradat_daily_answered_words WHERE user_id=? AND date=?",
+        _ensure_daily_answered_schema(conn)
+        return _daily_status_row(conn, user_id, today)
+
+
+def get_today_correct_keys(user_id):
+    """progress_key слов, отвеченных сегодня верно - для exclude_keys в
+    generate_question (см. pick_question_word)."""
+    today = _today()
+    with sqlite3.connect(HADITHS_DB) as conn:
+        _ensure_daily_answered_schema(conn)
+        rows = conn.execute(
+            "SELECT word_id FROM mufradat_daily_answered_words WHERE user_id=? AND date=? AND correct=1",
             (user_id, today)
-        ).fetchone()[0]
-    return count
+        ).fetchall()
+    return {row[0] for row in rows}

@@ -925,16 +925,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # ручная команда ушла вместе с ним - независимая рассылка
         # invite_friend_broadcast в scheduler.py не тронута.
 
-        if text == "/muftop":
-            from core.mufradat_bot import show_leaderboard
-            await show_leaderboard(phone, chat_id)
-            return
-
-        # ── Тренажёр муфрадата - ответ на "какой диапазон аятов" ────────────
-        if text and not text.startswith("/"):
-            from core.mufradat_bot import handle_page_text
-            if await handle_page_text(phone, chat_id, text):
-                return
+        # /muftop и текстовый ввод страницы для чатового тренажёра убраны
+        # 15.09.2026 вместе со всем Telegram-путём муфрадата - рейтинг и
+        # тренажёр только в приложении.
 
         # ── Анкета "откуда и сколько лет" (13.08.2026, окно 17.08.2026) ────
         # Команды (/help и т.п.) не считаем ответом - анкета просто ждёт

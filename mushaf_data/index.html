@@ -3823,8 +3823,9 @@
       ayah_n: 'аят %N%',
       ayah_range: 'аят %A%–%B%',
       word_from_page_n: 'слово со стр. %N%',
-      correct_n: '✅ %N% за сеанс',
+      correct_today: '✅ верно сегодня %N%/%M%',
       daily_n: '%N%/%M% сегодня',
+      daily_words_n: '%N%/%M% сегодня · ✅ %C%/%K%',
       overall_score: 'Общий вес',
       mastered_of: 'закреплено %N% из %M% слов',
       which_page_range: '📖 Какая страница мусхафа? (стр. %A%–%B%)',
@@ -3841,6 +3842,8 @@
       division_1: '🥇 Дивизион 1 (стр. 11+)',
       division_2: '🥈 Дивизион 2 (стр. 2-10)',
       daily_left: '📝 Ещё %N% разных слов сегодня — и дневное задание «Слова» будет засчитано',
+      daily_left_both: '📝 Ещё %N% слов и %C% верных сегодня — и дневное задание «Слова» будет засчитано',
+      daily_left_correct: '📝 %M% слов уже есть, для зачёта «Слова» ещё %C% верных',
       mywords_empty: 'Пока пусто. Дважды нажми на слово во время чтения — оно попадёт сюда.',
       mywords_new: 'Новые',
       mywords_old: 'Забытые',
@@ -3866,6 +3869,7 @@
       task_n: 'Нахв',
       task_h: 'Хадис',
       dash_words_today: '%N% из %M% слов сегодня',
+      dash_words_correct: '✅ %C%/%K% верных',
       dash_subs_waiting: 'на проверке %N%',
       dash_subs_retake: 'пересдать %N%',
       pulse_today: 'сегодня',
@@ -3904,7 +3908,6 @@
       ayah_n: '%N%-аят',
       ayah_range: '%A%–%B%-аяттар',
       word_from_page_n: '%N%-беттеги сөз',
-      correct_n: '✅ сеанста %N%',
       daily_n: 'бүгүн %N%/%M%',
       overall_score: 'Жалпы балл',
       mastered_of: '%M% сөздөн %N% сөз жатталды',
@@ -3959,7 +3962,6 @@
       ayah_n: '%N%-оят',
       ayah_range: '%A%–%B%-оятлар',
       word_from_page_n: '%N%-бетдаги сўз',
-      correct_n: '✅ сеансда %N%',
       daily_n: 'бугун %N%/%M%',
       overall_score: 'Умумий балл',
       mastered_of: '%M% та сўздан %N% таси мустаҳкамланди',
@@ -4648,6 +4650,11 @@
     box.classList.add('on');
   }
 
+  function wordsCorrectSuffix(w) {
+    if (!w || w.correct_target == null || w.complete || w.done < w.target) return '';
+    return T('dash_words_correct', { C: w.correct, K: w.correct_target });
+  }
+
   function dashFacts(f) {
     dashDay(f.day);
     var mush = document.getElementById('dash-mushaf-sub');
@@ -4660,9 +4667,14 @@
     dashFactsLast = f;
     dashLearnSub(f);
     if (f.words) {
+      // «✅ 14/20 верных» дописываем только в момент, когда 40 слов уже
+      // есть, а зачёта нет (15.09.2026) - иначе на двери тесно, а полная
+      // картина и так в пилюле тренажёра.
+      var wc = wordsCorrectSuffix(f.words);
       document.getElementById('dash-trainer-sub').textContent = f.tajweed
-        ? T('dash_trainers_both', { N: f.words.done, M: f.words.target, A: f.tajweed.done, B: f.tajweed.target })
-        : T('dash_words_today', { N: f.words.done, M: f.words.target });
+        ? T('dash_trainers_both', { N: f.words.done, M: f.words.target + (wc ? ' (' + wc + ')' : ''),
+            A: f.tajweed.done, B: f.tajweed.target })
+        : T('dash_words_today', { N: f.words.done, M: f.words.target }) + (wc ? ' · ' + wc : '');
     }
     if (document.getElementById('trainers').style.display === 'flex') trainersRender();
     var subsSub = document.getElementById('dash-subs-sub');
@@ -10193,8 +10205,11 @@
   function trainersRow(id, mark, name, desc, fact) {
     var cnt = '';
     if (fact && fact.target != null) {
-      cnt = '<span class="cnt' + (fact.done >= fact.target ? ' done' : '') + '">' +
-        T('daily_n', { N: fact.done, M: fact.target }) + '</span>';
+      var complete = fact.complete != null ? fact.complete : fact.done >= fact.target;
+      var label = fact.correct_target != null
+        ? T('daily_words_n', { N: fact.done, M: fact.target, C: fact.correct, K: fact.correct_target })
+        : T('daily_n', { N: fact.done, M: fact.target });
+      cnt = '<span class="cnt' + (complete ? ' done' : '') + '">' + label + '</span>';
     }
     return '<button class="tr-hub" id="' + id + '"><span class="mk">' + mark + '</span>' +
       '<span><span class="nm">' + name + '</span><span class="ds">' + desc + '</span></span>' +
@@ -10397,10 +10412,16 @@
       ? '<span class="trainer-feedback-ar">' + feedback.arabic + '</span> — ' : '';
     var html = '<div class="trainer-feedback ' + cls + '">' + icon + ' ' + ar +
       feedback.target + '</div>';
-    if (feedback.remaining_for_task > 0) {
-      html += '<div class="trainer-hint">' +
-        T('daily_left', { N: feedback.remaining_for_task }) + '</div>';
-    }
+    // Что осталось до зачёта «Слова» (15.09.2026, второй порог): пока не
+    // хватает и слов, и верных - одна фраза про оба; 40 слов уже есть -
+    // прямо говорим, что нужны верные, иначе привыкшие к «40 и всё» не
+    // поймут, почему зачёт не пришёл.
+    var leftW = feedback.remaining_for_task || 0, leftC = feedback.remaining_correct || 0;
+    var hint = leftW > 0 && leftC > 0 ? T('daily_left_both', { N: leftW, C: leftC })
+      : leftW > 0 ? T('daily_left', { N: leftW })
+      : leftC > 0 ? T('daily_left_correct', { C: leftC, M: (trainerState && trainerState.daily_target) || '' })
+      : '';
+    if (hint) html += '<div class="trainer-hint">' + hint + '</div>';
     return html;
   }
 
@@ -10419,9 +10440,11 @@
     // источник истины, значение меняли уже дважды (20 → 15 → 20 → 40).
     var el = document.getElementById('trainer-daily');
     if (!d || d.daily_target == null) { el.textContent = ''; el.classList.remove('done'); return; }
-    var done = d.daily_count >= d.daily_target;
-    el.textContent = T('daily_n', { N: d.daily_count, M: d.daily_target });
-    el.classList.toggle('done', done);
+    // Зелёная - только по daily_done с бэкенда (оба порога, 15.09.2026).
+    el.textContent = d.daily_correct_target != null
+      ? T('daily_words_n', { N: d.daily_count, M: d.daily_target, C: d.daily_correct, K: d.daily_correct_target })
+      : T('daily_n', { N: d.daily_count, M: d.daily_target });
+    el.classList.toggle('done', !!d.daily_done);
   }
 
   function renderTrainer() {
@@ -10457,7 +10480,8 @@
     }
 
     // Порядок блоков (30.08.2026): контекст -> задача -> действие -> прогресс.
-    // Раньше между словом и вариантами вклинивались "Верно за сеанс" и
+    // Раньше между словом и вариантами вклинивались "Верно за сеанс" (с
+    // 15.09.2026 - «верно сегодня», счёт за день, а не за сеанс) и
     // "Общий вес" с полосой - две строки статистики отодвигали кнопки от
     // вопроса, и взгляд метался между ними. Заодно контекст был разорван:
     // страница сверху, счёт за сеанс в середине. Теперь это одна мелкая
@@ -10466,7 +10490,7 @@
     var html = renderFeedbackBanner(d.feedback);
     html += '<div class="trainer-info">' + T('page_n', { N: d.bookmark_page }) +
       ' · ' + T('word_from_page_n', { N: d.word_page }) +
-      ' · ' + T('correct_n', { N: d.session_correct }) + '</div>';
+      ' · ' + T('correct_today', { N: d.daily_correct, M: d.daily_correct_target }) + '</div>';
     html += '<div class="trainer-word-card"><div class="trainer-word">' + d.arabic + '</div></div>';
     html += '<div class="trainer-options">';
     d.options.forEach(function (opt, i) {

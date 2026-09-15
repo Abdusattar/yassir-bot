@@ -1,18 +1,14 @@
 """HTTP API тренажёра муфрадата для веб-версии внутри YassirApp Mini App
-(29.08.2026) - тонкая обвязка НАД тем же движком core/mufradat.py, что и
-Telegram-версия (core/mufradat_bot.py). Вся игровая логика (подбор слова,
-дистракторы, прогресс, рейтинг, зачёт дневного задания) НЕ дублируется -
-импортируется напрямую, включая "приватные" (_-префикс) хелперы рейтинга
-из mufradat_bot - они уже транспорт-независимы, дублировать их означало бы
-рассинхрон дивизионов/формулы между ботом и вебом.
+(29.08.2026) - тонкая обвязка НАД движком core/mufradat.py. Вся игровая
+логика (подбор слова, дистракторы, прогресс, рейтинг, зачёт дневного
+задания) живёт там; хелперы рейтинга (гендерный фильтр, дивизионы) и
+отправка сообщений при зачёте - в core/mufradat_bot.py. Чатовая
+Telegram-версия тренажёра убрана 15.09.2026, это единственный транспорт.
 
-Сессия активного вопроса (_active) - СВОЙ словарь, отдельный от
-mufradat_bot._active_question: тот привязан к message_id (Telegram
-редактирует карточку на месте), здесь это не нужно - веб-клиент просто
-шлёт word_id вопроса, на который отвечает, и сервер сверяет его с
-активным состоянием (та же защита от гонки двойного тапа, что и в
-mufradat_bot.handle_answer_tap, но без message_id - HTTP запрос/ответ уже
-атомарен на уровне одного вызова).
+Сессия активного вопроса (_active) живёт в памяти процесса: веб-клиент
+шлёт word_id вопроса, на который отвечает, и сервер сверяет его с активным
+состоянием - защита от гонки двойного тапа на слабом интернете (реальный
+кейс 18.08.2026), HTTP запрос/ответ атомарен на уровне одного вызова.
 
 Аутентификация - Telegram initData (HMAC-SHA256 подписанная строка,
 Telegram.WebApp.initData на фронтенде) - см. validate_init_data. user_id
@@ -53,7 +49,7 @@ from core.mufradat import (
     generate_question, get_progress_map, record_answer,
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
-    record_daily_answered_word, get_daily_answered_count, DAILY_WORDS_FOR_TASK_CREDIT,
+    record_daily_answered_word, get_daily_words_status, get_today_correct_keys,
     get_starred_question_pool, _is_junk,
 )
 from core.mufradat_bot import (
@@ -80,7 +76,7 @@ from core.web_auth import (
 
 log = logging.getLogger(__name__)
 
-_active = {}  # user_id -> {word_id, target, options, arabic, surah, ayah, session_correct, start_score10}
+_active = {}  # user_id -> {word_id, target, options, arabic, surah, ayah, start_score10}
 
 _INIT_DATA_MAX_AGE = 86400  # сутки - initData протухает по auth_date, не только по подписи
 
@@ -157,31 +153,39 @@ def _bearer_token(request):
     return ""
 
 
-def _daily_fields(user_id):
-    """X/40 сегодня для шапки тренажёра (28.08.2026) - нужно в КАЖДОМ ответе
-    API (не только после ответа на вопрос), иначе счётчик в шапке пропадает
-    на экранах needs_page/empty."""
-    return {"daily_count": get_daily_answered_count(user_id), "daily_target": DAILY_WORDS_FOR_TASK_CREDIT}
+def _daily_fields(user_id, status=None):
+    """Пилюля «32/40 · ✅ 14/20» в шапке тренажёра (28.08.2026, второе число
+    с 15.09.2026) - нужно в КАЖДОМ ответе API (не только после ответа на
+    вопрос), иначе счётчик в шапке пропадает на экранах needs_page/empty.
+    daily_done - сдано ли задание «Слова» по обоим порогам; фронтенд сам
+    пороги не сравнивает, источник истины один (get_daily_words_status)."""
+    st = status or get_daily_words_status(user_id)
+    return {
+        "daily_count": st["count"], "daily_target": st["target"],
+        "daily_correct": st["correct"], "daily_correct_target": st["correct_target"],
+        "daily_done": st["done"],
+    }
 
 
-def _question_payload(user_id, state, overall_score, feedback=None):
+def _question_payload(user_id, state, overall_score, feedback=None, status=None):
     payload = {
         "arabic": state["arabic"], "options": state["options"], "word_id": state["word_id"],
-        "session_correct": state["session_correct"], "overall_score": overall_score,
+        "overall_score": overall_score,
         "bookmark_page": get_current_page(user_id),
         "word_page": page_for_ayah(state["surah"], state["ayah"]),
-        **_daily_fields(user_id),
+        **_daily_fields(user_id, status),
     }
     if feedback is not None:
         payload["feedback"] = feedback
     return payload
 
 
-def _new_question(user_id, session_correct, start_score10):
+def _new_question(user_id, start_score10):
     """Генерирует вопрос из ТЕКУЩЕГО пула закладки, кладёт в _active,
     возвращает (state, overall_score) или (None, overall_score) если пул
     пуст - вызывающий код решает, что показать в этом случае (см.
-    handle_state/handle_answer/handle_page)."""
+    handle_state/handle_answer/handle_page). Слова, отвеченные сегодня
+    верно, не спрашиваются повторно (exclude_keys, 15.09.2026)."""
     pool = get_words_for_bookmark(user_id)
     progress = get_progress_map(user_id, [w["progress_key"] for w in pool])
     overall_score = compute_overall_score(user_id, words=pool, progress=progress)
@@ -190,14 +194,15 @@ def _new_question(user_id, session_correct, start_score10):
     # get_starred_question_pool. Вызывается перед КАЖДЫМ generate_question -
     # эта функция единственная точка генерации вопроса на веб-стороне.
     starred_words = get_starred_question_pool(user_id, get_current_lang(user_id))
-    q = generate_question(pool, progress, starred_words=starred_words)
+    q = generate_question(
+        pool, progress, starred_words=starred_words, exclude_keys=get_today_correct_keys(user_id)
+    )
     if q is None:
         _active.pop(user_id, None)
         return None, overall_score
     state = {
         "word_id": q["word"]["progress_key"], "target": q["word"]["translation"], "options": q["options"],
         "arabic": q["word"]["arabic_text"], "surah": q["word"]["surah_number"], "ayah": q["word"]["ayah_number"],
-        "session_correct": session_correct,
         "start_score10": start_score10 if start_score10 is not None else (
             overall_score["score10"] if overall_score else None
         ),
@@ -223,7 +228,7 @@ async def handle_state(request, user_id):
         if state["word_id"] not in pool_keys:
             state = None  # закладка сдвинулась в другом клиенте, вопрос больше не из пула
     if not state:
-        state, overall_score = _new_question(user_id, 0, None)
+        state, overall_score = _new_question(user_id, None)
         if state is None:
             return web.json_response({
                 "empty": True, "bookmark_page": page, "overall_score": overall_score, **_daily_fields(user_id)
@@ -281,7 +286,7 @@ async def _state_body(user_id):
         return web.json_response({
             "needs_page": True, "first_page": FIRST_PAGE, "last_page": LAST_PAGE, **_daily_fields(user_id)
         })
-    state, overall_score = _new_question(user_id, 0, None)
+    state, overall_score = _new_question(user_id, None)
     if state is None:
         return web.json_response({
             "empty": True, "bookmark_page": page, "overall_score": overall_score, **_daily_fields(user_id)
@@ -292,11 +297,10 @@ async def _state_body(user_id):
 @with_auth
 async def handle_answer(request, user_id):
     """POST {word_id, slot} - ответ на активный вопрос. word_id сверяется с
-    _active[user_id] (защита от устаревшего/повторного ответа - тот же
-    паттерн, что handle_answer_tap в mufradat_bot.py, без message_id, он тут
-    не нужен). Начисление дневного задания "Слова" и уведомление в группу -
-    через ТОТ ЖЕ _credit_task_if_applicable, что и Telegram-путь (шлёт
-    сообщение в личку/группу как обычно, транспорт ответа API это не меняет)."""
+    _active[user_id] (защита от устаревшего/повторного ответа). Зачёт
+    дневного задания «Слова» - когда статус дня говорит done (40 слов и 20
+    из них верно, core/mufradat.py); уведомление в личку/группу шлёт
+    _credit_task_if_applicable."""
     try:
         body = await request.json()
     except (json.JSONDecodeError, ValueError):
@@ -317,31 +321,33 @@ async def handle_answer(request, user_id):
     chosen = opts[slot]
     correct = chosen == state["target"]
     target = state["target"]
-    session_correct = state["session_correct"] + (1 if correct else 0)
     start_score10 = state.get("start_score10")
     _active.pop(user_id, None)
 
     record_answer(user_id, state["word_id"], correct)
-    count_today = record_daily_answered_word(user_id, state["word_id"])
-    if count_today >= DAILY_WORDS_FOR_TASK_CREDIT:
+    status = record_daily_answered_word(user_id, state["word_id"], correct)
+    if status["done"]:
         await _credit_task_if_applicable(user_id, user_id)  # chat_id личного чата == user_id
 
     # "arabic" - слово, на которое студент ТОЛЬКО ЧТО отвечал (30.08.2026).
     # Без него плашка фидбека говорила "правильно: <перевод>", а самого слова
     # на экране уже не было - там отрисован следующий вопрос, и к чему
     # относится верный перевод, понять было нельзя (поймал пользователь).
+    # remaining_correct (15.09.2026) - сколько верных ещё нужно; вместе с
+    # remaining_for_task фронтенд строит подсказку «ещё N слов и M верных».
     feedback = {
         "correct": correct, "target": target, "arabic": state["arabic"],
-        "remaining_for_task": max(0, DAILY_WORDS_FOR_TASK_CREDIT - count_today),
+        "remaining_for_task": max(0, status["target"] - status["count"]),
+        "remaining_correct": max(0, status["correct_target"] - status["correct"]),
     }
 
-    new_state, overall_score = _new_question(user_id, session_correct, start_score10)
+    new_state, overall_score = _new_question(user_id, start_score10)
     if new_state is None:
         return web.json_response({
             "empty": True, "feedback": feedback, "overall_score": overall_score,
-            "bookmark_page": get_current_page(user_id), **_daily_fields(user_id),
+            "bookmark_page": get_current_page(user_id), **_daily_fields(user_id, status),
         })
-    return web.json_response(_question_payload(user_id, new_state, overall_score, feedback))
+    return web.json_response(_question_payload(user_id, new_state, overall_score, feedback, status))
 
 
 @with_auth
@@ -358,9 +364,8 @@ async def handle_lang_get(request, user_id):
 
 @with_auth
 async def handle_lang(request, user_id):
-    """POST {language} - переключатель языка перевода (сеанс визуально
-    начинается заново, как и в Telegram-версии - другой язык означает
-    другой пул progress_key, см. handle_language_set_tap)."""
+    """POST {language} - переключатель языка перевода (сеанс начинается
+    заново - другой язык означает другой пул progress_key)."""
     try:
         body = await request.json()
     except (json.JSONDecodeError, ValueError):
@@ -390,8 +395,7 @@ async def handle_end(request, user_id):
             result["rank"] = {
                 "division": label,
                 # Порядковый номер дивизиона - чтобы приложение подставило
-                # НАЗВАНИЕ на языке студента (label - всегда русский, он
-                # общий с /muftop в чате, где язык один).
+                # НАЗВАНИЕ на языке студента (label - всегда русский).
                 "division_no": next(
                     (i for i, (lbl, _e) in enumerate(divisions, start=1) if lbl == label), None
                 ),
@@ -403,9 +407,8 @@ async def handle_end(request, user_id):
 
 @with_auth
 async def handle_leaderboard(request, user_id):
-    """GET - рейтинг. Тот же гендер-фильтр/дивизионы/Wilson-формула, что и
-    /muftop в Telegram (переиспользует приватные хелперы mufradat_bot.py
-    напрямую - см. модульный docstring, почему это не дублирование)."""
+    """GET - рейтинг: гендер-фильтр и дивизионы из mufradat_bot.py,
+    Wilson-формула из core/mufradat.py."""
     if not get_learning_group(user_id):
         full = _leaderboard_for_this_bot()
         own = next(((i, s) for i, (uid, s) in enumerate(full, start=1) if uid == user_id), None)
@@ -1145,15 +1148,22 @@ def _my_day(user):
     }
 
 
+def _words_facts(st):
+    return {
+        "done": st["count"], "target": st["target"],
+        "correct": st["correct"], "correct_target": st["correct_target"],
+        "complete": st["done"],
+    }
+
+
 def _dashboard_facts(user_id):
     user = find_user_by_phone(user_id)
     subs = get_submission_counts(user["id"]) if user else {"waiting": 0, "retake": 0}
     return {
         "hifz": get_hifz_pointer(user_id),
-        "words": {
-            "done": get_daily_answered_count(user_id),
-            "target": DAILY_WORDS_FOR_TASK_CREDIT,
-        },
+        # done/target - слова за день; correct/correct_target - из них верно;
+        # complete - задание «Слова» сдано по обоим порогам (15.09.2026).
+        "words": _words_facts(get_daily_words_status(user_id)),
         # None - тренажёра таджвида у человека нет (группа без задания «j»):
         # тогда и строки о нём на двери и в «Тренажёрах» нет.
         "tajweed": _tajweed_facts(user_id),

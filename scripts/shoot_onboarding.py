@@ -49,6 +49,11 @@ if _REAL_WORDS.exists() and not _STAND_WORDS.exists():
 db.DB = str(TMP / "dev.db")
 sampler.HADITHS_DB = str(TMP / "hadiths.db")
 mushaf_words.HADITHS_DB = str(TMP / "hadiths.db")
+# core/mufradat.py импортирует HADITHS_DB по имени - подмена в sampler его не
+# задевает, и прогресс тренажёра со стенда уходил в настоящую sources/hadiths.db
+# (15.09.2026).
+import core.mufradat as _mufradat          # noqa: E402
+_mufradat.HADITHS_DB = str(TMP / "hadiths.db")
 
 import core.mufradat_api as api           # noqa: E402
 api.validate_init_data = lambda raw, token: {"id": raw}
@@ -352,37 +357,39 @@ SCENE_SCRIPT = """
     },
 
     // --- слова и тренажёр ---
+    // Дверь «Тренажёры» с 14.09.2026 - хаб, тренажёр слов за второй кнопкой
+    // (trh-words); сцены идут через неё (15.09.2026).
     trainer_start: async function () {
       await state('trainer_fresh');
-      $('dash-trainer').click(); await wait(1800);
+      $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(1800);
     },
 
     trainer_q: async function () {
       await state('words');
-      $('dash-trainer').click(); await wait(2200);
+      $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(2200);
     },
 
     trainer_daily: async function () {
       await state('words');
-      $('dash-trainer').click(); await wait(2200);
+      $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(2200);
       spot('#trainer-daily');
     },
 
     trainer_range: async function () {
       await state('words');
-      $('dash-trainer').click(); await wait(2200);
+      $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(2200);
       spot('.trainer-pagebar');       // ➖ ➕ - шаг закладки на страницу
     },
 
     trainer_answer: async function () {
       await state('words');
-      $('dash-trainer').click(); await wait(2200);
+      $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(2200);
       var opt = document.querySelector('#trainer-body button');
       if (opt) { opt.click(); await wait(1400); }
     },
 
     mywords: async function () {
-      $('dash-trainer').click(); await wait(1600);
+      $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(1600);
       $('trainer-tab-mywords').click(); await wait(1600);
     },
 
