@@ -118,3 +118,17 @@ def get_trail(user_id, hours=72):
             "SELECT ts, profile, event, page, line, stage, note FROM app_trail "
             "WHERE user_id=? AND ts >= ? ORDER BY ts, id", (str(user_id), since)).fetchall()
     return [dict(r) for r in rows]
+
+
+def users_seen_since(profile, hours=72):
+    """user_id (Telegram ID строкой) всех, у кого за окно есть хоть один
+    след в приложении этого бота (15.09.2026, для утреннего напоминания
+    «переходи в приложение»: кто сдаёт, но приложение не открывал)."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    with sqlite3.connect(_mw.HADITHS_DB) as conn:
+        conn.execute(_SCHEMA)
+        rows = conn.execute(
+            "SELECT DISTINCT user_id FROM app_trail WHERE profile=? AND ts >= ?",
+            (profile, since)).fetchall()
+    return {r[0] for r in rows}
+

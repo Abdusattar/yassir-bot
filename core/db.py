@@ -1448,6 +1448,18 @@ def save_report(uid, group_id, date, tasks_done):
                 )
 
 
+def student_ids_with_tasks_since(date_str):
+    """id студентов, у кого с date_str (включительно) есть хоть один зачёт
+    задания - неважно, текстом в группе или из приложения (15.09.2026,
+    утреннее напоминание «переходи в приложение»)."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT DISTINCT student_id FROM score_events WHERE category='task' AND date>=?",
+            (date_str,)
+        ).fetchall()
+    return {r[0] for r in rows}
+
+
 def get_today_report(uid, group_id=None):
     today = get_date()
     with db() as c:

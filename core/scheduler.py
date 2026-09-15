@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, date
 
 import pytz
 
-from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK, IS_FEMALE
+from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK, IS_FEMALE, PROFILE
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
@@ -18,7 +18,9 @@ from core.db import (
     count_unpublished_parts, get_users_due_for_survey, get_users_due_for_survey_nudge,
     start_survey, touch_survey_stage, get_prep_group, get_pending_voice_reviews,
     bot_leads_group, get_last_miss_nasiha_at, mark_miss_nasiha_sent,
+    student_ids_with_tasks_since, SERVICE_GROUP_TYPE,
 )
+from core.app_trail import users_seen_since
 from core.tg import send_message, tg_call, get_dm_start_link
 from core.i18n import T
 from core.transfers import run_transfer_checks, send_return_nudges
@@ -1326,6 +1328,58 @@ async def invite_friend_broadcast():
             log.error("invite_friend_broadcast error for %s: %s", name, e)
 
 
+# ── Утреннее «переходи в приложение» (06:00) ─────────────────────────────────
+
+APP_SWITCH_WINDOW_DAYS = 3
+
+
+def app_switch_recipients(today=None, seen=None):
+    """Кому сегодня писать «переходи в приложение» (15.09.2026, задача
+    пользователя): {phone: (name, lang)}.
+
+    Критерий - сдаёт, но приложение не открывает: за последние
+    APP_SWITCH_WINDOW_DAYS дней есть хоть один зачёт задания (текстом в
+    группе, голосом в группу - источник в базе не хранится, но кто сдаёт ИЗ
+    приложения, тот его открывал), и за то же окно ни одного следа в
+    app_trail. Откроет приложение - письма прекратятся сами.
+
+    Кого нет: служебная группа устазов (там не учатся), супер-админы, те,
+    кому в личку писать нельзя (get_dm_ok). Устазы-студенты получают
+    наравне со всеми - они сдают в своей учебной группе как студенты
+    (решение пользователя 15.09.2026: «устазам, которые студенты и сдают
+    задания в телеграм, также писать надо»). Подготовительная - тоже, она
+    сдаёт те же задания в приложении. Дедуп по phone: студент может
+    состоять в нескольких группах."""
+    today = today or datetime.now(pytz.timezone(TZ)).date()
+    since = (today - timedelta(days=APP_SWITCH_WINDOW_DAYS - 1)).isoformat()
+    active_ids = student_ids_with_tasks_since(since)
+    if seen is None:
+        seen = users_seen_since(PROFILE, hours=APP_SWITCH_WINDOW_DAYS * 24)
+    recipients = {}
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") == SERVICE_GROUP_TYPE:
+            continue
+        glang = get_group_lang(group)
+        for s in get_students(group["id"]):
+            phone = s["phone"]
+            if (not phone or phone in recipients or phone in SUPER_ADMIN_IDS
+                    or s["id"] not in active_ids or phone in seen or not get_dm_ok(s["id"])):
+                continue
+            recipients[phone] = (s["name"], glang)
+    return recipients
+
+
+async def app_switch_reminder():
+    recipients = app_switch_recipients()
+    log.info("app_switch_reminder: %d получателей", len(recipients))
+    for phone, (name, glang) in recipients.items():
+        try:
+            await send_message(phone, T("app_switch_reminder", glang, name=name))
+            await asyncio.sleep(0.3)
+        except Exception as e:
+            log.error("app_switch_reminder error for %s: %s", name, e)
+
+
 # ── Вечерний отчёт (20:00) ────────────────────────────────────────────────────
 
 async def evening_report():
@@ -1815,6 +1869,8 @@ async def scheduler():
                 if d in (1, 2):
                     await maybe_run("monthly_ops_report", monthly_ops_report)
                     await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
+            elif h == 6 and m == 0:
+                await maybe_run("app_switch_reminder", app_switch_reminder)
             elif h == 8 and m == 55:
                 await maybe_run("tadabbur_prepare_nasiha", tadabbur_prepare_nasiha)
             elif h == 9 and m == 0:
