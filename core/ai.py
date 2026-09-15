@@ -1,5 +1,6 @@
 import asyncio
 import random
+import re
 import logging
 import aiohttp
 from datetime import datetime
@@ -644,6 +645,9 @@ async def personal_streak_praise(name, streak_days, lang="ru", hadith=None, ayah
         + "a dua.\n"
         + lang_instruction(lang) + " Length: 5-7 lines."
     )
+    tpl = nasiha_bank.pick("streak", lang)
+    if tpl:
+        return nasiha_bank.render(tpl, name=name, streak=nasiha_bank.days_text(streak_days, lang))
     return await _keep("streak", prompt, lang, name=name, bucket=str(streak_days))
 
 
@@ -677,6 +681,9 @@ async def morning_miss_nasiha(lang="ru", hadith=None, ayah=None):
     # ключ без профиля), поэтому и система бесполая - решение пользователя
     # 13.09.2026. Второй путь, развести кэш по ботам, отклонён: лишний вызов
     # ИИ каждое утро ради одного слова.
+    ready = nasiha_bank.pick("morning_miss", lang, template=False)
+    if ready:
+        return ready
     return await _keep("morning_miss", prompt, lang,
                        system=_MOTIVATIONAL_SYSTEM_NEUTRAL)
 
@@ -693,6 +700,9 @@ async def absent_motivation(name, days, lang="ru", hadith=None, ayah=None):
         + "a brief dua.\n"
         + lang_instruction(lang) + " Tone: kind, no blame. 3-4 lines."
     )
+    tpl = nasiha_bank.pick("absent", lang, bucket=nasiha_bank.days_bucket(days))
+    if tpl:
+        return nasiha_bank.render(tpl, name=name, days=nasiha_bank.days_text(days, lang))
     return await _keep("absent", prompt, lang, name=name,
                        bucket=nasiha_bank.days_bucket(days))
 
@@ -709,6 +719,9 @@ async def winner_praise(name, period_label, points, lang="ru", hadith=None, ayah
         + "a brief dua.\n"
         + lang_instruction(lang) + " Short and warm: 3-4 lines."
     )
+    tpl = nasiha_bank.pick("winner", lang, bucket=period_label)
+    if tpl:
+        return nasiha_bank.render(tpl, name=name, points=nasiha_bank.points_text(points, lang))
     return await _keep("winner", prompt, lang, name=name, bucket=period_label)
 
 
@@ -745,6 +758,11 @@ async def warning_skips(name, skip_count, transfer_limit, lang="ru", hadith=None
         + "a short call to return.\n"
         + lang_instruction(lang) + " Tone: clear and kind, not harsh. 3-4 lines."
     )
+    tpl = nasiha_bank.pick("skips", lang, bucket=nasiha_bank.skips_bucket(skip_count, transfer_limit))
+    if tpl:
+        return nasiha_bank.render(
+            tpl, name=name, skips=nasiha_bank.skips_text(skip_count, lang),
+            left=nasiha_bank.days_text(days_left, lang), limit=nasiha_bank.skips_text(transfer_limit, lang))
     return await _keep("skips", prompt, lang, name=name,
                        gtype="pro" if is_pro else "relaxed",
                        bucket=nasiha_bank.skips_bucket(skip_count, transfer_limit))
@@ -762,7 +780,18 @@ async def ask_admin_improvement(groups):
     return await ask_ai(prompt)
 
 
+def mystats_bucket(streak):
+    """Комментарий к статистике при нулевой серии и при идущей - разные по
+    смыслу тексты (у нуля «чистый лист», у серии «держи»)."""
+    return "zero" if not streak else "going"
+
+
 async def mystats_comment(name, streak, rank, total_score, days_done, lang="ru"):
+    tpl = nasiha_bank.pick("mystats", lang, bucket=mystats_bucket(streak))
+    if tpl:
+        return nasiha_bank.render(
+            tpl, name=name, streak=nasiha_bank.days_text(streak, lang), rank=str(rank),
+            points=nasiha_bank.points_text(total_score, lang), days=nasiha_bank.days_text(days_done, lang))
     prompt = (
         "Write a brief motivational comment for Quran student «" + name + "».\n"
         "Their stats: " + str(streak) + " day streak, rank #" + str(rank) +
@@ -772,6 +801,89 @@ async def mystats_comment(name, streak, rank, total_score, days_done, lang="ru")
     )
     text = await ask_ai(prompt)
     nasiha_bank.save("mystats", text, lang=lang, name=name)
+    return text
+
+
+# ── Шаблоны для банка (15.09.2026) ──────────────────────────────────────────
+# Генерируются пачкой скриптом scripts/seed_nasiha_templates.py, выдаются
+# nasiha_bank.pick(). Плейсхолдеры приходят уже отформатированными строками
+# («5 дней», «31 балл»), модель их только расставляет.
+_PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
+
+TEMPLATE_KINDS = {
+    "absent": {
+        "buckets": ["3-5", "6-10", "11+"],
+        "required": ["name", "days"],
+        "task": lambda b: (
+            "Write a gentle warm reminder for a Quran student who has not submitted a "
+            "report for {days} (roughly " + b + " days). Say they are missed, invite them "
+            "to return. Do NOT scold. Address by {name} with warmth."),
+        "tone": "kind, no blame. 3-4 lines.",
+    },
+    "skips": {
+        "buckets": ["warning", "near_limit"],
+        "required": ["name", "skips", "left", "limit"],
+        "task": lambda b: (
+            "Write a warning for a Quran student. Group rule: {limit} missed in a month = "
+            "transfer to the Tadabbur group. The student already has {skips} this month and "
+            "{left} left before the transfer" + (" - very close to the limit" if b == "near_limit" else "")
+            + ". Start with 'Assalamu alaykum, {name}!', state the rule and what is left, "
+            "a short call to return."),
+        "tone": "clear and kind, not harsh. 3-4 lines.",
+    },
+    "winner": {
+        "buckets": ["неделю", "месяц"],
+        "required": ["name", "points"],
+        "task": lambda b: (
+            "Write a congratulation for a Quran student who took first place for the period "
+            "«" + b + "» (in Russian, use exactly «за " + b + "») with {points}. Start with "
+            "'MashaAllah, {name}!', congratulate on first place."),
+        "tone": "short and warm. 3-4 lines.",
+    },
+    "streak": {
+        "buckets": [None],
+        "required": ["name", "streak"],
+        "task": lambda b: (
+            "Write a congratulation for a Quran student who has {streak} in a row without "
+            "missing a single day. Start with 'Assalamu alaykum, {name}! MashaAllah!'."),
+        "tone": "warm. 5-7 lines.",
+    },
+}
+
+
+def validate_template(kind, text):
+    """Шаблон годен: все обязательные плейсхолдеры на месте и нет чужих."""
+    if not text:
+        return False
+    found = set(_PLACEHOLDER_RE.findall(text))
+    required = set(TEMPLATE_KINDS[kind]["required"])
+    return required <= found and found <= required
+
+
+async def generate_template(kind, bucket=None, lang="ru", hadith=None, ayah=None):
+    """Один шаблон для банка или None, если модель не справилась с
+    плейсхолдерами (проверяем, не доверяем)."""
+    spec = TEMPLATE_KINDS[kind]
+    source_block = await _build_source_block(hadith, ayah, lang)
+    holders = ", ".join("{" + h + "}" for h in spec["required"])
+    prompt = (
+        _HUMAN_STYLE + "\n\n"
+        "You are writing a reusable TEMPLATE, not a message to one person.\n"
+        + spec["task"](bucket) + "\n"
+        + source_block
+        + ("Mention the meaning of the ayah/hadith above with its reference. " if source_block else "")
+        + "Use these placeholders literally, each exactly once: " + holders + ". "
+        "{name} is the student's name; the other placeholders are already formatted phrases "
+        "(e.g. «5 дней», «31 балл») - do not add units or numbers next to them, and never "
+        "invent concrete names or numbers yourself. No other curly braces.\n"
+        + lang_instruction(lang) + " Tone: " + spec["tone"]
+    )
+    text = await ask_ai(prompt, system=_MOTIVATIONAL_SYSTEM, model=_model_for_lang(lang))
+    if text:
+        text = text.strip().strip('"')
+    if not validate_template(kind, text):
+        return None
+    nasiha_bank.save(kind, text, lang=lang, bucket=bucket, template=True)
     return text
 
 
@@ -943,6 +1055,9 @@ _NASIHA_SYSTEM = (
 
 
 async def morning_report_intro(hadith=None, ayah=None) -> str | None:
+    ready = nasiha_bank.pick("tadabbur_morning", "ru", template=False)
+    if ready:
+        return ready
     source_block = await _build_source_block(hadith, ayah, "ru")
     if not source_block:
         return None

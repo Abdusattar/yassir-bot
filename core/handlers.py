@@ -5,7 +5,7 @@ import time
 import unicodedata
 
 from config import (SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, REQUIRE_PREP_FOR_NEW_STUDENTS,
-                    AI_ANSWER_IF_RELEVANT)
+                    AI_ANSWER_IF_RELEVANT, AI_ANSWER_QUESTIONS)
 from core.content import (
     TASK_KEYS, DEFAULT_TASKS, SHORT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
@@ -219,9 +219,12 @@ async def _send_mystats_to(target_chat_id, s_check, group, group_id, group_tasks
         T("mystats_today", glang, done=today_done, total=len(group_tasks)),
     ]
     await send_message(target_chat_id, "\n".join(lines))
-    comment = await ai.mystats_comment(s_check["name"], streak, rank, total_score, days_done, glang)
-    if comment:
-        await send_message(target_chat_id, comment)
+    # Комментарий ИИ к цифрам выключен (15.09.2026, решение пользователя:
+    # «отвечать что-то на сообщение студента отключи»), см. AI_ANSWER_QUESTIONS.
+    if AI_ANSWER_QUESTIONS:
+        comment = await ai.mystats_comment(s_check["name"], streak, rank, total_score, days_done, glang)
+        if comment:
+            await send_message(target_chat_id, comment)
 
 
 def extract_phone(sender):
@@ -1143,14 +1146,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             return
 
         if is_admin(phone):
-            if text and not text.startswith("/"):
+            if text and not text.startswith("/") and AI_ANSWER_QUESTIONS:
                 answer = await ai.answer_question(
                     text, _build_reference_for_question(text), "личка суперадмина", phone, None, sender_name
                 )
                 await send_message(chat_id, answer)
             return
         if is_any_group_admin(phone):
-            if text and not text.startswith("/"):
+            if text and not text.startswith("/") and AI_ANSWER_QUESTIONS:
                 answer = await ai.answer_ustaz_question(
                     text, _build_reference_for_question(text), sender_name
                 )
@@ -1879,6 +1882,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
     yassir_question = detect_yassir(text)
     if yassir_question is not None:
+        if not AI_ANSWER_QUESTIONS:
+            # Вопросы разбирают устазы групп (15.09.2026, см. config.py) -
+            # молчим, но и как сдачу такое сообщение не разбираем.
+            return
         if not yassir_question:
             await send_message(chat_id, T("yassir_listening", glang))
             return

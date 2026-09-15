@@ -16,6 +16,7 @@
 «брат»/«сестра» уже внутри текста, и перепутать их нельзя.
 """
 import logging
+import random
 import sqlite3
 from datetime import datetime
 
@@ -77,21 +78,35 @@ def _mask_name(text, name):
     return text.replace(name, "{name}")
 
 
-def save(kind, text, lang="ru", gtype=None, bucket=None, name=None):
+def _ensure_schema(conn):
+    """Таблица + миграции: template (15.09.2026, шаблон с подстановками, не
+    живой текст) и used_count (сколько раз выдан из банка; seen_count - про
+    другое: сколько раз модель повторила ровно этот текст)."""
+    conn.execute(_SCHEMA)
+    conn.execute(_UNIQ)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(nasiha_bank)")}
+    if "template" not in cols:
+        conn.execute("ALTER TABLE nasiha_bank ADD COLUMN template INTEGER DEFAULT 0")
+    if "used_count" not in cols:
+        conn.execute("ALTER TABLE nasiha_bank ADD COLUMN used_count INTEGER DEFAULT 0")
+
+
+def save(kind, text, lang="ru", gtype=None, bucket=None, name=None, template=False):
     """Положить сгенерированный текст в банк. Никогда не бросает исключений:
-    копилка не должна мешать отправке самой насыхи."""
+    копилка не должна мешать отправке самой насыхи. template=True - это
+    шаблон с подстановками (см. pick), имя в нём не маскируется, его там нет."""
     if not text or not HADITHS_DB.exists():
         return
     try:
         with sqlite3.connect(HADITHS_DB, timeout=5) as conn:
-            conn.execute(_SCHEMA)
-            conn.execute(_UNIQ)
+            _ensure_schema(conn)
             cur = conn.execute(
                 "INSERT OR IGNORE INTO nasiha_bank"
-                " (kind, profile, lang, gtype, bucket, text, created_at)"
-                " VALUES (?,?,?,?,?,?,?)",
+                " (kind, profile, lang, gtype, bucket, text, created_at, template)"
+                " VALUES (?,?,?,?,?,?,?,?)",
                 (kind, "female" if IS_FEMALE else "male", lang or "ru", gtype,
-                 bucket, _mask_name(text, name), datetime.utcnow().isoformat())
+                 bucket, text if template else _mask_name(text, name),
+                 datetime.utcnow().isoformat(), 1 if template else 0)
             )
             if not cur.rowcount:
                 conn.execute(
@@ -103,6 +118,96 @@ def save(kind, text, lang="ru", gtype=None, bucket=None, name=None):
                 )
     except Exception as e:
         log.debug("nasiha_bank: не записалось (%s)", e)
+
+
+# ── Выдача из банка (15.09.2026) ────────────────────────────────────────────
+# Решение пользователя: типовые тексты не сочинять каждый раз, а брать готовые
+# («очень много вызовов»). Накопленные с 08.09 живые тексты несут числа
+# конкретного студента («уже 5 дней», «31 балл», «осталось 2 дня») - проверено
+# по проду: у absent цифры в 247 из 314, у skips в 20 из 21, у winner в 23 из
+# 25. Выдавать их другому человеку нельзя. Поэтому для таких типов выдаются
+# ШАБЛОНЫ с подстановками ({name}, {days}, {points}...), сгенерированные пачкой
+# один раз (scripts/seed_nasiha_templates.py, template=1). Типы без личных
+# чисел (morning_miss, tadabbur_morning) берутся из обычных накопленных
+# текстов (template=False). Пока в банке меньше MIN_TEMPLATES подходящих
+# текстов (так у кыргызского), вызывающий код сочиняет как раньше - и банк
+# дорастает сам.
+MIN_TEMPLATES = 8
+
+
+def pick(kind, lang="ru", bucket=None, template=True, min_count=MIN_TEMPLATES):
+    """Готовый текст из банка или None (тогда сочинять как раньше). Берётся
+    наименее выданный (used_count), при равенстве - случайный: ротация без
+    повторов подряд. Профиль (брат/сестра) - этого бота."""
+    if not HADITHS_DB.exists():
+        return None
+    try:
+        with sqlite3.connect(HADITHS_DB, timeout=5) as conn:
+            _ensure_schema(conn)
+            where = "kind=? AND profile=? AND lang=? AND IFNULL(bucket,'')=IFNULL(?,'')"
+            if template:
+                where += " AND template=1"
+            rows = conn.execute(
+                "SELECT id, text, used_count FROM nasiha_bank WHERE " + where,
+                (kind, "female" if IS_FEMALE else "male", lang or "ru", bucket)
+            ).fetchall()
+            if len(rows) < min_count:
+                return None
+            least = min(r[2] for r in rows)
+            rid, text, _ = random.choice([r for r in rows if r[2] == least])
+            conn.execute("UPDATE nasiha_bank SET used_count = used_count + 1 WHERE id=?", (rid,))
+            return text
+    except Exception as e:
+        log.warning("nasiha_bank.pick(%s): %s", kind, e)
+        return None
+
+
+def count_templates(kind, lang="ru", bucket=None, template=True):
+    """Сколько подходящих текстов в банке - для скрипта засева и отчётов."""
+    if not HADITHS_DB.exists():
+        return 0
+    with sqlite3.connect(HADITHS_DB, timeout=5) as conn:
+        _ensure_schema(conn)
+        where = "kind=? AND profile=? AND lang=? AND IFNULL(bucket,'')=IFNULL(?,'')"
+        if template:
+            where += " AND template=1"
+        return conn.execute(
+            "SELECT COUNT(*) FROM nasiha_bank WHERE " + where,
+            (kind, "female" if IS_FEMALE else "male", lang or "ru", bucket)
+        ).fetchone()[0]
+
+
+class _Keep(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def render(text, **vals):
+    """Подстановка в шаблон; незнакомые плейсхолдеры остаются как есть."""
+    return text.format_map(_Keep(vals))
+
+
+def plural_ru(n, one, few, many):
+    n = abs(int(n))
+    if n % 10 == 1 and n % 100 != 11:
+        form = one
+    elif 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        form = few
+    else:
+        form = many
+    return f"{n} {form}"
+
+
+def days_text(n, lang="ru"):
+    return plural_ru(n, "день", "дня", "дней") if lang == "ru" else str(n)
+
+
+def points_text(n, lang="ru"):
+    return plural_ru(n, "балл", "балла", "баллов") if lang == "ru" else str(n)
+
+
+def skips_text(n, lang="ru"):
+    return plural_ru(n, "пропуск", "пропуска", "пропусков") if lang == "ru" else str(n)
 
 
 def stats():
