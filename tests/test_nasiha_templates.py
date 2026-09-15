@@ -26,9 +26,20 @@ def bank(tmp_path, monkeypatch):
     return db
 
 
-def _fill(kind, bucket, n, text="Ассаляму алейкум, {name}! Уже {days} без тебя. Возвращайся №%d"):
+def _fill(kind, bucket, n, text="Ассаляму алейкум, {name}! Уже {days} без тебя. Возвращайся №%d", approved=True):
     for i in range(n):
         nasiha_bank.save(kind, text % i, lang="ru", bucket=bucket, template=True)
+    if approved:
+        with sqlite3.connect(nasiha_bank.HADITHS_DB) as conn:
+            conn.execute("UPDATE nasiha_bank SET approved=1 WHERE kind=? AND IFNULL(bucket,'')=IFNULL(?,'')",
+                         (kind, bucket))
+
+
+def test_непроверенные_шаблоны_не_выдаются(bank):
+    """Аяты и хадисы в заготовках сверяет человек; до отметки approved бот
+    сочиняет как раньше (требование пользователя 15.09.2026)."""
+    _fill("absent", "3-5", nasiha_bank.MIN_TEMPLATES, approved=False)
+    assert nasiha_bank.pick("absent", "ru", bucket="3-5") is None
 
 
 def test_pick_ротация_наименее_выданных(bank):

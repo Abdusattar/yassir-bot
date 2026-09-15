@@ -138,13 +138,19 @@ MIN_TEMPLATES = 8
 def pick(kind, lang="ru", bucket=None, template=True, min_count=MIN_TEMPLATES):
     """Готовый текст из банка или None (тогда сочинять как раньше). Берётся
     наименее выданный (used_count), при равенстве - случайный: ротация без
-    повторов подряд. Профиль (брат/сестра) - этого бота."""
+    повторов подряд. Профиль (брат/сестра) - этого бота.
+
+    Только approved=1 (15.09.2026, требование пользователя: «надо потом эти
+    заготовки проверить соответствие Корану и хадисам, ничто не должно
+    браться просто так»). Пока текст не проверен человеком, он в выдачу не
+    попадает - бот сочиняет как раньше. Отметка ставится вручную после
+    сверки аятов и хадисов (см. wiki/ai_costs.md)."""
     if not HADITHS_DB.exists():
         return None
     try:
         with sqlite3.connect(HADITHS_DB, timeout=5) as conn:
             _ensure_schema(conn)
-            where = "kind=? AND profile=? AND lang=? AND IFNULL(bucket,'')=IFNULL(?,'')"
+            where = "kind=? AND profile=? AND lang=? AND IFNULL(bucket,'')=IFNULL(?,'') AND approved=1"
             if template:
                 where += " AND template=1"
             rows = conn.execute(
