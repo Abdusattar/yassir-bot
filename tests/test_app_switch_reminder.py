@@ -63,6 +63,7 @@ def test_след_в_приложении_берётся_из_app_trail(test_had
 
 def test_текст_подставляет_имя():
     from core.i18n import T
-    text = T("app_switch_reminder", "ky", name="Хамза")
+    text = T("app_switch_reminder", "ky", who=", Хамза")
     assert text.startswith("Ассаляму алейкум, Хамза!")
     assert "YassirApp" in text and "Знания" in text
+    assert T("app_switch_reminder", "ru", who="").startswith("Ассаляму алейкум! ")

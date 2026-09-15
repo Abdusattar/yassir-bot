@@ -1374,7 +1374,10 @@ async def app_switch_reminder():
     log.info("app_switch_reminder: %d получателей", len(recipients))
     for phone, (name, glang) in recipients.items():
         try:
-            await send_message(phone, T("app_switch_reminder", glang, name=name))
+            # {who} - ", Имя" или пусто: в базе встречаются студенты без имени,
+            # и «Ассаляму алейкум, !» выглядело бы ошибкой (прод, 15.09.2026).
+            who = ", " + name.strip() if (name or "").strip() else ""
+            await send_message(phone, T("app_switch_reminder", glang, who=who))
             await asyncio.sleep(0.3)
         except Exception as e:
             log.error("app_switch_reminder error for %s: %s", name, e)
