@@ -3863,7 +3863,8 @@
       revision_done: '✅ Повторение засчитано',
       revision_already: 'Уже засчитано сегодня',
       revision_rec_place: 'Повторение с начала Аль-Бакары',
-      revision_rec_hint: 'Включи запись и читай повторение до своего места. Листать страницы можно',
+      revision_rec_start: 'Записать всё повторение',
+      revision_rec_hint: 'Одной записью до своего места, листать можно',
       revision_rec_sent: 'Отправлено устазу, повторение засчитано 🤲',
       added_mywords: '✅ В «Мои слова»',
       bookmark_none: 'Закладка ещё не сохранена',
@@ -7067,7 +7068,10 @@
     }
     recRow.push(['hifz-rec-stop', 'hifz_rec_stop', 'stop']);
     var defs = {
-      idle:   [['hifz-rec-go', 'hifz_rec_start', 'primary']],
+      // В режиме повторения кнопка называет ОБЪЁМ работы (16.09.2026, вопрос
+      // пользователя «ребёнок понимает, что надо записать всё?»): у сдачи
+      // 40+40 объём виден из места в шапке, у повторения - нет.
+      idle:   [['hifz-rec-go', rec.mode === 'revision' ? 'revision_rec_start' : 'hifz_rec_start', 'primary']],
       rec:    recRow,
       done:   [['hifz-rec-again', 'hifz_rec_again', ''],
                ['hifz-rec-send', 'hifz_rec_send', 'primary']],
