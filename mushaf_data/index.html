@@ -7297,6 +7297,11 @@
     hifzListenStop();
     hifzRecReset();
     rec.mode = 'revision';
+    // Повторение всегда начинается с начала Аль-Бакары (16.09.2026, решение
+    // пользователя): открыли запись - лист сразу первый, искать его руками не
+    // надо. Закладка чтения от этого не двигается (её ставит только 🔖),
+    // вернуться к своему месту можно кнопкой «.
+    if (currentPage !== BAQARA_START_PAGE) loadPage(BAQARA_START_PAGE);
     document.getElementById('hifz-rec-place').textContent = T('revision_rec_place');
     document.getElementById('hifz-rec-hint').textContent = T('revision_rec_hint');
     hifzRecButtons('idle');
