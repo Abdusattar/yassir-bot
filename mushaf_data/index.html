@@ -7205,6 +7205,8 @@
       // Строк на листе не всегда 15 — сервер по этому же числу считает,
       // какая половина (та же формула, что hifzHalf выше).
       fd.append('lines', String(hifzTextLines().length));
+      // Свой замер длины: Telegram для части файлов отдаёт 0 (16.09.2026).
+      fd.append('ms', String(rec.ms || 0));
       return fetch(apiBase() + '/hifz/submit', {
         method: 'POST',
         headers: authHeaders(),

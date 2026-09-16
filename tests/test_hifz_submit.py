@@ -129,3 +129,27 @@ def test_hifz_place_wording_per_stage():
     assert mb._hifz_place(5, 2, 2) == "стр. 5, верхняя половина"
     assert mb._hifz_place(5, 9, 2) == "стр. 5, нижняя половина"
     assert mb._hifz_place(5, 0, 3) == "стр. 5, вся страница"
+
+
+def test_hifz_submit_duration_falls_back_to_client_ms(test_db, monkeypatch):
+    """Telegram отдал duration=0 (бывает у браузерных файлов, 16.09.2026) -
+    берём замер приложения; когда Telegram дал длину, она главнее."""
+    group = _setup_group()
+    db.add_student("Тест", group["id"], phone="999000111")
+    durations = iter([0, 77])
+    msg_ids = iter([222, 223])
+
+    async def fake_transcode(audio_bytes):
+        return audio_bytes
+
+    async def fake_send_voice(chat_id, voice_bytes, caption=None, reply_to_message_id=None):
+        return {"ok": True, "result": {"message_id": next(msg_ids),
+                                       "voice": {"file_id": "FID", "duration": next(durations)}}}
+
+    monkeypatch.setattr(mb, "transcode_to_ogg", fake_transcode)
+    monkeypatch.setattr(mb, "send_voice_bytes", fake_send_voice)
+    asyncio.run(mb.submit_hifz_recording("999000111", b"A", None, 5, 2, 1, client_ms=12_400))
+    asyncio.run(mb.submit_hifz_recording("999000111", b"B", None, 5, 2, 1, client_ms=12_400))
+    with db.db() as c:
+        rows = c.execute("SELECT duration FROM voice_submissions ORDER BY id").fetchall()
+    assert [r[0] for r in rows] == [12, 77]

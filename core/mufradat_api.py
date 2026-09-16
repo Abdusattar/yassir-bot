@@ -720,7 +720,15 @@ async def handle_hifz_submit(request, user_id):
     if not (1 <= page_lines <= 16):
         page_lines = 15
 
-    result = await submit_hifz_recording(user_id, audio, image, page, line, stage, page_lines)
+    try:
+        client_ms = int(float(fields.get("ms", 0)))
+    except (ValueError, TypeError):
+        client_ms = 0
+    if not (0 < client_ms <= 4 * 3600 * 1000):
+        client_ms = None
+
+    result = await submit_hifz_recording(user_id, audio, image, page, line, stage, page_lines,
+                                         client_ms=client_ms)
     return web.json_response(result, status=200 if result.get("ok") else 400)
 
 

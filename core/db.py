@@ -1524,12 +1524,14 @@ def set_submission_duration(submission_id, seconds):
 
 def get_submissions_without_duration(pending_only=True):
     """Сдачи с файлом, но без длины - кандидаты на добивание. По умолчанию
-    только те, что ещё ждут проверки: у давно разобранных длина уже ни к чему."""
+    только те, что ещё ждут проверки: у давно разобранных длина уже ни к чему.
+    Ноль считается «нет длины» (16.09.2026): Telegram отдаёт 0 для части
+    браузерных файлов, а ffprobe по скачанному файлу длину видит."""
     where = " AND vs.reviewed_at IS NULL" if pending_only else ""
     with db() as c:
         rows = c.execute(
             "SELECT vs.id, vs.file_id, vs.chat_id, vs.message_id FROM voice_submissions vs"
-            " WHERE vs.duration IS NULL AND vs.file_id IS NOT NULL AND vs.file_id != ''"
+            " WHERE IFNULL(vs.duration, 0) = 0 AND vs.file_id IS NOT NULL AND vs.file_id != ''"
             + where + " ORDER BY vs.id"
         ).fetchall()
     return [dict(r) for r in rows]

@@ -184,7 +184,8 @@ def _hifz_place(page, line, stage, page_lines=15):
     return f"стр. {page}, вся страница"
 
 
-async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, stage, page_lines=15):
+async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, stage, page_lines=15,
+                                client_ms=None):
     """Сдача 40+40, записанная прямо в YassirApp (02.09.2026).
 
     Идёт тем же путём, что обычная голосовая сдача в группе: аудио уходит
@@ -271,9 +272,13 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     voice_msg_id = res["result"]["message_id"]
     voice_obj = res["result"].get("voice") or {}
     file_id = voice_obj.get("file_id")
-    # Длину записи Telegram считает сам при приёме файла (14.09.2026) -
-    # свой ffprobe тут не нужен.
+    # Длину записи Telegram считает сам при приёме файла (14.09.2026), но для
+    # части браузерных файлов отдаёт 0 (16.09.2026: 36 нулей из 475 сдач за
+    # три дня, все - из приложения). Приложение свою длину знает точно
+    # (таймер записи, client_ms) - она и подстраховывает ноль Telegram.
     duration = voice_obj.get("duration")
+    if not duration and client_ms:
+        duration = round(client_ms / 1000)
     # Место сдачи кладём в саму запись (04.09.2026): кабинету устаза нужно
     # показать, ЧТО именно проверять, а из подписи в Telegram это не достать.
     save_voice_submission(user["id"], group["id"], group["chat_id"],
