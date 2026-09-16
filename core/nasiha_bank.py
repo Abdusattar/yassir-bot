@@ -132,7 +132,12 @@ def save(kind, text, lang="ru", gtype=None, bucket=None, name=None, template=Fal
 # текстов (template=False). Пока в банке меньше MIN_TEMPLATES подходящих
 # текстов (так у кыргызского), вызывающий код сочиняет как раньше - и банк
 # дорастает сам.
-MIN_TEMPLATES = 8
+# 16.09.2026: после ручной сверки (materials/nasiha_review/, решения
+# decisions_batch*.json, применены scripts/apply_nasiha_review.py) в части
+# корзин осталось 4-7 проверенных текстов. Проверенный текст всегда лучше
+# сочинённого на лету, поэтому порог опущен до 4: ниже - бот сочиняет как
+# раньше, и это сигнал добить корзину, а не смириться с повторами.
+MIN_TEMPLATES = 4
 
 
 def pick(kind, lang="ru", bucket=None, template=True, min_count=MIN_TEMPLATES):
