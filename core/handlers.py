@@ -37,7 +37,7 @@ from core.db import (
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
     get_published_curriculum_content, get_curriculum_content_for_reference,
-    log_verify_check, revision_record_required
+    log_verify_check, revision_record_required, group_app_only_active
 )
 from core.transfers import (
     block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student,
@@ -1811,6 +1811,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     text_lower = text.strip().lower()
     if text_lower in ("u", "у"):
         s_self = find_by_phone(phone, group_id)
+        # Группа переведена на приложение (16.09.2026): отметка урока - кнопкой
+        # «Я был», как и задания. Устаз своей отметкой не затронут.
+        if s_self and group_app_only_active(group):
+            await send_message(chat_id, T("app_only_lesson", glang, name=s_self["name"]))
+            return
         if s_self:
             if credit_lesson_attendance(s_self["id"], group_id):
                 await send_message(chat_id, T("present", glang, name=s_self["name"]))
@@ -1841,6 +1846,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Голосовая/аудио сдача заучивания — ждёт проверки устаза ───────────────
+    # После рубильника голосовое в группе сдачей не считается (16.09.2026):
+    # ни в очередь устаза, ни в указатель 40+40. Отвечаем коротко - молчание
+    # читалось бы как «бот сломался».
+    if is_voice and message_id and group_app_only_active(group):
+        await send_message(chat_id, T("app_only_refuse", glang, name=s["name"]))
+        return
     if is_voice and message_id:
         save_voice_submission(s["id"], group_id, chat_id, message_id, get_date(), voice_file_id,
                               duration=voice_duration)
@@ -1913,6 +1924,13 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
     else:
         tasks_done = check_text(text)
+
+    # Рубильник группы (16.09.2026, решение пользователя): задания принимаются
+    # только через YassirApp. Отвечаем один раз на сообщение, ничего не
+    # засчитываем. Узр сюда не попадает - он разбирается выше, при score == 0.
+    if group_app_only_active(group):
+        await send_message(chat_id, T("app_only_refuse", glang, name=s["name"]))
+        return
 
     # Повторение только записью (16.09.2026, несовершеннолетние): текстовое
     # «повторение» в группе не засчитывается - иначе запись в приложении

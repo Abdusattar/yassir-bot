@@ -406,6 +406,12 @@ def _run_migrations(c):
     # Вердикт устаза по записи повторения (16.09.2026). Таблица
     # revision_recordings заведена тем же днём утром, без этих колонок, и на
     # проде она уже создана - CREATE TABLE IF NOT EXISTS её не доберёт.
+    # Дата перехода группы на сдачу только через приложение (16.09.2026,
+    # решение пользователя: переводим волнами по три группы, два дня отсчёта,
+    # потом рубильник). NULL - группа сдаёт по-старому.
+    gcols = [r["name"] for r in c.execute("PRAGMA table_info(groups)").fetchall()]
+    if "app_only_from" not in gcols:
+        c.execute("ALTER TABLE groups ADD COLUMN app_only_from TEXT")
     rrcols = [r["name"] for r in c.execute("PRAGMA table_info(revision_recordings)").fetchall()]
     if rrcols:
         for col in ("verdict", "verdict_at", "verdict_by"):
@@ -1472,6 +1478,34 @@ def cancel_task(student_id, group_id, task_code):
             " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
             (student_id, group_id, today, task_code)
         )
+
+
+def set_group_app_only(group_id, date_str):
+    """Дата, с которой группа сдаёт задания только через YassirApp.
+    None снимает переход (scripts/app_only_waves.py)."""
+    with db() as c:
+        cur = c.execute("UPDATE groups SET app_only_from=? WHERE id=?", (date_str, group_id))
+        return cur.rowcount > 0
+
+
+def group_app_only_active(group, today=None):
+    """True - рубильник уже опущен: задания и отметку урока в чате не
+    засчитываем. Сравнение строк дат безопасно: формат ГГГГ-ММ-ДД."""
+    try:
+        since = group["app_only_from"]
+    except (KeyError, IndexError, TypeError):
+        since = None
+    return bool(since) and (today or get_date()) >= since
+
+
+def groups_with_app_only_date():
+    """Группы, у которых дата перехода назначена - для отсчёта в чат."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT * FROM groups WHERE app_only_from IS NOT NULL AND app_only_from != ''"
+            " ORDER BY app_only_from, title"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def cancel_task_on(student_id, group_id, date, task_code):

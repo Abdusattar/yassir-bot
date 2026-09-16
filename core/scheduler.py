@@ -18,7 +18,7 @@ from core.db import (
     count_unpublished_parts, get_users_due_for_survey, get_users_due_for_survey_nudge,
     start_survey, touch_survey_stage, get_prep_group, get_pending_voice_reviews,
     bot_leads_group, get_last_miss_nasiha_at, mark_miss_nasiha_sent,
-    student_ids_with_tasks_since, SERVICE_GROUP_TYPE,
+    student_ids_with_tasks_since, SERVICE_GROUP_TYPE, groups_with_app_only_date,
 )
 from core.app_trail import users_seen_since
 from core.tg import send_message, tg_call, get_dm_start_link
@@ -1392,6 +1392,46 @@ async def app_switch_reminder():
             log.error("app_switch_reminder error for %s: %s", name, e)
 
 
+# ── Переход групп на сдачу только через приложение (16.09.2026) ───────────────
+#
+# Решение пользователя: переводим волнами по три группы. Два дня отсчёта утром
+# и вечером, на третий день рубильник (core/handlers.py: group_app_only_active).
+# Отсчёт видят и поздние волны - каждая знает свою дату с первого дня.
+
+def _days_word(n):
+    if n % 10 == 1 and n % 100 != 11:
+        return f"{n} день"
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return f"{n} дня"
+    return f"{n} дней"
+
+
+async def app_only_countdown():
+    today = get_date()
+    for group in groups_with_app_only_date():
+        chat_id = group.get("chat_id")
+        if not chat_id or not bot_leads_group(group.get("group_type") or "relaxed"):
+            continue
+        since = group["app_only_from"]
+        left = (date.fromisoformat(since) - date.fromisoformat(today)).days
+        glang = get_group_lang(group)
+        human = date.fromisoformat(since).strftime("%d.%m")
+        if left > 1:
+            text = T("app_only_countdown", glang, days=_days_word(left), date=human)
+        elif left == 1:
+            text = T("app_only_tomorrow", glang, date=human)
+        elif left == 0:
+            text = T("app_only_today", glang)
+        else:
+            continue          # день перехода прошёл - напоминать больше не о чем
+        try:
+            await send_message(chat_id, text)
+            log.info("app_only_countdown: %s, осталось %s", group.get("title"), left)
+            await asyncio.sleep(0.3)
+        except Exception as e:
+            log.error("app_only_countdown error for %s: %s", group.get("title"), e)
+
+
 # ── Вечерний отчёт (20:00) ────────────────────────────────────────────────────
 
 async def evening_report():
@@ -1883,6 +1923,7 @@ async def scheduler():
                     await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
             elif h == 6 and m == 0:
                 await maybe_run("app_switch_reminder", app_switch_reminder)
+                await maybe_run("app_only_countdown_morning", app_only_countdown)
             elif h == 8 and m == 55:
                 await maybe_run("tadabbur_prepare_nasiha", tadabbur_prepare_nasiha)
             elif h == 9 and m == 0:
@@ -1894,6 +1935,8 @@ async def scheduler():
                     await maybe_run("dm_connect_reminder", dm_connect_reminder)
                 if wd == 3:
                     await maybe_run("publish_curriculum_parts", publish_curriculum_parts)
+            elif h == 19 and m == 30:
+                await maybe_run("app_only_countdown_evening", app_only_countdown)
             elif h == 15 and m == 0:
                 await maybe_run("individual_reminders", individual_reminders)
                 if VERIFY_REPORT_ENABLED:
