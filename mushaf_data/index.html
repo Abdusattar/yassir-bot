@@ -7201,6 +7201,10 @@
             T('hifz_rec_hint_left', { N: Math.ceil(left / 60000) });
         }
       }, 500);
+      // Таймер спрятан со сброса панели (13.09.2026) - показать его надо
+      // здесь, а не только после паузы (16.09.2026: три дня запись шла без
+      // видимого времени, поймано на съёмке шагов повторения).
+      document.getElementById('hifz-rec-timer').style.display = '';
       document.getElementById('hifz-rec-timer').classList.add('rec');
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');
       hifzRecButtons('rec');
