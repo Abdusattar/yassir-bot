@@ -2285,6 +2285,10 @@
     cursor: pointer;
   }
   .ustaz-zones button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  /* Четвёртая зона «Повторения» есть не у всех устазов (16.09.2026), и с ней
+     подписи на 390px переносились в две строки - полоса росла вдвое. Сжимаем
+     только этот случай, у трёх кнопок всё остаётся как было. */
+  .ustaz-zones.four button { font-size: 11.5px; padding: 8px 2px; letter-spacing: -.2px; }
   /* Фильтр ВНУТРИ зоны (07.09.2026): вкладок кабинета осталось три, а
      «Проверено» отвечает на два разных вопроса - что вообще разобрано и
      кому висит пересдача. Второй вопрос важнее, но четвёртой вкладкой он не
@@ -3731,6 +3735,8 @@
       ustaz_voices_hint: 'места на листе нет — ответ реплаем в Telegram',
       ustaz_voices_show: 'показать ›',
       ustaz_voices_title: 'Голосовые в группе',
+      ustaz_zone_revisions: 'Повторения',
+      ustaz_rev_empty: 'Записей повторения за неделю нет',
       ustaz_rev_fold: 'Повторения · %N%',
       ustaz_rev_hint: 'записи чтения — слушать выборочно',
       ustaz_rev_title: 'Повторения',
@@ -6854,7 +6860,13 @@
 
      Совсем без предела нельзя: забытая включённой запись копит чанки в
      памяти телефона, пока он не начнёт задыхаться. */
-  var HIFZ_REC_MAX_MS = 30 * 60 * 1000;
+  /* 16.09.2026: два часа вместо тридцати минут. Повторение у младших идёт от
+     начала Аль-Бакары до их места, и оно растёт с каждой страницей: на стр. 30
+     это уже около часа чтения, и 30 минут обрывали работу на середине.
+     Решение пользователя - читать всё, прерываясь «Паузой». Цепочка расшита
+     под этот предел: 120 мин ≈ 29 МБ при 4,05 КБ/сек, загрузка 40 МБ
+     (HIFZ_MAX_UPLOAD_BYTES), nginx 45 МБ, перекодировка 600 сек. */
+  var HIFZ_REC_MAX_MS = 120 * 60 * 1000;
   // За сколько до предела предупредить. Молчаливый обрыв - это потерянная
   // работа: студент дочитывает, не зная, что его уже не пишут.
   var HIFZ_REC_WARN_MS = 2 * 60 * 1000;
@@ -9896,24 +9908,15 @@
         T('ustaz_voices_hint') + '</span></div><span class="go">' +
         T('ustaz_voices_show') + '</span></div>';
     }
-    /* Записи повторения (16.09.2026) - свёрнутой строкой под очередью, не
-       долг: устаз слушает выборочно, «коротко» подсказывает кого. Тянутся
-       отдельным запросом один раз на открытие кабинета. */
-    if (data.revisions === undefined) {
-      data.revisions = [];
+    /* Записи повторения живут в своей зоне (16.09.2026) - здесь только
+       подгружаем их один раз, чтобы в полосе зон появилась вкладка со
+       счётчиком. Заучивание в очереди от этого не сдвигается. */
+    if (ustazRevs === null) {
+      ustazRevs = [];
       apiCall('/ustaz/revisions' + (ustazShowAll ? '?all=1' : '')).then(function (res) {
-        if (res.data && res.data.items && res.data.items.length && ustazQueueData === data) {
-          data.revisions = res.data.items;
-          ustazRenderList(data);
-        }
+        var items = (res.data && res.data.items) || [];
+        if (items.length) { ustazRevs = items; ustazRenderList(data); }
       }).catch(function () {});
-    }
-    var revs = (data.revisions || []).filter(function (it) { return shown === null || it.group_id === shown; });
-    if (revs.length) {
-      html += '<div class="ustaz-fold" id="ustaz-revs"><div class="t"><b>' +
-        T('ustaz_rev_fold', { N: revs.length }) + '</b><span>' +
-        T('ustaz_rev_hint') + '</span></div><span class="go">' +
-        T('ustaz_voices_show') + '</span></div>';
     }
     var olderCount = current ? current.older : data.older;
     if (olderCount) {
@@ -9952,18 +9955,6 @@
           function (it) { return it.date; },
           function (it) { return ustazRow(it, today, false); });
     });
-    var revsEl = document.getElementById('ustaz-revs');
-    if (revsEl) revsEl.addEventListener('click', function () {
-      var box = document.createElement('div');
-      box.innerHTML = '<div class="ustaz-group-title">' + T('ustaz_rev_title') + '</div>' +
-        ustazDaySections(revs, today,
-          function (it) { return it.date; },
-          function (it) { return ustazRevRow(it); });
-      revsEl.replaceWith(box);
-      Array.prototype.forEach.call(box.querySelectorAll('[data-rev]'), function (el) {
-        el.addEventListener('click', function () { ustazRevPlay(el, parseInt(el.getAttribute('data-rev'), 10)); });
-      });
-    });
     var olderEl = document.getElementById('ustaz-older');
     if (olderEl) olderEl.addEventListener('click', function () { ustazLoadOlder(data); });
     var moreEl = document.getElementById('ustaz-more-groups');
@@ -10001,20 +9992,31 @@
 
      Успеваемость видит ЛЮБОЙ устаз по ЛЮБОЙ группе (решение пользователя):
      проверять он по-прежнему может только у себя, а знать - про всех. */
-  var ustazZone = 'queue';          // 'queue' | 'students' | 'done'
+  var ustazZone = 'queue';          // 'queue' | 'students' | 'done' | 'revisions'
+  /* Записи повторения младших (16.09.2026) - СВОЯ зона, не хвост очереди.
+     Причина (вопрос пользователя): в «Ждут» лежит заучивание всей группы, в
+     G-12 это уже десять карточек, и записи детей внизу пришлось бы каждый раз
+     прокручивать. Вкладка появляется только у того, кому есть что слушать. */
+  var ustazRevs = null;             // null - ещё не грузили, [] - грузили, пусто
   var doneFilter = 'all';           // срез зоны "Проверено": 'all' | 'retake'
   var stuGroups = null;             // все группы, грузим один раз за сессию
   var stuShown = null;              // группа на экране «Студентов»/«Проверено», см. ustazGroupId
   var stuData = null;
 
   function ustazZones() {
-    return '<div class="ustaz-zones">' +
+    var four = !!(ustazRevs && ustazRevs.length);
+    return '<div class="ustaz-zones' + (four ? ' four' : '') + '">' +
       '<button data-zone="queue"' + (ustazZone === 'queue' ? ' class="on"' : '') + '>' +
       T('ustaz_zone_queue') + '</button>' +
       '<button data-zone="students"' + (ustazZone === 'students' ? ' class="on"' : '') + '>' +
       T('ustaz_zone_students') + '</button>' +
       '<button data-zone="done"' + (ustazZone === 'done' ? ' class="on"' : '') + '>' +
-      T('ustaz_zone_done') + '</button></div>';
+      T('ustaz_zone_done') + '</button>' +
+      ((ustazRevs && ustazRevs.length)
+        ? '<button data-zone="revisions"' + (ustazZone === 'revisions' ? ' class="on"' : '') + '>' +
+          T('ustaz_zone_revisions') + ' · ' + ustazRevs.length + '</button>'
+        : '') +
+      '</div>';
   }
 
   // Раскрытие списка групп. Вешаем здесь, а не в каждом месте отрисовки:
@@ -10044,6 +10046,7 @@
         body.scrollTop = 0;
         if (ustazZone === 'queue') openUstaz();
         else if (ustazZone === 'done') openReviewed();
+        else if (ustazZone === 'revisions') openRevisions();
         else openStudents();
       });
     });
@@ -10087,6 +10090,53 @@
      устаз, и подхвативший супер-админ, и это ровно тот вопрос, ради которого
      зона нужна. Группа берётся та же, что выбрана в "Студентах" - один
      выбор на весь кабинет, а не три разных. */
+  /* Зона «Повторения» (16.09.2026): записи чтения младших по выбранной
+     группе, свежие сверху, неделя. Вердиктов здесь нет - это не долг устаза,
+     он слушает выборочно, «⚠ коротко» подсказывает кого. */
+  function openRevisions() {
+    ustazZone = 'revisions';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('ustaz').style.display = 'flex';
+    var body = document.getElementById('ustaz-body');
+    body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_loading') + '</div>';
+    var groupsReady = stuGroups
+      ? Promise.resolve({ data: { groups: stuGroups } })
+      : apiCall('/ustaz/groups');
+    groupsReady.then(function (res) {
+      stuGroups = (res.data && res.data.groups) || [];
+      stuShown = ustazPickGroup(stuGroups, stuGroups.length ? stuGroups[0].id : null);
+      return apiCall('/ustaz/revisions' + (ustazShowAll ? '?all=1' : ''));
+    }).then(function (res) {
+      ustazRevs = (res.data && res.data.items) || [];
+      var today = (res.data && res.data.today) || '';
+      var items = ustazRevs.filter(function (it) {
+        return stuShown === null || it.group_id === stuShown;
+      });
+      var html = '<div class="ustaz-head">' + ustazZones() + stuGroupTabs() + '</div>';
+      html += items.length
+        ? ustazDaySections(items, today,
+            function (it) { return it.date; },
+            function (it) { return ustazRevRow(it); })
+        : '<div class="ustaz-empty">' + T('ustaz_rev_empty') + '</div>';
+      body.innerHTML = html;
+      ustazBindZones(body);
+      Array.prototype.forEach.call(body.querySelectorAll('[data-rev]'), function (el) {
+        el.addEventListener('click', function () {
+          ustazRevPlay(el, parseInt(el.getAttribute('data-rev'), 10));
+        });
+      });
+      Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
+        el.addEventListener('click', function () {
+          ustazGroupId = parseInt(el.getAttribute('data-gid'), 10);
+          body.scrollTop = 0;
+          openRevisions();
+        });
+      });
+    }).catch(function () {
+      body.innerHTML = '<div class="ustaz-empty">' + T('ustaz_rev_empty') + '</div>';
+    });
+  }
+
   function openReviewed() {
     ustazZone = 'done';
     document.getElementById('dashboard').style.display = 'none';
