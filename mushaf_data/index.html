@@ -2432,6 +2432,10 @@
     padding: 0; background: transparent; color: var(--ink);
     font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
   }
+  /* Запись повторения короче, чем читается охват страниц (16.09.2026) -
+     устазу видно, кого слушать, не слушая всех. */
+  .sub-pill.short { background: #fde8e8; color: #b42318; }
+  .ustaz-row.rev.playing { background: var(--tint, #eef3ff); }
   /* Заголовок группы внутри списка - устаз ведёт несколько групп (у Умар
      устаза их три), и "кто ждёт" без "где" читается плохо. */
   .ustaz-group-title {
@@ -3727,6 +3731,13 @@
       ustaz_voices_hint: 'места на листе нет — ответ реплаем в Telegram',
       ustaz_voices_show: 'показать ›',
       ustaz_voices_title: 'Голосовые в группе',
+      ustaz_rev_fold: 'Повторения · %N%',
+      ustaz_rev_hint: 'записи чтения — слушать выборочно',
+      ustaz_rev_title: 'Повторения',
+      ustaz_rev_short: '⚠ коротко',
+      ustaz_rev_span: 'стр. %A%–%B%',
+      ustaz_rev_play: '▶ слушать',
+      ustaz_rev_stop: '■ стоп',
       ustaz_waits: 'ждёт %N%',
       ustaz_older: 'Ещё %N% старше — показать',
       ustaz_older_title: 'Старше последних дней',
@@ -3851,6 +3862,9 @@
       revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
       revision_done: '✅ Повторение засчитано',
       revision_already: 'Уже засчитано сегодня',
+      revision_rec_place: 'Повторение с начала Аль-Бакары',
+      revision_rec_hint: 'Включи запись и читай повторение до своего места. Листать страницы можно',
+      revision_rec_sent: 'Отправлено устазу, повторение засчитано 🤲',
       added_mywords: '✅ В «Мои слова»',
       bookmark_none: 'Закладка ещё не сохранена',
       meaning_missing: 'перевод смысла для этой страницы ещё не загружен',
@@ -4117,6 +4131,7 @@
     name_empty: 'Без имени нельзя — его видит устаз.',
     name_too_long: 'Слишком длинное имя.',
     birth_year_bad: 'Не похоже на год рождения.',
+    birth_year_locked: 'Год рождения указан устазом.',
     location_too_long: 'Слишком длинно.'
   };
 
@@ -4172,6 +4187,11 @@
       savedProfile = d;
       settName.value = d.name || '';
       settYear.value = d.birth_year || '';
+      // Год, поставленный устазом (16.09.2026), с экрана не правится - иначе
+      // запись повторения снимается одной цифрой.
+      settYear.disabled = !!d.birth_year_locked;
+      var yearNote = document.querySelector('label[for="sett-year"] i');
+      if (yearNote) yearNote.textContent = d.birth_year_locked ? 'указан устазом' : 'по желанию';
       settShowPlace(d.location || '');
     }).catch(function () {});
   }
@@ -4571,6 +4591,9 @@
   // Роль из heartbeat: по ней же показывается раздел онбординга
   // «Проверка сдач» (см. LEARN).
   var meIsUstaz = false;
+  // Повторение только записью (16.09.2026, несовершеннолетние) - едет тем
+  // же heartbeat, что и роль устаза.
+  var meRevisionRecord = false;
   var ONLINE_BADGE_MIN = 3; // меньше - не показываем совсем (решение
   // пользователя 30.08.2026 - 1-2 "онлайн" выглядит бедно, не украшает)
   function sendHeartbeat() {
@@ -4593,6 +4616,7 @@
       var door = document.getElementById('dash-ustaz');
       var count = document.getElementById('dash-ustaz-count');
       var isUstaz = !!(res.data && res.data.is_ustaz);
+      meRevisionRecord = !!(res.data && res.data.revision_record);
       // Раздел «Проверка сдач» рисуется по этому же признаку. Если человек
       // стоял в оглавлении, когда ответ пришёл, - перерисуем, иначе раздел
       // появился бы только со второго захода.
@@ -6836,7 +6860,8 @@
   /* Короче двух секунд - это не сдача, а промах по кнопке (13.09.2026).
      Устазу такие обрывки уходили как полноценная работа. */
   var HIFZ_REC_MIN_MS = 2000;
-  var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null };
+  var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null,
+              mode: null };   // mode: null - сдача 40+40, 'revision' - запись повторения
 
   function hifzSubmitLines() {
     var lines = hifzTextLines();
@@ -7004,6 +7029,7 @@
 
   function hifzRecClose() {
     hifzRecReset();
+    rec.mode = null;
     hifzRecRelease();   // панель закрыта - микрофон отпущен, индикатор гаснет
     document.getElementById('hifz-rec').classList.remove('visible');
     // Свёрнутый разбор живёт только внутри этой панели: закрылась - и слушать
@@ -7193,6 +7219,7 @@
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_too_short');
       return;
     }
+    if (rec.mode === 'revision') { revisionRecSend(); return; }
     hifzRecButtons('sending');
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
     hifzLinesToPng(hifzSubmitLines()).then(function (png) {
@@ -7256,12 +7283,57 @@
     });
   }
 
+  /* ─── Повторение записью (16.09.2026) ─────────────────────────────────
+     Несовершеннолетним «повторение» засчитывается только записью чтения
+     (задача пользователя: дети жали 🔁, не читая). Та же шторка записи, что у
+     сдачи 40+40, но: открывается на обычной странице чтения, листать можно
+     (pageTurnBlocked не держит - режим заучивания выключен), отправка идёт
+     в /revision/submit, охват страниц сервер берёт из указателя. */
+  function revisionRecOpen() {
+    hifzListenStop();
+    hifzRecReset();
+    rec.mode = 'revision';
+    document.getElementById('hifz-rec-place').textContent = T('revision_rec_place');
+    document.getElementById('hifz-rec-hint').textContent = T('revision_rec_hint');
+    hifzRecButtons('idle');
+    document.getElementById('hifz-rec').classList.add('visible');
+    hifzRecPad();
+    trail('rev_open', { p: currentPage });
+  }
+
+  function revisionRecSend() {
+    hifzRecButtons('sending');
+    document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
+    var fd = new FormData();
+    fd.append('audio', rec.blob, 'rec');
+    fd.append('ms', String(rec.ms || 0));
+    fd.append('page_to', String(currentPage));
+    fetch(apiBase() + '/revision/submit', { method: 'POST', headers: authHeaders(), body: fd })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        trail('rev_submit', { ms: rec.ms || 0, n: (res.ok && res.data.ok) ? 'ok' : String(res.data && res.data.error) });
+        if (res.ok && res.data.ok) {
+          document.getElementById('hifz-rec-hint').textContent = T('revision_rec_sent');
+          setTimeout(hifzRecClose, 1500);
+          return;
+        }
+        var err = res.data && res.data.error;
+        document.getElementById('hifz-rec-hint').textContent =
+          err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
+        hifzRecButtons('done');
+      }).catch(function () {
+        document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');
+        hifzRecButtons('done');
+      });
+  }
+
   /* Шторка записи. Место берём параметром, а не из шапки: при пересдаче
      панель открывается сразу, ещё до того как лист догрузится и hifzHead
      впишет туда строку (07.09.2026). */
   function hifzRecOpen(place) {
     hifzListenStop();  // запись голоса и прослушка Хусари одновременно мешают друг другу
     hifzRecReset();
+    rec.mode = null;
     document.getElementById('hifz-rec-place').textContent =
       place || document.getElementById('hifz-where').textContent;
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
@@ -7757,9 +7829,13 @@
   // credit_revision_task) только после явного "Да".
   document.getElementById('btn-revision').addEventListener('click', function (e) {
     var btn = e.currentTarget;
+    // Несовершеннолетним (16.09.2026) - не вопрос, а панель записи: читает
+    // повторение под запись, запись уходит устазу, зачёт ставит сервер.
+    if (meRevisionRecord) { revisionRecOpen(); return; }
     showConfirm(T('revision_ask'), function () {
       apiCall('/revision', { method: 'POST' }).then(function (res) {
         if (res.status === 401) return;
+        if (res.data && res.data.error === 'record_required') { meRevisionRecord = true; revisionRecOpen(); return; }
         showPopupMessage(btn, res.data && res.data.credited ?
           T('revision_done') : T('revision_already'));
       });
@@ -9631,6 +9707,49 @@
       '<div class="meta">' + meta.join(' · ') + '</div></div>';
   }
 
+  function ustazRevRow(it) {
+    var dur = ustazDur(it.duration);
+    var right = (dur ? '<span class="sub-pill dur">' + dur + '</span>' : '') +
+      (it.short ? '<span class="sub-pill short">' + T('ustaz_rev_short') + '</span>' : '');
+    var meta = [T('ustaz_rev_span', { A: 2, B: it.page_to || 2 })];
+    var when = ustazTimeOnly(it.sent_at);
+    if (when) meta.push(when);
+    meta.push('<b class="rev-play">' + T('ustaz_rev_play') + '</b>');
+    return '<div class="ustaz-row rev" data-rev="' + it.id + '"><div class="name">' +
+      '<span>' + ustazEsc(it.student_name) + '</span>' + right + '</div>' +
+      '<div class="meta">' + meta.join(' · ') + '</div></div>';
+  }
+
+  var revAudio = new Audio();
+  var revPlayingEl = null;
+  function ustazRevStop() {
+    try { revAudio.pause(); } catch (e) {}
+    if (revPlayingEl) {
+      revPlayingEl.classList.remove('playing');
+      var b = revPlayingEl.querySelector('.rev-play');
+      if (b) b.textContent = T('ustaz_rev_play');
+    }
+    revPlayingEl = null;
+  }
+  revAudio.addEventListener('ended', ustazRevStop);
+  function ustazRevPlay(el, id) {
+    var same = revPlayingEl === el;
+    ustazRevStop();
+    if (same) return;
+    revPlayingEl = el;
+    el.classList.add('playing');
+    var b = el.querySelector('.rev-play');
+    if (b) b.textContent = '…';
+    fetch(apiBase() + '/ustaz/revision_audio?id=' + id, { headers: authHeaders() })
+      .then(function (r) { if (!r.ok) throw new Error('audio'); return r.blob(); })
+      .then(function (blob) {
+        if (revPlayingEl !== el) return;
+        revAudio.src = URL.createObjectURL(blob);
+        if (b) b.textContent = T('ustaz_rev_stop');
+        return revAudio.play();
+      }).catch(function () { ustazRevStop(); });
+  }
+
   /* Выбранная группа - ОДНА на весь кабинет (13.09.2026, поймано на разборе
      удобства и повторено на стенде). Раньше их было две: своя у «Ждут» и
      своя у «Студентов» с «Проверено», а openUstaz обнулял первую при каждом
@@ -9764,6 +9883,25 @@
         T('ustaz_voices_hint') + '</span></div><span class="go">' +
         T('ustaz_voices_show') + '</span></div>';
     }
+    /* Записи повторения (16.09.2026) - свёрнутой строкой под очередью, не
+       долг: устаз слушает выборочно, «коротко» подсказывает кого. Тянутся
+       отдельным запросом один раз на открытие кабинета. */
+    if (data.revisions === undefined) {
+      data.revisions = [];
+      apiCall('/ustaz/revisions' + (ustazShowAll ? '?all=1' : '')).then(function (res) {
+        if (res.data && res.data.items && res.data.items.length && ustazQueueData === data) {
+          data.revisions = res.data.items;
+          ustazRenderList(data);
+        }
+      }).catch(function () {});
+    }
+    var revs = (data.revisions || []).filter(function (it) { return shown === null || it.group_id === shown; });
+    if (revs.length) {
+      html += '<div class="ustaz-fold" id="ustaz-revs"><div class="t"><b>' +
+        T('ustaz_rev_fold', { N: revs.length }) + '</b><span>' +
+        T('ustaz_rev_hint') + '</span></div><span class="go">' +
+        T('ustaz_voices_show') + '</span></div>';
+    }
     var olderCount = current ? current.older : data.older;
     if (olderCount) {
       html += '<div class="ustaz-older" id="ustaz-older">' +
@@ -9800,6 +9938,18 @@
         ustazDaySections(voices, today,
           function (it) { return it.date; },
           function (it) { return ustazRow(it, today, false); });
+    });
+    var revsEl = document.getElementById('ustaz-revs');
+    if (revsEl) revsEl.addEventListener('click', function () {
+      var box = document.createElement('div');
+      box.innerHTML = '<div class="ustaz-group-title">' + T('ustaz_rev_title') + '</div>' +
+        ustazDaySections(revs, today,
+          function (it) { return it.date; },
+          function (it) { return ustazRevRow(it); });
+      revsEl.replaceWith(box);
+      Array.prototype.forEach.call(box.querySelectorAll('[data-rev]'), function (el) {
+        el.addEventListener('click', function () { ustazRevPlay(el, parseInt(el.getAttribute('data-rev'), 10)); });
+      });
     });
     var olderEl = document.getElementById('ustaz-older');
     if (olderEl) olderEl.addEventListener('click', function () { ustazLoadOlder(data); });

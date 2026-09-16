@@ -17,7 +17,8 @@ from core.db import (
     find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
     get_today_report, save_voice_submission, get_open_retakes, get_submission,
     set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
-    VERDICT_RETAKE, is_retake_answered,
+    VERDICT_RETAKE, is_retake_answered, revision_record_required, save_revision_recording,
+    REVISION_FIRST_PAGE,
 )
 from core.mufradat import (
     get_leaderboard, DAILY_WORDS_FOR_TASK_CREDIT, DAILY_CORRECT_FOR_TASK_CREDIT,
@@ -99,6 +100,10 @@ async def credit_revision_task(user_id):
     user = find_user_by_phone(user_id)
     if not user:
         return False
+    # Несовершеннолетним тап не засчитывается (16.09.2026): только запись
+    # чтения, см. submit_revision_recording. API отвечает record_required.
+    if revision_record_required(user_id):
+        return False
     already = get_today_report(user["id"], group["id"]) or {}
     if already.get("r"):
         return False
@@ -112,6 +117,58 @@ async def credit_revision_task(user_id):
             f"{user['name']}, {SHORT_TASKS['r'].lower()} + (через YassirApp, Мусхаф)."
         )
     return True
+
+
+async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_to=None):
+    """Повторение записью (16.09.2026, несовершеннолетние): студент читает с
+    начала Аль-Бакары до своего места, приложение пишет звук, запись уходит
+    в группу голосовым с подписью «Имя, повторение + (запись 12:40,
+    стр. 2–17)», ложится в revision_recordings для строки «Повторения» в
+    кабинете устаза и засчитывает дневное задание «r». Охват страниц берётся
+    из указателя заучивания (до какой страницы дошёл), page_to с фронта -
+    только подстраховка, если указателя нет.
+
+    Тон подписи в группе - как у обычной сдачи, без «коротко»: пометка
+    короткой записи (REVISION_MIN_SEC_PER_PAGE) видна только устазу."""
+    group = get_learning_group(user_id, include_prep=True)
+    if not group or "r" not in get_group_tasks(group):
+        return {"ok": False, "error": "no_group"}
+    user = find_user_by_phone(user_id)
+    if not user:
+        return {"ok": False, "error": "no_group"}
+    pointer = get_hifz_pointer(user_id)
+    if pointer and pointer.get("page"):
+        page_to = int(pointer["page"])
+    page_to = max(REVISION_FIRST_PAGE, int(page_to or REVISION_FIRST_PAGE))
+
+    ogg = await transcode_to_ogg(audio_bytes)
+    if not ogg:
+        return {"ok": False, "error": "bad_audio"}
+
+    already = get_today_report(user["id"], group["id"]) or {}
+    credited = not already.get("r")
+    sec = client_ms and round(client_ms / 1000)
+    span = (f"стр. {REVISION_FIRST_PAGE}" if page_to <= REVISION_FIRST_PAGE
+            else f"стр. {REVISION_FIRST_PAGE}–{page_to}")
+    caption = (f"{user['name']}, {SHORT_TASKS['r'].lower()}"
+               + (" +" if credited else "")
+               + f" (запись{' ' + _mmss(sec) if sec else ''}, {span}).")
+    res = await send_voice_bytes(group["chat_id"], ogg, caption=caption)
+    if not (res and res.get("ok")):
+        return {"ok": False, "error": "send_failed"}
+    voice_obj = res["result"].get("voice") or {}
+    duration = voice_obj.get("duration") or sec or None
+    rec_id = save_revision_recording(
+        user["id"], group["id"], group["chat_id"], res["result"]["message_id"], get_date(),
+        voice_obj.get("file_id"), duration, page_to)
+    if credited:
+        save_report(user["id"], group["id"], get_date(), {"r": True})
+    return {"ok": True, "credited": credited, "id": rec_id, "page_to": page_to}
+
+
+def _mmss(sec):
+    sec = int(sec or 0)
+    return f"{sec // 60}:{sec % 60:02d}"
 
 
 HIFZ_MAX_UPLOAD_BYTES = 20 * 1024 * 1024

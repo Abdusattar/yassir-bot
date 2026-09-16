@@ -41,7 +41,8 @@ from core.db import (
     get_group_by_id, get_students, get_reviewed_submissions,
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
     is_retake_answered, get_group_tasks, get_today_report, is_app_member, save_report,
-    get_profile, update_profile,
+    get_profile, update_profile, revision_record_required, get_revision_recordings,
+    get_revision_recording,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
     remove_lesson_attendance,
 )
@@ -56,7 +57,7 @@ from core.mufradat_bot import (
     submit_ustaz_verdict, send_ustaz_comment,
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
-    submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES, _hifz_place,
+    submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES, _hifz_place, submit_revision_recording,
 )
 from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
@@ -739,8 +740,49 @@ async def handle_revision_credit(request, user_id):
     ДО этого запроса - сюда приходит только финальное "да". Логика зачёта
     и сообщения в группу - в credit_revision_task (core/mufradat_bot.py),
     та же, что у обычной текстовой сдачи "повторение" в группе."""
+    if revision_record_required(user_id):
+        # Несовершеннолетний (16.09.2026): тап не засчитывается, приложение
+        # открывает панель записи. Сюда он попадает только со старой
+        # страницы в кэше.
+        return web.json_response({"credited": False, "error": "record_required"})
     credited = await credit_revision_task(user_id)
     return web.json_response({"credited": credited})
+
+
+@with_auth
+async def handle_revision_submit(request, user_id):
+    """POST multipart: audio, ms (замер длины на клиенте), page_to - запись
+    повторения (16.09.2026). Тот же приём файла, что у сдачи 40+40."""
+    try:
+        reader = await request.multipart()
+    except Exception:
+        return web.json_response({"error": "bad_form"}, status=400)
+    audio, fields = None, {}
+    while True:
+        part = await reader.next()
+        if part is None:
+            break
+        if part.name == "audio":
+            data = await part.read(decode=False)
+            if len(data) > HIFZ_MAX_UPLOAD_BYTES:
+                return web.json_response({"error": "too_big"}, status=413)
+            audio = data
+        else:
+            fields[part.name] = (await part.read(decode=False)).decode("utf-8", "replace")
+    if not audio:
+        return web.json_response({"error": "no_audio"}, status=400)
+    try:
+        client_ms = int(float(fields.get("ms", 0)))
+    except (ValueError, TypeError):
+        client_ms = 0
+    if not (0 < client_ms <= 4 * 3600 * 1000):
+        client_ms = None
+    try:
+        page_to = int(fields.get("page_to", 0)) or None
+    except (ValueError, TypeError):
+        page_to = None
+    result = await submit_revision_recording(user_id, audio, client_ms=client_ms, page_to=page_to)
+    return web.json_response(result, status=200 if result.get("ok") else 400)
 
 
 # "Сейчас онлайн" на дашборде (30.08.2026) - в Mini App нет постоянного
@@ -860,6 +902,9 @@ async def handle_heartbeat(request, user_id):
         # Только сдачи из приложения (13.09.2026): дверь зовёт в кабинет, а
         # голосовое прямо в группу там не открыть (см. _pending_reviews_sql).
         "waiting_count": count_pending_voice_reviews(counted, app_only=True),
+        # Повторение только записью (16.09.2026, несовершеннолетние): по нему
+        # кнопка 🔁 открывает панель записи вместо вопроса «Да/Нет».
+        "revision_record": revision_record_required(user_id),
         # Факты для дверей дашборда (07.09.2026): раздел должен сам говорить,
         # что там внутри — на какой странице стоишь, сколько слов сделал,
         # сколько сдач ждёт устаза. Едут этим же ответом, а не тремя новыми
@@ -1548,6 +1593,38 @@ async def handle_ustaz_audio(request, user_id):
 
 
 @with_auth
+async def handle_ustaz_revisions(request, user_id):
+    """GET - записи повторения по видимым группам за неделю (16.09.2026):
+    строка «Повторения» под очередью «Ждут». Не долг устаза - слушает
+    выборочно; «коротко» (short) подсказывает, кого именно."""
+    scope = "all" if request.query.get("all") == "1" else "own"
+    visible, own_ids, is_super, hidden = _visible_ustaz_groups(user_id, scope)
+    if not visible and not is_super:
+        return web.json_response({"error": "not_ustaz"}, status=403)
+    items = get_revision_recordings([g["id"] for g in visible])
+    for it in items:
+        it.pop("file_id", None)
+    return web.json_response({"items": items, "today": get_date()})
+
+
+@with_auth
+async def handle_ustaz_revision_audio(request, user_id):
+    """GET ?id= - звук записи повторения для устаза своей группы/супер-админа."""
+    try:
+        rec = get_revision_recording(int(request.query.get("id", "")))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    if not rec:
+        return web.json_response({"error": "not_found"}, status=404)
+    visible, own_ids, is_super, hidden = _visible_ustaz_groups(user_id, "all")
+    if rec["group_id"] not in [g["id"] for g in visible] and not is_super:
+        return web.json_response({"error": "forbidden"}, status=403)
+    if not rec.get("file_id"):
+        return web.json_response({"error": "not_found"}, status=404)
+    return await _telegram_audio_response(rec["file_id"])
+
+
+@with_auth
 async def handle_ustaz_verdict(request, user_id):
     """POST {id, verdict: accepted|retake, words: [{line, word}]}."""
     body = await request.json()
@@ -1861,6 +1938,9 @@ def build_app():
     app.router.add_get("/api/muf/hifz/progress", handle_hifz_progress_get)
     app.router.add_post("/api/muf/hifz/progress", handle_hifz_progress_add)
     app.router.add_post("/api/muf/hifz/submit", handle_hifz_submit)
+    app.router.add_post("/api/muf/revision/submit", handle_revision_submit)
+    app.router.add_get("/api/muf/ustaz/revisions", handle_ustaz_revisions)
+    app.router.add_get("/api/muf/ustaz/revision_audio", handle_ustaz_revision_audio)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     app.router.add_post("/api/muf/fitlog", handle_fit_log)

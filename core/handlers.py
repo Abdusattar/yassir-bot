@@ -37,7 +37,7 @@ from core.db import (
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
     get_published_curriculum_content, get_curriculum_content_for_reference,
-    log_verify_check
+    log_verify_check, revision_record_required
 )
 from core.transfers import (
     block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student,
@@ -1913,6 +1913,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
     else:
         tasks_done = check_text(text)
+
+    # Повторение только записью (16.09.2026, несовершеннолетние): текстовое
+    # «повторение» в группе не засчитывается - иначе запись в приложении
+    # обходится одним словом в чате. Остальные задания из того же сообщения
+    # засчитываются как обычно.
+    if tasks_done.get("r") and "r" in group_tasks and revision_record_required(phone):
+        tasks_done["r"] = False
+        await send_message(chat_id, T("revision_record_only", glang, name=s["name"]))
+        if not any(tasks_done.get(k) for k in group_tasks):
+            return
 
     score = sum(1 for k in group_tasks if tasks_done.get(k))
 

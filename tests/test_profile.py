@@ -49,7 +49,8 @@ def test_no_such_person_is_none(test_db):
 
 def test_reads_what_registration_wrote(test_db):
     _student()
-    assert db.get_profile(PHONE) == {"name": "Абдулла", "birth_year": None, "location": ""}
+    assert db.get_profile(PHONE) == {"name": "Абдулла", "birth_year": None,
+                                     "birth_year_locked": False, "location": ""}
 
 
 def test_name_change_is_seen_by_the_group(test_db):

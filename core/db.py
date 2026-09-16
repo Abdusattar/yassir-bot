@@ -211,6 +211,27 @@ def init():
             );
             CREATE INDEX IF NOT EXISTS idx_vs_group_date ON voice_submissions(group_id, date);
 
+            -- Записи повторения (16.09.2026): несовершеннолетние сдают
+            -- "повторение" не тапом, а аудиозаписью чтения. Своя таблица, а не
+            -- voice_submissions: у той десяток запросов кабинета устаза
+            -- (очередь, счётчики, вердикты), и запись повторения ни в один из
+            -- них попадать не должна - это не долг устаза, а материал для
+            -- выборочного прослушивания.
+            CREATE TABLE IF NOT EXISTS revision_recordings(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                chat_id TEXT NOT NULL,
+                message_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                sent_at TEXT,
+                file_id TEXT,
+                duration INTEGER,
+                page_to INTEGER,
+                short INTEGER DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_rr_group_date ON revision_recordings(group_id, date);
+
             CREATE TABLE IF NOT EXISTS curriculum_parts(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 subject TEXT NOT NULL,
@@ -406,6 +427,12 @@ def _run_migrations(c):
         # возраст, чтобы не устаревал (17.08.2026). survey_age хранит сырой
         # ответ как есть, для сверки.
         c.execute("ALTER TABLE users ADD COLUMN survey_birth_year INTEGER")
+    if "birth_year_locked" not in ucols:
+        # Год рождения, поставленный устазом/админом, а не самим студентом
+        # (16.09.2026, запись повторения для несовершеннолетних): с экрана
+        # настроек такой год не правится - иначе ребёнок впишет 2000 и
+        # станет «взрослым». См. revision_record_required.
+        c.execute("ALTER TABLE users ADD COLUMN birth_year_locked INTEGER DEFAULT 0")
     if "is_observer" not in ucols:
         # Устаз-наблюдатель "со стороны" (23.08.2026) - глобальный флаг, не
         # привязан к group_id. Даёт только "бот его игнорирует" во всех
@@ -3305,7 +3332,8 @@ def get_profile(phone):
     """Профиль для экрана настроек. None, если такого человека нет."""
     with db() as c:
         row = c.execute(
-            "SELECT name, survey_birth_year, survey_location FROM users WHERE phone=?",
+            "SELECT name, survey_birth_year, survey_location, birth_year_locked"
+            " FROM users WHERE phone=?",
             (phone,)
         ).fetchone()
     if not row:
@@ -3313,6 +3341,7 @@ def get_profile(phone):
     return {
         "name": row["name"] or "",
         "birth_year": row["survey_birth_year"],
+        "birth_year_locked": bool(row["birth_year_locked"]),
         "location": row["survey_location"] or "",
     }
 
@@ -3340,6 +3369,12 @@ def update_profile(phone, name=None, birth_year=None, location=None):
         params.append(name)
 
     if birth_year is not None:
+        with db() as c:
+            locked = c.execute(
+                "SELECT birth_year_locked FROM users WHERE phone=?", (phone,)
+            ).fetchone()
+        if locked and locked["birth_year_locked"]:
+            raise ValueError("birth_year_locked")
         if birth_year == "" or birth_year is False:
             fields.append("survey_birth_year=NULL")
         else:
@@ -3669,3 +3704,88 @@ def format_period_report(group_id, group_title, group_tasks, days=None, start=No
                 lines.append(header)
 
     return "\n".join(lines)
+
+
+# ── Запись повторения для несовершеннолетних (16.09.2026) ─────────────────
+#
+# Задача пользователя: дети до 18 жмут «повторение» не читая. Для них
+# повторение сдаётся аудиозаписью чтения из приложения, запись уходит устазу.
+# Признак - только год рождения (дата не хранится), отдельного флага нет:
+# требование снимается само с 1 января года, следующего за тем, в котором
+# исполняется 18 (строгий вариант: пока в этом году студенту «по году» 18,
+# запись ещё нужна). Год ставит устаз/админ скриптом scripts/set_birth_year.py
+# и запирает от правки (birth_year_locked).
+
+REVISION_RECORD_MAX_AGE = 18
+# Одна страница мусхафа читается за 1,5–3 минуты; запись короче этого на
+# страницу помечается устазу как «коротко» - тапнул, не читая.
+REVISION_MIN_SEC_PER_PAGE = 40
+REVISION_FIRST_PAGE = 2   # повторение всегда с начала Аль-Бакары
+
+
+def revision_record_required(phone, today=None):
+    """True, если этому студенту повторение засчитывается только записью."""
+    with db() as c:
+        row = c.execute(
+            "SELECT survey_birth_year FROM users WHERE phone=?", (phone,)
+        ).fetchone()
+    if not row or not row["survey_birth_year"]:
+        return False
+    year = int((today or get_date())[:4])
+    return year - int(row["survey_birth_year"]) <= REVISION_RECORD_MAX_AGE
+
+
+def set_student_birth_year(phone, year, locked=True):
+    """Год рождения от устаза/админа, запертый от правки студентом. year=None
+    снимает и год, и замок."""
+    with db() as c:
+        if year is None:
+            cur = c.execute("UPDATE users SET survey_birth_year=NULL, birth_year_locked=0 WHERE phone=?",
+                            (phone,))
+        else:
+            cur = c.execute("UPDATE users SET survey_birth_year=?, birth_year_locked=? WHERE phone=?",
+                            (int(year), 1 if locked else 0, phone))
+        return cur.rowcount
+
+
+def save_revision_recording(student_id, group_id, chat_id, message_id, date, file_id,
+                            duration, page_to):
+    pages = max(1, int(page_to or REVISION_FIRST_PAGE) - REVISION_FIRST_PAGE + 1)
+    sec = _as_seconds(duration)
+    short = 1 if sec is not None and sec < pages * REVISION_MIN_SEC_PER_PAGE else 0
+    with db() as c:
+        c.execute(
+            "INSERT INTO revision_recordings"
+            " (student_id, group_id, chat_id, message_id, date, sent_at, file_id, duration, page_to, short)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (student_id, group_id, chat_id, message_id, date, get_now().isoformat(timespec="seconds"),
+             file_id, sec, page_to, short)
+        )
+        return c.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def get_revision_recordings(group_ids, days=7):
+    """Записи повторения по группам за последние days дней, свежие сверху -
+    строка «Повторения» в кабинете устаза."""
+    if not group_ids:
+        return []
+    since = (get_now().date() - timedelta(days=days - 1)).isoformat()
+    placeholders = ",".join("?" * len(group_ids))
+    with db() as c:
+        rows = c.execute(
+            f"SELECT rr.id, rr.student_id, rr.group_id, rr.date, rr.sent_at, rr.duration,"
+            f" rr.page_to, rr.short, rr.file_id, u.name AS student_name, g.title AS group_title"
+            f" FROM revision_recordings rr"
+            f" JOIN users u ON u.id = rr.student_id"
+            f" JOIN groups g ON g.id = rr.group_id"
+            f" WHERE rr.group_id IN ({placeholders}) AND rr.date >= ?"
+            f" ORDER BY rr.id DESC",
+            (*group_ids, since)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_revision_recording(rec_id):
+    with db() as c:
+        row = c.execute("SELECT * FROM revision_recordings WHERE id=?", (rec_id,)).fetchone()
+    return dict(row) if row else None
