@@ -43,16 +43,17 @@ def _find(name, group_part=None):
 def cmd_list():
     with db.db() as c:
         rows = c.execute(
-            "SELECT u.name, u.phone, u.survey_birth_year, g.title"
-            " FROM users u LEFT JOIN groups g ON g.id = u.group_id"
-            " WHERE u.birth_year_locked = 1 ORDER BY g.title, u.name"
+            "SELECT name, phone, survey_birth_year FROM users"
+            " WHERE birth_year_locked = 1 ORDER BY name"
         ).fetchall()
     if not rows:
         print("запертых годов нет")
         return
     for r in rows:
+        group = db.get_learning_group(r["phone"], include_prep=True)
         need = db.revision_record_required(r["phone"])
-        print(f"{r['title'] or '—':20} {r['name']:25} {r['survey_birth_year']}  "
+        title = group["title"] if group else "—"   # sqlite3.Row: без .get()
+        print(f"{title:16} {r['name']:22} {r['survey_birth_year']}  "
               f"{'запись нужна' if need else 'взрослый по году'}")
 
 
@@ -62,7 +63,7 @@ def cmd_set(name, year, group_part):
         print("нашёл " + str(len(hits)) + ":", [(s["name"], g["title"]) for s, g in hits])
         sys.exit(1)
     st, g = hits[0]
-    if not st.get("phone"):
+    if not st["phone"]:   # sqlite3.Row: без .get()
         sys.exit(f"{st['name']}: нет Telegram ID (phone), профиль не найти")
     db.set_student_birth_year(st["phone"], year)
     print(f"{st['name']} ({g['title']}): год {year}, заперт; запись нужна: "
