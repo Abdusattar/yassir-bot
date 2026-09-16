@@ -228,7 +228,10 @@ def init():
                 file_id TEXT,
                 duration INTEGER,
                 page_to INTEGER,
-                short INTEGER DEFAULT 0
+                short INTEGER DEFAULT 0,
+                verdict TEXT,
+                verdict_at TEXT,
+                verdict_by TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_rr_group_date ON revision_recordings(group_id, date);
 
@@ -400,6 +403,14 @@ def _run_migrations(c):
     # scripts/backfill_voice_duration.py (ffprobe по скачанному файлу).
     if "duration" not in vscols:
         c.execute("ALTER TABLE voice_submissions ADD COLUMN duration INTEGER")
+    # Вердикт устаза по записи повторения (16.09.2026). Таблица
+    # revision_recordings заведена тем же днём утром, без этих колонок, и на
+    # проде она уже создана - CREATE TABLE IF NOT EXISTS её не доберёт.
+    rrcols = [r["name"] for r in c.execute("PRAGMA table_info(revision_recordings)").fetchall()]
+    if rrcols:
+        for col in ("verdict", "verdict_at", "verdict_by"):
+            if col not in rrcols:
+                c.execute(f"ALTER TABLE revision_recordings ADD COLUMN {col} TEXT")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -1461,6 +1472,19 @@ def cancel_task(student_id, group_id, task_code):
             " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
             (student_id, group_id, today, task_code)
         )
+
+
+def cancel_task_on(student_id, group_id, date, task_code):
+    """Снять зачёт задания за КОНКРЕТНЫЙ день (16.09.2026, «Отвергнуто» у
+    записи повторения). cancel_task снимает только сегодняшний - устаз же
+    слушает и назавтра."""
+    with db() as c:
+        cur = c.execute(
+            "DELETE FROM score_events"
+            " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
+            (student_id, group_id, date, task_code)
+        )
+        return cur.rowcount > 0
 
 
 def save_report(uid, group_id, date, tasks_done):
@@ -3077,6 +3101,13 @@ def move_lesson_attendance(uid, group_id, from_date, to_date):
         return cur.rowcount > 0
 
 
+def get_user_by_id(uid):
+    """Строка users по id - имя и phone (Telegram ID) для уведомлений."""
+    with db() as c:
+        row = c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    return dict(row) if row else None
+
+
 def get_dm_ok(uid):
     """Писал ли пользователь боту в личку хотя бы раз (значит, бот может ему туда писать)."""
     with db() as c:
@@ -3783,6 +3814,55 @@ def get_revision_recordings(group_ids, days=7):
             (*group_ids, since)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+REVISION_REJECTED = "rejected"
+REVISION_ACCEPTED = "accepted"
+
+
+def set_revision_verdict(rec_id, verdict, by_phone):
+    """Вердикт устаза по записи повторения (16.09.2026).
+
+    «Отвергнуто» снимает зачёт повторения за ТОТ день, «Принято» возвращает -
+    устаз мог ошибиться тапом. Решение пользователя: успел перечитать и
+    отправить до полуночи - зачёт снова идёт, это делает сама новая запись
+    (submit_revision_recording засчитывает, раз зачёта уже нет)."""
+    rec = get_revision_recording(rec_id)
+    if not rec:
+        return None
+    with db() as c:
+        c.execute(
+            "UPDATE revision_recordings SET verdict=?, verdict_at=?, verdict_by=? WHERE id=?",
+            (verdict, get_now().isoformat(timespec="seconds"), by_phone, rec_id)
+        )
+    if verdict == REVISION_REJECTED:
+        cancel_task_on(rec["student_id"], rec["group_id"], rec["date"], "r")
+    elif verdict == REVISION_ACCEPTED:
+        save_report(rec["student_id"], rec["group_id"], rec["date"], {"r": True})
+    rec["verdict"] = verdict
+    return rec
+
+
+def get_rejected_revisions(student_id, days=3):
+    """Отвергнутые записи студента за последние дни - блок «не принято» в его
+    кабинете. Показываем только те, после которых он ещё не записал заново."""
+    since = (get_now().date() - timedelta(days=days - 1)).isoformat()
+    with db() as c:
+        rows = c.execute(
+            "SELECT id, date, duration, page_to, verdict_at FROM revision_recordings"
+            " WHERE student_id=? AND verdict=? AND date>=? ORDER BY id DESC",
+            (student_id, REVISION_REJECTED, since)
+        ).fetchall()
+        out = []
+        for r in rows:
+            newer = c.execute(
+                "SELECT 1 FROM revision_recordings WHERE student_id=? AND date=? AND id>?"
+                " AND IFNULL(verdict,'') != ?",
+                (student_id, r["date"], r["id"], REVISION_REJECTED)
+            ).fetchone()
+            if not newer:
+                out.append(dict(r))
+        return out
 
 
 def get_revision_recording(rec_id):

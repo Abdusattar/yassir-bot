@@ -174,3 +174,83 @@ def test_text_revision_in_group_credited_for_adult(test_db, monkeypatch):
     asyncio.run(h.process_message(chat_id=group["chat_id"], sender=PHONE,
                                   text="повторение", sender_name="Юный"))
     assert (db.get_today_report(uid, group["id"]) or {}).get("r") is True
+
+
+def test_reject_removes_credit_and_notifies(test_db, monkeypatch):
+    """«Отвергнуто»: балл за тот день снимается, в группу реплай на запись,
+    в личку стандартное наставление."""
+    import core.db as _db
+    uid, group = _student()
+    sent = _capture(monkeypatch)
+    monkeypatch.setattr(mb, "get_hifz_pointer", lambda u: None)
+    asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=180_000, page_to=17))
+    assert db.get_today_report(uid, group["id"])["r"] is True
+    rec = db.get_revision_recordings([group["id"]])[0]
+
+    msgs = []
+
+    async def fake_msg(chat_id, text, **kw):
+        msgs.append((chat_id, text, kw.get("reply_to_message_id")))
+
+    monkeypatch.setattr(mb, "send_message", fake_msg)
+    res = asyncio.run(mb.submit_revision_verdict("ustaz1", rec["id"], "rejected"))
+
+    assert res == {"ok": True, "verdict": "rejected"}
+    assert not (db.get_today_report(uid, group["id"]) or {}).get("r")
+    full = db.get_revision_recording(rec["id"])
+    assert msgs[0][0] == group["chat_id"] and msgs[0][2] == full["message_id"]
+    assert "не принято" in msgs[0][1]
+    assert db.get_revision_recording(rec["id"])["verdict"] == "rejected"
+    # у ребёнка блок «не принято» в кабинете
+    assert [r["id"] for r in db.get_rejected_revisions(uid)] == [rec["id"]]
+
+
+def test_new_recording_after_reject_returns_the_credit(test_db, monkeypatch):
+    """Успел до полуночи — зачёт возвращает сама новая запись, и блок
+    «не принято» у ребёнка гаснет."""
+    uid, group = _student()
+    _capture(monkeypatch)
+    monkeypatch.setattr(mb, "get_hifz_pointer", lambda u: None)
+    asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=180_000, page_to=17))
+    rec = db.get_revision_recordings([group["id"]])[0]
+
+    async def fake_msg(chat_id, text, **kw):
+        return None
+
+    monkeypatch.setattr(mb, "send_message", fake_msg)
+    asyncio.run(mb.submit_revision_verdict("ustaz1", rec["id"], "rejected"))
+
+    res = asyncio.run(mb.submit_revision_recording(PHONE, b"B", client_ms=1_500_000, page_to=17))
+    assert res["credited"] is True
+    assert db.get_today_report(uid, group["id"])["r"] is True
+    assert db.get_rejected_revisions(uid) == []
+
+
+def test_accept_returns_credit_after_mistap(test_db, monkeypatch):
+    """«Принято» после ошибочного «Отвергнуто» возвращает балл."""
+    uid, group = _student()
+    _capture(monkeypatch)
+    monkeypatch.setattr(mb, "get_hifz_pointer", lambda u: None)
+
+    async def fake_msg(chat_id, text, **kw):
+        return None
+
+    monkeypatch.setattr(mb, "send_message", fake_msg)
+    asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=900_000, page_to=17))
+    rec = db.get_revision_recordings([group["id"]])[0]
+    asyncio.run(mb.submit_revision_verdict("ustaz1", rec["id"], "rejected"))
+    assert not (db.get_today_report(uid, group["id"]) or {}).get("r")
+
+    asyncio.run(mb.submit_revision_verdict("ustaz1", rec["id"], "accepted"))
+    assert db.get_today_report(uid, group["id"])["r"] is True
+    assert db.get_rejected_revisions(uid) == []
+
+
+def test_bad_verdict_refused(test_db, monkeypatch):
+    uid, group = _student()
+    _capture(monkeypatch)
+    monkeypatch.setattr(mb, "get_hifz_pointer", lambda u: None)
+    asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=60_000, page_to=3))
+    rec = db.get_revision_recordings([group["id"]])[0]
+    assert asyncio.run(mb.submit_revision_verdict("u", rec["id"], "maybe")) == {
+        "ok": False, "error": "bad_verdict"}

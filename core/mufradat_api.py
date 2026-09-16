@@ -42,7 +42,7 @@ from core.db import (
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
     is_retake_answered, get_group_tasks, get_today_report, is_app_member, save_report,
     get_profile, update_profile, revision_record_required, get_revision_recordings,
-    get_revision_recording,
+    get_revision_recording, get_rejected_revisions,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
     remove_lesson_attendance,
 )
@@ -58,6 +58,7 @@ from core.mufradat_bot import (
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
     submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES, _hifz_place, submit_revision_recording,
+    submit_revision_verdict,
 )
 from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
@@ -1625,6 +1626,28 @@ async def handle_ustaz_revision_audio(request, user_id):
 
 
 @with_auth
+async def handle_ustaz_revision_verdict(request, user_id):
+    """POST {id, verdict} - «Отвергнуто»/«Принято» по записи повторения
+    (16.09.2026). Права те же, что у прослушивания: своя группа или
+    супер-админ."""
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    try:
+        rec = get_revision_recording(int(body.get("id", "")))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "bad_id"}, status=400)
+    if not rec:
+        return web.json_response({"error": "not_found"}, status=404)
+    visible, own_ids, is_super, hidden = _visible_ustaz_groups(user_id, "all")
+    if rec["group_id"] not in [g["id"] for g in visible] and not is_super:
+        return web.json_response({"error": "forbidden"}, status=403)
+    result = await submit_revision_verdict(user_id, rec["id"], body.get("verdict"))
+    return web.json_response(result, status=200 if result.get("ok") else 400)
+
+
+@with_auth
 async def handle_ustaz_verdict(request, user_id):
     """POST {id, verdict: accepted|retake, words: [{line, word}]}."""
     body = await request.json()
@@ -1709,7 +1732,11 @@ async def handle_submissions(request, user_id):
     # Серия голосовых, отправленных подряд в группу, - одна сдача, а не пять
     # (07.09.2026, см. merge_submission_series).
     items = merge_submission_series(get_student_submissions(user["id"], SUBMISSIONS_LIMIT))
-    return web.json_response({"items": items, "today": get_date()})
+    # Отвергнутые записи повторения (16.09.2026) - отдельным полем: это не
+    # сдача заучивания, у неё нет места на листе и её не пересдают через
+    # разбор, её просто читают заново.
+    return web.json_response({"items": items, "today": get_date(),
+                              "revisions_rejected": get_rejected_revisions(user["id"])})
 
 
 @with_auth
@@ -1941,6 +1968,7 @@ def build_app():
     app.router.add_post("/api/muf/revision/submit", handle_revision_submit)
     app.router.add_get("/api/muf/ustaz/revisions", handle_ustaz_revisions)
     app.router.add_get("/api/muf/ustaz/revision_audio", handle_ustaz_revision_audio)
+    app.router.add_post("/api/muf/ustaz/revision_verdict", handle_ustaz_revision_verdict)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     app.router.add_post("/api/muf/fitlog", handle_fit_log)

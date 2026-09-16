@@ -18,13 +18,15 @@ from core.db import (
     get_today_report, save_voice_submission, get_open_retakes, get_submission,
     set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
     VERDICT_RETAKE, is_retake_answered, revision_record_required, save_revision_recording,
-    REVISION_FIRST_PAGE,
+    REVISION_FIRST_PAGE, set_revision_verdict, REVISION_REJECTED, REVISION_ACCEPTED,
+    get_group, get_user_by_id, get_dm_ok,
 )
 from core.mufradat import (
     get_leaderboard, DAILY_WORDS_FOR_TASK_CREDIT, DAILY_CORRECT_FOR_TASK_CREDIT,
     compute_overall_score,
 )
 from core.mushaf_words import get_hifz_pointer
+from core.i18n import T, get_group_lang
 from core.tg import send_message, send_photo_bytes, send_voice_bytes
 
 log = logging.getLogger(__name__)
@@ -164,6 +166,36 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
     if credited:
         save_report(user["id"], group["id"], get_date(), {"r": True})
     return {"ok": True, "credited": credited, "id": rec_id, "page_to": page_to}
+
+
+async def submit_revision_verdict(ustaz_id, rec_id, verdict):
+    """«Отвергнуто» / «Принято» по записи повторения (16.09.2026, решение
+    пользователя). Отвергнутая запись снимает балл за тот день; ребёнку
+    уходит стандартное наставление в личку и короткая строка в группу
+    реплаем на саму запись. Устно устаз говорит отдельно - это его часть.
+
+    Успел перечитать и отправить до полуночи - зачёт возвращает сама новая
+    запись, ничего дополнительно нажимать не надо."""
+    if verdict not in (REVISION_REJECTED, REVISION_ACCEPTED):
+        return {"ok": False, "error": "bad_verdict"}
+    rec = set_revision_verdict(rec_id, verdict, ustaz_id)
+    if not rec:
+        return {"ok": False, "error": "not_found"}
+    if verdict == REVISION_ACCEPTED:
+        return {"ok": True, "verdict": verdict}
+
+    student = get_user_by_id(rec["student_id"])
+    name = (student or {}).get("name") or ""
+    group = get_group(rec["chat_id"])
+    lang = get_group_lang(group) if group else "ru"
+    if rec.get("chat_id"):
+        await send_message(
+            rec["chat_id"], T("revision_rejected_group", lang, name=name),
+            reply_to_message_id=rec.get("message_id")
+        )
+    if get_dm_ok(rec["student_id"]):
+        await send_message(student["phone"], T("revision_rejected_dm", lang, name=name))
+    return {"ok": True, "verdict": verdict}
 
 
 def _mmss(sec):

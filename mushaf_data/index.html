@@ -2227,6 +2227,12 @@
   }
   .subs-todo .body { background: var(--card-bg); padding: 10px 11px; }
   .subs-todo .body .sub-row { border: none; padding: 0; margin: 0; }
+  .subs-rev-go { margin-top: 10px; }
+  .subs-rev-go button {
+    width: 100%; padding: 11px; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+  }
   .subs-todo-hint {
     font-size: 12px; color: var(--ink); background: var(--marker-soft, #f5edd8);
     border-radius: 8px; padding: 7px 9px; margin-top: 8px;
@@ -2439,6 +2445,35 @@
   /* Запись повторения короче, чем читается охват страниц (16.09.2026) -
      устазу видно, кого слушать, не слушая всех. */
   .sub-pill.short { background: #fde8e8; color: #b42318; }
+  /* Плеер записи повторения (16.09.2026). Запись идёт до двух часов, и
+     слушать её подряд устаз не станет - нужна полоса, по которой он прыгает
+     в любое место, и шаг в полминуты для точной сверки. */
+  .rev-player { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .rev-player .line { display: flex; align-items: center; gap: 10px; }
+  .rev-player .pp {
+    width: 40px; height: 40px; flex: none; border: none; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: 15px; cursor: pointer;
+  }
+  .rev-track { flex: 1; height: 6px; border-radius: 3px; background: var(--card-border); cursor: pointer; }
+  .rev-fill { height: 100%; border-radius: 3px; background: var(--accent); width: 0; }
+  .rev-time {
+    font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+    min-width: 84px; text-align: right;
+  }
+  .rev-skips { display: flex; gap: 6px; }
+  .rev-skips button {
+    flex: 1 1 0; padding: 7px 4px; border: 1px solid var(--card-border);
+    background: var(--card-bg); border-radius: 8px; font: inherit; font-size: 12.5px;
+    color: var(--ink); cursor: pointer;
+  }
+  .rev-acts { display: flex; gap: 8px; margin-top: 2px; }
+  .rev-acts button {
+    flex: 1 1 0; padding: 9px 6px; border-radius: 9px; font: inherit;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .rev-acts .no { border: 1px solid #d9534f; background: #fde8e8; color: #b42318; }
+  .rev-acts .ok { border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+  .rev-done { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
   .ustaz-row.rev.playing { background: var(--tint, #eef3ff); }
   /* Заголовок группы внутри списка - устаз ведёт несколько групп (у Умар
      устаза их три), и "кто ждёт" без "где" читается плохо. */
@@ -3744,6 +3779,18 @@
       ustaz_rev_span: 'стр. %A%–%B%',
       ustaz_rev_play: '▶ слушать',
       ustaz_rev_stop: '■ стоп',
+      ustaz_rev_back: '↺ 30 сек',
+      ustaz_rev_fwd: '30 сек ↻',
+      ustaz_rev_back5: '↺ 5 мин',
+      ustaz_rev_fwd5: '5 мин ↻',
+      ustaz_rev_reject: 'Отвергнуть',
+      ustaz_rev_accept: 'Принято',
+      ustaz_rev_rejected: 'Отвергнуто · балл за день снят, ребёнок читает заново',
+      ustaz_rev_accepted: 'Принято',
+      subs_rev_title: 'ПОВТОРЕНИЕ НЕ ПРИНЯТО',
+      subs_rev_meta: '%D% · стр. 2–%P% · запись %T%',
+      subs_rev_hint: 'Прочитай повторение заново и запиши целиком — успеешь сегодня, зачёт за день вернётся.',
+      subs_rev_go: '🔁 Прочитать заново',
       ustaz_waits: 'ждёт %N%',
       ustaz_older: 'Ещё %N% старше — показать',
       ustaz_older_title: 'Старше последних дней',
@@ -9061,6 +9108,14 @@
           + '<span class="cnt">' + right + '</span></button>';
       });
       body.innerHTML = html;
+      var revGo = document.getElementById('subs-rev-go');
+      if (revGo) revGo.addEventListener('click', function () {
+        // Ведём туда же, куда 🔁 на странице чтения: мусхаф, первая страница
+        // Аль-Бакары, панель записи (16.09.2026).
+        document.getElementById('subs').style.display = 'none';
+        openMushaf('page');
+        setTimeout(function () { revisionRecOpen(); }, 700);
+      });
       body.scrollTop = 0;
       Array.prototype.forEach.call(body.querySelectorAll('[data-lesson]'), function (b) {
         b.addEventListener('click', function () {
@@ -9190,7 +9245,8 @@
     body.innerHTML = '<div class="subs-empty">' + T('subs_loading') + '</div>';
     apiCall('/submissions').then(function (res) {
       var items = (res.data && res.data.items) || [];
-      if (!items.length) {
+      var rejectedRevs = (res.data && res.data.revisions_rejected) || [];
+      if (!items.length && !rejectedRevs.length) {
         body.innerHTML = '<div class="subs-empty">' + T('subs_empty') + '</div>';
         return;
       }
@@ -9230,6 +9286,19 @@
       });
       var waiting = items.filter(function (it) { return !it.reviewed_at; }).length;
       var html = '';
+      /* Отвергнутая запись повторения (16.09.2026) - своим блоком сверху, как
+         «ПЕРЕСДАТЬ» у заучивания: это единственное на экране, что требует
+         действия прямо сейчас. Успеет до полуночи - зачёт вернётся. */
+      (rejectedRevs || []).forEach(function (rv) {
+        html += '<div class="subs-todo"><div class="hd">' + T('subs_rev_title') + '</div>' +
+          '<div class="body"><div class="sub-row"><div class="top">' +
+          '<span class="place">' + T('subs_rev_meta', {
+            D: ustazDayLabel(rv.date, today), P: rv.page_to || 2,
+            T: revFmt(rv.duration) }) + '</span></div></div>' +
+          '<div class="subs-todo-hint">' + T('subs_rev_hint') + '</div>' +
+          '<div class="subs-rev-go"><button id="subs-rev-go">' + T('subs_rev_go') + '</button></div>' +
+          '</div></div>';
+      });
       if (todo.length) {
         html += '<div class="subs-todo"><div class="hd">' +
           T('subs_todo_title', { N: todo.length }) + '</div><div class="body" id="subs-todo-rows">' +
@@ -9739,40 +9808,152 @@
     var meta = [T('ustaz_rev_span', { A: 2, B: it.page_to || 2 })];
     var when = ustazTimeOnly(it.sent_at);
     if (when) meta.push(when);
-    meta.push('<b class="rev-play">' + T('ustaz_rev_play') + '</b>');
+    if (!it.verdict) meta.push('<b class="rev-play">' + T('ustaz_rev_play') + '</b>');
+    /* Плеер и вердикт живут в самой карточке (16.09.2026): отдельный экран
+       разбора здесь не нужен - устаз слушает выборочно и решает на месте.
+       Уже разобранная запись показывает итог вместо кнопок. */
+    var tail = it.verdict
+      ? '<div class="rev-done">' + T(it.verdict === 'rejected' ? 'ustaz_rev_rejected' : 'ustaz_rev_accepted') + '</div>'
+      : '<div class="rev-player" data-player="' + it.id + '">' +
+          '<div class="line"><button class="pp">▶</button>' +
+          '<div class="rev-track"><div class="rev-fill"></div></div>' +
+          '<span class="rev-time">0:00 / ' + (dur ? dur.replace('⏱ ', '') : '—') + '</span></div>' +
+          '<div class="rev-skips">' +
+            '<button data-skip="-300">' + T('ustaz_rev_back5') + '</button>' +
+            '<button data-skip="-30">' + T('ustaz_rev_back') + '</button>' +
+            '<button data-skip="30">' + T('ustaz_rev_fwd') + '</button>' +
+            '<button data-skip="300">' + T('ustaz_rev_fwd5') + '</button>' +
+          '</div>' +
+          '<div class="rev-acts">' +
+            '<button class="no" data-verdict="rejected">' + T('ustaz_rev_reject') + '</button>' +
+            '<button class="ok" data-verdict="accepted">' + T('ustaz_rev_accept') + '</button>' +
+          '</div></div>';
     return '<div class="ustaz-row rev" data-rev="' + it.id + '"><div class="name">' +
       '<span>' + ustazEsc(it.student_name) + '</span>' + right + '</div>' +
-      '<div class="meta">' + meta.join(' · ') + '</div></div>';
+      '<div class="meta">' + meta.join(' · ') + '</div>' + tail + '</div>';
   }
 
+  /* Один проигрыватель на весь кабинет: две записи одновременно слушать
+     некому, а общий объект даёт «включил другую - первая остановилась». */
   var revAudio = new Audio();
-  var revPlayingEl = null;
+  var revCardEl = null;          // карточка, чей звук сейчас загружен
+  var revLoadedId = null;
+
+  function revFmt(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    return Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2);
+  }
+
+  function revTick() {
+    if (!revCardEl) return;
+    var fill = revCardEl.querySelector('.rev-fill');
+    var time = revCardEl.querySelector('.rev-time');
+    var d = isFinite(revAudio.duration) && revAudio.duration > 0 ? revAudio.duration : 0;
+    if (fill) fill.style.width = (d ? (revAudio.currentTime / d * 100) : 0) + '%';
+    if (time) time.textContent = revFmt(revAudio.currentTime) + ' / ' + (d ? revFmt(d) : '—');
+  }
+  revAudio.addEventListener('timeupdate', revTick);
+  revAudio.addEventListener('loadedmetadata', revTick);
+  revAudio.addEventListener('ended', function () {
+    if (revCardEl) {
+      var pp = revCardEl.querySelector('.pp');
+      if (pp) pp.textContent = '▶';
+    }
+  });
+
   function ustazRevStop() {
     try { revAudio.pause(); } catch (e) {}
-    if (revPlayingEl) {
-      revPlayingEl.classList.remove('playing');
-      var b = revPlayingEl.querySelector('.rev-play');
-      if (b) b.textContent = T('ustaz_rev_play');
+    if (revCardEl) {
+      var pp = revCardEl.querySelector('.pp');
+      if (pp) pp.textContent = '▶';
     }
-    revPlayingEl = null;
   }
-  revAudio.addEventListener('ended', ustazRevStop);
-  function ustazRevPlay(el, id) {
-    var same = revPlayingEl === el;
+
+  // Звук отдаётся через наш сервер (file_id Telegram наружу не уходит), поэтому
+  // грузим blob один раз на карточку и дальше перематываем локально.
+  function ustazRevLoad(card, id) {
+    if (revLoadedId === id) return Promise.resolve();
     ustazRevStop();
-    if (same) return;
-    revPlayingEl = el;
-    el.classList.add('playing');
-    var b = el.querySelector('.rev-play');
-    if (b) b.textContent = '…';
-    fetch(apiBase() + '/ustaz/revision_audio?id=' + id, { headers: authHeaders() })
+    revCardEl = card;
+    var pp = card.querySelector('.pp');
+    if (pp) pp.textContent = '…';
+    return fetch(apiBase() + '/ustaz/revision_audio?id=' + id, { headers: authHeaders() })
       .then(function (r) { if (!r.ok) throw new Error('audio'); return r.blob(); })
       .then(function (blob) {
-        if (revPlayingEl !== el) return;
         revAudio.src = URL.createObjectURL(blob);
-        if (b) b.textContent = T('ustaz_rev_stop');
-        return revAudio.play();
-      }).catch(function () { ustazRevStop(); });
+        revLoadedId = id;
+        if (pp) pp.textContent = '▶';
+      });
+  }
+
+  function ustazRevPlay(card, id) {
+    if (revLoadedId === id && !revAudio.paused) { ustazRevStop(); return; }
+    ustazRevLoad(card, id).then(function () {
+      revCardEl = card;
+      var pp = card.querySelector('.pp');
+      if (pp) pp.textContent = '❚❚';
+      return revAudio.play();
+    }).catch(function () { ustazRevStop(); });
+  }
+
+  function ustazRevSkip(card, id, sec) {
+    ustazRevLoad(card, id).then(function () {
+      revAudio.currentTime = Math.max(0, revAudio.currentTime + sec);
+      revTick();
+    }).catch(function () {});
+  }
+
+  function ustazRevSeek(card, id, ratio) {
+    ustazRevLoad(card, id).then(function () {
+      var d = isFinite(revAudio.duration) ? revAudio.duration : 0;
+      if (d) { revAudio.currentTime = Math.min(d - 1, Math.max(0, d * ratio)); revTick(); }
+    }).catch(function () {});
+  }
+
+  function ustazRevVerdict(card, id, verdict) {
+    var box = card.querySelector('.rev-acts');
+    if (box) box.innerHTML = '<div class="rev-done">' + T('ustaz_loading') + '</div>';
+    apiCall('/ustaz/revision_verdict', { method: 'POST', body: { id: id, verdict: verdict } })
+      .then(function (res) {
+        if (!(res.data && res.data.ok)) throw new Error('verdict');
+        ustazRevStop();
+        var player = card.querySelector('.rev-player');
+        if (player) {
+          player.outerHTML = '<div class="rev-done">' +
+            T(verdict === 'rejected' ? 'ustaz_rev_rejected' : 'ustaz_rev_accepted') + '</div>';
+        }
+        var play = card.querySelector('.rev-play');
+        if (play) play.remove();
+        if (ustazRevs) {
+          ustazRevs.forEach(function (r) { if (r.id === id) r.verdict = verdict; });
+        }
+      }).catch(function () {
+        if (box) box.innerHTML = '<div class="rev-done">' + T('hifz_rec_failed') + '</div>';
+      });
+  }
+
+  // Один слушатель на карточку: кнопки внутри неё пересобираются.
+  function ustazRevBind(card) {
+    var id = parseInt(card.getAttribute('data-rev'), 10);
+    card.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.closest('.pp')) { ustazRevPlay(card, id); return; }
+      if (t.closest('[data-skip]')) {
+        ustazRevSkip(card, id, parseInt(t.closest('[data-skip]').getAttribute('data-skip'), 10));
+        return;
+      }
+      if (t.closest('[data-verdict]')) {
+        ustazRevVerdict(card, id, t.closest('[data-verdict]').getAttribute('data-verdict'));
+        return;
+      }
+      var track = t.closest('.rev-track');
+      if (track) {
+        var box = track.getBoundingClientRect();
+        ustazRevSeek(card, id, (e.clientX - box.left) / box.width);
+        return;
+      }
+      if (t.closest('.rev-play')) ustazRevPlay(card, id);
+    });
   }
 
   /* Выбранная группа - ОДНА на весь кабинет (13.09.2026, поймано на разборе
@@ -10120,11 +10301,7 @@
         : '<div class="ustaz-empty">' + T('ustaz_rev_empty') + '</div>';
       body.innerHTML = html;
       ustazBindZones(body);
-      Array.prototype.forEach.call(body.querySelectorAll('[data-rev]'), function (el) {
-        el.addEventListener('click', function () {
-          ustazRevPlay(el, parseInt(el.getAttribute('data-rev'), 10));
-        });
-      });
+      Array.prototype.forEach.call(body.querySelectorAll('[data-rev]'), ustazRevBind);
       Array.prototype.forEach.call(body.querySelectorAll('.ustaz-groups .g'), function (el) {
         el.addEventListener('click', function () {
           ustazGroupId = parseInt(el.getAttribute('data-gid'), 10);
