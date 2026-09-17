@@ -307,6 +307,11 @@ def test_hidden_for_group_without_nahw_but_open_for_ustaz(test_db, monkeypatch):
 
 
 def _call(method, path, user_id, body=None):
+    # Уроки в тестах кладутся в базу уже «опубликованными» - открываем их
+    # группам с этим предметом, как это сделал бы разовый перенос.
+    from core import curriculum
+    curriculum.backfill()
+
     async def run():
         from aiohttp.test_utils import TestClient, TestServer
         client = TestClient(TestServer(api.build_app()))

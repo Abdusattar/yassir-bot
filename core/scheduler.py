@@ -978,55 +978,59 @@ async def request_curriculum_review():
 
 
 async def publish_curriculum_parts():
-    """Публикует следующую часть по очереди в группы с соответствующим заданием.
+    """Четверг: каждой группе - ЕЁ следующая лекция (17.09.2026,
+    core/curriculum.py). Раньше очередь была одна на базу, и группа, начавшая
+    предмет позже, получила бы двадцатую лекцию вместо первой.
+
     Не ждёт одобрения устаза (решение от 08.07.2026) — только видимость заранее
-    через request_curriculum_review. Нет части в очереди → безопасный no-op."""
+    через request_curriculum_review."""
+    from core import curriculum
     for subject, task_key in _SUBJECT_TASK_KEY.items():
+        label = "Нахв" if subject == "n" else "Таджвид"
         try:
-            part = get_next_part_to_publish(subject)
-            if not part:
-                # Пустая очередь молчала: предупреждение приходит только один
-                # раз, когда осталась последняя часть (см. ниже), а дальше
-                # четверг за четвергом проходил без единого слова. Так нахв
-                # простоял три недели (20.08-03.09.2026), а женская база —
-                # где очередь СВОЯ и кончается раньше — с 13.08. Теперь пустой
-                # четверг сам напоминает о себе.
-                label = "Нахв" if subject == "n" else "Таджвид"
-                if SUPER_ADMIN_IDS:
-                    await send_message(
-                        SUPER_ADMIN_IDS[0],
-                        "📭 Сегодня по предмету «" + label + "» в группы ничего "
-                        "не ушло: очередь пуста. Нужно подготовить части."
-                    )
-                continue
-            label = "Нахв" if subject == "n" else "Таджвид"
-            text = (
-                "📘 " + label + ": " + part["chapter"] + " — " + part["topic"]
-                + " (часть " + str(part["part_number"]) + "/" + str(part["part_total"]) + ")\n\n"
-                + part["content"]
-            )
+            starved = []                       # кому не хватило лекций
             for group in get_all_groups():
                 gtype = group["group_type"] or "relaxed"
-                if not bot_leads_group(gtype):
+                if not bot_leads_group(gtype) or not curriculum.lessons_go(group, subject):
                     continue
-                if task_key not in get_group_tasks(group):
+                part = curriculum.next_part(group["id"], subject)
+                if not part:
+                    starved.append(group["title"] or str(group["chat_id"]))
                     continue
+                text = (
+                    "📘 " + label + ": " + part["chapter"] + " — " + part["topic"]
+                    + " (часть " + str(part["part_number"]) + "/" + str(part["part_total"]) + ")\n\n"
+                    + part["content"]
+                )
                 try:
-                    # Важное (см. core/feed.py): карточка на дашборде ведёт
+                    # Важное (см. core/feed.py): строка на доске дашборда ведёт
                     # прямо в урок и висит, пока студент его не открыл.
                     with important("lesson", link="lesson:%s:%s" % (subject, part["id"]),
                                    title=label + ": " + part["topic"]):
                         await send_message(group["chat_id"], text)
+                    curriculum.open_part(group["id"], part["id"])
+                    if not part["published_at"]:
+                        mark_curriculum_published(part["id"])
                     await asyncio.sleep(0.3)
                 except Exception as e:
                     log.error("publish_curriculum_parts send error in %s: %s", group["chat_id"], e)
-            mark_curriculum_published(part["id"])
+                    continue
+                # Задание включается, когда в тренажёре есть что сдавать:
+                # вводные лекции таджвида (без букв) группа только читает.
+                if curriculum.enable_task_if_ready(group, subject):
+                    glang = get_group_lang(group)
+                    with important("task", title="В заданиях группы теперь " + label):
+                        await send_message(group["chat_id"], T("subject_task_on_" + subject, glang))
 
-            # За неделю до последнего урока в очереди — напомнить устазу
-            # подготовить ещё (решение пользователя 23.07.2026). Публикация
-            # раз в неделю, значит remaining==1 означает: то, что сейчас
-            # ушло — предпоследнее, а единственное оставшееся уйдёт ровно
-            # через неделю и будет последним.
+            # Пустая очередь молчала: так нахв простоял три недели
+            # (20.08-03.09.2026). Теперь пустой четверг сам напоминает о себе.
+            if starved and SUPER_ADMIN_IDS:
+                await send_message(
+                    SUPER_ADMIN_IDS[0],
+                    "📭 Сегодня по предмету «" + label + "» не получили лекцию: "
+                    + ", ".join(starved) + " — очередь пуста. Нужно подготовить части."
+                )
+            # За неделю до последнего урока в очереди — напомнить (23.07.2026).
             remaining = count_unpublished_parts(subject)
             if remaining == 1 and SUPER_ADMIN_IDS:
                 await send_message(
@@ -1036,6 +1040,38 @@ async def publish_curriculum_parts():
                 )
         except Exception as e:
             log.error("publish_curriculum_parts error for subject=%s: %s", subject, e)
+
+
+async def subject_readiness_check():
+    """Раз в сутки: группа дошла до порога заучивания - предупреждаем, что
+    через неделю начинается предмет (правило и пороги - core/curriculum.py)."""
+    from core import curriculum
+    today = get_date()
+    if today < curriculum.AUTO_OPEN_FROM:
+        return
+    for group in get_all_groups():
+        if (group["group_type"] or "relaxed") not in ("pro", "relaxed"):
+            continue
+        try:
+            stats = None
+            for subject in ("j", "n"):
+                if subject in get_group_tasks(group) or curriculum.subject_start(group["id"], subject):
+                    continue
+                stats = stats or curriculum.readiness(group["id"])
+                if not curriculum.is_ready(stats, subject):
+                    continue
+                start = curriculum.announce_start(group["id"], subject, today)
+                human = date.fromisoformat(start).strftime("%d.%m")
+                label = curriculum.SUBJECT_LABEL[subject]
+                with important("task", until=start, title="С " + human + " у группы начинается " + label):
+                    await send_message(group["chat_id"],
+                                       T("subject_start_soon_" + subject, get_group_lang(group), date=human))
+                for ap in SUPER_ADMIN_IDS:
+                    await send_message(ap, "🆕 «%s»: %d из %d прошли порог — с %s начинается %s." % (
+                        group["title"], stats[subject], stats["total"], human, label))
+                await asyncio.sleep(0.3)
+        except Exception as e:
+            log.error("subject_readiness_check error in %s: %s", group["chat_id"], e)
 
 
 # ── Приглашение устазов в «Масштабирование» (21:00) ──────────────────────────
@@ -1956,6 +1992,8 @@ async def scheduler():
                 await maybe_run("individual_reminders", individual_reminders)
                 if VERIFY_REPORT_ENABLED:
                     await maybe_run("verify_quality_report", verify_quality_report)
+            elif h == 11 and m == 0:
+                await maybe_run("subject_readiness_check", subject_readiness_check)
             elif h == 20 and m == 30:
                 await maybe_run("skip_warnings", skip_warnings)
             elif h == 21 and m == 0:

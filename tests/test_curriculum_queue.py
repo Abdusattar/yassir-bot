@@ -42,8 +42,10 @@ def test_empty_queue_tells_the_admin_instead_of_silence(test_db, monkeypatch):
     to_group = [s for s in sent if s[0] == CHAT]
     to_admin = [s for s in sent if s[0] == "900001"]
     assert to_group == []                       # в группы по-прежнему ничего
-    assert len(to_admin) == 2                   # по одному на нахв и таджвид
-    assert "очередь пуста" in to_admin[0][1]
+    # Только нахв: таджвид в этой базе никто не учит, и ждать его некому
+    # (17.09.2026 - лекции по группам, core/curriculum.py).
+    assert len(to_admin) == 1
+    assert "очередь пуста" in to_admin[0][1] and "N-" in to_admin[0][1]
 
 
 def test_part_goes_to_groups_with_that_task_only(test_db, monkeypatch):

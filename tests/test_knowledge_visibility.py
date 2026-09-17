@@ -24,6 +24,11 @@ def _part(subject):
 
 
 def _call(path, user_id):
+    # Уроки в тестах кладутся в базу уже «опубликованными» - открываем их
+    # группам с этим предметом, как это сделал бы разовый перенос.
+    from core import curriculum
+    curriculum.backfill()
+
     async def run():
         from aiohttp.test_utils import TestClient, TestServer
         client = TestClient(TestServer(api.build_app()))

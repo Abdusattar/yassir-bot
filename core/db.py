@@ -360,6 +360,9 @@ def init():
     # core.web_auth сам берёт db() отсюда, на верхнем уровне вышел бы цикл.
     from core.web_auth import init_web_auth
     init_web_auth()
+    # Лекции по группам (17.09.2026) - таблицы и разовый перенос.
+    from core import curriculum
+    curriculum.init()
 
 
 def _run_migrations(c):

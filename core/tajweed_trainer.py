@@ -113,13 +113,12 @@ _CARD = {c["id"]: c for c in CARDS}
 _sessions = {}
 
 
-def open_cards():
-    """Карточки уроков, уже опубликованных в этой базе."""
+def open_cards(user_id=None):
+    """Карточки уроков, открытых группе этого человека (17.09.2026,
+    core/curriculum.py); устазу и без user_id - всё опубликованное в базе."""
     try:
-        with db() as c:
-            topics = [r["topic"] or "" for r in c.execute(
-                "SELECT topic FROM curriculum_parts"
-                " WHERE subject='j' AND published_at IS NOT NULL").fetchall()]
+        from core.curriculum import topics as _topics, user_group_id
+        topics = _topics("j", user_group_id(user_id) if user_id else None)
     except Exception as e:
         log.error("tajweed open_cards error: %s: %s", type(e).__name__, e)
         return []
@@ -189,7 +188,7 @@ def _next(session):
 
 
 def start(user_id):
-    cards = open_cards()
+    cards = open_cards(user_id)
     if not cards:
         _sessions.pop(str(user_id), None)
         return None

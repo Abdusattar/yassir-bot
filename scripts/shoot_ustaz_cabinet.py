@@ -111,6 +111,9 @@ def seed_extra():
         # 777003 - как N-1: все навыки открыты лекциями (снимки nhs_*).
         conn.execute("DELETE FROM nahw_answers WHERE user_id='777003'")
         conn.execute("DELETE FROM nahw_answers WHERE user_id=?", (stand.STUDENT,))
+    # Лекции по группам (17.09.2026): засеянное «опубликованным» открываем группе стенда.
+    from core import curriculum
+    curriculum.backfill()
     # Важные сообщения (17.09.2026): у 777002 - «открылся урок», у 777003 -
     # предупреждение о пропусках. Адресные, чтобы не попасть в чужие снимки.
     from core import feed

@@ -410,12 +410,12 @@ def corpus():
 
 # ── Пул, открытость, статистика ────────────────────────────────────────────
 
-def _published_topics():
+def _published_topics(user_id=None):
+    """Темы лекций, открытых группе этого человека (17.09.2026,
+    core/curriculum.py); устазу и без user_id - всё опубликованное в базе."""
     try:
-        with db() as c:
-            return [r["topic"] or "" for r in c.execute(
-                "SELECT topic FROM curriculum_parts"
-                " WHERE subject='n' AND published_at IS NOT NULL").fetchall()]
+        from core.curriculum import topics, user_group_id
+        return topics("n", user_group_id(user_id) if user_id else None)
     except Exception as e:
         log.error("nahw topics error: %s: %s", type(e).__name__, e)
         return []
@@ -438,7 +438,7 @@ def open_skills(user_id=None, passed=0):
     """Навыки по порядку, пока цепочка не прервётся. Первые `passed` открыты
     лекциями. Дальше шаг за шагом: урок навыка опубликован в этой базе И
     предыдущий навык освоен (первому навыку хватает урока)."""
-    topics, out = _published_topics(), []
+    topics, out = _published_topics(user_id), []
     for i, skill in enumerate(SKILLS):
         if i >= passed:
             if not skill["lesson"] or not any(t.startswith(skill["lesson"]) for t in topics):

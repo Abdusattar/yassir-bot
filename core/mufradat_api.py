@@ -977,8 +977,24 @@ async def handle_lessons(request, user_id):
             return web.json_response({"error": "bad_subject"}, status=400)
         if keys is not None and subject not in keys:
             return web.json_response({"items": []})
-        return web.json_response({"items": lessons_of(subject)})
-    return web.json_response({"subjects": subjects_overview(keys)})
+        return web.json_response({"items": lessons_of(subject, _lesson_group_id(user_id))})
+    return web.json_response({"subjects": subjects_overview(keys, _lesson_group_id(user_id))})
+
+
+def _lesson_group_id(user_id):
+    """Группа, по счёту которой человеку открыты лекции (core/curriculum.py);
+    None - устаз и супер-админ, им всё опубликованное."""
+    from core.curriculum import user_group_id
+    return user_group_id(user_id)
+
+
+def _task_subject_keys(user_id):
+    """Предметы, которые группа СДАЁТ (буквы заданий) - по ним открыты
+    тренажёры. None - устазу и супер-админу всё."""
+    if _is_ustaz(user_id):
+        return None
+    group = get_learning_group(user_id, include_prep=True)
+    return set(get_group_tasks(group)) if group else set()
 
 
 def _lesson_subject_keys(user_id):
@@ -989,7 +1005,12 @@ def _lesson_subject_keys(user_id):
     if _is_ustaz(user_id):
         return None
     group = get_learning_group(user_id, include_prep=True)
-    return set(get_group_tasks(group)) if group else set()
+    if not group:
+        return set()
+    # Плюс предметы, по которым группе уже идут лекции (17.09.2026): вводные
+    # лекции таджвида читают ДО того, как задание «j» включится.
+    from core.curriculum import opened_subjects
+    return set(get_group_tasks(group)) | opened_subjects(group["id"])
 
 
 # ── Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py) ───────────────
@@ -1004,7 +1025,7 @@ def _tajweed_open(user_id):
     «Таджвид», остальным скрыт, «потом решим, как открывать». Устазу и
     супер-админу - всегда, как и уроки в «Знаниях»: им надо видеть, что
     сдают студенты."""
-    keys = _lesson_subject_keys(user_id)
+    keys = _task_subject_keys(user_id)
     return keys is None or "j" in keys
 
 
@@ -1092,7 +1113,7 @@ async def handle_tajweed_new(request, user_id):
 
 def _nahw_open(user_id):
     """Группам с заданием «Нахв», устазам и супер-админу - как таджвид."""
-    keys = _lesson_subject_keys(user_id)
+    keys = _task_subject_keys(user_id)
     return keys is None or "n" in keys
 
 
@@ -1194,7 +1215,7 @@ async def handle_lesson(request, user_id):
         part_id = int(request.query.get("id", ""))
     except ValueError:
         return web.json_response({"error": "bad_id"}, status=400)
-    item = lesson(part_id)
+    item = lesson(part_id, _lesson_group_id(user_id))
     if not item:
         return web.json_response({"error": "not_open"}, status=404)
     # Предмета нет в заданиях группы - как закрытый (14.09.2026): список и

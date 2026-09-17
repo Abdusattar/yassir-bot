@@ -7,8 +7,10 @@ Telegram, и через неделю-две она уходила вверх п�
 
 Два правила, важные для понимания:
 
-* **«Открыт» = `published_at IS NOT NULL`.** Отдельного переключателя нет и не
-  нужно: урок открывается сам, когда четверговая рассылка его отправила.
+* **«Открыт» - у каждой группы своё (17.09.2026, core/curriculum.py).**
+  Студенту открыто то, что четверговая рассылка отправила ЕГО группе
+  (`group_lessons`); устазу и супер-админу (group_id=None) - всё, что хоть раз
+  ушло студентам (`published_at IS NOT NULL`).
   `approved_at` для этого не годится — с 08.07.2026 публикация идёт без
   обязательного одобрения устаза, и у большинства опубликованных частей он
   так и остаётся пустым (та же ловушка описана в
@@ -36,7 +38,15 @@ SUBJECTS = (
 )
 
 
-def subjects_overview(keys=None):
+def _opened(subject, group_id):
+    """{part_id: дата открытия} для группы; None - смотреть по published_at."""
+    if group_id is None:
+        return None
+    from core.curriculum import opened_parts
+    return opened_parts(group_id, subject)
+
+
+def subjects_overview(keys=None, group_id=None):
     """Предметы со счётом «открыто из всего» — для блока «Уроки».
 
     keys — буквы заданий группы студента (14.09.2026): показываем только те
@@ -61,11 +71,12 @@ def subjects_overview(keys=None):
         r = by_id.get(s["id"])
         if not r or not r["total"]:
             continue                      # предмета в базе нет — и раздела нет
-        out.append(dict(s, open=r["open"] or 0, total=r["total"]))
+        mine = _opened(s["id"], group_id)
+        out.append(dict(s, open=(r["open"] or 0) if mine is None else len(mine), total=r["total"]))
     return out
 
 
-def lessons_of(subject):
+def lessons_of(subject, group_id=None):
     """Части предмета по порядку: глава, тема, открыт ли и когда открылся.
 
     Содержимое здесь НЕ отдаём даже для открытых — список может быть длинным,
@@ -79,18 +90,23 @@ def lessons_of(subject):
     except Exception as e:
         log.error("lessons_of error: %s: %s", type(e).__name__, e)
         return []
+    mine = _opened(subject, group_id)
+
+    def at(r):
+        return r["published_at"] if mine is None else mine.get(r["id"])
+
     return [{
         "id": r["id"],
         "chapter": r["chapter"],
         "topic": r["topic"],
         "part": r["part_number"],
         "parts": r["part_total"],
-        "open": bool(r["published_at"]),
-        "at": (r["published_at"] or "")[:10],
+        "open": bool(at(r)),
+        "at": (at(r) or "")[:10],
     } for r in rows]
 
 
-def lesson(part_id):
+def lesson(part_id, group_id=None):
     """Один урок с текстом — только если он уже открыт.
 
     Закрытый возвращает None, а не текст с пометкой: программа вперёд не
@@ -105,7 +121,11 @@ def lesson(part_id):
     except Exception as e:
         log.error("lesson error: %s: %s", type(e).__name__, e)
         return None
-    if not r or not r["published_at"]:
+    if not r:
+        return None
+    mine = _opened(r["subject"], group_id)
+    opened = r["published_at"] if mine is None else mine.get(r["id"])
+    if not opened:
         return None
     return {
         "id": r["id"],
@@ -115,5 +135,5 @@ def lesson(part_id):
         "part": r["part_number"],
         "parts": r["part_total"],
         "content": r["content"],
-        "at": (r["published_at"] or "")[:10],
+        "at": (opened or "")[:10],
     }

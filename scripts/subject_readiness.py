@@ -17,11 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import core.db as db                                   # noqa: E402
-from core.mushaf_words import get_hifz_pointer         # noqa: E402
-
-HALF_JUZ_PAGE = 12
-JUZ_PAGE = 22
-SHARE = 0.7
+import core.curriculum as cur                          # noqa: E402
 
 
 def main():
@@ -30,25 +26,22 @@ def main():
         groups = [dict(r) for r in c.execute(
             "SELECT id, title, tasks, group_type FROM groups WHERE active=1"
             " AND COALESCE(group_type,'relaxed') IN ('pro','relaxed') ORDER BY title")]
-    print("%-30s %-12s %5s %8s %8s %8s  %s" % ("группа", "задания", "всего", "с указ.", ">=пол", ">=джуз", "вывод"))
+    print("правило включается с", cur.AUTO_OPEN_FROM)
+    print("%-30s %-12s %5s %8s %8s %8s %6s %6s  %s" % (
+        "группа", "задания", "всего", "с указ.", ">=пол", ">=джуз", "лекц j", "лекц n", "вывод"))
     for g in groups:
-        students = [s for s in db.get_students(g["id"]) if s["phone"]]
-        pages = []
-        for s in students:
-            p = get_hifz_pointer(s["phone"])
-            if p and p.get("page"):
-                pages.append(int(p["page"]))
-        n = len(students)
-        half = sum(1 for p in pages if p >= HALF_JUZ_PAGE)
-        juz = sum(1 for p in pages if p >= JUZ_PAGE)
+        st = cur.readiness(g["id"])
         tasks = (g["tasks"] or "").split(",")
         out = []
-        if n and half / n >= SHARE and "j" not in tasks:
-            out.append("пора таджвид")
-        if n and juz / n >= SHARE and "n" not in tasks:
-            out.append("пора нахв")
-        print("%-30s %-12s %5d %8d %8d %8d  %s" % (
-            (g["title"] or "")[:30], g["tasks"] or "", n, len(pages), half, juz, ", ".join(out)))
+        for subject in ("j", "n"):
+            row = cur.subject_start(g["id"], subject)
+            if row:
+                out.append("%s с %s" % (cur.SUBJECT_LABEL[subject], row["start_date"]))
+            elif subject not in tasks and cur.is_ready(st, subject):
+                out.append("пора " + cur.SUBJECT_LABEL[subject])
+        print("%-30s %-12s %5d %8d %8d %8d %6d %6d  %s" % (
+            (g["title"] or "")[:30], g["tasks"] or "", st["total"], st["with_pointer"], st["j"], st["n"],
+            len(cur.opened_parts(g["id"], "j")), len(cur.opened_parts(g["id"], "n")), ", ".join(out)))
 
 
 if __name__ == "__main__":

@@ -598,6 +598,9 @@ def seed_lessons():
                 " part_total, order_index, content, published_at)"
                 " VALUES(?,?,?,?,?,?,?,?)",
                 (subj, chapter, topic, num, total, i, text, pub))
+    # Лекции по группам (17.09.2026): открываем засеянное группе стенда.
+    from core import curriculum
+    curriculum.backfill()
 
 
 def build_app():
