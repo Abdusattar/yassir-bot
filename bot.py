@@ -14,7 +14,7 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL, MUFRADAT_API_PORT
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.feed import record_incoming
@@ -225,7 +225,7 @@ async def main():
                             if user.get("username"):
                                 cache_username(user["username"], uid)
                             glang = get_group_lang(group_info)
-                            existing_user = find_user_by_phone(uid)
+                            existing_user = find_known_user_by_phone(uid)
                             if existing_user:
                                 await handle_known_user_group_join(chat_id, group_info, uid, existing_user)
                             else:
@@ -357,7 +357,7 @@ async def main():
                             tg_name = nm["username"]
                         glang = get_group_lang(group_info) if group_info else "ru"
                         if group_info:
-                            existing_user = find_user_by_phone(uid)
+                            existing_user = find_known_user_by_phone(uid)
                             if existing_user:
                                 await handle_known_user_group_join(chat_id, group_info, uid, existing_user)
                             else:

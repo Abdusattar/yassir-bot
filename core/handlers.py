@@ -27,7 +27,8 @@ from core.db import (
     credit_lesson_attendance, mark_dm_ok_by_phone, get_dm_ok_by_phone, is_active_prep_student,
     get_survey_stage, save_survey_location, save_survey_age, survey_answer_in_window,
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
-    find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone,
+    find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone, find_known_user_by_phone,
+    set_user_name_if_empty, track_unregistered, remove_unregistered, bot_leads_group,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
@@ -845,6 +846,35 @@ def _first_lesson_refusal_today(student_id):
     return True
 
 
+async def _take_missing_name(phone, group, chat_id, text, sender_name, glang):
+    """Студент уже в группе, но без имени. Первое сообщение - просим имя и
+    запускаем отсчёт до кика; сам отчёт при этом засчитывается как обычно
+    (False). Пока ждём - сообщение, похожее на имя, записываем (True)."""
+    group_id = group["id"]
+    if not is_pending_name(phone, group_id):
+        set_pending_name(phone, group_id, "")
+        track_unregistered(phone, chat_id)
+        await send_message(chat_id, T("ask_missing_name", glang))
+        return False
+    raw = (text or "").strip()
+    if not raw or any(check_text(raw).values()):
+        return False
+    name = raw if looks_like_plain_name(raw) else None
+    if not name:
+        got = await ai.extract_name(raw)
+        name = None if got == ai.AI_DOWN else (got or "").strip() or None
+    if not name:
+        return False
+    name = name[:32]
+    set_user_name_if_empty(phone, name)
+    clear_pending_name(phone, group_id)
+    remove_unregistered(phone, chat_id)
+    await send_message(chat_id, T("missing_name_saved", glang, name=name))
+    for ap in SUPER_ADMIN_IDS:
+        await send_message(ap, "👤 Записан без имени, представился: " + name + " («" + (group["title"] or str(chat_id)) + "»)")
+    return True
+
+
 async def process_message(chat_id, sender, text, sender_name="", is_media=False, reply_to_id=None, message_id=None, reply_to_text="", is_voice=False, reply_to_message_id=None, voice_file_id=None, voice_duration=None):
     phone = extract_phone(sender)
     text = (text or "").strip()
@@ -1348,9 +1378,15 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # сообщениями (23.08.2026).
     if not is_group_admin(phone, group_id) and not is_observer(phone):
         s_reg = find_by_phone(phone, group_id)
+        if s_reg and not (s_reg["name"] or "").strip() and bot_leads_group(group["group_type"] or "relaxed"):
+            # Записан без имени (17.09.2026, см. find_known_user_by_phone).
+            # Правило пользователя: все с именами, не представился - повторный
+            # вопрос, потом кик (transfers.kick_unregistered).
+            if await _take_missing_name(phone, group, chat_id, text, sender_name, glang):
+                return
         if not s_reg:
             # Уже известен боту (зарегистрирован где-то ещё) — не спрашиваем имя заново
-            existing_user = find_user_by_phone(phone)
+            existing_user = find_known_user_by_phone(phone)
             if existing_user:
                 gtype_chk = group["group_type"] or "relaxed"
                 if gtype_chk != "tadabbur":
@@ -1473,7 +1509,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 return
             else:
                 # Уже зарегистрирован в другой группе — авторегистрация
-                existing_user = find_user_by_phone(phone)
+                existing_user = find_known_user_by_phone(phone)
                 if existing_user:
                     if await block_return_if_pending_prep(existing_user["id"], existing_user["name"], phone, chat_id, group):
                         return

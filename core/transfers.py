@@ -587,11 +587,37 @@ UNREG_DAYS = 7  # общий порог (относится к prep/tadabbur-п�
 UNREG_DAYS_PREP_BYPASS = 1
 
 
+# Записанных без имени спрашиваем в личке в начале отсчёта и ещё раз на этот
+# день (17.09.2026, правило пользователя: не представился - перепрос, потом кик).
+NAMELESS_REASK_DAY = 3
+
+
+async def ask_nameless_students():
+    """Всех активных студентов без имени ставим на отсчёт до кика и просим
+    имя в личку: многие из них в группе молчат, вопрос там они не увидят."""
+    from core.db import get_nameless_students, track_unregistered, db
+    for row in get_nameless_students():
+        phone, chat_id = row["phone"], row["chat_id"]
+        started = track_unregistered(phone, chat_id)
+        with db() as c:
+            r = c.execute("SELECT julianday('now') - julianday(joined_date) AS d FROM unregistered_members"
+                          " WHERE user_id=? AND chat_id=?", (phone, chat_id)).fetchone()
+        day = int(r["d"] or 0) if r else 0
+        if not (started or day == NAMELESS_REASK_DAY) or not row["dm_ok"]:
+            continue
+        try:
+            await send_message(phone, T("ask_missing_name_dm", "ru", title=row["title"] or ""))
+        except Exception as e:
+            log.error("ask_nameless_students dm %s: %s", phone, e)
+
+
 async def kick_unregistered():
     """Кикает из групп тех, кто не зарегистрировался. Для pro/relaxed — через
     UNREG_DAYS_PREP_BYPASS дней (ссылка на подготовительную), для остальных —
-    через UNREG_DAYS (ссылка на Тадаббур)."""
+    через UNREG_DAYS (ссылка на Тадаббур). Записанных без имени - через
+    UNREG_DAYS после первого вопроса (17.09.2026)."""
     from core.tg import ban_member, unban_member
+    await ask_nameless_students()
     tadabbur = get_tadabbur_group()
     overdue = get_overdue_unregistered(min(UNREG_DAYS, UNREG_DAYS_PREP_BYPASS))
     for row in overdue:
@@ -600,7 +626,9 @@ async def kick_unregistered():
         elapsed = row["elapsed"] or 0
         group = get_group(chat_id)
         gtype = (group["group_type"] or "relaxed") if group else "relaxed"
-        is_prep_bypass = REQUIRE_PREP_FOR_NEW_STUDENTS and gtype in ("pro", "relaxed")
+        student = group and find_by_phone(uid, group["id"])
+        nameless = bool(student) and not (student["name"] or "").strip()
+        is_prep_bypass = REQUIRE_PREP_FOR_NEW_STUDENTS and gtype in ("pro", "relaxed") and not nameless
         threshold = UNREG_DAYS_PREP_BYPASS if is_prep_bypass else UNREG_DAYS
         if elapsed < threshold:
             # Личный порог этого типа группы ещё не истёк — запись не трогаем,
@@ -612,7 +640,7 @@ async def kick_unregistered():
                 remove_unregistered(uid, chat_id)
                 continue
             # Если уже зарегистрировался — просто чистим запись
-            if group and find_by_phone(uid, group["id"]):
+            if student and not nameless:
                 remove_unregistered(uid, chat_id)
                 continue
             # Устазов и супер-админов не кикаем — они могут состоять в группе
@@ -627,7 +655,9 @@ async def kick_unregistered():
             # 02.08.2026), это просто уведомление о факте.
             if group:
                 addr = "Сёстры" if IS_FEMALE else "Братья"
-                if is_prep_bypass:
+                if nameless:
+                    msg = T("kick_nameless", "ru", days=threshold)
+                elif is_prep_bypass:
                     msg = T("kick_unreg_prep", "ru")
                 else:
                     msg = "👋 Участник не представился в течение " + str(threshold) + " дней и сейчас будет удалён из группы."
@@ -640,6 +670,8 @@ async def kick_unregistered():
                 await asyncio.sleep(10)
             await ban_member(chat_id, uid)
             await unban_member(chat_id, uid)
+            if nameless:
+                deactivate_student(student["id"], group["id"])
             log.info("Kicked unregistered user %s from %s (gtype=%s, threshold=%d)", uid, chat_id, gtype, threshold)
         except Exception as e:
             log.error("kick_unregistered error user=%s chat=%s: %s", uid, chat_id, e)

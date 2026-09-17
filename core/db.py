@@ -1212,6 +1212,42 @@ def find_user_by_phone(phone):
         ).fetchone()
 
 
+def find_known_user_by_phone(phone):
+    """Как find_user_by_phone, но только с именем (17.09.2026). Строку с
+    пустым именем заводит mark_dm_ok_by_phone, когда человек пишет боту в
+    личку или входит в приложение раньше, чем в группу. Считать такого
+    «уже известным» нельзя: бот не спрашивал имя и регистрировал его без
+    имени - в группу уходило «, Слова +»."""
+    user = find_user_by_phone(phone)
+    return user if user and (user["name"] or "").strip() else None
+
+
+def set_user_name_if_empty(phone, name):
+    with db() as c:
+        c.execute("UPDATE users SET name=? WHERE phone=? AND TRIM(COALESCE(name,''))=''",
+                  (name, phone))
+
+
+def get_nameless_students():
+    """(phone, group_id, chat_id, title, dm_ok) - активные студенты групп,
+    которые ведёт бот (подготовительная, pro, relaxed), без имени."""
+    with db() as c:
+        return c.execute(
+            "SELECT u.phone, g.id AS group_id, g.chat_id, g.title, u.dm_ok"
+            " FROM users u JOIN user_groups ug ON ug.user_id=u.id JOIN groups g ON g.id=ug.group_id"
+            " WHERE TRIM(COALESCE(u.name,''))='' AND u.phone IS NOT NULL AND ug.role='student'"
+            " AND ug.active=1 AND g.active=1 AND COALESCE(g.group_type,'relaxed') IN ('prep','pro','relaxed')"
+        ).fetchall()
+
+
+def track_unregistered(user_id, chat_id):
+    """Начать отсчёт до кика, если он ещё не идёт. True - начат сейчас."""
+    with db() as c:
+        cur = c.execute("INSERT OR IGNORE INTO unregistered_members(user_id,chat_id) VALUES(?,?)",
+                        (user_id, chat_id))
+        return cur.rowcount == 1
+
+
 def is_app_member(phone):
     """Есть ли у этого человека право открывать приложение (10.09.2026).
 
