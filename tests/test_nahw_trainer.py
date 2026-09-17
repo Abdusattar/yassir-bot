@@ -162,6 +162,20 @@ def test_mistake_repeats_with_another_word_of_the_same_type(test_db, monkeypatch
     assert data["daily_count"] == nt.SESSION_SIZE        # 9 сразу + 1 с повтора
 
 
+def test_session_saved_by_old_version_starts_over(test_db, monkeypatch):
+    """17.09.2026: после выкладки навыков у всех, кто начал заход раньше,
+    экран висел на «Загрузке» - в старом заходе карточка без «skill»."""
+    import json
+    _no_sources(monkeypatch)
+    _lesson()
+    old = {"skill": "kinds", "stage": 1, "size": 10, "asked": 1, "retry": [], "used": ["1:2:1:1"],
+           "results": [], "current": {"item": "1:2:1:1", "ctype": "ism_al", "retry": False,
+                                      "left": 0, "stage": 1}}
+    nt._save_session("777", old)
+    data = nt.state("777")
+    assert data["card"]["id"].startswith("kinds|")
+
+
 def test_session_survives_restart(test_db, monkeypatch):
     _no_sources(monkeypatch)
     _lesson()

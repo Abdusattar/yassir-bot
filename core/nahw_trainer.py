@@ -761,7 +761,12 @@ def _load_session(user_id):
         row = c.execute("SELECT date, data FROM nahw_sessions WHERE user_id=?", (str(user_id),)).fetchone()
     if not row or row["date"] != get_date():
         return None
-    return json.loads(row["data"])
+    session = json.loads(row["data"])
+    # Заход, сохранённый до навыков (17.09.2026), - без «skill» у карточки:
+    # такой начинаем заново, иначе экран висит на «Загрузке».
+    if "open" not in session or (session.get("current") and "skill" not in session["current"]):
+        return None
+    return session
 
 
 def _save_session(user_id, session):
