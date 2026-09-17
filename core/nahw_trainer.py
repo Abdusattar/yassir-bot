@@ -539,11 +539,16 @@ def _choose_skill(user_id, skills, passed):
     if len(skills) == 1:
         return skills[0]["id"]
     ids = [s["id"] for s in skills]
+    return random.choices(ids, _skill_weights(user_id, ids, passed))[0]
+
+
+def _skill_weights(user_id, ids, passed):
     weights = [0.3 + _weakness(user_id, sid) for sid in ids]
-    last = len(skills) - 1
+    last = len(ids) - 1
     if last >= passed and not skill_mastered(user_id, ids[last]):
-        weights[last] = 1.5 * sum(weights[:last])
-    return random.choices(ids, weights)[0]
+        # Не меньше 60% захода, но и не урезать, если слабость уже дала больше.
+        weights[last] = max(weights[last], 1.5 * sum(weights[:last]))
+    return weights
 
 
 def _choose_ctype(user_id, skill, stage, limit):

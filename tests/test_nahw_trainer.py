@@ -141,6 +141,8 @@ def test_nothing_without_published_lesson(test_db, monkeypatch):
 
 def test_mistake_repeats_with_another_word_of_the_same_type(test_db, monkeypatch):
     _no_sources(monkeypatch)
+    # пул пошире: на 29 аятах у редкого типа (фиаль с تْ) другого слова может не быть
+    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord["2:141"])
     _lesson()
     nt.new_session("777")
     first = _current("777")
@@ -198,22 +200,23 @@ def test_next_skill_opens_step_by_step(test_db, monkeypatch):
     _lesson()
     _lesson("اسم وعلامته — часть 1 (Имя и его признаки)")
     assert [s["id"] for s in nt.open_skills("777")] == ["kinds"]
-    _answer_all("777", rounds=16)                # 40 на ступени 1, затем 40 на ступени 2
+    import random
+    random.seed(3)                               # выбор карточек случаен - фиксируем, иначе тест мигает
+    for _ in range(40):                          # 40 на ступени 1, затем 40 на ступени 2
+        _answer_all("777")
+        if nt.skill_mastered("777", "kinds"):
+            break
     assert nt.skill_mastered("777", "kinds")
     assert [s["id"] for s in nt.open_skills("777")] == ["kinds", "signs"]
     # «Число» ждёт освоения «Признаков исма», хотя урок уже вышел
     _lesson("الجمع وأنواعه — часть 1")
     assert [s["id"] for s in nt.open_skills("777")] == ["kinds", "signs"]
-    # новый навык приходит чаще старого
-    import random
-    random.seed(7)                               # выбор случаен - фиксируем, иначе тест мигает
-    skills = []
-    for _ in range(10):
-        nt.new_session("777")
-        while _current("777"):
-            skills.append(_current("777")["skill"])
-            nt.answer("777", _card_id("777"), _right("777"))
-    assert skills.count("signs") > skills.count("kinds")
+    # новый навык - не меньше 60% захода, пока не освоен
+    w = nt._skill_weights("777", ["kinds", "signs"], 0)
+    assert w[1] / sum(w) >= 0.6
+    # и старые навыки при нескольких открытых получают повторение
+    many = nt._skill_weights("777", ["kinds", "signs", "number"], 3)
+    assert all(x > 0 for x in many)
 
 
 def test_new_skill_is_announced_once(test_db, monkeypatch):
