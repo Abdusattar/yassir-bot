@@ -153,3 +153,62 @@ def test_hifz_submit_duration_falls_back_to_client_ms(test_db, monkeypatch):
     with db.db() as c:
         rows = c.execute("SELECT duration FROM voice_submissions ORDER BY id").fetchall()
     assert [r[0] for r in rows] == [12, 77]
+
+
+# ── Запись дошла не целиком (17.09.2026, Саламат: страница 14 с вместо ~2 мин) ──
+
+def _lengths(monkeypatch, first, via_file=None):
+    """Подменяет замер длины: первая переделка даёт first секунд, переделка
+    через файл - via_file (None - такой не было)."""
+    calls = []
+
+    async def fake_seconds(data):
+        return via_file if data.startswith(b"FILE:") else first
+
+    async def fake_ffmpeg(codec_args, audio_bytes, via_file=False):
+        calls.append(via_file)
+        return b"FILE:" + audio_bytes
+    monkeypatch.setattr(mb, "audio_seconds", fake_seconds)
+    monkeypatch.setattr(mb, "_run_ffmpeg", fake_ffmpeg)
+    return calls
+
+
+def test_lost_tail_is_redone_via_file_and_sent_whole(test_db, monkeypatch):
+    g = _setup_group()
+    db.add_student("Саламат", g["id"], phone="999000111")
+    sent = _capture(monkeypatch)
+    calls = _lengths(monkeypatch, first=14.4, via_file=150.0)
+    res = asyncio.run(mb.submit_hifz_recording("999000111", b"A", b"P", 21, 0, 3, client_ms=151000))
+    assert res["ok"] is True and calls == [True]
+    assert sent["voice"][0][2].startswith(b"FILE:")          # ушла переделка через файл
+
+
+def test_still_short_after_file_is_incomplete_and_not_sent(test_db, monkeypatch):
+    g = _setup_group()
+    db.add_student("Саламат", g["id"], phone="999000111")
+    sent = _capture(monkeypatch)
+    _lengths(monkeypatch, first=14.4, via_file=14.4)
+    res = asyncio.run(mb.submit_hifz_recording("999000111", b"A", b"P", 21, 0, 3, client_ms=151000))
+    assert res == {"ok": False, "error": "incomplete"}
+    assert sent["voice"] == [] and sent["photo"] == []
+    assert not (db.get_today_report(db.find_user_by_phone("999000111")["id"], g["id"]) or {}).get("m")
+
+
+def test_page_shorter_than_minimum_is_refused(test_db, monkeypatch):
+    g = _setup_group()
+    db.add_student("Саламат", g["id"], phone="999000111")
+    sent = _capture(monkeypatch)
+    _lengths(monkeypatch, first=15.0)
+    res = asyncio.run(mb.submit_hifz_recording("999000111", b"A", b"P", 21, 0, 3, client_ms=15500))
+    assert res["error"] == "too_short" and sent["voice"] == []
+    # строка в 5 секунд - нормально, быстрый чтец
+    ok = asyncio.run(mb.submit_hifz_recording("999000111", b"A", b"P", 21, 0, 1, client_ms=5200))
+    assert ok["ok"] is True
+
+
+def test_lost_tail_rule_leaves_room_for_small_differences():
+    assert mb.lost_tail(14.4, 151000)
+    assert not mb.lost_tail(146, 151000)       # 5 с разницы, но это 97%
+    assert not mb.lost_tail(8, 12000)          # 67%, но всего 4 с
+    assert not mb.lost_tail(None, 151000)      # не смогли замерить - не мешаем
+    assert mb.lost_tail(0.0, 151000)           # пустой результат - потеряно всё

@@ -143,9 +143,9 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
         page_to = int(pointer["page"])
     page_to = max(REVISION_FIRST_PAGE, int(page_to or REVISION_FIRST_PAGE))
 
-    ogg = await transcode_to_ogg(audio_bytes)
+    ogg, err = await transcode_checked(audio_bytes, client_ms)
     if not ogg:
-        return {"ok": False, "error": "bad_audio"}
+        return {"ok": False, "error": err}
 
     already = get_today_report(user["id"], group["id"]) or {}
     credited = not already.get("r")
@@ -231,17 +231,115 @@ async def transcode_to_ogg(audio_bytes):
     out = await _run_ffmpeg(["-c:a", "copy"], audio_bytes)
     if out:
         return out
+    # mp4 - через временный файл, не потоком (17.09.2026): оглавление mp4
+    # бывает в конце файла, из потока ffmpeg назад не перемотает и отдаёт
+    # обрубок. Замер: 30-секундная запись потоком - 282 байта, файлом - все
+    # 30 с. Похоже, так и обрывались страницы Саламата с iPhone.
     return await _run_ffmpeg(
-        ["-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000"], audio_bytes)
+        ["-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000"], audio_bytes, via_file=True)
 
 
-async def _run_ffmpeg(codec_args, audio_bytes):
+# Запись дошла не целиком (17.09.2026, Саламат: страница из приложения шла
+# 14-15 сек вместо ~2 минут, речь обрывалась на полуслове). «Заметно короче»
+# - и на столько секунд, и на такую долю от таймера записи на телефоне.
+LOST_TAIL_SEC = 5
+LOST_TAIL_SHARE = 0.8
+# Меньше этого запись объёма не бывает даже у очень быстрого чтеца: примерно
+# треть самого быстрого настоящего чтения в принятых сдачах (строка от 7 с,
+# половина от 53 с, страница от 93 с). Этап: 1 строка, 2 половина, 3 страница.
+HIFZ_MIN_SEC = {1: 3, 2: 20, 3: 40}
+
+
+_probe_ok = None
+
+
+async def _probe_available():
+    global _probe_ok
+    if _probe_ok is None:
+        import shutil
+        _probe_ok = bool(shutil.which("ffprobe"))
+    return _probe_ok
+
+
+def lost_tail(seconds, client_ms):
+    if seconds is None or not client_ms:
+        return False
+    expected = client_ms / 1000
+    return expected - seconds >= LOST_TAIL_SEC and seconds < LOST_TAIL_SHARE * expected
+
+
+async def audio_seconds(data):
+    """Длина звука в секундах по самому файлу (ffprobe), None - не смогли."""
+    import tempfile, os
+    fd, path = tempfile.mkstemp(suffix=".ogg")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+        return float(out.strip()) if out.strip() else None
+    except (FileNotFoundError, OSError, ValueError, asyncio.TimeoutError) as e:
+        log.error("ffprobe: %s: %s", type(e).__name__, e)
+        return None
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+async def transcode_checked(audio_bytes, client_ms):
+    """(ogg, ошибка). Переделали - а звука заметно меньше, чем писал телефон:
+    второй заход через временный файл (ffmpeg читает mp4 с iPhone с
+    перемоткой, из потока - нет). Не помогло - «incomplete»: приложение
+    само отправит ту же запись ещё раз, а не студент перезаписывает."""
+    ogg = await transcode_to_ogg(audio_bytes)
+    if not ogg:
+        return None, "bad_audio"
+    sec = await audio_seconds(ogg)
+    if sec is None and client_ms and client_ms > LOST_TAIL_SEC * 1000 and await _probe_available():
+        sec = 0.0            # ffprobe есть, а длину не прочёл - файл битый, считаем пустым
+    if not lost_tail(sec, client_ms):
+        return ogg, None
+    log.warning("запись короче таймера: %.1f с из %.1f - переделываю через файл заново", sec, client_ms / 1000)
+    again = await _run_ffmpeg(["-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000"],
+                              audio_bytes, via_file=True)
+    sec2 = again and await audio_seconds(again)
+    if again and not lost_tail(sec2, client_ms):
+        log.warning("через файл вышло целиком: %.1f с", sec2)
+        return again, None
+    log.warning("запись дошла не целиком и через файл: %s с из %.1f", sec2, client_ms / 1000)
+    return None, "incomplete"
+
+
+async def _run_ffmpeg(codec_args, audio_bytes, via_file=False):
     """Один прогон ffmpeg с заданными аргументами кодека. None - не вышло
-    (вызывающий решает, пробовать ли иначе)."""
+    (вызывающий решает, пробовать ли иначе). via_file - вход временным
+    файлом, а не потоком: так ffmpeg может перематывать (mp4 с iPhone)."""
+    import tempfile, os
+    src, path = "pipe:0", None
+    if via_file:
+        fd, path = tempfile.mkstemp(suffix=".rec")
+        with os.fdopen(fd, "wb") as f:
+            f.write(audio_bytes)
+        src, audio_bytes = path, b""
+    try:
+        return await _run_ffmpeg_on(codec_args, audio_bytes, src)
+    finally:
+        if path:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+async def _run_ffmpeg_on(codec_args, audio_bytes, src):
     try:
         proc = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "error",
-            "-i", "pipe:0", *codec_args, "-f", "ogg", "pipe:1",
+            "-i", src, *codec_args, "-f", "ogg", "pipe:1",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -334,9 +432,12 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
                            "stage": first["hifz_stage"]},
             }
 
-    ogg = await transcode_to_ogg(audio_bytes)
+    ogg, err = await transcode_checked(audio_bytes, client_ms)
     if not ogg:
-        return {"ok": False, "error": "bad_audio"}
+        return {"ok": False, "error": err}
+    sec = await audio_seconds(ogg)
+    if sec is not None and sec < HIFZ_MIN_SEC.get(stage, 0):
+        return {"ok": False, "error": "too_short", "min_sec": HIFZ_MIN_SEC[stage]}
 
     place = _hifz_place(page, line, stage, page_lines)
     photo_msg_id = None

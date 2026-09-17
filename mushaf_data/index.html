@@ -3946,6 +3946,9 @@
       hifz_rec_hint_left: 'Осталось %N% мин записи',
       hifz_rec_hint_limit: 'Достигнут предел 30 минут — запись остановлена. Отправь эту часть, остальное запиши отдельно',
       hifz_rec_too_short: 'Слишком коротко — прочитай ещё раз',
+      hifz_rec_short_unit: 'Для такого объёма запись слишком короткая — прочитай и запиши заново',
+      hifz_rec_lost: 'Запись сохранилась на телефоне не целиком — запиши заново. Лучше без паузы',
+      hifz_rec_incomplete: 'Запись дошла не целиком — запиши заново. Лучше без паузы',
       hifz_rec_hint_sending: 'Отправляю…',
       hifz_rec_no_mic: 'Не получилось включить микрофон. Разреши доступ в настройках Telegram',
       hifz_rec_sent: 'Отправлено устазу в группу 🤲',
@@ -7009,6 +7012,15 @@
   /* Короче двух секунд - это не сдача, а промах по кнопке (13.09.2026).
      Устазу такие обрывки уходили как полноценная работа. */
   var HIFZ_REC_MIN_MS = 2000;
+  // Минимум по объёму (17.09.2026) - тот же, что на сервере (HIFZ_MIN_SEC в
+  // core/mufradat_bot.py): треть самого быстрого настоящего чтения.
+  var HIFZ_MIN_SEC = { 1: 3, 2: 20, 3: 40 };
+  // Запись на телефоне короче таймера - на столько секунд и такую долю.
+  function recLostTail(sec, ms) {
+    if (!sec || !isFinite(sec) || !ms) return false;
+    var exp = ms / 1000;
+    return exp - sec >= 5 && sec < 0.8 * exp;
+  }
   var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null,
               mode: null };   // mode: null - сдача 40+40, 'revision' - запись повторения
 
@@ -7157,7 +7169,7 @@
     // а повторный захват - это повторный вопрос студенту.
     if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
     rec.mr = null; rec.chunks = []; rec.blob = null;
-    rec.accMs = 0; rec.paused = false;
+    rec.accMs = 0; rec.paused = false; rec.resent = false;
     var a = document.getElementById('hifz-rec-audio');
     a.pause(); a.removeAttribute('src');
     hifzRecPlayerShow(false);
@@ -7258,6 +7270,7 @@
       rec.t0 = Date.now();
       rec.paused = false;
       rec.mr.resume();
+      trail('rec', { n: 'resume' });
       document.getElementById('hifz-rec-timer').style.display = '';
       document.getElementById('hifz-rec-timer').classList.add('rec');
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');
@@ -7265,6 +7278,7 @@
       rec.accMs = hifzRecElapsed();
       rec.paused = true;
       rec.mr.pause();
+      trail('rec', { n: 'pause ' + Math.round(rec.accMs / 1000) + 's' });
       // Красный на таймере означает "идёт запись" - на паузе он гаснет,
       // иначе непонятно, пишется сейчас или нет.
       document.getElementById('hifz-rec-timer').classList.remove('rec');
@@ -7375,6 +7389,20 @@
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_too_short');
       return;
     }
+    // Запись на самом телефоне короче таймера (17.09.2026): отправлять нечего,
+    // полной записи нет нигде. Длину файла знает плеер; у webm из Chrome её
+    // бывает не видно (Infinity) - тогда проверит сервер.
+    var played = document.getElementById('hifz-rec-audio').duration;
+    trail('rec', { n: 'send ' + Math.round((rec.ms || 0) / 1000) + 's file ' +
+                      (isFinite(played) ? Math.round(played) + 's' : '?') + ' ' + rec.blob.size + 'b' });
+    if (recLostTail(played, rec.ms)) {
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_lost');
+      return;
+    }
+    if (rec.mode !== 'revision' && rec.ms && rec.ms / 1000 < (HIFZ_MIN_SEC[hifz.stage] || 0)) {
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_short_unit');
+      return;
+    }
     if (rec.mode === 'revision') { revisionRecSend(); return; }
     hifzRecButtons('sending');
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
@@ -7429,8 +7457,18 @@
       // пока не принята пересдача. Называем место прямо - иначе отказ
       // читается как поломка.
       var err = res.data && res.data.error;
+      // Дошла не целиком (17.09.2026): та же запись ещё лежит на телефоне -
+      // один раз отправляем её сами, студенту ничего нажимать не нужно.
+      if (err === 'incomplete' && !rec.resent) {
+        rec.resent = true;
+        hifzRecSend();
+        return;
+      }
+      rec.resent = false;
       document.getElementById('hifz-rec-hint').textContent =
         err === 'retake_pending' ? T('hifz_retake_pending', { P: res.data.place || '' })
+        : err === 'incomplete' ? T('hifz_rec_incomplete')
+        : err === 'too_short' ? T('hifz_rec_short_unit')
         : (err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed'));
       hifzRecButtons('done');
     }).catch(function () {
@@ -7479,8 +7517,15 @@
           return;
         }
         var err = res.data && res.data.error;
+        if (err === 'incomplete' && !rec.resent) {
+          rec.resent = true;
+          revisionRecSend();
+          return;
+        }
+        rec.resent = false;
         document.getElementById('hifz-rec-hint').textContent =
-          err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
+          err === 'incomplete' ? T('hifz_rec_incomplete')
+          : err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
         hifzRecButtons('done');
       }).catch(function () {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');

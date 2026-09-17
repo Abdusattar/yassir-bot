@@ -28,3 +28,16 @@ def test_hadiths_db(tmp_path, monkeypatch):
     monkeypatch.setattr(sampler_module, "HADITHS_DB", path)
     monkeypatch.setattr(mushaf_words_module, "HADITHS_DB", path)
     yield path
+
+
+@pytest.fixture(autouse=True)
+def _no_audio_probe(monkeypatch):
+    """Тесты подают ненастоящий звук (b"OGG:...") - длину не меряем, иначе
+    проверка «запись дошла не целиком» (17.09.2026) сочтёт его пустым.
+    Тесты самой проверки подменяют audio_seconds поверх."""
+    import core.mufradat_bot as mb
+
+    async def no_seconds(data):
+        return None
+    monkeypatch.setattr(mb, "audio_seconds", no_seconds)
+    monkeypatch.setattr(mb, "_probe_ok", False)
