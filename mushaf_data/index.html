@@ -393,21 +393,6 @@
   #hifz-head .where b { display: inline; }
   #hifz-head .where small::before { content: '· '; }
 
-  /* Долг пересдачи в шапке. Красная точка, а не красная плашка: пока ход
-     открыт, это напоминание, а не укор, и рядом с текстом Корана кричать
-     нечему. Красное придёт позже - в блоке «ПЕРЕСДАТЬ». */
-  #hifz-debt {
-    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
-    border: 1px solid var(--card-border); background: var(--card-bg);
-    color: var(--ink); border-radius: 999px; padding: 3px 10px;
-    font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1.35;
-    direction: ltr; cursor: pointer; -webkit-tap-highlight-color: transparent;
-  }
-  #hifz-debt::before {
-    content: ''; width: 7px; height: 7px; border-radius: 50%;
-    background: var(--no); flex: 0 0 auto;
-  }
-
   /* Счётчик 40+40 у кнопки Хусари. */
   #hifz-count, #big-count {
     flex: 0 0 auto; display: none; flex-direction: column; align-items: center;
@@ -3198,10 +3183,6 @@
        вместо #tabbar. Место не отнимается — обе панели просто подменяются. -->
   <div id="hifz-head">
     <button id="hifz-close" title="Выйти из режима">✕</button>
-    <!-- Долг пересдачи (13.09.2026). Стоит в пустой середине шапки: ✕ слева,
-         место справа, между ними ничего не было. Вторую строку в шапку не
-         возвращаем - её свели в одну 11.09, она отъедала место у мусхафа. -->
-    <button id="hifz-debt" style="display:none"></button>
     <div class="where">
       <b><span id="hifz-where">—</span><span class="fix" id="hifz-fix">поправить</span></b>
       <small id="hifz-sub">—</small>
@@ -3850,8 +3831,6 @@
       subs_verdict_redone: 'пересдал — ждёт устаза',
       subs_marked_words: 'Отмечено слов: %N%',
       hifz_retake_pending: 'Сначала пересдай: %P%',
-      hifz_debt: 'пересдать',
-      hifz_debt_n: 'пересдать · %N%',
       subs_retake_hint: 'Пересдаётся ровно то, что сдавал: та же строчка, половина или страница.',
       dash_ustaz_sub: 'Сдачи на проверке',
       ustaz_title: 'Устаз',
@@ -6743,7 +6722,6 @@
        уходила бы не туда, а указатель на сервере успевал сдвинуться
        (hifzSave), и возврат hifzRetakeFinish чинил бы только экран. */
     fix.style.display = (hifz.picking || hifzRetakeMode) ? 'none' : '';
-    hifzDebtRender();
     var units = document.querySelectorAll('#hifz-units button');
     Array.prototype.forEach.call(units, function (b) {
       b.textContent = T('hifz_unit_' + b.getAttribute('data-unit'));
@@ -6764,7 +6742,6 @@
       // ему двигаться незачем: ведём человека к долгам.
       if (res.data && res.data.error === 'retake_pending') {
         hifzDebt = { retakes: res.data.retakes || [], done: true };
-        hifzDebtRender();
         hifzExit();
         openSubs();
       }
@@ -7951,7 +7928,6 @@
       retakes: (data && data.retakes) || [],
       done: !!(data && data.done)
     };
-    hifzDebtRender();
   }
 
   function hifzDebtRefresh() {
@@ -7967,29 +7943,10 @@
     return !!(hifzDebt.retakes.length && hifzDebt.done);
   }
 
-  function hifzDebtRender() {
-    var pill = document.getElementById('hifz-debt');
-    if (!pill) return;
-    // Пилюля живёт, пока ход ОТКРЫТ. Закрылся - человека уже ведут в «Работу
-    // с устазом», и двух дверей в одно место разом не бывает. В разборе,
-    // пересдаче и проверке устаза её тоже нет: там свой экран.
-    var busy = (typeof look !== 'undefined' && look.on)
-      || (typeof review !== 'undefined' && review.on)
-      || (typeof hifzRetakeMode !== 'undefined' && hifzRetakeMode);
-    var show = hifz.on && !hifz.picking && !busy
-      && hifzDebt.retakes.length && !hifzWall();
-    pill.style.display = show ? '' : 'none';
-    if (show) pill.textContent = hifzDebt.retakes.length > 1
-      ? T('hifz_debt_n', { N: hifzDebt.retakes.length })
-      : T('hifz_debt');
-  }
-
-  // Тап по пилюле - туда же, куда ведёт закрытый ход: в свой список, где
-  // блок «ПЕРЕСДАТЬ» со всеми долгами по порядку.
-  document.getElementById('hifz-debt').addEventListener('click', function () {
-    hifzExit();
-    openSubs();
-  });
+  // Плашки «пересдать» в шапке заучивания больше нет (17.09.2026, решение
+  // пользователя: не загромождать мусхаф). О долге говорят доска важного на
+  // дашборде («Нужно пересдать») и счётчик у «Работы с устазом»; при закрытом
+  // ходе вход в заучивание по-прежнему ведёт туда сам (hifzWall).
 
   var hifzPointerPage = null;
   // setTimeout(...,0) оставлен как есть (безвредно) - причина ("var

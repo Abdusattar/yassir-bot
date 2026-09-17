@@ -384,6 +384,19 @@ def mark_read(phone, last_id):
         log.error("mark_read error: %s: %s", type(e).__name__, e)
 
 
+def _has_open_retake(me):
+    """Висит ли на человеке пересдача. Плашки «пересдать» в мусхафе больше нет
+    (17.09.2026), поэтому строка на доске держится до самой пересдачи."""
+    try:
+        from core.db import find_user_by_phone, get_learning_group, get_open_retakes
+        user = find_user_by_phone(me)
+        group = get_learning_group(me, include_prep=True)
+        return bool(user and group and get_open_retakes(user["id"], group["id"]))
+    except Exception as e:
+        log.error("_has_open_retake error: %s: %s", type(e).__name__, e)
+        return False
+
+
 def open_notices(phone, chats=None):
     """[(строка, прочитано)] - доска человека: по одному на ключ, свежее
     первым. Неоткрытое - всё; открытое - только объявления до их даты.
@@ -413,7 +426,12 @@ def open_notices(phone, chats=None):
         if r["notice_until"] and r["notice_until"] < today:
             continue
         read = r["id"] <= seen.get(key, 0)
-        if read and not (r["notice"] in STICKY_TYPES and r["notice_until"]):
+        if r["notice"] == "retake":
+            # Пока не пересдал - висит (после открытия спокойная); пересдал -
+            # уходит, даже если не открывал.
+            if not _has_open_retake(me):
+                continue
+        elif read and not (r["notice"] in STICKY_TYPES and r["notice_until"]):
             continue
         out.append((r, read))
     out.sort(key=lambda x: x[1])             # непрочитанное выше

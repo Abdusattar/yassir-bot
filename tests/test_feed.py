@@ -371,9 +371,25 @@ def test_урок_открытый_через_знания_тоже_уходит
     assert _board(ME) == []
 
 
-def test_личное_важное_в_группе_видит_только_адресат(test_db):
+def test_пересдача_висит_пока_не_пересдал(test_db, monkeypatch):
+    import core.feed as feed
+    from core.feed import important, mark_notice_seen
+    _setup()
+    debt = {"on": True}
+    monkeypatch.setattr(feed, "_has_open_retake", lambda me: debt["on"])
+    with important("retake", link="subs", to=ME, title="Устаз просит перезаписать"):
+        _out(ME, "Сатар, нужно пересдать")
+    mark_notice_seen(ME, feed_id=_board(ME)[0]["id"])
+    assert [(n["type"], n["read"]) for n in _board(ME)] == [("retake", True)]   # открыл - спокойная
+    debt["on"] = False
+    assert _board(ME) == []                                                     # пересдал - ушла
+
+
+def test_личное_важное_в_группе_видит_только_адресат(test_db, monkeypatch):
+    import core.feed as feed
     from core.feed import important
     _setup()
+    monkeypatch.setattr(feed, "_has_open_retake", lambda me: True)
     with important("retake", link="subs", to=ME, title="Устаз просит перезаписать"):
         _out(MY_CHAT, "Сатар, нужно пересдать")
         _out(ME, "Сатар, нужно пересдать")                 # то же в личку - строка одна
