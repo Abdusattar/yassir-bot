@@ -61,7 +61,6 @@ KIND_BY_FIELD = (
 #   lesson   - открылся урок (всей группе), висит, пока не открыл
 #   kick     - предупреждение: пропуски, нет имени (личное)
 #   announce - объявление, которое шлём сами (переход на YassirApp)
-#   retake   - устаз просит перезаписать сдачу (личное)
 #   transfer - перевод в другую группу (личное)
 #   task     - у группы появляется новое задание (таджвид, нахв)
 #
@@ -79,7 +78,9 @@ KIND_BY_FIELD = (
 # Отправщиков в core/tg.py одиннадцать, и тянуть параметр через каждый значило
 # бы забыть следующий - поэтому contextvar: record_outgoing читает его сам.
 # `to` - кому адресовано, если сообщение идёт в группу: остальным не покажем.
-NOTICE_TYPES = ("lesson", "kick", "announce", "retake", "transfer", "task")
+# Пересдачи здесь НЕТ (решение пользователя 17.09.2026): долг и так виден на
+# том же экране - красная цифра и текст на двери «Работа с устазом».
+NOTICE_TYPES = ("lesson", "kick", "announce", "transfer", "task")
 STICKY_TYPES = ("announce", "task")
 STICKY_DAYS = 2           # сколько висит объявление, если дата не названа
 BOARD_MAX = 3
@@ -384,19 +385,6 @@ def mark_read(phone, last_id):
         log.error("mark_read error: %s: %s", type(e).__name__, e)
 
 
-def _has_open_retake(me):
-    """Висит ли на человеке пересдача. Плашки «пересдать» в мусхафе больше нет
-    (17.09.2026), поэтому строка на доске держится до самой пересдачи."""
-    try:
-        from core.db import find_user_by_phone, get_learning_group, get_open_retakes
-        user = find_user_by_phone(me)
-        group = get_learning_group(me, include_prep=True)
-        return bool(user and group and get_open_retakes(user["id"], group["id"]))
-    except Exception as e:
-        log.error("_has_open_retake error: %s: %s", type(e).__name__, e)
-        return False
-
-
 def open_notices(phone, chats=None):
     """[(строка, прочитано)] - доска человека: по одному на ключ, свежее
     первым. Неоткрытое - всё; открытое - только объявления до их даты.
@@ -411,10 +399,10 @@ def open_notices(phone, chats=None):
     with db() as c:
         rows = c.execute(f"""
             SELECT * FROM feed_messages
-            WHERE notice IS NOT NULL AND chat_id IN ({q})
+            WHERE notice IN ({",".join("?" * len(NOTICE_TYPES))}) AND chat_id IN ({q})
               AND (reply_to_user IS NULL OR reply_to_user = ? OR chat_id = ?)
             ORDER BY id DESC LIMIT 100
-        """, (*chats, me, me)).fetchall()
+        """, (*NOTICE_TYPES, *chats, me, me)).fetchall()
         seen = {r["nkey"]: r["last_id"] for r in c.execute(
             "SELECT nkey, last_id FROM feed_notice_seen WHERE user_id=?", (me,)).fetchall()}
     out, taken = [], set()
@@ -426,12 +414,7 @@ def open_notices(phone, chats=None):
         if r["notice_until"] and r["notice_until"] < today:
             continue
         read = r["id"] <= seen.get(key, 0)
-        if r["notice"] == "retake":
-            # Пока не пересдал - висит (после открытия спокойная); пересдал -
-            # уходит, даже если не открывал.
-            if not _has_open_retake(me):
-                continue
-        elif read and not (r["notice"] in STICKY_TYPES and r["notice_until"]):
+        if read and not (r["notice"] in STICKY_TYPES and r["notice_until"]):
             continue
         out.append((r, read))
     out.sort(key=lambda x: x[1])             # непрочитанное выше

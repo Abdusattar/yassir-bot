@@ -371,28 +371,12 @@ def test_урок_открытый_через_знания_тоже_уходит
     assert _board(ME) == []
 
 
-def test_пересдача_висит_пока_не_пересдал(test_db, monkeypatch):
-    import core.feed as feed
-    from core.feed import important, mark_notice_seen
-    _setup()
-    debt = {"on": True}
-    monkeypatch.setattr(feed, "_has_open_retake", lambda me: debt["on"])
-    with important("retake", link="subs", to=ME, title="Устаз просит перезаписать"):
-        _out(ME, "Сатар, нужно пересдать")
-    mark_notice_seen(ME, feed_id=_board(ME)[0]["id"])
-    assert [(n["type"], n["read"]) for n in _board(ME)] == [("retake", True)]   # открыл - спокойная
-    debt["on"] = False
-    assert _board(ME) == []                                                     # пересдал - ушла
-
-
-def test_личное_важное_в_группе_видит_только_адресат(test_db, monkeypatch):
-    import core.feed as feed
+def test_личное_важное_в_группе_видит_только_адресат(test_db):
     from core.feed import important
     _setup()
-    monkeypatch.setattr(feed, "_has_open_retake", lambda me: True)
-    with important("retake", link="subs", to=ME, title="Устаз просит перезаписать"):
-        _out(MY_CHAT, "Сатар, нужно пересдать")
-        _out(ME, "Сатар, нужно пересдать")                 # то же в личку - строка одна
+    with important("kick", to=ME, title="Напиши своё имя"):
+        _out(MY_CHAT, "Я не знаю твоего имени")
+        _out(ME, "Я не знаю твоего имени")                 # то же в личку - строка одна
     assert len(_board(ME)) == 1
     assert _board(FRIEND) == []
 
@@ -444,4 +428,17 @@ def test_важное_из_чужой_группы_не_видно(test_db):
     _setup()
     with important("announce"):
         _out(OTHER_CHAT, "📣 переход")
+    assert _board(ME) == []
+
+
+def test_пересдача_на_доску_не_идёт(test_db):
+    """Долг виден на двери «Работа с устазом»; старые помеченные строки
+    (тип убран 17.09.2026) доска не показывает."""
+    import pytest
+    from core.feed import important, record
+    _setup()
+    with pytest.raises(ValueError):
+        with important("retake"):
+            pass
+    record(ME, text="нужно пересдать", is_bot=1, notice={"type": "retake", "link": "subs"})
     assert _board(ME) == []
