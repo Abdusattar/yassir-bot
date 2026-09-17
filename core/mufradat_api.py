@@ -41,6 +41,7 @@ from core.db import (
     get_group_by_id, get_students, get_reviewed_submissions,
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
     is_retake_answered, get_group_tasks, get_today_report, is_app_member, save_report,
+    other_bot_member,
     get_profile, update_profile, revision_record_required, get_revision_recordings,
     get_revision_recording, get_rejected_revisions,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
@@ -915,6 +916,9 @@ async def handle_heartbeat(request, user_id):
         # отдельным запросом: heartbeat и так ходит каждые 20 секунд, а
         # строка обязана оживать без перезагрузки экрана.
         "feed": _feed_brief(user_id),
+        # Открыто не через свой бот (17.09.2026): здесь не своя, а во втором
+        # боте учится. Спрашиваем соседа только у «чужих» - своим незачем.
+        "wrong_bot": (not is_app_member(user_id)) and other_bot_member(user_id),
     })
 
 

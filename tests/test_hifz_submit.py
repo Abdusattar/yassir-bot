@@ -212,3 +212,31 @@ def test_lost_tail_rule_leaves_room_for_small_differences():
     assert not mb.lost_tail(8, 12000)          # 67%, но всего 4 с
     assert not mb.lost_tail(None, 151000)      # не смогли замерить - не мешаем
     assert mb.lost_tail(0.0, 151000)           # пустой результат - потеряно всё
+
+
+def test_сдача_из_чужого_бота_говорит_прямо(test_db, tmp_path, monkeypatch):
+    """17.09.2026, Динара: открыла приложение через мужской бот, учится в
+    женском. Вместо «нет группы» - «не тот бот»."""
+    import sqlite3
+    import config
+    other = tmp_path / "quran_female.db"
+    c = sqlite3.connect(other)
+    c.executescript("""
+        CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT, phone TEXT);
+        CREATE TABLE groups(id INTEGER PRIMARY KEY, group_type TEXT);
+        CREATE TABLE user_groups(user_id INT, group_id INT, role TEXT, active INT);
+        INSERT INTO users VALUES(1, 'Динара', '555');
+        INSERT INTO groups VALUES(6, 'relaxed');
+        INSERT INTO user_groups VALUES(1, 6, 'student', 1);
+    """)
+    c.commit(); c.close()
+    own = tmp_path / "quran_male.db"
+    monkeypatch.setattr(config, "PROFILE", "male")
+    monkeypatch.setattr(db, "DB", str(own))
+    db.init()
+    res = asyncio.run(mb.submit_hifz_recording("555", b"a", None, 10, 1, 1))
+    assert res == {"ok": False, "error": "wrong_bot"}
+    assert db.other_bot_member("555") and not db.other_bot_member("777")
+    db.mark_dm_ok_by_phone("555")
+    db.mark_dm_ok_by_phone("777")
+    assert [r["phone"] for r in db.get_return_nudge_candidates()] == ["777"]

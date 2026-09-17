@@ -1255,6 +1255,12 @@
     0%, 55% { background: var(--warn-soft); box-shadow: 0 0 0 6px var(--warn-soft); }
     100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
   }
+  /* Открыто не через свой бот (17.09.2026). Не красное - это не долг. */
+  #dash-wrongbot { display: none; flex: 0 0 auto; margin: 20px 0 0; padding: 12px 14px;
+    border-radius: 16px; background: var(--warn-soft); color: var(--warn-ink);
+    border: 1px solid var(--warn); font-size: 14px; line-height: 1.4;
+    direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #dash-wrongbot.on { display: block; }
   #dash-board { display: none; flex: 0 0 auto; flex-direction: column; margin: 20px 0 0; overflow: hidden;
     background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
     box-shadow: var(--shadow-sm);
@@ -3004,7 +3010,8 @@
        первым и отодвигал двери за первый экран. -->
   <!-- Доска важного (17.09.2026): над пульсом, под дверями - двери остаются
        на первом экране. См. boardRender и core/feed.py. -->
-  <div id="dash-board"></div>
+  <div id="dash-wrongbot" role="alert"></div>
+<div id="dash-board"></div>
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
     <div class="p-split" id="pulse-split"></div>
@@ -4012,6 +4019,7 @@
       hifz_rec_sent: 'Отправлено устазу в группу 🤲',
       hifz_rec_failed: 'Не отправилось. Попробуй ещё раз',
       hifz_rec_no_group: 'Ты пока не в учебной группе',
+      wrong_bot: 'Приложение открыто не через бот твоей группы, поэтому сдачи и зачёты отсюда не проходят. Закрой его и открой YassirApp кнопкой в чате бота своей группы.',
       hifz_progress_looking_only: 'глядя %N%/40',
       hifz_progress_both: 'глядя 40/40 ✓ · не глядя %N%/40',
       hifz_progress_done: 'глядя 40/40 ✓ · не глядя 40/40 ✓',
@@ -4881,6 +4889,9 @@
       var count = document.getElementById('dash-ustaz-count');
       var isUstaz = !!(res.data && res.data.is_ustaz);
       meRevisionRecord = !!(res.data && res.data.revision_record);
+      var wb = document.getElementById('dash-wrongbot');
+      if (res.data && res.data.wrong_bot) { wb.textContent = T('wrong_bot'); wb.classList.add('on'); }
+      else wb.classList.remove('on');
       // Раздел «Проверка сдач» рисуется по этому же признаку. Если человек
       // стоял в оглавлении, когда ответ пришёл, - перерисуем, иначе раздел
       // появился бы только со второго захода.
@@ -7588,6 +7599,7 @@
         err === 'retake_pending' ? T('hifz_retake_pending', { P: res.data.place || '' })
         : err === 'incomplete' ? T('hifz_rec_incomplete')
         : err === 'too_short' ? T('hifz_rec_short_unit')
+        : err === 'wrong_bot' ? T('wrong_bot')
         : (err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed'));
       hifzRecButtons('done');
     }).catch(function () {
@@ -7644,6 +7656,7 @@
         rec.resent = false;
         document.getElementById('hifz-rec-hint').textContent =
           err === 'incomplete' ? T('hifz_rec_incomplete')
+          : err === 'wrong_bot' ? T('wrong_bot')
           : err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
         hifzRecButtons('done');
       }).catch(function () {

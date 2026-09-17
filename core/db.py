@@ -950,7 +950,7 @@ def get_return_nudge_candidates():
     учёбу (26.07.2026, решение пользователя: Умар устаз не должен получать
     такое напоминание)."""
     with db() as c:
-        return c.execute("""
+        rows = c.execute("""
             SELECT DISTINCT u.id, u.name, u.phone
             FROM users u
             WHERE u.phone IS NOT NULL AND u.active=1
@@ -965,6 +965,9 @@ def get_return_nudge_candidates():
                   WHERE ug2.user_id=u.id AND ug2.role='admin' AND ug2.active=1
               )
         """).fetchall()
+    # Учится во втором боте (17.09.2026) - он не «выпал», он просто однажды
+    # написал не тому боту. Звать сестру в мужскую подготовительную нельзя.
+    return [r for r in rows if not other_bot_member(r["phone"])]
 
 
 def get_last_known_lang(phone):
@@ -1283,6 +1286,54 @@ def is_app_member(phone):
     это не влияет - там по-прежнему решает SUPER_ADMIN_IDS."""
     return (is_any_group_admin(phone)
             or get_learning_group(phone, include_prep=True) is not None)
+
+
+def _other_bot_db_path():
+    """База второго бота (мужской <-> женский) рядом с нашей, или None.
+    Считается от ТЕКУЩЕГО пути DB: в тестах это временный файл, соседа у
+    него нет - и проверка молча выключается."""
+    import os
+    from config import PROFILE
+    if os.path.basename(DB) != f"quran_{PROFILE}.db":
+        return None
+    other = "female" if PROFILE == "male" else "male"
+    path = os.path.join(os.path.dirname(DB), f"quran_{other}.db")
+    return path if os.path.exists(path) else None
+
+
+def other_bot_member(phone):
+    """Учится (или устаз) ли человек во ВТОРОМ боте (17.09.2026).
+
+    Случай Динары (женская группа устаза Асмы): однажды написала /start
+    мужскому боту, тот завёл на неё пустую строку users, и с тех пор она
+    открывала YassirApp кнопкой из его чата. Мусхаф и слова работали (эти
+    данные общие), а сдача получала «Ты пока не в учебной группе» - мужская
+    база её группы не знает. Отсюда два потребителя:
+      - приложение прямо говорит «ты открыл(а) не через свой бот»;
+      - напоминание о возврате не зовёт такого человека в подготовительную
+        чужого бота.
+    Та же мерка, что is_app_member, только по базе соседа, только чтение."""
+    path = _other_bot_db_path()
+    if not path:
+        return False
+    try:
+        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            row = c.execute("""
+                SELECT 1 FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                JOIN groups g ON ug.group_id=g.id
+                WHERE u.phone=? AND ug.active=1
+                  AND (ug.role='admin'
+                       OR (ug.role='student'
+                           AND (g.group_type IN ('pro','relaxed','prep') OR g.group_type IS NULL)))
+                LIMIT 1
+            """, (str(phone),)).fetchone()
+        finally:
+            c.close()
+        return row is not None
+    except sqlite3.Error:
+        return False
 
 
 def get_learning_group(phone, include_prep=False):

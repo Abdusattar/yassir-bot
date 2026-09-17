@@ -19,7 +19,7 @@ from core.db import (
     set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
     VERDICT_RETAKE, is_retake_answered, revision_record_required, save_revision_recording,
     REVISION_FIRST_PAGE, set_revision_verdict, REVISION_REJECTED, REVISION_ACCEPTED,
-    get_group, get_user_by_id, get_dm_ok,
+    get_group, get_user_by_id, get_dm_ok, other_bot_member,
 )
 from core.mufradat import (
     get_leaderboard, DAILY_WORDS_FOR_TASK_CREDIT, DAILY_CORRECT_FOR_TASK_CREDIT,
@@ -121,6 +121,12 @@ async def credit_revision_task(user_id):
     return True
 
 
+def _no_group_error(user_id):
+    """«Нет группы» здесь, а группа есть во втором боте - значит приложение
+    открыто не через свой бот (17.09.2026, см. core/db.py:other_bot_member)."""
+    return "wrong_bot" if other_bot_member(user_id) else "no_group"
+
+
 async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_to=None):
     """Повторение записью (16.09.2026, несовершеннолетние): студент читает с
     начала Аль-Бакары до своего места, приложение пишет звук, запись уходит
@@ -134,10 +140,10 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
     короткой записи (REVISION_MIN_SEC_PER_PAGE) видна только устазу."""
     group = get_learning_group(user_id, include_prep=True)
     if not group or "r" not in get_group_tasks(group):
-        return {"ok": False, "error": "no_group"}
+        return {"ok": False, "error": _no_group_error(user_id)}
     user = find_user_by_phone(user_id)
     if not user:
-        return {"ok": False, "error": "no_group"}
+        return {"ok": False, "error": _no_group_error(user_id)}
     pointer = get_hifz_pointer(user_id)
     if pointer and pointer.get("page"):
         page_to = int(pointer["page"])
@@ -396,7 +402,7 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     от "не смогли сконвертировать"."""
     group = get_learning_group(user_id, include_prep=True)
     if not group or not group["chat_id"]:
-        return {"ok": False, "error": "no_group"}
+        return {"ok": False, "error": _no_group_error(user_id)}
     if "m" not in get_group_tasks(group):
         return {"ok": False, "error": "task_off"}
     user = find_user_by_phone(user_id)
