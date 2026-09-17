@@ -1713,14 +1713,14 @@
      Та же приглушённо-изумрудная палитра, что и у дашборда - единый
      фирменный акцент на всё приложение, не отдельный стиль под каждый
      экран. */
-  #trainer, #trainers, #tajweed {
+  #trainer, #trainers, #tajweed, #nahw {
     display: none;
     flex-direction: column;
     height: 100%;
     width: 100%;
     background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
-  #trainer-topbar, #trainers-topbar, #tajweed-topbar {
+  #trainer-topbar, #trainers-topbar, #tajweed-topbar, #nahw-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1734,7 +1734,7 @@
     direction: ltr;
     flex: 0 0 auto;
   }
-  #trainer-topbar button, #trainers-topbar button, #tajweed-topbar button {
+  #trainer-topbar button, #trainers-topbar button, #tajweed-topbar button, #nahw-topbar button {
     background: none; border: none; color: var(--accent);
     font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
     font-family: inherit;
@@ -1746,7 +1746,7 @@
      утренний прогресс потерялся). Зелёная (--accent), когда задел ещё не
      закрыт; --ok, когда 40/40 уже набрано - тот же сигнал "готово", что и
      фидбек-пилюля верного ответа. */
-  #trainer-daily, #tajweed-daily {
+  #trainer-daily, #tajweed-daily, #nahw-daily {
     font-size: 12px;
     font-weight: 700;
     padding: 4px 10px;
@@ -1755,8 +1755,8 @@
     color: var(--accent);
     white-space: nowrap;
   }
-  #trainer-daily.done, #tajweed-daily.done { background: var(--ok-soft); color: var(--ok); }
-  #trainer-body, #tajweed-body {
+  #trainer-daily.done, #tajweed-daily.done, #nahw-daily.done { background: var(--ok-soft); color: var(--ok); }
+  #trainer-body, #tajweed-body, #nahw-body {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -1846,6 +1846,52 @@
     padding: 13px 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
     width: 100%; max-width: 320px;
   }
+  /* Тренажёр нахва (17.09.2026). Слово показывается в аяте - вид слова
+     узнаётся по соседям (харф джарр перед исмом, قَدْ перед фиалем), -
+     но только окном вокруг него: длинный аят не должен вытеснять вопрос.
+     Выделение подложкой, не цветом букв: у слитного слова выделена часть,
+     и цвет по полбуквы читался бы как ошибка письма. */
+  .nh-ayah {
+    font-family: 'Scheherazade New', serif; direction: rtl;
+    font-size: 30px; line-height: 2; color: var(--ink);
+  }
+  .nh-ayah .hl {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+    border-radius: 6px;
+  }
+  .nh-ayah .gap { color: var(--muted); }
+  .nh-ref { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .nh-q { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .nh-opts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: 100%; max-width: 420px; }
+  .trainer-opt.nh-opt { padding: 8px 6px 10px; }
+  .nh-opt .ar { display: block; font-family: 'Scheherazade New', serif; font-size: 30px; line-height: 1.35; }
+  .nh-opt .ru { display: block; font-size: 13px; color: var(--muted); }
+  .trainer-opt.nh-opt:disabled { opacity: .55; }
+  .trainer-opt.nh-opt.ok, .trainer-opt.nh-opt.no { opacity: 1; }
+  .trainer-opt.nh-opt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .trainer-opt.nh-opt.no { background: var(--no-soft); border-color: var(--no); color: var(--no); }
+  .nh-fb {
+    width: 100%; max-width: 420px; box-sizing: border-box; text-align: left;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .nh-fb .exp { font-size: 15px; line-height: 1.45; color: var(--ink); }
+  .nh-fb .ar { font-family: 'Scheherazade New', serif; font-size: 1.3em; }
+  .nh-fb .mean { font-size: 13px; color: var(--muted); }
+  /* Разбор слова по частям - справа налево, как читается слово. */
+  .nh-bd { display: flex; flex-wrap: wrap; gap: 6px; direction: rtl; }
+  .nh-bd span {
+    display: inline-flex; flex-direction: column; align-items: center;
+    padding: 2px 10px 5px; border-radius: 10px; border: 1px solid var(--card-border);
+  }
+  .nh-bd span.asked { border-color: var(--accent); background: var(--accent-soft); }
+  .nh-bd b { font-family: 'Scheherazade New', serif; font-weight: 400; font-size: 24px; line-height: 1.5; color: var(--ink); }
+  .nh-bd i { font-family: 'Scheherazade New', serif; font-style: normal; font-size: 16px; color: var(--muted); }
+  .nh-sum { font-size: 15px; color: var(--ink); line-height: 1.5; max-width: 420px; }
+  .nh-sum b { font-weight: 600; }
+  .nh-sum .ar { font-family: 'Scheherazade New', serif; font-size: 1.3em; }
+  .nh-src { font-size: 11px; color: var(--muted); }
+  .nh-src a { color: inherit; }
   .trainer-info, .trainer-session { font-size: 13px; color: var(--muted); }
   .trainer-score { font-size: 13px; color: var(--muted); }
 
@@ -3316,6 +3362,16 @@
   <div id="trainers-body"></div>
 </div>
 
+<!-- Тренажёр нахва (17.09.2026, core/nahw_trainer.py). -->
+<div id="nahw">
+  <div id="nahw-topbar">
+    <button id="nahw-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span data-i18n="nahw_title">Нахв</span>
+    <span id="nahw-daily"></span>
+  </div>
+  <div id="nahw-body"></div>
+</div>
+
 <!-- Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py). -->
 <div id="tajweed">
   <div id="tajweed-topbar">
@@ -3615,6 +3671,26 @@
       trainers_words_sub: 'Смыслы слов Корана',
       trainers_tajweed_sub: 'Места выхода букв',
       tajweed_title: 'Таджвид',
+      nahw_title: 'Нахв',
+      trainers_nahw_sub: 'Виды слов в аятах',
+      dash_trainers_nahw: 'Нахв %A%/%B%',
+      nahw_question: 'Что это за слово?',
+      nahw_question_part: 'Что за выделенная часть слова?',
+      nahw_retry: 'другое слово того же типа',
+      nahw_right: 'Верно',
+      nahw_wrong: 'Правильно: %A%',
+      nahw_next: 'Дальше',
+      nahw_done_title: 'Заход окончен 🤲',
+      nahw_good: 'Получается: %L%',
+      nahw_weak: 'Стоит повторить: %L%',
+      nahw_stage_up: 'Открыта вторая ступень: слитные слова. Спрашиваю выделенную часть.',
+      nahw_task_done: 'Нахв на сегодня засчитан ✅',
+      nahw_task_left: 'До нормы дня ещё %N%',
+      nahw_today: 'Сегодня верно: %N% из %M%',
+      nahw_more: 'Ещё заход',
+      nahw_empty: 'Здесь появятся задания по пройденным урокам нахва.',
+      nahw_closed: 'Тренажёр нахва открыт группам, где сдают нахв.',
+      nahw_source: 'Разметка слов: <a href="https://corpus.quran.com" target="_blank" rel="noopener">Quranic Arabic Corpus</a>',
       dash_trainers_both: 'Слова %N%/%M% · Таджвид %A%/%B%',
       tajweed_question: 'Откуда выходит буква?',
       tajweed_retry: 'повторяем',
@@ -4134,6 +4210,7 @@
     if (document.getElementById('trainer').style.display !== 'none' && trainerState) renderTrainer();
     if (document.getElementById('trainers').style.display === 'flex') trainersRender();
     if (document.getElementById('tajweed').style.display === 'flex' && tajweedState) renderTajweed(tajweedState);
+    if (document.getElementById('nahw').style.display === 'flex' && nahwState) renderNahw(nahwState);
     if (dashFactsLast) dashLearnSub(dashFactsLast);
     if (typeof loadMyWords === 'function' &&
         document.getElementById('view-mywords') &&
@@ -4749,10 +4826,13 @@
       // есть, а зачёта нет (15.09.2026) - иначе на двери тесно, а полная
       // картина и так в пилюле тренажёра.
       var wc = wordsCorrectSuffix(f.words);
-      document.getElementById('dash-trainer-sub').textContent = f.tajweed
+      var sub = f.tajweed
         ? T('dash_trainers_both', { N: f.words.done, M: f.words.target + (wc ? ' (' + wc + ')' : ''),
             A: f.tajweed.done, B: f.tajweed.target })
         : T('dash_words_today', { N: f.words.done, M: f.words.target }) + (wc ? ' · ' + wc : '');
+      // Нахв (17.09.2026) дописывается третьим, если он есть у группы.
+      if (f.nahw) sub += ' · ' + T('dash_trainers_nahw', { A: f.nahw.done, B: f.nahw.target });
+      document.getElementById('dash-trainer-sub').textContent = sub;
     }
     if (document.getElementById('trainers').style.display === 'flex') trainersRender();
     var subsSub = document.getElementById('dash-subs-sub');
@@ -10576,6 +10656,7 @@
      facts.tajweed - у группы нет таджвида, строки нет. */
   var dashFactsLast = null;
   var tajweedState = null;
+  var nahwState = null;
 
   // Подпись двери «Знания» - по предметам группы (14.09.2026): у кого нет
   // таджвида и нахва, про них и не пишем.
@@ -10590,6 +10671,7 @@
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('trainer').style.display = 'none';
     document.getElementById('tajweed').style.display = 'none';
+    document.getElementById('nahw').style.display = 'none';
     document.getElementById('trainers').style.display = 'flex';
     trainersRender();
   }
@@ -10614,11 +10696,16 @@
     if (f.tajweed) {
       html += trainersRow('trh-tajweed', 'ض', T('tajweed_title'), T('trainers_tajweed_sub'), f.tajweed);
     }
+    if (f.nahw) {
+      html += trainersRow('trh-nahw', 'ك', T('nahw_title'), T('trainers_nahw_sub'), f.nahw);
+    }
     var body = document.getElementById('trainers-body');
     body.innerHTML = html;
     document.getElementById('trh-words').addEventListener('click', openTrainer);
     var tj = document.getElementById('trh-tajweed');
     if (tj) tj.addEventListener('click', openTajweed);
+    var nh = document.getElementById('trh-nahw');
+    if (nh) nh.addEventListener('click', openNahw);
   }
 
   function openTajweed() {
@@ -10743,6 +10830,148 @@
       });
     });
   }
+
+  /* ── Тренажёр нахва (17.09.2026, core/nahw_trainer.py) ─────────────────
+     Слово в аяте, три кнопки: исм / фиаль / харф. После ответа - объяснение
+     словами урока и разбор слова по частям. Верно - дальше само, мимо -
+     ждёт «Дальше»: объяснение надо успеть прочитать. */
+  function openNahw() {
+    document.getElementById('trainers').style.display = 'none';
+    document.getElementById('nahw').style.display = 'flex';
+    document.getElementById('nahw-body').innerHTML = '<div class="trainer-msg">' + T('loading') + '</div>';
+    withAuthCheck(apiCall('/nahw'), renderNahw);
+  }
+
+  function nahwEsc(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  }
+
+  // Окно вокруг слова: длинный аят (2:282) не должен вытеснять вопрос.
+  var NAHW_AROUND = 4;
+  function nahwAyah(words) {
+    var at = 0;
+    words.forEach(function (w, i) { if (w.hl || w.parts) at = i; });
+    var from = Math.max(0, at - NAHW_AROUND), to = Math.min(words.length, at + NAHW_AROUND + 1);
+    var out = [];
+    if (from > 0) out.push('<span class="gap">…</span>');
+    for (var i = from; i < to; i++) {
+      var w = words[i];
+      if (w.parts) {
+        out.push('<span>' + w.parts.map(function (p) {
+          return p.hl ? '<span class="hl">' + nahwEsc(p.t) + '</span>' : nahwEsc(p.t);
+        }).join('') + '</span>');
+      } else {
+        out.push(w.hl ? '<span class="hl">' + nahwEsc(w.t) + '</span>' : nahwEsc(w.t));
+      }
+    }
+    if (to < words.length) out.push('<span class="gap">…</span>');
+    return out.join(' ');
+  }
+
+  // Арабские вставки в русском тексте («есть артикль الـ») - крупнее, только размером.
+  function nahwArabic(text) {
+    return nahwEsc(text).replace(/[؀-ۿ]+(?:[\s\/]+[؀-ۿ]+)*/g, function (m) {
+      return '<span class="ar">' + m + '</span>';
+    });
+  }
+
+  function nahwFeedback(fb) {
+    var head = fb.correct ? T('nahw_right') : T('nahw_wrong', { A: fb.answer_ar + ' · ' + fb.answer_ru });
+    var html = '<div class="nh-fb"><div class="exp"><b style="color:var(' + (fb.correct ? '--ok' : '--no') + ')">' +
+      nahwArabic(head) + '.</b> ' + nahwArabic(fb.explain) + '</div>';
+    var parts = (fb.breakdown || []).filter(function (b) { return b.t; });
+    if (parts.length > 1) {
+      html += '<div class="nh-bd">' + parts.map(function (b) {
+        return '<span class="' + (b.asked ? 'asked' : '') + '"><b>' + nahwEsc(b.t) + '</b><i>' + nahwEsc(b.label) + '</i></span>';
+      }).join('') + '</div>';
+    }
+    if (fb.meaning) html += '<div class="mean">' + nahwArabic(fb.word) + ' — ' + nahwEsc(fb.meaning) + '</div>';
+    return html + '</div>';
+  }
+
+  function renderNahw(d) {
+    nahwState = d;
+    var body = document.getElementById('nahw-body');
+    var pill = document.getElementById('nahw-daily');
+    if (!d || d.error) {
+      pill.textContent = '';
+      body.innerHTML = '<div class="trainer-msg">' + T('nahw_closed') + '</div>';
+      return;
+    }
+    pill.textContent = T('daily_n', { N: d.daily_count, M: d.daily_target });
+    pill.classList.toggle('done', d.daily_count >= d.daily_target);
+
+    if (d.empty) {
+      body.innerHTML = '<div class="trainer-msg">' + T('nahw_empty') + '</div>';
+      return;
+    }
+
+    var html;
+    if (d.finished) {
+      var f = d.finished;
+      html = '<div class="trainer-msg">' + T('nahw_done_title') + '</div>';
+      if (f.stage_up) html += '<div class="nh-sum"><b>' + T('nahw_stage_up') + '</b></div>';
+      if (f.good.length) html += '<div class="nh-sum">' + nahwArabic(T('nahw_good', { L: f.good.join(', ') })) + '</div>';
+      if (f.weak.length) html += '<div class="nh-sum">' + nahwArabic(T('nahw_weak', { L: f.weak.join(', ') })) + '</div>';
+      var left = Math.max(0, d.daily_target - d.daily_count);
+      html += '<div class="trainer-info">' + (!d.task ? T('nahw_today', { N: d.daily_count, M: d.daily_target })
+        : d.task.done ? T('nahw_task_done') : T('nahw_task_left', { N: left })) + '</div>';
+      html += '<button class="tj-go" id="nh-more">' + T('nahw_more') + '</button>';
+      html += '<div class="nh-src">' + T('nahw_source') + '</div>';
+      body.innerHTML = html;
+      body.scrollTop = 0;
+      document.getElementById('nh-more').addEventListener('click', function () {
+        this.disabled = true;
+        withAuthCheck(apiCall('/nahw/new', { method: 'POST' }), renderNahw);
+      });
+      return;
+    }
+
+    var c = d.card;
+    var dots = '';
+    for (var i = 0; i < c.size; i++) {
+      dots += '<i class="' + (c.retry || i < c.pos - 1 ? 'on' : i === c.pos - 1 ? 'cur' : '') + '"></i>';
+    }
+    if (c.retry) dots += '<span>' + T('nahw_retry') + '</span>';
+    html = '<div class="tj-dots">' + dots + '</div>';
+    html += '<div class="trainer-word-card"><div class="nh-ayah">' + nahwAyah(c.words) + '</div>' +
+      '<div class="nh-ref">' + nahwEsc(c.ref) + '</div></div>';
+    html += '<div class="nh-q">' + T(c.compound ? 'nahw_question_part' : 'nahw_question') + '</div>';
+    html += '<div class="nh-opts">';
+    d.options.forEach(function (o) {
+      html += '<button class="trainer-opt nh-opt" data-key="' + o.key + '"><span class="ar">' + o.ar +
+        '</span><span class="ru">' + o.ru + '</span></button>';
+    });
+    html += '</div><div id="nh-after" style="display:contents"></div>';
+    html += '<div class="nh-src">' + T('nahw_source') + '</div>';
+    body.innerHTML = html;
+    body.scrollTop = 0;
+    var buttons = body.querySelectorAll('.nh-opt');
+    Array.prototype.forEach.call(buttons, function (btn) {
+      btn.addEventListener('click', function () {
+        // Двойной тап не должен ответить за следующую карточку.
+        Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
+        withAuthCheck(apiCall('/nahw/answer', { method: 'POST',
+          body: { card: c.id, choice: btn.getAttribute('data-key') } }), function (next) {
+          var fb = next && next.feedback;
+          if (!fb) { renderNahw(next); return; }
+          Array.prototype.forEach.call(buttons, function (b) {
+            if (b.getAttribute('data-key') === fb.answer) b.classList.add('ok');
+          });
+          if (!fb.correct) btn.classList.add('no');
+          document.getElementById('nh-after').innerHTML = nahwFeedback(fb) +
+            (fb.correct ? '' : '<button class="tj-go" id="nh-next">' + T('nahw_next') + '</button>');
+          if (fb.correct) { setTimeout(function () { renderNahw(next); }, 1600); return; }
+          document.getElementById('nh-next').addEventListener('click', function () { renderNahw(next); });
+        });
+      });
+    });
+  }
+
+  document.getElementById('nahw-back').addEventListener('click', function () {
+    document.getElementById('nahw').style.display = 'none';
+    openTrainers();
+  });
 
   document.getElementById('trainers-back').addEventListener('click', function () {
     document.getElementById('trainers').style.display = 'none';

@@ -1088,6 +1088,89 @@ async def handle_tajweed_new(request, user_id):
     return web.json_response(dict(new_session(user_id), task=_tajweed_task_state(user_id)))
 
 
+# ── Тренажёр нахва (17.09.2026, core/nahw_trainer.py) ─────────────────────
+
+def _nahw_open(user_id):
+    """Группам с заданием «Нахв», устазам и супер-админу - как таджвид."""
+    keys = _lesson_subject_keys(user_id)
+    return keys is None or "n" in keys
+
+
+def _nahw_facts(user_id):
+    if not _nahw_open(user_id):
+        return None
+    from core.nahw_trainer import daily_count, DAILY_TARGET
+    try:
+        return {"done": daily_count(user_id), "target": DAILY_TARGET}
+    except Exception as e:
+        log.error("nahw facts error: %s: %s", type(e).__name__, e)
+        return None
+
+
+async def _credit_nahw_task(user_id):
+    """Норма дня набрана - засчитываем «Нахв» и говорим группе."""
+    group = get_learning_group(user_id, include_prep=True)
+    if not group or "n" not in get_group_tasks(group):
+        return False
+    user = find_user_by_phone(user_id)
+    if not user:
+        return False
+    if (get_today_report(user["id"], group["id"]) or {}).get("n"):
+        return False
+    save_report(user["id"], group["id"], get_date(), {"n": True})
+    if group["chat_id"]:
+        from core.tg import send_message
+        try:
+            await send_message(group["chat_id"], f"{user['name']}, Нахв + (через тренажёр).")
+        except Exception as e:
+            log.error("nahw credit notify error: %s: %s", type(e).__name__, e)
+    return True
+
+
+def _nahw_task_state(user_id):
+    group = get_learning_group(user_id, include_prep=True)
+    if not group or "n" not in get_group_tasks(group):
+        return None
+    user = find_user_by_phone(user_id)
+    done = bool(user and (get_today_report(user["id"], group["id"]) or {}).get("n"))
+    return {"done": done}
+
+
+@with_auth
+async def handle_nahw_state(request, user_id):
+    if not _nahw_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    from core.nahw_trainer import state
+    return web.json_response(dict(state(user_id), task=_nahw_task_state(user_id)))
+
+
+@with_auth
+async def handle_nahw_answer(request, user_id):
+    """POST {card, choice: ism|fil|harf}."""
+    if not _nahw_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "bad_json"}, status=400)
+    from core.nahw_trainer import answer
+    try:
+        data, reached = answer(user_id, body.get("card"), body.get("choice"))
+    except ValueError:
+        return web.json_response({"error": "bad_choice"}, status=400)
+    if reached:
+        await _credit_nahw_task(user_id)
+    return web.json_response(dict(data, task=_nahw_task_state(user_id)))
+
+
+@with_auth
+async def handle_nahw_new(request, user_id):
+    if not _nahw_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    from core.nahw_trainer import new_session
+    return web.json_response(dict(new_session(user_id), task=_nahw_task_state(user_id)))
+
+
 @with_auth
 async def handle_lesson(request, user_id):
     """GET ?id= — текст одного урока. Закрытый не отдаётся: программа вперёд
@@ -1221,6 +1304,7 @@ def _dashboard_facts(user_id):
         # None - тренажёра таджвида у человека нет (группа без задания «j»):
         # тогда и строки о нём на двери и в «Тренажёрах» нет.
         "tajweed": _tajweed_facts(user_id),
+        "nahw": _nahw_facts(user_id),
         # Какие предметы есть у человека в «Знаниях» (14.09.2026): по ним
         # подпись двери и блок «Уроки» - у группы без таджвида и нахва их нет.
         "learn": _learn_subjects(user_id),
@@ -1990,6 +2074,9 @@ def build_app():
     app.router.add_get("/api/muf/tajweed", handle_tajweed_state)
     app.router.add_post("/api/muf/tajweed/answer", handle_tajweed_answer)
     app.router.add_post("/api/muf/tajweed/new", handle_tajweed_new)
+    app.router.add_get("/api/muf/nahw", handle_nahw_state)
+    app.router.add_post("/api/muf/nahw/answer", handle_nahw_answer)
+    app.router.add_post("/api/muf/nahw/new", handle_nahw_new)
     app.router.add_get("/api/muf/feed", handle_feed)
     app.router.add_post("/api/muf/feed/read", handle_feed_read)
     app.router.add_get("/api/muf/feed/media", handle_feed_media)

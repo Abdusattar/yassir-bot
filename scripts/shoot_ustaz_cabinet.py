@@ -92,7 +92,23 @@ def seed_extra():
     # кодом. Время записи сдвинуто на 30 часов назад: иначе правило «сутки
     # между отметками» спрячет кнопку «Я был» и снимок покажет не то.
     # Тренажёр таджвида (14.09.2026) виден только группе с заданием «j».
-    db.update_group_tasks(stand.CHAT, "m,r,t,j")
+    db.update_group_tasks(stand.CHAT, "m,r,t,j,n")
+    # Тренажёр нахва (17.09.2026): урок «Виды слова» опубликован, у 777002 -
+    # 40 верных ответов первой ступени, чтобы снять слитное слово (ступень 2).
+    with sqlite3.connect(db.DB) as conn:
+        if not conn.execute("SELECT 1 FROM curriculum_parts WHERE topic LIKE 'أنواع الكلمة%'").fetchone():
+            conn.execute(
+                "INSERT INTO curriculum_parts(subject, chapter, topic, part_number, part_total,"
+                " order_index, content, published_at) VALUES('n','الكلمة',"
+                "'أنواع الكلمة (Виды слова)',1,1,-1,'Текст','2026-07-09')")
+    stand.db.init()
+    with sqlite3.connect(db.DB) as conn:
+        if not conn.execute("SELECT 1 FROM nahw_answers WHERE user_id='777002'").fetchone():
+            conn.executemany(
+                "INSERT INTO nahw_answers(user_id, date, skill, ctype, stage, item, correct, retry)"
+                " VALUES('777002','2026-09-10','kinds','ism_al',1,'1:2:1:1',1,0)", [()] * 40)
+        conn.execute("DELETE FROM nahw_sessions")
+        conn.execute("DELETE FROM nahw_answers WHERE user_id=?", (stand.STUDENT,))
     for phone, days_ago in ((stand.STUDENT, 1), (stand.STUDENT, 7), ("777002", 1)):
         user = db.find_user_by_phone(phone)
         if not user:
@@ -485,6 +501,47 @@ MOCK_JS = """
         await wait(1000);
       }
     },
+    // Тренажёр нахва (17.09.2026) - настоящий код, без инъекций.
+    nh_hub: async function () {
+      await wait(2500); $('dash-trainer').click(); await wait(700);
+    },
+    nh_card: async function () {
+      await scenes.nh_hub(); $('trh-nahw').click(); await wait(1800);
+    },
+    // Мимо нарочно: верный ответ берём из разбора после первого тапа не
+    // можем, поэтому жмём «Харф» - на первой ступени он верен реже всего.
+    nh_answer: async function () {
+      await scenes.nh_card();
+      document.querySelector('.nh-opt[data-key="harf"]').click(); await wait(900);
+    },
+    nh_right: async function () {
+      await scenes.nh_card();
+      document.querySelector('.nh-opt[data-key="ism"]').click(); await wait(500);
+    },
+    // Ступень 2: листаем, пока не выпадет слитное слово.
+    nh2_part: async function () {
+      await scenes.nh_card();
+      var part = function () { var q = document.querySelector('.nh-q'); return q && /выделенная/.test(q.textContent); };
+      for (var i = 0; i < 20 && !part(); i++) {
+        if ($('nh-next')) { $('nh-next').click(); await wait(400); continue; }
+        var o = document.querySelector('.nh-opt:not(:disabled)');
+        if (o) o.click();
+        await wait(2200);
+      }
+    },
+    nh2_answer: async function () {
+      await scenes.nh2_part();
+      document.querySelector('.nh-opt[data-key="fil"]').click(); await wait(900);
+    },
+    nh_done: async function () {
+      await scenes.nh_card();
+      for (var i = 0; i < 60 && !$('nh-more'); i++) {
+        if ($('nh-next')) { $('nh-next').click(); await wait(300); continue; }
+        var opts = document.querySelectorAll('.nh-opt:not(:disabled)');
+        if (opts.length) opts[i % opts.length].click();
+        await wait(2000);
+      }
+    },
     tj_words: async function () {
       await scenes.tj_hub(); $('trh-words').click(); await wait(1500);
     },
@@ -571,7 +628,8 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
+VARIANTS = ["nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
+            "kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
             "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
             "les_list_now", "les_list", "les_cal", "les_cal_confirm",
@@ -584,6 +642,9 @@ VARIANTS = ["kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "
 COMPARE = {
     "knowledge": [("kn_door", "Без предметов · дашборд"), ("kn_learn", "Без предметов · Знания"),
                   ("tj_door", "С таджвидом · дашборд"), ("tj_learn", "С таджвидом · Знания")],
+    "nahw": [("tj_door", "Дашборд"), ("nh_hub", "Тренажёры"), ("nh_card", "Карточка"),
+             ("nh_answer", "Мимо"), ("nh2_part", "Слитное слово"), ("nh2_answer", "Разбор частей"),
+             ("nh_done", "Итог захода")],
     "tajweed": [("tj_door", "Дашборд"), ("tj_hub", "Тренажёры"),
                 ("tj_card", "Карточка"), ("tj_answer", "После ответа"), ("tj_done", "Итог захода")],
     "lesson_real": [("les_stu_now", "Студент"), ("les_stu_real_month", "Свой месяц"),
@@ -614,7 +675,9 @@ def page(variant):
     # сцен-предложений, «как сейчас» ничего не дорисовывает.
     if variant.startswith("kn_"):
         return stand.dev_index("777004", "Юсуф") + MOCK_CSS + MOCK_JS
-    if variant.startswith(("les_stu", "tj_")):
+    if variant.startswith("nh2_"):
+        return stand.dev_index("777002", "Хамза") + MOCK_CSS + MOCK_JS
+    if variant.startswith(("les_stu", "tj_", "nh_")):
         return stand.dev_index(stand.STUDENT, "Абдулла") + MOCK_CSS + MOCK_JS
     return stand.dev_index(stand.USTAZ, "Устаз") + MOCK_CSS + MOCK_JS
 
@@ -693,7 +756,8 @@ def main():
         subprocess.run([
             chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
             "--window-size=%d,%d" % (WIDTH, HEIGHT),
-            "--virtual-time-budget=%d" % (90000 if name == "tj_done" else 17000),
+            "--virtual-time-budget=%d" % (90000 if name in ("tj_done", "nh_done", "nh2_part", "nh2_answer")
+                                          else 17000),
             "--screenshot=%s" % png,
             "http://127.0.0.1:%d/vframe?v=%s" % (PORT, name),
         ], check=True, capture_output=True)

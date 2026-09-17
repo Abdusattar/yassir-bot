@@ -316,6 +316,30 @@ def init():
                 card TEXT NOT NULL,
                 PRIMARY KEY(user_id, date, card)
             );
+            /* Тренажёр нахва (17.09.2026, core/nahw_trainer.py). История
+               ответов целиком: по ней считается и норма дня, и «навык
+               освоен», и на каком типе случаев человек слаб - терять её
+               нельзя. Заход лежит в базе, а не в памяти процесса: рестарт
+               бота не должен его обрывать. */
+            CREATE TABLE IF NOT EXISTS nahw_answers(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                skill TEXT NOT NULL,
+                ctype TEXT NOT NULL,
+                stage INTEGER NOT NULL DEFAULT 1,
+                item TEXT NOT NULL,
+                correct INTEGER NOT NULL,
+                retry INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_nahw_answers_user
+                ON nahw_answers(user_id, skill, id);
+            CREATE TABLE IF NOT EXISTS nahw_sessions(
+                user_id TEXT PRIMARY KEY,
+                date TEXT NOT NULL,
+                data TEXT NOT NULL
+            );
         """)
         _run_migrations(c)
     # Свой вход в приложение вне Telegram (10.09.2026). Импорт внутри функции:
