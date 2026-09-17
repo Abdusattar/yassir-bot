@@ -128,6 +128,16 @@ def seed_extra():
     with feed.important("announce", to="777002", until="2099-01-01"):
         feed.record_outgoing(stand.CHAT, text="📣 С 19.09 группа сдаёт только через YassirApp")
     feed.mark_notice_seen("777002", key="announce|")
+    # Длинные тексты (сцена nt_long): три строки, арабское, длинные заголовки.
+    long_chat = (db.get_learning_group("777004", include_prep=True) or {"chat_id": stand.CHAT})["chat_id"]
+    with feed.important("lesson", link="lesson:n:%s" % part, to="777004",
+                        title="Нахв: المبتدأ والخبر وأحكامهما في الجملة الاسمية (Подлежащее и сказуемое именного предложения и их правила) — часть 2 из 4"):
+        feed.record_outgoing(long_chat, text="📘 длинный урок")
+    with feed.important("kick", title="Пропусков за месяц: 9 из 10 — ещё один пропуск, и я переведу тебя в Тадаббур; вернуться можно будет только через подготовительную группу"):
+        feed.record_outgoing("777004", text="⚠️ длинное предупреждение")
+    with feed.important("task", to="777004", until="2099-01-01",
+                        title="С четверга 08.10 у группы начинается таджвид: каждую неделю новая лекция, потом тренажёр станет ежедневным заданием"):
+        feed.record_outgoing(long_chat, text="🆕 длинное новое задание")
     # После объявления группа успела написать - оно не внизу чата (сцена nt_focus).
     for i in range(30):
         feed.record(stand.CHAT, text="м р т", sender_id="777%03d" % (100 + i), sender_name="Студент %d" % (i + 1))
@@ -528,6 +538,9 @@ MOCK_JS = """
     // Важное сообщение на дашборде и тап по нему (17.09.2026).
     nt_lesson: async function () { await wait(2500); },
     nt_kick: async function () { await wait(2500); },
+    nt_long: async function () { await wait(2500); },
+    nt_long_dark: async function () { await wait(2500); document.documentElement.setAttribute('data-theme', 'dark'); await wait(600); },
+    nt_lesson_dark: async function () { await wait(2500); document.documentElement.setAttribute('data-theme', 'dark'); await wait(600); },
     // Тап по объявлению: чат открыт на самом сообщении, оно подсвечено
     // (анимацию останавливаем в начале - снимок делается в конце бюджета).
     nt_focus: async function () {
@@ -712,7 +725,7 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["nt_focus", "nt_lesson", "nt_kick", "nt_open", "nh_auto", "nh_auto_after", "nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
+VARIANTS = ["nt_long_dark", "nt_lesson_dark", "nt_long", "nt_focus", "nt_lesson", "nt_kick", "nt_open", "nh_auto", "nh_auto_after", "nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
             "kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
             "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
@@ -760,6 +773,8 @@ def page(variant):
     # Стили макета безвредны и для *_now: их классы появляются только из
     # сцен-предложений, «как сейчас» ничего не дорисовывает.
     if variant.startswith("kn_"):
+        return stand.dev_index("777004", "Юсуф") + MOCK_CSS + MOCK_JS
+    if variant in ("nt_long", "nt_long_dark"):
         return stand.dev_index("777004", "Юсуф") + MOCK_CSS + MOCK_JS
     if variant == "nt_kick":
         return stand.dev_index("777003", "Ибрахим") + MOCK_CSS + MOCK_JS

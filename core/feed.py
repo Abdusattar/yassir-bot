@@ -534,11 +534,15 @@ def brief(phone):
             WHERE chat_id IN ({q}) AND id > ?
             ORDER BY id DESC LIMIT 200
         """, (*chats, seen)).fetchall()
+        top_id = rows[0]["id"] if rows else None
+        # Помеченное «важным» живёт на доске - в строке чата его не повторяем
+        # (17.09.2026: на дашборде выходило два места с одним объявлением).
+        rows = [r for r in rows if not r["notice"]]
 
         latest = None
         if not rows:
             latest = c.execute(f"""
-                SELECT * FROM feed_messages WHERE chat_id IN ({q})
+                SELECT * FROM feed_messages WHERE chat_id IN ({q}) AND notice IS NULL
                 ORDER BY id DESC LIMIT 1
             """, chats).fetchone()
 
@@ -546,9 +550,12 @@ def brief(phone):
     notices = _notice_out(open_notices(me, chats), titles)
     if not rows:
         if not latest:
-            return None
+            # Обычной переписки нет вовсе, но доска может быть не пустой.
+            return {"item": None, "unread": 0, "more": False, "top_id": top_id or 0,
+                    "notices": notices} if notices else None
         out = _row_out(latest, titles, me)
-        return {"item": out, "unread": 0, "more": False, "top_id": latest["id"], "notices": notices}
+        return {"item": out, "unread": 0, "more": False, "top_id": top_id or latest["id"],
+                "notices": notices}
 
     # Адресовано тебе: ответили на твоё сообщение или бот написал в личку.
     mine = [r for r in rows
@@ -566,7 +573,7 @@ def brief(phone):
         "item": _row_out(pick, titles, me),
         "unread": len(mine),
         "more": bool([r for r in others if r not in mine]),
-        "top_id": rows[0]["id"],
+        "top_id": top_id,
         "notices": notices,
     }
 

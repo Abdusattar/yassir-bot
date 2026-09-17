@@ -102,6 +102,10 @@
     --ok: #1f7a52;
     --ok-soft: #e3f2e8;
     --no: #b3403a;
+    /* Важное (доска на дашборде): янтарь, не красный - красное только долг. */
+    --warn: #d9a21b;
+    --warn-soft: #fbefc9;
+    --warn-ink: #5a4100;
     --no-soft: #fbe9e7;
   }
   /* Ручной переключатель темы (30.08.2026) - system-тема (media query)
@@ -138,6 +142,9 @@
       --ok: #4cae83;
       --ok-soft: #1e3126;
       --no: #e0776f;
+      --warn: #e0b341;
+      --warn-soft: #3b3016;
+      --warn-ink: #f3dfa6;
       --no-soft: #33201e;
     }
   }
@@ -164,6 +171,9 @@
     --ok: #4cae83;
     --ok-soft: #1e3126;
     --no: #e0776f;
+    --warn: #e0b341;
+    --warn-soft: #3b3016;
+    --warn-ink: #f3dfa6;
     --no-soft: #33201e;
   }
 
@@ -1242,34 +1252,49 @@
      сама за несколько секунд. */
   #feed .l-row.hit { animation: feed-hit 4s ease-out forwards; border-radius: 12px; }
   @keyframes feed-hit {
-    0%, 55% { background: #fff4d6; box-shadow: 0 0 0 6px #fff4d6; }
+    0%, 55% { background: var(--warn-soft); box-shadow: 0 0 0 6px var(--warn-soft); }
     100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
   }
-  #dash-board { display: none; flex-direction: column; gap: 8px; margin: 20px 0 0;
+  #dash-board { display: none; flex: 0 0 auto; flex-direction: column; margin: 20px 0 0; overflow: hidden;
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+    box-shadow: var(--shadow-sm);
     direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   #dash-board.on { display: flex; }
+  /* Доска - ОДНО место (замечание пользователя 17.09.2026), и тихое: главное
+     на экране - двери. Карточка нейтральная; непрочитанную строку отмечают
+     янтарная полоска слева и плитка значка, а не заливка - три залитые строки
+     выходили жёлтой плитой тяжелее дверей. */
+  #dash-board.hot { border-color: var(--warn); }
   #dash-board .bd-row {
-    display: flex; align-items: center; gap: 10px; cursor: pointer;
-    background: #fff4d6; border: 1px solid #e9b949; border-radius: 16px;
-    box-shadow: 0 0 0 3px rgba(233,185,73,.22), var(--shadow-sm);
-    padding: 10px 12px 10px 10px;
+    position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 11px;
+    cursor: pointer; padding: 11px 12px 11px 15px; -webkit-tap-highlight-color: transparent;
   }
+  #dash-board .bd-row::before {
+    content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px;
+    border-radius: 0 3px 3px 0; background: var(--warn);
+  }
+  #dash-board .bd-row + .bd-row { border-top: 1px solid var(--card-border); }
+  #dash-board .bd-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   #dash-board .bd-ic {
-    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px; font-size: 16px;
-    background: #e9b949; display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px;
+    background: var(--warn-soft); color: var(--warn-ink);
+    display: flex; align-items: center; justify-content: center;
   }
-  #dash-board .bd-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-  #dash-board .bd-h { font-size: 12.5px; font-weight: 700; color: #4a3500;
+  #dash-board .bd-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor;
+    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #dash-board .bd-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  #dash-board .bd-h { font-size: 12.5px; font-weight: 700; color: var(--ink);
     display: flex; align-items: baseline; gap: 6px; }
-  #dash-board .bd-h i { font-style: normal; font-size: 10.5px; font-weight: 400; color: #7a5c10;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #dash-board .bd-t { font-size: 13px; color: #4a3500; overflow: hidden;
+  #dash-board .bd-h > span { flex: 0 0 auto; }
+  #dash-board .bd-h i { min-width: 0; font-style: normal; font-size: 10.5px; font-weight: 400;
+    color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dash-board .bd-t { font-size: 13px; line-height: 1.35; color: var(--ink); overflow: hidden;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  #dash-board .bd-go { flex: 0 0 auto; color: #7a5c10; font-size: 15px; }
-  /* Прочитанное объявление висит до своей даты, но уже спокойно. */
-  #dash-board .bd-row.read { background: var(--card-bg); border-color: var(--card-border);
-    box-shadow: var(--shadow-sm); }
-  #dash-board .bd-row.read .bd-ic { background: var(--accent-soft); }
+  #dash-board .bd-go { flex: 0 0 auto; color: var(--muted); font-size: 15px; }
+  /* Прочитанное объявление висит до своей даты, но уже без акцента. */
+  #dash-board .bd-row.read::before { display: none; }
+  #dash-board .bd-row.read .bd-ic { background: var(--accent-soft); color: var(--accent); }
+  #dash-board .bd-row.read .bd-h { font-weight: 600; }
   #dash-board .bd-row.read .bd-h, #dash-board .bd-row.read .bd-t { color: var(--muted); }
   #dash-brief .b-ava {
     flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px;
@@ -4427,7 +4452,15 @@
 
   // Строка дашборда. item выбирает сервер (важнейшее непрочитанное, а не
   // последнее по времени) - здесь только рисуем.
-  var NOTICE_ICON = { lesson: '📘', kick: '⚠️', announce: '📣', transfer: '➡️', task: '🆕' };
+  // Линейные значки в один цвет - тем же языком, что у дверей (эмодзи на
+  // доске читались вставкой из другого приложения).
+  var NOTICE_ICON = {
+    lesson: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/>',
+    kick: '<path d="M12 4 3 19.5h18zM12 10v4.5M12 17.2v.3"/>',
+    announce: '<path d="M4 10v4h3l7 4V6l-7 4zM17.5 9.5a4 4 0 0 1 0 5M7 14l1.5 5h2.5"/>',
+    transfer: '<path d="M4 12h15M13.5 6.5 19 12l-5.5 5.5"/>',
+    task: '<path d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="9"/>'
+  };
   // Доска важного (17.09.2026) - отдельно от строки чата: строка показывает
   // последнее, а важное висит, пока не открыл (объявление - до своей даты).
   function boardRender(list) {
@@ -4435,12 +4468,13 @@
     list = list || [];
     box.innerHTML = list.map(function (n, i) {
       return '<div class="bd-row' + (n.read ? ' read' : '') + '" data-i="' + i + '" tabindex="0" role="button">' +
-        '<span class="bd-ic">' + (NOTICE_ICON[n.type] || '❗') + '</span>' +
-        '<span class="bd-body"><span class="bd-h">' + feedEsc(T('notice_' + n.type)) +
+        '<span class="bd-ic"><svg viewBox="0 0 24 24" aria-hidden="true">' + (NOTICE_ICON[n.type] || NOTICE_ICON.announce) + '</svg></span>' +
+        '<span class="bd-body"><span class="bd-h"><span>' + feedEsc(T('notice_' + n.type)) + '</span>' +
         (n.source ? '<i>' + feedEsc(n.source) + '</i>' : '') + '</span>' +
         '<span class="bd-t">' + feedEsc(n.text) + '</span></span><span class="bd-go">›</span></div>';
     }).join('');
     box.classList.toggle('on', !!list.length);
+    box.classList.toggle('hot', list.some(function (n) { return !n.read; }));
     Array.prototype.forEach.call(box.querySelectorAll('.bd-row'), function (row) {
       var go = function () { boardGo(list[+row.getAttribute('data-i')], row); };
       row.addEventListener('click', go);
@@ -4456,6 +4490,8 @@
       sendHeartbeat();
     }).catch(function () {});
     row.classList.add('read');
+    document.getElementById('dash-board').classList.toggle('hot',
+      !!document.querySelector('#dash-board .bd-row:not(.read)'));
     var m = /^lesson:([a-z]):(\d+)$/.exec(n.link || '');
     if (m) {
       openLearn();

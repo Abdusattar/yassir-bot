@@ -442,3 +442,24 @@ def test_пересдача_на_доску_не_идёт(test_db):
             pass
     record(ME, text="нужно пересдать", is_bot=1, notice={"type": "retake", "link": "subs"})
     assert _board(ME) == []
+
+
+def test_важное_не_повторяется_в_строке_чата(test_db):
+    """На дашборде выходило два места с одним объявлением (17.09.2026)."""
+    from core.feed import important
+    _setup()
+    record(MY_CHAT, text="м р т", sender_id=FRIEND, sender_name="Абдулла")
+    with important("announce", until="2099-01-01"):
+        _out(MY_CHAT, "📣 переход 19.09")
+    got = brief(ME)
+    assert got["item"]["text"] == "м р т"
+    assert [n["type"] for n in got["notices"]] == ["announce"]
+
+
+def test_доска_видна_даже_без_обычной_переписки(test_db):
+    from core.feed import important
+    _setup()
+    with important("announce", until="2099-01-01"):
+        _out(MY_CHAT, "📣 переход 19.09")
+    got = brief(ME)
+    assert got["item"] is None and len(got["notices"]) == 1
