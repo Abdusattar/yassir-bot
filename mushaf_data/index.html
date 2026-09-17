@@ -1846,6 +1846,15 @@
     padding: 13px 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
     width: 100%; max-width: 320px;
   }
+  /* «Дальше» в нахве после верного ответа: полоска показывает, сколько
+     осталось до автоперелистывания (3 с, как NAHW_AUTO_MS). */
+  .tj-go.nh-auto { position: relative; overflow: hidden; }
+  .tj-go.nh-auto::after {
+    content: ''; position: absolute; left: 0; bottom: 0; height: 4px; width: 100%;
+    background: rgba(255,255,255,.65); transform-origin: left center;
+    animation: nh-auto-run 3s linear forwards;
+  }
+  @keyframes nh-auto-run { from { transform: scaleX(0); } to { transform: scaleX(1); } }
   /* Тренажёр нахва (17.09.2026). Слово показывается в аяте - вид слова
      узнаётся по соседям (харф джарр перед исмом, قَدْ перед фиалем), -
      но только окном вокруг него: длинный аят не должен вытеснять вопрос.
@@ -10945,7 +10954,10 @@
     return html + '</div>';
   }
 
+  var NAHW_AUTO_MS = 3000, nahwAutoTimer = null;
+
   function renderNahw(d) {
+    clearTimeout(nahwAutoTimer);
     nahwState = d;
     window.__nahwCard = function () { return nahwState && nahwState.card; };   // для стенда снимков
     var body = document.getElementById('nahw-body');
@@ -11021,11 +11033,29 @@
             if (b.getAttribute('data-key') === fb.answer) b.classList.add('ok');
           });
           if (!fb.correct) btn.classList.add('no');
-          // «Дальше» и после верного ответа (17.09.2026): кто попал наугад,
-          // должен успеть прочитать, почему это так.
+          // После верного ответа карточка листается сама через NAHW_AUTO_MS
+          // (17.09.2026): объяснение успевают прочитать, а норма дня - не 20
+          // нажатий. Ждём «Дальше» после ошибки и при первой встрече с типом
+          // случая: там объяснение и есть урок.
+          var auto = fb.correct && !fb.first_meet;
           document.getElementById('nh-after').innerHTML = nahwFeedback(fb) +
-            '<button class="tj-go" id="nh-next">' + T('nahw_next') + '</button>';
-          document.getElementById('nh-next').addEventListener('click', function () { renderNahw(next); });
+            '<button class="tj-go' + (auto ? ' nh-auto' : '') + '" id="nh-next">' + T('nahw_next') + '</button>';
+          var gone = false;
+          var go = function () {
+            if (gone) return;
+            gone = true;
+            clearTimeout(nahwAutoTimer);
+            renderNahw(next);
+          };
+          document.getElementById('nh-next').addEventListener('click', go);
+          clearTimeout(nahwAutoTimer);
+          if (auto) {
+            nahwAutoTimer = setTimeout(function () {
+              // Ушёл с экрана или уже другая карточка - не трогаем.
+              if (document.getElementById('nahw').style.display === 'none' || nahwState !== d) return;
+              go();
+            }, NAHW_AUTO_MS);
+          }
         });
       });
     });

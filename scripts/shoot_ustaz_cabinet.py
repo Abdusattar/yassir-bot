@@ -520,6 +520,32 @@ MOCK_JS = """
       await scenes.nh_card();
       document.querySelector('.nh-opt[data-key="ism"]').click(); await wait(500);
     },
+    // Автоперелистывание после верного ответа: отвечаем, пока «Дальше» не
+    // придёт с полоской (тип случая уже встречался и ответ верный).
+    nh_auto: async function (live) {
+      // Снимок делается в конце бюджета времени, а не сцены: чтобы застать
+      // кнопку с полоской, таймер на 3 с в этой сцене не заводим.
+      if (!live) {
+        var st = window.setTimeout;
+        window.setTimeout = function (f, ms) { return ms === 3000 ? 0 : st(f, ms); };
+      }
+      await scenes.nh_card();
+      for (var i = 0; i < 60; i++) {
+        if (document.querySelector('#nh-next.nh-auto')) break;
+        if ($('nh-more')) { $('nh-more').click(); await wait(900); continue; }
+        if ($('nh-next')) { $('nh-next').click(); await wait(500); continue; }
+        var opts = document.querySelectorAll('.nh-opt:not(:disabled)');
+        if (opts.length) opts[i % opts.length].click();
+        await wait(700);
+      }
+      await wait(1300);
+    },
+    // Та же сцена, но ждём дольше 3 с: на снимке должна быть уже следующая
+    // карточка без разбора - значит, перелистнулось само.
+    nh_auto_after: async function () {
+      await scenes.nh_auto(true);
+      await wait(2600);
+    },
     // Ступень 2: листаем, пока не выпадет слитное слово.
     nh2_part: async function () {
       await scenes.nh_card();
@@ -652,7 +678,7 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
+VARIANTS = ["nh_auto", "nh_auto_after", "nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
             "kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
             "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
@@ -790,7 +816,7 @@ def main():
         subprocess.run([
             chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
             "--window-size=%d,%d" % (WIDTH, HEIGHT),
-            "--virtual-time-budget=%d" % (90000 if name in ("tj_done", "nh_done", "nh2_part", "nh2_answer") or name.startswith("nhs_")
+            "--virtual-time-budget=%d" % (90000 if name in ("tj_done", "nh_done", "nh2_part", "nh2_answer", "nh_auto", "nh_auto_after") or name.startswith("nhs_")
                                           else 17000),
             "--screenshot=%s" % png,
             "http://127.0.0.1:%d/vframe?v=%s" % (PORT, name),

@@ -318,3 +318,19 @@ def _call(method, path, user_id, body=None):
         finally:
             await client.close()
     return asyncio.run(run())
+
+
+def test_first_meet_with_case_type_is_flagged_once(test_db, monkeypatch):
+    """Первая встреча с типом случая - приложение ждёт «Дальше» и после
+    верного ответа; со второй листает само."""
+    _no_sources(monkeypatch)
+    _lesson()
+    seen, flags = set(), []
+    for _ in range(3):
+        nt.new_session("777")
+        while _current("777"):
+            ctype = _current("777")["ctype"]
+            data, _ = nt.answer("777", _card_id("777"), _right("777"))
+            flags.append((ctype in seen, data["feedback"]["first_meet"]))
+            seen.add(ctype)
+    assert all(met != first for met, first in flags)

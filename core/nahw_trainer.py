@@ -863,6 +863,10 @@ def answer(user_id, card_id, choice, passed=0):
     correct = choice == right
     before = daily_count(user_id)
     with db() as c:
+        # Первая встреча с этим типом случая: приложение не листает карточку
+        # само даже после верного ответа - правило надо раз увидеть спокойно.
+        first_meet = not c.execute("SELECT 1 FROM nahw_answers WHERE user_id=? AND skill=? AND ctype=? LIMIT 1",
+                                   (str(user_id), cur["skill"], cur["ctype"])).fetchone()
         c.execute("INSERT INTO nahw_answers(user_id, date, skill, ctype, stage, item, correct, retry)"
                   " VALUES(?,?,?,?,?,?,?,?)",
                   (str(user_id), get_date(), cur["skill"], cur["ctype"], cur["stage"],
@@ -874,7 +878,7 @@ def answer(user_id, card_id, choice, passed=0):
     reached = before < DAILY_TARGET <= before + int(correct)
     opt = next(o for o in skill["options"] if o["key"] == right)
     view = card_view(cur["item"])
-    feedback = {"correct": correct, "answer": right, "answer_ar": opt["ar"], "answer_ru": opt["ru"],
+    feedback = {"correct": correct, "first_meet": first_meet, "answer": right, "answer_ar": opt["ar"], "answer_ru": opt["ru"],
                 "explain": explain(cur["item"], cur["ctype"]), "breakdown": breakdown(cur["item"]),
                 "word": view["word"], "meaning": view["meaning"]}
     _next_card(user_id, session)
