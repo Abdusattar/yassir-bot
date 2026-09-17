@@ -1407,6 +1407,7 @@ def _days_word(n):
 
 
 async def app_only_countdown():
+    from core.content import SHORT_TASKS
     today = get_date()
     for group in groups_with_app_only_date():
         chat_id = group.get("chat_id")
@@ -1424,6 +1425,12 @@ async def app_only_countdown():
             text = T("app_only_today", glang)
         else:
             continue          # день перехода прошёл - напоминать больше не о чем
+        # Нахв и хадис пока сдаются письменно (handlers.APP_ONLY_WRITTEN_KEYS) -
+        # говорим об этом сразу, иначе объявление противоречит правилу.
+        written = [k for k in (group.get("tasks") or "").split(",") if k.strip() in ("n", "h")]
+        if written:
+            names = " и ".join(SHORT_TASKS[k.strip()].lower() for k in written).capitalize()
+            text += "\n\n" + T("app_only_written_note", glang, names=names)
         try:
             await send_message(chat_id, text)
             log.info("app_only_countdown: %s, осталось %s", group.get("title"), left)

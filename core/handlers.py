@@ -49,6 +49,11 @@ from core.web_auth import claim_login_code, refuse_login_code, LOGIN_START_PREFI
 
 log = logging.getLogger(__name__)
 
+# Задания, которые группа «только через YassirApp» пока сдаёт письменно: для
+# них в приложении ещё нет тренажёра (17.09.2026). Вышел тренажёр - убрать
+# ключ отсюда.
+APP_ONLY_WRITTEN_KEYS = ("n", "h")
+
 # Ответы на вход в приложение с сайта (10.09.2026, см. обработчик
 # "/start login_" ниже). Вынесены сюда, а не написаны по месту: тексты бота
 # правятся отдельно от логики, и держать их в середине длинного разветвления
@@ -1929,8 +1934,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # только через YassirApp. Отвечаем один раз на сообщение, ничего не
     # засчитываем. Узр сюда не попадает - он разбирается выше, при score == 0.
     if group_app_only_active(group):
-        await send_message(chat_id, T("app_only_refuse", glang, name=s["name"]))
-        return
+        # Нахв и хадис в приложении сдать пока негде (17.09.2026, решение
+        # пользователя): до выхода их тренажёров принимаем письменно, как
+        # раньше. Остальное из того же сообщения не засчитываем.
+        written = {k for k in APP_ONLY_WRITTEN_KEYS if k in group_tasks and tasks_done.get(k)}
+        if not written:
+            await send_message(chat_id, T("app_only_refuse", glang, name=s["name"]))
+            return
+        tasks_done = {k: (k in written) for k in TASK_KEYS}
 
     # Повторение только записью (16.09.2026, несовершеннолетние): текстовое
     # «повторение» в группе не засчитывается - иначе запись в приложении

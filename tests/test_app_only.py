@@ -118,3 +118,48 @@ def test_excuse_still_accepted_after_switch(test_db, monkeypatch):
             "SELECT COUNT(*) FROM score_events WHERE student_id=? AND category='excuse'",
             (uid,)).fetchone()[0]
     assert excuses == 1, sent
+
+
+def test_written_nahw_and_hadith_still_accepted_after_switch(test_db, monkeypatch):
+    """17.09.2026: у нахва и хадиса в приложении тренажёра ещё нет - в группе
+    после рубильника они засчитываются письменно, остальное из того же
+    сообщения - нет."""
+    g = _group(tasks="m,r,t,j,n,h")
+    uid = db.add_student("Ахмад", g["id"], phone=PHONE)
+    db.set_group_app_only(g["id"], db.get_date())
+    sent = _silence(monkeypatch)
+
+    asyncio.run(h.process_message(chat_id=CHAT, sender=PHONE,
+                                  text="заучивание, слова, нахв, хадис", sender_name="Ахмад"))
+
+    report = db.get_today_report(uid, g["id"])
+    assert report and report["n"] and report["h"], sent
+    assert not report["m"] and not report["t"]
+    assert not any("только через YassirApp" in t for t in sent), sent
+
+
+def test_group_without_nahw_still_refused(test_db, monkeypatch):
+    g = _group()
+    uid = db.add_student("Ахмад", g["id"], phone=PHONE)
+    db.set_group_app_only(g["id"], db.get_date())
+    sent = _silence(monkeypatch)
+
+    asyncio.run(h.process_message(chat_id=CHAT, sender=PHONE,
+                                  text="слова, нахв", sender_name="Ахмад"))
+
+    assert db.get_today_report(uid, g["id"]) is None
+    assert any("только через YassirApp" in t for t in sent), sent
+
+
+def test_countdown_tells_nahw_groups_about_written_exception(test_db, monkeypatch):
+    import core.scheduler as sch
+    g = _group(tasks="m,r,t,j,n")
+    db.set_group_app_only(g["id"], db.get_date())
+    sent = []
+
+    async def fake_send(chat_id, text, **kw):
+        sent.append(text)
+
+    monkeypatch.setattr(sch, "send_message", fake_send)
+    asyncio.run(sch.app_only_countdown())
+    assert sent and "Нахв пока сдавайте в группе письменно" in sent[0], sent
