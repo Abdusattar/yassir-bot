@@ -205,8 +205,10 @@ def test_next_skill_opens_step_by_step(test_db, monkeypatch):
     _lesson("الجمع وأنواعه — часть 1")
     assert [s["id"] for s in nt.open_skills("777")] == ["kinds", "signs"]
     # новый навык приходит чаще старого
+    import random
+    random.seed(7)                               # выбор случаен - фиксируем, иначе тест мигает
     skills = []
-    for _ in range(3):
+    for _ in range(10):
         nt.new_session("777")
         while _current("777"):
             skills.append(_current("777")["skill"])
