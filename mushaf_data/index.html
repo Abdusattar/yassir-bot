@@ -1855,10 +1855,15 @@
     font-family: 'Scheherazade New', serif; direction: rtl;
     font-size: 30px; line-height: 2; color: var(--ink);
   }
+  /* Черта снизу - чтобы и одна буква (بِ, وَ) была видна: одной
+     подложки на такой ширине почти не видно (17.09.2026). Отступов нет -
+     они разорвали бы вязь внутри слова. */
   .nh-ayah .hl {
-    background: color-mix(in srgb, var(--accent) 24%, transparent);
-    border-radius: 6px;
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    box-shadow: inset 0 -4px 0 var(--accent);
+    border-radius: 4px;
   }
+  .nh-hint { font-size: 13px; color: var(--muted); max-width: 420px; line-height: 1.4; }
   .nh-ayah .gap { color: var(--muted); }
   .nh-ref { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .nh-q { font-size: 15px; font-weight: 600; color: var(--ink); }
@@ -3675,6 +3680,7 @@
       trainers_nahw_sub: 'Виды слов в аятах',
       dash_trainers_nahw: 'Нахв %A%/%B%',
       nahw_question: 'Что это за слово?',
+      nahw_hint: 'Слова из пройденных аятов. Определи вид слова — 10 верных за день засчитают нахв.',
       nahw_question_part: 'Что за выделенная часть слова?',
       nahw_retry: 'другое слово того же типа',
       nahw_right: 'Верно',
@@ -10833,8 +10839,7 @@
 
   /* ── Тренажёр нахва (17.09.2026, core/nahw_trainer.py) ─────────────────
      Слово в аяте, три кнопки: исм / фиаль / харф. После ответа - объяснение
-     словами урока и разбор слова по частям. Верно - дальше само, мимо -
-     ждёт «Дальше»: объяснение надо успеть прочитать. */
+     словами урока и разбор слова по частям, дальше - по «Дальше». */
   function openNahw() {
     document.getElementById('trainers').style.display = 'none';
     document.getElementById('nahw').style.display = 'flex';
@@ -10934,6 +10939,8 @@
     }
     if (c.retry) dots += '<span>' + T('nahw_retry') + '</span>';
     html = '<div class="tj-dots">' + dots + '</div>';
+    // Первая карточка дня - одна строка, что это и зачем.
+    if (!d.daily_count && c.pos === 1 && !c.retry) html += '<div class="nh-hint">' + T('nahw_hint') + '</div>';
     html += '<div class="trainer-word-card"><div class="nh-ayah">' + nahwAyah(c.words) + '</div>' +
       '<div class="nh-ref">' + nahwEsc(c.ref) + '</div></div>';
     html += '<div class="nh-q">' + T(c.compound ? 'nahw_question_part' : 'nahw_question') + '</div>';
@@ -10959,9 +10966,10 @@
             if (b.getAttribute('data-key') === fb.answer) b.classList.add('ok');
           });
           if (!fb.correct) btn.classList.add('no');
+          // «Дальше» и после верного ответа (17.09.2026): кто попал наугад,
+          // должен успеть прочитать, почему это так.
           document.getElementById('nh-after').innerHTML = nahwFeedback(fb) +
-            (fb.correct ? '' : '<button class="tj-go" id="nh-next">' + T('nahw_next') + '</button>');
-          if (fb.correct) { setTimeout(function () { renderNahw(next); }, 1600); return; }
+            '<button class="tj-go" id="nh-next">' + T('nahw_next') + '</button>';
           document.getElementById('nh-next').addEventListener('click', function () { renderNahw(next); });
         });
       });

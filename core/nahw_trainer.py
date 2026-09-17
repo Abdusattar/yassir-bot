@@ -113,11 +113,26 @@ def _answer_of(seg):
     return {"N": "ism", "V": "fil", "P": "harf"}[seg[1]]
 
 
+def _letters(text):
+    """Только буквы: порядок шадды и фатхи в байтах у корпуса и у нашего
+    текста разный, сравнение с харакатами молча не совпадает (17.09.2026 -
+    так имя Аллаха прошло в вопросы при «проверенном» исключении)."""
+    return "".join(ch for ch in unicodedata.normalize("NFD", text)
+                   if unicodedata.category(ch) == "Lo")
+
+
+_ALLAH_LEMMAS = {"الله", "اللهم"}
+
+
+def _is_allah(feats):
+    return any(x.startswith("LEM:") and _letters(x[4:]) in _ALLAH_LEMMAS for x in feats)
+
+
 def _askable(seg):
     f = _feats(seg)
     if seg[1] == "N":
         # Имя Аллаха не делаем учебным примером «угадай вид слова» (17.09.2026).
-        return not (f & _SKIP_NOUN) and "LEM:اللَّه" not in f
+        return not (f & _SKIP_NOUN) and not _is_allah(f)
     if seg[1] == "P":
         return not (f & _SKIP_PARTICLE)
     return True

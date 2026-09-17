@@ -77,6 +77,15 @@ def test_every_indexed_item_has_its_answer_kind():
             assert word[idx][1] == kinds[nt.CTYPES[ctype][0]], (ctype, item)
 
 
+def test_name_of_allah_is_never_asked():
+    """Проверка по буквам, не по записи с харакатами: 17.09.2026 исключение
+    по строке «LEM:اللَّه» молча не срабатывало из-за порядка шадды и фатхи."""
+    asked = [item for _, items in nt.corpus().index.values() for item in items
+             if nt._letters(nt.corpus().word(item)[1][nt.corpus().word(item)[3]][0]) in ("الله", "لله", "اللهم")]
+    assert asked == []
+    assert _ctype("2:61:50", 0) is None
+
+
 def test_compound_word_is_split_on_our_spelling():
     parts = nt.split_by_segments("وَأَبْصَٰرِهِمْ", _item("2:20:19"))
     assert parts == ["وَ", "أَبْصَٰرِ", "هِمْ"]

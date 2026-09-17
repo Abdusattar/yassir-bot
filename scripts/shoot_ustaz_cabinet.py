@@ -523,10 +523,10 @@ MOCK_JS = """
       await scenes.nh_card();
       var part = function () { var q = document.querySelector('.nh-q'); return q && /выделенная/.test(q.textContent); };
       for (var i = 0; i < 20 && !part(); i++) {
-        if ($('nh-next')) { $('nh-next').click(); await wait(400); continue; }
+        if ($('nh-next')) { $('nh-next').click(); await wait(600); continue; }
         var o = document.querySelector('.nh-opt:not(:disabled)');
         if (o) o.click();
-        await wait(2200);
+        await wait(700);
       }
     },
     nh2_answer: async function () {
@@ -535,11 +535,11 @@ MOCK_JS = """
     },
     nh_done: async function () {
       await scenes.nh_card();
-      for (var i = 0; i < 60 && !$('nh-more'); i++) {
+      for (var i = 0; i < 120 && !$('nh-more'); i++) {
         if ($('nh-next')) { $('nh-next').click(); await wait(300); continue; }
         var opts = document.querySelectorAll('.nh-opt:not(:disabled)');
         if (opts.length) opts[i % opts.length].click();
-        await wait(2000);
+        await wait(700);
       }
     },
     tj_words: async function () {
