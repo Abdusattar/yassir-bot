@@ -125,6 +125,9 @@ def seed_extra():
     with feed.important("announce", to="777002", until="2099-01-01"):
         feed.record_outgoing(stand.CHAT, text="📣 С 19.09 группа сдаёт только через YassirApp")
     feed.mark_notice_seen("777002", key="announce|")
+    # После объявления группа успела написать - оно не внизу чата (сцена nt_focus).
+    for i in range(30):
+        feed.record(stand.CHAT, text="м р т", sender_id="777%03d" % (100 + i), sender_name="Студент %d" % (i + 1))
     with feed.important("kick", title="Пропусков за месяц: 6 из 10 — прочитай"):
         feed.record_outgoing("777003", text="⚠️ Ибрахим, в этом месяце 6 пропусков...")
     for phone, days_ago in ((stand.STUDENT, 1), (stand.STUDENT, 7), ("777002", 1)):
@@ -522,6 +525,14 @@ MOCK_JS = """
     // Важное сообщение на дашборде и тап по нему (17.09.2026).
     nt_lesson: async function () { await wait(2500); },
     nt_kick: async function () { await wait(2500); },
+    // Тап по объявлению: чат открыт на самом сообщении, оно подсвечено
+    // (анимацию останавливаем в начале - снимок делается в конце бюджета).
+    nt_focus: async function () {
+      var st = document.createElement('style');
+      st.textContent = '#feed .l-row.hit{animation-play-state:paused !important}';
+      document.head.appendChild(st);
+      await wait(2500); document.querySelectorAll('#dash-board .bd-row')[1].click(); await wait(2000);
+    },
     nt_open: async function () { await wait(2500); document.querySelector('#dash-board .bd-row').click(); await wait(1500); },
     // Тренажёр нахва (17.09.2026) - настоящий код, без инъекций.
     nh_hub: async function () {
@@ -698,7 +709,7 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["nt_lesson", "nt_kick", "nt_open", "nh_auto", "nh_auto_after", "nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
+VARIANTS = ["nt_focus", "nt_lesson", "nt_kick", "nt_open", "nh_auto", "nh_auto_after", "nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
             "kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
             "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",

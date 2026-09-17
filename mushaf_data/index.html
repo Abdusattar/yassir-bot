@@ -1253,6 +1253,13 @@
      пересдача, перевод, новое задание. Янтарная, не красная: красное здесь -
      только долг по сдачам. Без color-mix - на iOS до 16.2 его нет. Пустая
      доска места не занимает. */
+  /* Сообщение, на которое привела доска важного: янтарная подложка гаснет
+     сама за несколько секунд. */
+  #feed .l-row.hit { animation: feed-hit 4s ease-out forwards; border-radius: 12px; }
+  @keyframes feed-hit {
+    0%, 55% { background: #fff4d6; box-shadow: 0 0 0 6px #fff4d6; }
+    100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
+  }
   #dash-board { display: none; flex-direction: column; gap: 8px; margin: 20px 0 0;
     direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   #dash-board.on { display: flex; }
@@ -4479,7 +4486,7 @@
     } else if (n.link === 'subs') {
       openSubs();
     } else {
-      feedOpen(n.chat_id);
+      feedOpen(n.chat_id, n.id);
     }
   }
   function feedBrief(f) {
@@ -4611,7 +4618,7 @@
       }
       // Источник у строки не подписываем: чат выбран чипом выше, и рамка
       // «N-1» у каждого сообщения внутри N-1 - чистый шум.
-      html += '<div class="l-row' + (it.is_bot ? ' bot' : '') + '">'
+      html += '<div class="l-row' + (it.is_bot ? ' bot' : '') + '" data-mid="' + it.id + '">'
         + '<span class="l-ava">' + feedEsc(feedInitial(it.who)) + '</span>'
         + '<span class="l-body">'
         +   '<span class="l-top"><b>' + feedEsc(it.who) + '</b>'
@@ -4627,12 +4634,25 @@
       b.addEventListener('click', function () { feedPlay(b.getAttribute('data-voice'), b); });
     });
     feedScroll.scrollTop = feedScroll.scrollHeight;
+    // Пришли с доски важного (17.09.2026): открываем на самом сообщении и
+    // подсвечиваем его - иначе вчерашнее объявление пришлось бы искать под
+    // полусотней «м р т». Не нашлось (старше выдачи) - остаёмся внизу.
+    if (feedFocus) {
+      var hit = feedScroll.querySelector('[data-mid="' + feedFocus + '"]');
+      feedFocus = null;
+      if (hit) {
+        feedScroll.scrollTop += hit.getBoundingClientRect().top - feedScroll.getBoundingClientRect().top - 60;
+        hit.classList.add('hit');
+      }
+    }
   }
 
   // wantChat - чат, на котором открыть ленту. Приходит из строки дашборда:
   // тапнул по разбору устаза - попал в свою учебную, а не в общий список,
   // где его ещё надо найти.
-  function feedOpen(wantChat) {
+  var feedFocus = null;
+  function feedOpen(wantChat, focusId) {
+    feedFocus = focusId || null;
     feedBox.classList.add('on');
     feedScroll.innerHTML = '<div class="l-empty">Загружаю…</div>';
     document.getElementById('feed-chips').innerHTML = '';
