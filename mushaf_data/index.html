@@ -1249,22 +1249,36 @@
     padding: 8px 12px 8px 8px; margin-bottom: 10px; cursor: pointer;
   }
   #dash-brief.on { display: flex; }
-  /* Важное сообщение (17.09.2026): урок открылся, предупреждение, объявление,
-     пересдача, перевод. Янтарный, не красный: красное здесь - только долг по
-     сдачам. Без color-mix - на iOS до 16.2 его нет. */
-  #dash-brief.notice {
-    background: #fff4d6; border-color: #e9b949;
+  /* Доска важного (17.09.2026): урок открылся, предупреждение, объявление,
+     пересдача, перевод, новое задание. Янтарная, не красная: красное здесь -
+     только долг по сдачам. Без color-mix - на iOS до 16.2 его нет. Пустая
+     доска места не занимает. */
+  #dash-board { display: none; flex-direction: column; gap: 8px; margin: 20px 0 0;
+    direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #dash-board.on { display: flex; }
+  #dash-board .bd-row {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    background: #fff4d6; border: 1px solid #e9b949; border-radius: 16px;
     box-shadow: 0 0 0 3px rgba(233,185,73,.22), var(--shadow-sm);
-    padding-top: 11px; padding-bottom: 11px;
+    padding: 10px 12px 10px 10px;
   }
-  #dash-brief.notice .b-ava { background: #e9b949; color: #4a3500; font-size: 16px; }
-  #dash-brief.notice .b-who { color: #4a3500; }
-  #dash-brief.notice .b-who i { color: #7a5c10; }
-  #dash-brief.notice .b-txt { color: #4a3500; font-size: 13px; white-space: normal;
+  #dash-board .bd-ic {
+    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px; font-size: 16px;
+    background: #e9b949; display: flex; align-items: center; justify-content: center;
+  }
+  #dash-board .bd-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  #dash-board .bd-h { font-size: 12.5px; font-weight: 700; color: #4a3500;
+    display: flex; align-items: baseline; gap: 6px; }
+  #dash-board .bd-h i { font-style: normal; font-size: 10.5px; font-weight: 400; color: #7a5c10;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dash-board .bd-t { font-size: 13px; color: #4a3500; overflow: hidden;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  #dash-brief.notice .b-n { background: #e9b949; color: #4a3500; }
-  #dash-brief.notice .b-go { color: #7a5c10; }
-  #dash-brief.notice .b-dot { display: none; }
+  #dash-board .bd-go { flex: 0 0 auto; color: #7a5c10; font-size: 15px; }
+  /* Прочитанное объявление висит до своей даты, но уже спокойно. */
+  #dash-board .bd-row.read { background: var(--card-bg); border-color: var(--card-border);
+    box-shadow: var(--shadow-sm); }
+  #dash-board .bd-row.read .bd-ic { background: var(--accent-soft); }
+  #dash-board .bd-row.read .bd-h, #dash-board .bd-row.read .bd-t { color: var(--muted); }
   #dash-brief .b-ava {
     flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px;
     background: var(--accent-soft); color: var(--accent);
@@ -2971,6 +2985,9 @@
        Стоит ПОД дверями с 10.09.2026: двери - это то, ради чего человек
        открыл приложение, а пульс смотрят между делом. Раньше он шёл
        первым и отодвигал двери за первый экран. -->
+  <!-- Доска важного (17.09.2026): над пульсом, под дверями - двери остаются
+       на первом экране. См. boardRender и core/feed.py. -->
+  <div id="dash-board"></div>
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
     <div class="p-split" id="pulse-split"></div>
@@ -3718,6 +3735,7 @@
       notice_announce: 'Объявление',
       notice_retake: 'Нужно пересдать',
       notice_transfer: 'Перевод',
+      notice_task: 'Новое задание',
       nahw_done_title: 'Заход окончен 🤲',
       nahw_good: 'Получается: %L%',
       nahw_weak: 'Стоит повторить: %L%',
@@ -4424,24 +4442,49 @@
 
   // Строка дашборда. item выбирает сервер (важнейшее непрочитанное, а не
   // последнее по времени) - здесь только рисуем.
-  var NOTICE_ICON = { lesson: '📘', kick: '⚠️', announce: '📣', retake: '🎙', transfer: '➡️' };
+  var NOTICE_ICON = { lesson: '📘', kick: '⚠️', announce: '📣', retake: '🎙', transfer: '➡️', task: '🆕' };
+  // Доска важного (17.09.2026) - отдельно от строки чата: строка показывает
+  // последнее, а важное висит, пока не открыл (объявление - до своей даты).
+  function boardRender(list) {
+    var box = document.getElementById('dash-board');
+    list = list || [];
+    box.innerHTML = list.map(function (n, i) {
+      return '<div class="bd-row' + (n.read ? ' read' : '') + '" data-i="' + i + '" tabindex="0" role="button">' +
+        '<span class="bd-ic">' + (NOTICE_ICON[n.type] || '❗') + '</span>' +
+        '<span class="bd-body"><span class="bd-h">' + feedEsc(T('notice_' + n.type)) +
+        (n.source ? '<i>' + feedEsc(n.source) + '</i>' : '') + '</span>' +
+        '<span class="bd-t">' + feedEsc(n.text) + '</span></span><span class="bd-go">›</span></div>';
+    }).join('');
+    box.classList.toggle('on', !!list.length);
+    Array.prototype.forEach.call(box.querySelectorAll('.bd-row'), function (row) {
+      var go = function () { boardGo(list[+row.getAttribute('data-i')], row); };
+      row.addEventListener('click', go);
+      row.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    });
+  }
+  // Тап: отмечаем открытым и ведём к делу - урок в урок, пересдача в
+  // «Работа с устазом», остальное - в чат с полным текстом.
+  function boardGo(n, row) {
+    apiCall('/feed/notice', { method: 'POST', body: { id: n.id } }).then(function () {
+      sendHeartbeat();
+    }).catch(function () {});
+    row.classList.add('read');
+    var m = /^lesson:([a-z]):(\d+)$/.exec(n.link || '');
+    if (m) {
+      openLearn();
+      document.getElementById('learn-foot').style.display = 'none';
+      lessonsRenderOne(m[1], m[2]);
+    } else if (n.link === 'subs') {
+      openSubs();
+    } else {
+      feedOpen(n.chat_id);
+    }
+  }
   function feedBrief(f) {
     var box = document.getElementById('dash-brief');
-    briefNotice = (f && f.notice) || null;
-    box.classList.toggle('notice', !!briefNotice);
-    if (briefNotice) {
-      // Важное занимает строку целиком: пока не открыл, обычная лента ждёт.
-      briefChat = briefNotice.chat_id;
-      document.getElementById('brief-ava').textContent = NOTICE_ICON[briefNotice.type] || '❗';
-      document.getElementById('brief-who').textContent = T('notice_' + briefNotice.type);
-      document.getElementById('brief-src').textContent = briefNotice.source || '';
-      document.getElementById('brief-txt').textContent = briefNotice.text;
-      var nn = document.getElementById('brief-n');
-      nn.textContent = briefNotice.count > 1 ? briefNotice.count : '';
-      nn.classList.toggle('on', briefNotice.count > 1);
-      box.classList.add('on');
-      return;
-    }
+    boardRender(f && f.notices);
     if (!f || !f.item) { box.classList.remove('on'); return; }
     var it = f.item;
     briefChat = it.chat_id;
@@ -4626,31 +4669,12 @@
   }
 
   // Чат из строки запоминаем при отрисовке - по нему лента и откроется.
-  var briefChat = null, briefNotice = null;
-  // Тап по важному: отмечаем открытым и ведём к делу - урок в урок,
-  // пересдача в «Работа с устазом», остальное - в чат с полным текстом.
-  function briefGo() {
-    var n = briefNotice;
-    if (!n) { feedOpen(briefChat); return; }
-    apiCall('/feed/notice', { method: 'POST', body: { id: n.id } }).then(function () {
-      sendHeartbeat();
-    }).catch(function () {});
-    briefNotice = null;
-    document.getElementById('dash-brief').classList.remove('notice');
-    var m = /^lesson:([a-z]):(\d+)$/.exec(n.link || '');
-    if (m) {
-      openLearn();
-      document.getElementById('learn-foot').style.display = 'none';
-      lessonsRenderOne(m[1], m[2]);
-    } else if (n.link === 'subs') {
-      openSubs();
-    } else {
-      feedOpen(n.chat_id);
-    }
-  }
-  document.getElementById('dash-brief').addEventListener('click', briefGo);
+  var briefChat = null;
+  document.getElementById('dash-brief').addEventListener('click', function () {
+    feedOpen(briefChat);
+  });
   document.getElementById('dash-brief').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); briefGo(); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); feedOpen(briefChat); }
   });
   document.getElementById('feed-back').addEventListener('click', feedClose);
   document.addEventListener('keydown', function (e) {

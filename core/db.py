@@ -497,7 +497,7 @@ def _run_migrations(c):
         c.execute("ALTER TABLE users ADD COLUMN is_observer INTEGER DEFAULT 0")
 
     fcols = [r["name"] for r in c.execute("PRAGMA table_info(feed_messages)").fetchall()]
-    for col in ("notice", "notice_link", "notice_title"):
+    for col in ("notice", "notice_link", "notice_title", "notice_until"):
         if col not in fcols:
             c.execute("ALTER TABLE feed_messages ADD COLUMN " + col + " TEXT")
 

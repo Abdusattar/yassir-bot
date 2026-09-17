@@ -121,6 +121,10 @@ def seed_extra():
     with feed.important("lesson", link="lesson:n:%s" % part, to="777002",
                         title="Нахв: أنواع الكلمة (Виды слова)"):
         feed.record_outgoing(stand.CHAT, text="📘 Нахв: الكلمة — أنواع الكلمة (часть 1/1)")
+    # Объявление уже прочитано - на доске висит спокойным до своей даты.
+    with feed.important("announce", to="777002", until="2099-01-01"):
+        feed.record_outgoing(stand.CHAT, text="📣 С 19.09 группа сдаёт только через YassirApp")
+    feed.mark_notice_seen("777002", key="announce|")
     with feed.important("kick", title="Пропусков за месяц: 6 из 10 — прочитай"):
         feed.record_outgoing("777003", text="⚠️ Ибрахим, в этом месяце 6 пропусков...")
     for phone, days_ago in ((stand.STUDENT, 1), (stand.STUDENT, 7), ("777002", 1)):
@@ -518,7 +522,7 @@ MOCK_JS = """
     // Важное сообщение на дашборде и тап по нему (17.09.2026).
     nt_lesson: async function () { await wait(2500); },
     nt_kick: async function () { await wait(2500); },
-    nt_open: async function () { await wait(2500); $('dash-brief').click(); await wait(1500); },
+    nt_open: async function () { await wait(2500); document.querySelector('#dash-board .bd-row').click(); await wait(1500); },
     // Тренажёр нахва (17.09.2026) - настоящий код, без инъекций.
     nh_hub: async function () {
       await wait(2500); $('dash-trainer').click(); await wait(700);

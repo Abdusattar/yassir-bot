@@ -24,7 +24,9 @@
 """
 import contextvars
 import logging
+import re
 from contextlib import contextmanager
+from datetime import date, timedelta
 
 from config import SUPER_ADMIN_IDS
 from core.db import db
@@ -61,6 +63,13 @@ KIND_BY_FIELD = (
 #   announce - объявление, которое шлём сами (переход на YassirApp)
 #   retake   - устаз просит перезаписать сдачу (личное)
 #   transfer - перевод в другую группу (личное)
+#   task     - у группы появляется новое задание (таджвид, нахв)
+#
+# Живут на ДОСКЕ дашборда - отдельно от строки чата (решение пользователя
+# 17.09.2026): бот пишет и в группу, и в личку, строка чата показывает
+# последнее, а важное должно повисеть. Личное и урок уходят, когда человек
+# открыл. Объявление и новое задание (STICKY) висят до своей даты `until` -
+# после прочтения остаются спокойными, без свечения.
 #
 # Пометка ставится ТАМ, ГДЕ бот отправляет, а не угадывается по тексту:
 #
@@ -70,16 +79,23 @@ KIND_BY_FIELD = (
 # Отправщиков в core/tg.py одиннадцать, и тянуть параметр через каждый значило
 # бы забыть следующий - поэтому contextvar: record_outgoing читает его сам.
 # `to` - кому адресовано, если сообщение идёт в группу: остальным не покажем.
-NOTICE_TYPES = ("lesson", "kick", "announce", "retake", "transfer")
+NOTICE_TYPES = ("lesson", "kick", "announce", "retake", "transfer", "task")
+STICKY_TYPES = ("announce", "task")
+STICKY_DAYS = 2           # сколько висит объявление, если дата не названа
+BOARD_MAX = 3
 _notice = contextvars.ContextVar("feed_notice", default=None)
 
 
 @contextmanager
-def important(ntype, link=None, title=None, to=None):
+def important(ntype, link=None, title=None, to=None, until=None):
+    """until - дата ISO, до которой (включительно) висит объявление."""
     if ntype not in NOTICE_TYPES:
         raise ValueError("bad notice type: %s" % ntype)
+    if ntype in STICKY_TYPES and not until:
+        from core.db import get_date
+        until = (date.fromisoformat(get_date()) + timedelta(days=STICKY_DAYS)).isoformat()
     token = _notice.set({"type": ntype, "link": link, "title": title,
-                         "to": str(to) if to else None})
+                         "to": str(to) if to else None, "until": until})
     try:
         yield
     finally:
@@ -122,11 +138,12 @@ def record(chat_id, text=None, sender_id=None, sender_name=None, is_bot=0,
             c.execute("""
                 INSERT INTO feed_messages(chat_id, message_id, sender_id, sender_name,
                                           is_bot, kind, text, file_id, reply_to_user,
-                                          notice, notice_link, notice_title)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                                          notice, notice_link, notice_title, notice_until)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (str(chat_id), message_id, sender_id, sender_name,
                   1 if is_bot else 0, kind, (text or "")[:4000], file_id, reply_to_user,
-                  (notice or {}).get("type"), (notice or {}).get("link"), (notice or {}).get("title")))
+                  (notice or {}).get("type"), (notice or {}).get("link"), (notice or {}).get("title"),
+                  (notice or {}).get("until")))
     except Exception as e:
         log.error("feed.record error: %s: %s", type(e).__name__, e)
 
@@ -368,8 +385,11 @@ def mark_read(phone, last_id):
 
 
 def open_notices(phone, chats=None):
-    """Важное, которое человек ещё не открыл: по одному на ключ, свежее
-    первым. Адресованное другому (reply_to_user) не показываем."""
+    """[(строка, прочитано)] - доска человека: по одному на ключ, свежее
+    первым. Неоткрытое - всё; открытое - только объявления до их даты.
+    Адресованное другому (reply_to_user) не показываем."""
+    from core.db import get_date
+    today = get_date()
     me = str(phone)
     chats = chats if chats is not None else feed_chats_for(me)
     if not chats:
@@ -387,10 +407,16 @@ def open_notices(phone, chats=None):
     out, taken = [], set()
     for r in rows:
         key = _notice_key(r)
-        if key in taken or r["id"] <= seen.get(key, 0):
+        if key in taken:
             continue
-        taken.add(key)
-        out.append(r)
+        taken.add(key)                       # старое того же ключа не поднимаем
+        if r["notice_until"] and r["notice_until"] < today:
+            continue
+        read = r["id"] <= seen.get(key, 0)
+        if read and not (r["notice"] in STICKY_TYPES and r["notice_until"]):
+            continue
+        out.append((r, read))
+    out.sort(key=lambda x: x[1])             # непрочитанное выше
     return out
 
 
@@ -416,13 +442,14 @@ def mark_notice_seen(phone, feed_id=None, key=None):
 
 
 def _notice_out(rows, titles):
-    if not rows:
-        return None
-    r = rows[0]
-    text = r["notice_title"] or (r["text"] or "").strip().split("\n")[0]
-    return {"id": r["id"], "type": r["notice"], "link": r["notice_link"] or "",
-            "text": text, "chat_id": r["chat_id"], "source": titles.get(r["chat_id"]) or "",
-            "count": len(rows)}
+    out = []
+    for r, read in rows[:BOARD_MAX]:
+        # Значок типа рисует доска - свой эмодзи из начала текста убираем.
+        text = r["notice_title"] or re.sub(r"^\W+", "", (r["text"] or "").strip().split("\n")[0])
+        out.append({"id": r["id"], "type": r["notice"], "link": r["notice_link"] or "",
+                    "text": text, "chat_id": r["chat_id"], "read": read,
+                    "source": titles.get(r["chat_id"]) or ""})
+    return out
 
 
 def _row_out(r, titles, me):
@@ -515,12 +542,12 @@ def brief(phone):
             """, chats).fetchone()
 
     titles = _chat_titles(chats)
-    notice = _notice_out(open_notices(me, chats), titles)
+    notices = _notice_out(open_notices(me, chats), titles)
     if not rows:
         if not latest:
             return None
         out = _row_out(latest, titles, me)
-        return {"item": out, "unread": 0, "more": False, "top_id": latest["id"], "notice": notice}
+        return {"item": out, "unread": 0, "more": False, "top_id": latest["id"], "notices": notices}
 
     # Адресовано тебе: ответили на твоё сообщение или бот написал в личку.
     mine = [r for r in rows
@@ -539,7 +566,7 @@ def brief(phone):
         "unread": len(mine),
         "more": bool([r for r in others if r not in mine]),
         "top_id": rows[0]["id"],
-        "notice": notice,
+        "notices": notices,
     }
 
 

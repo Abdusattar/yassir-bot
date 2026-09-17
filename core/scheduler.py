@@ -1437,7 +1437,7 @@ async def app_only_countdown():
             names = " и ".join(SHORT_TASKS[k.strip()].lower() for k in written).capitalize()
             text += "\n\n" + T("app_only_written_note", glang, names=names)
         try:
-            with important("announce"):
+            with important("announce", until=since):
                 await send_message(chat_id, text)
             log.info("app_only_countdown: %s, осталось %s", group.get("title"), left)
             await asyncio.sleep(0.3)

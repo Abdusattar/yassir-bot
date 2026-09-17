@@ -332,38 +332,43 @@ def test_счётчик_на_чипе_считает_только_адресов
     assert n.get(ME) == 1
 
 
-# ── важные сообщения (17.09.2026) ─────────────────────────────────────────
+# ── важные сообщения: доска на дашборде (17.09.2026) ─────────────────────
 
 def _out(chat, text):
     from core.feed import record_outgoing
     record_outgoing(chat, result={"ok": True, "result": {"message_id": 1, "text": text}}, text=text)
 
 
-def test_важное_занимает_строку_и_уходит_после_открытия(test_db):
+def _board(who):
+    got = brief(who)
+    return (got or {}).get("notices") or []
+
+
+def test_урок_на_доске_и_уходит_после_открытия(test_db):
     from core.feed import important, mark_notice_seen
     _setup()
-    with important("lesson", link="lesson:n:7", title="Открылся урок · Нахв: Исм"):
+    with important("lesson", link="lesson:n:7", title="Нахв: Исм"):
         _out(MY_CHAT, "📘 Нахв: часть первая")
         _out(MY_CHAT, "продолжение длинного урока")        # урок ушёл двумя сообщениями
     _out(MY_CHAT, "обычная насыха")                        # без пометки
 
-    n = brief(ME)["notice"]
-    assert (n["type"], n["link"], n["count"]) == ("lesson", "lesson:n:7", 1)
-    assert n["text"] == "Открылся урок · Нахв: Исм"
-    assert brief(FRIEND)["notice"]["type"] == "lesson"     # урок - всей группе
+    board = _board(ME)
+    assert [(n["type"], n["link"], n["text"], n["read"]) for n in board] ==         [("lesson", "lesson:n:7", "Нахв: Исм", False)]
+    assert brief(ME)["item"]["text"] == "обычная насыха"   # строка чата живёт сама
+    assert _board(FRIEND)[0]["type"] == "lesson"           # урок - всей группе
 
-    mark_notice_seen(ME, feed_id=n["id"])
-    assert brief(ME)["notice"] is None
-    assert brief(FRIEND)["notice"] is not None             # у каждого своя отметка
+    mark_notice_seen(ME, feed_id=board[0]["id"])
+    assert _board(ME) == []
+    assert _board(FRIEND)                                  # у каждого своя отметка
 
 
-def test_урок_открытый_через_знания_тоже_гасит_карточку(test_db):
+def test_урок_открытый_через_знания_тоже_уходит_с_доски(test_db):
     from core.feed import important, mark_notice_seen
     _setup()
     with important("lesson", link="lesson:n:7"):
         _out(MY_CHAT, "📘 Нахв")
     mark_notice_seen(ME, key="lesson|lesson:n:7")
-    assert brief(ME)["notice"] is None
+    assert _board(ME) == []
 
 
 def test_личное_важное_в_группе_видит_только_адресат(test_db):
@@ -371,27 +376,56 @@ def test_личное_важное_в_группе_видит_только_ад�
     _setup()
     with important("retake", link="subs", to=ME, title="Устаз просит перезаписать"):
         _out(MY_CHAT, "Сатар, нужно пересдать")
-        _out(ME, "Сатар, нужно пересдать")                 # то же в личку - карточка одна
-    assert brief(ME)["notice"]["count"] == 1
-    assert brief(FRIEND) is None or brief(FRIEND)["notice"] is None
+        _out(ME, "Сатар, нужно пересдать")                 # то же в личку - строка одна
+    assert len(_board(ME)) == 1
+    assert _board(FRIEND) == []
 
 
-def test_новое_предупреждение_поднимает_карточку_снова(test_db):
+def test_новое_предупреждение_возвращается_на_доску(test_db):
     from core.feed import important, mark_notice_seen
     _setup()
     with important("kick"):
         _out(ME, "⚠️ пропусков 5")
-    mark_notice_seen(ME, feed_id=brief(ME)["notice"]["id"])
-    assert brief(ME)["notice"] is None
+    mark_notice_seen(ME, feed_id=_board(ME)[0]["id"])
+    assert _board(ME) == []
     with important("kick"):
         _out(ME, "⚠️ пропусков 6")
-    assert brief(ME)["notice"]["text"] == "⚠️ пропусков 6"
+    assert _board(ME)[0]["text"] == "пропусков 6"
 
 
-def test_чужое_важное_из_чужой_группы_не_видно(test_db):
+def test_объявление_висит_до_даты_а_после_прочтения_спокойное(test_db, monkeypatch):
+    import core.db as cdb
+    from core.feed import important, mark_notice_seen
+    _setup()
+    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-17")
+    with important("announce", until="2026-09-19"):
+        _out(MY_CHAT, "📣 переход 19.09")
+    with important("kick"):
+        _out(ME, "⚠️ пропуски")
+    mark_notice_seen(ME, feed_id=[n for n in _board(ME) if n["type"] == "announce"][0]["id"])
+    assert [(n["type"], n["read"]) for n in _board(ME)] == [("kick", False), ("announce", True)]
+    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-19")
+    assert "announce" in [n["type"] for n in _board(ME)]   # день события - ещё висит
+    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-20")
+    assert "announce" not in [n["type"] for n in _board(ME)]
+
+
+def test_объявление_без_даты_висит_два_дня(test_db, monkeypatch):
+    import core.db as cdb
+    from core.feed import important
+    _setup()
+    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-17")
+    with important("task"):
+        _out(MY_CHAT, "🆕 со следующего четверга - таджвид")
+    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-19")
+    assert _board(ME)
+    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-20")
+    assert _board(ME) == []
+
+
+def test_важное_из_чужой_группы_не_видно(test_db):
     from core.feed import important
     _setup()
     with important("announce"):
         _out(OTHER_CHAT, "📣 переход")
-    got = brief(ME)
-    assert got is None or got["notice"] is None
+    assert _board(ME) == []
