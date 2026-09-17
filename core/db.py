@@ -335,6 +335,12 @@ def init():
             );
             CREATE INDEX IF NOT EXISTS idx_nahw_answers_user
                 ON nahw_answers(user_id, skill, id);
+            /* Сколько первых навыков группа прошла на лекциях и получает
+               сразу (scripts/nahw_start_level.py). */
+            CREATE TABLE IF NOT EXISTS nahw_group_start(
+                group_id INTEGER PRIMARY KEY,
+                passed INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS nahw_sessions(
                 user_id TEXT PRIMARY KEY,
                 date TEXT NOT NULL,

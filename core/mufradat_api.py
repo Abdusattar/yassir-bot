@@ -1096,6 +1096,17 @@ def _nahw_open(user_id):
     return keys is None or "n" in keys
 
 
+def _nahw_passed(user_id):
+    """Сколько первых навыков открыто без условий: устазу и супер-админу -
+    все (им надо видеть, что сдают студенты), студенту - пройденное его
+    группой на лекциях."""
+    from core.nahw_trainer import SKILLS, group_passed
+    if _is_ustaz(user_id):
+        return len(SKILLS)
+    group = get_learning_group(user_id, include_prep=True)
+    return group_passed(group["id"]) if group else 0
+
+
 def _nahw_facts(user_id):
     if not _nahw_open(user_id):
         return None
@@ -1141,7 +1152,8 @@ async def handle_nahw_state(request, user_id):
     if not _nahw_open(user_id):
         return web.json_response({"error": "closed"}, status=403)
     from core.nahw_trainer import state
-    return web.json_response(dict(state(user_id), task=_nahw_task_state(user_id)))
+    return web.json_response(dict(state(user_id, passed=_nahw_passed(user_id)),
+                                  task=_nahw_task_state(user_id)))
 
 
 @with_auth
@@ -1155,7 +1167,8 @@ async def handle_nahw_answer(request, user_id):
         return web.json_response({"error": "bad_json"}, status=400)
     from core.nahw_trainer import answer
     try:
-        data, reached = answer(user_id, body.get("card"), body.get("choice"))
+        data, reached = answer(user_id, body.get("card"), body.get("choice"),
+                               passed=_nahw_passed(user_id))
     except ValueError:
         return web.json_response({"error": "bad_choice"}, status=400)
     if reached:
@@ -1168,7 +1181,8 @@ async def handle_nahw_new(request, user_id):
     if not _nahw_open(user_id):
         return web.json_response({"error": "closed"}, status=403)
     from core.nahw_trainer import new_session
-    return web.json_response(dict(new_session(user_id), task=_nahw_task_state(user_id)))
+    return web.json_response(dict(new_session(user_id, passed=_nahw_passed(user_id)),
+                                  task=_nahw_task_state(user_id)))
 
 
 @with_auth

@@ -1868,6 +1868,8 @@
   .nh-ref { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .nh-q { font-size: 15px; font-weight: 600; color: var(--ink); }
   .nh-opts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: 100%; max-width: 420px; }
+  .nh-opts.n2, .nh-opts.n4 { grid-template-columns: 1fr 1fr; }
+  .nh-q .ar { font-family: 'Scheherazade New', serif; font-size: 1.45em; }
   .trainer-opt.nh-opt { padding: 8px 6px 10px; }
   .nh-opt .ar { display: block; font-family: 'Scheherazade New', serif; font-size: 30px; line-height: 1.35; }
   .nh-opt .ru { display: block; font-size: 13px; color: var(--muted); }
@@ -3677,7 +3679,7 @@
       trainers_tajweed_sub: 'Места выхода букв',
       tajweed_title: 'Таджвид',
       nahw_title: 'Нахв',
-      trainers_nahw_sub: 'Виды слов в аятах',
+      trainers_nahw_sub: 'Грамматика на словах аятов',
       dash_trainers_nahw: 'Нахв %A%/%B%',
       nahw_question: 'Что это за слово?',
       nahw_hint: 'Слова из пройденных аятов. Определи вид слова — 10 верных за день засчитают нахв.',
@@ -3689,6 +3691,7 @@
       nahw_done_title: 'Заход окончен 🤲',
       nahw_good: 'Получается: %L%',
       nahw_weak: 'Стоит повторить: %L%',
+      nahw_new_skill: 'Открыт новый навык: %S%. Он будет приходить чаще, пока не освоишься.',
       nahw_stage_up: 'Открыта вторая ступень: слитные слова. Спрашиваю выделенную часть.',
       nahw_task_done: 'Нахв на сегодня засчитан ✅',
       nahw_task_left: 'До нормы дня ещё %N%',
@@ -10875,8 +10878,11 @@
 
   // Арабские вставки в русском тексте («есть артикль الـ») - крупнее, только размером.
   function nahwArabic(text) {
-    return nahwEsc(text).replace(/[؀-ۿ]+(?:[\s\/]+[؀-ۿ]+)*/g, function (m) {
-      return '<span class="ar">' + m + '</span>';
+    return nahwEsc(text).replace(/[\u0600-\u06FF]+(?:[\s\/]+[\u0600-\u06FF]+)*/g, function (m) {
+      // Знак «слева направо» после вставки (17.09.2026): иначе тире между
+      // двумя арабскими словами склеивает их в один кусок справа налево, и
+      // «نون التوكيد — معرب» читается задом наперёд.
+      return '<span class="ar">' + m + '</span>\u200E';
     });
   }
 
@@ -10896,6 +10902,7 @@
 
   function renderNahw(d) {
     nahwState = d;
+    window.__nahwCard = function () { return nahwState && nahwState.card; };   // для стенда снимков
     var body = document.getElementById('nahw-body');
     var pill = document.getElementById('nahw-daily');
     if (!d || d.error) {
@@ -10916,6 +10923,7 @@
       var f = d.finished;
       html = '<div class="trainer-msg">' + T('nahw_done_title') + '</div>';
       if (f.stage_up) html += '<div class="nh-sum"><b>' + T('nahw_stage_up') + '</b></div>';
+      if (f.new_skill) html += '<div class="nh-sum"><b>' + nahwArabic(T('nahw_new_skill', { S: f.new_skill })) + '</b></div>';
       if (f.good.length) html += '<div class="nh-sum">' + nahwArabic(T('nahw_good', { L: f.good.join(', ') })) + '</div>';
       if (f.weak.length) html += '<div class="nh-sum">' + nahwArabic(T('nahw_weak', { L: f.weak.join(', ') })) + '</div>';
       var left = Math.max(0, d.daily_target - d.daily_count);
@@ -10943,8 +10951,10 @@
     if (!d.daily_count && c.pos === 1 && !c.retry) html += '<div class="nh-hint">' + T('nahw_hint') + '</div>';
     html += '<div class="trainer-word-card"><div class="nh-ayah">' + nahwAyah(c.words) + '</div>' +
       '<div class="nh-ref">' + nahwEsc(c.ref) + '</div></div>';
-    html += '<div class="nh-q">' + T(c.compound ? 'nahw_question_part' : 'nahw_question') + '</div>';
-    html += '<div class="nh-opts">';
+    // Вопрос и кнопки - от навыка (17.09.2026): виды слова, признаки исма,
+    // число, время, معرب/مبني... Приходят с сервера готовыми.
+    html += '<div class="nh-q">' + nahwArabic(c.question || T('nahw_question')) + '</div>';
+    html += '<div class="nh-opts n' + d.options.length + '">';
     d.options.forEach(function (o) {
       html += '<button class="trainer-opt nh-opt" data-key="' + o.key + '"><span class="ar">' + o.ar +
         '</span><span class="ru">' + o.ru + '</span></button>';

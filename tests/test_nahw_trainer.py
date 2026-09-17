@@ -38,11 +38,17 @@ def _current(user_id):
 
 
 def _right(user_id):
-    return nt.CTYPES[_current(user_id)["ctype"]][0]
+    return nt.right_answer(_current(user_id))
 
 
 def _wrong(user_id):
-    return next(a for a in nt.ANSWERS if a != _right(user_id))
+    skill = nt._SKILL[_current(user_id)["skill"]]
+    return next(o["key"] for o in skill["options"] if o["key"] != _right(user_id))
+
+
+def _card_id(user_id):
+    cur = _current(user_id)
+    return cur["skill"] + "|" + cur["item"]
 
 
 def _item(ref):
@@ -50,38 +56,67 @@ def _item(ref):
     return nt.corpus().ayat["%s:%s" % (s, a)][w]
 
 
-def _ctype(ref, idx):
+def _ctype(ref, idx, skill="kinds"):
     s, a, w = ref.split(":")
     ayah = nt.corpus().ayat["%s:%s" % (s, a)]
-    return nt._classify(ayah[w], idx, ayah, int(w))
+    return nt._SKILL[skill]["classify"](ayah[w], idx, ayah, int(w))
 
 
 def test_classification_follows_lesson_signs():
-    assert _ctype("1:2:1", 1) == ("ism_al", 1)          # ٱلْحَمْدُ
-    assert _ctype("1:5:2", 0) == ("fil_mudari", 1)      # نَعْبُدُ
-    assert _ctype("1:7:4", 0) == ("c_harf", 2)          # عَلَيْ + هِمْ
-    assert _ctype("2:20:19", 0) == ("c_harf_pref", 2)   # وَ + أَبْصَٰرِ + هِمْ
-    assert _ctype("2:20:19", 1) == ("c_ism", 2)
+    assert _ctype("1:2:1", 1) == "ism_al"          # ٱلْحَمْدُ
+    assert _ctype("1:5:2", 0) == "fil_mudari"      # نَعْبُدُ
+    assert _ctype("1:7:4", 0) == "c_harf"          # عَلَيْ + هِمْ
+    assert _ctype("2:20:19", 0) == "c_harf_pref"   # وَ + أَبْصَٰرِ + هِمْ
+    assert _ctype("2:20:19", 1) == "c_ism"
     assert _ctype("2:20:19", 2) is None                 # ضمير - не в этом уроке
     assert _ctype("2:2:1", 0) is None                   # ذَٰلِكَ - указательное
-    assert _ctype("2:10:9", 0) == ("ism_tanwin", 1)     # أَلِيمٌۢ
+    assert _ctype("2:10:9", 0) == "ism_tanwin"     # أَلِيمٌۢ
     assert _ctype("1:2:1", 0) is None                   # ال - признак, не вопрос
 
 
 def test_every_indexed_item_has_its_answer_kind():
     kinds = {"ism": "N", "fil": "V", "harf": "P"}
-    for ctype, (ords, items) in nt.corpus().index.items():
+    for ctype, (ords, items) in nt.corpus().index["kinds"].items():
         assert ords == sorted(ords)
         for item in items[:200]:
             _, word, _, idx = nt.corpus().word(item)
-            assert word[idx][1] == kinds[nt.CTYPES[ctype][0]], (ctype, item)
+            assert word[idx][1] == kinds[nt._SKILL["kinds"]["ctypes"][ctype][0]], (ctype, item)
+
+
+def test_index_matches_skills_and_every_type_has_explanation():
+    assert set(nt.corpus().index) == {s["id"] for s in nt.SKILLS}
+    for skill in nt.SKILLS:
+        keys = {o["key"] for o in skill["options"]}
+        assert set(nt.corpus().index[skill["id"]]) <= set(skill["ctypes"])
+        for ctype, (ans, label) in skill["ctypes"].items():
+            assert ans in keys and label
+            assert skill["id"] == "kinds" or ctype in nt._EXPLAIN
+
+
+def test_later_skills_take_only_unambiguous_words():
+    assert _ctype("1:2:1", 1, "signs") == "sg_al"              # ٱلْحَمْدُ
+    assert _ctype("1:2:4", 1, "number") == "nm_p"              # ٱلْعَٰلَمِينَ
+    assert _ctype("1:5:2", 0, "tense") == "tn_mudari"          # نَعْبُدُ
+    assert _ctype("1:5:2", 0, "bina") == "bn_mudari"
+    assert _ctype("1:5:2", 0, "irab") == "ir_vind"
+    assert _ctype("1:6:1", 0, "bina") == "bn_amr"              # ٱهْدِنَا
+    assert _ctype("1:6:1", 1, "bina") == "bn_pron"
+    assert _ctype("1:7:4", 0, "bina") == "bn_harf"             # عَلَيْهِمْ
+    assert _ctype("1:2:1", 1, "defin") == "df_al"
+    assert _ctype("2:10:9", 0, "defin") == "df_indef"          # أَلِيمٌۢ
+    assert _ctype("1:2:1", 1, "irab") == "ir_nom"
+    for skill in nt.SKILLS:                                     # имя Аллаха - нигде
+        assert _ctype("2:61:50", 0, skill["id"]) is None
 
 
 def test_name_of_allah_is_never_asked():
     """Проверка по буквам, не по записи с харакатами: 17.09.2026 исключение
     по строке «LEM:اللَّه» молча не срабатывало из-за порядка шадды и фатхи."""
-    asked = [item for _, items in nt.corpus().index.values() for item in items
-             if nt._letters(nt.corpus().word(item)[1][nt.corpus().word(item)[3]][0]) in ("الله", "لله", "اللهم")]
+    asked = []
+    for types in nt.corpus().index.values():
+        for _, items in types.values():
+            asked += [i for i in items
+                      if nt._letters(nt.corpus().word(i)[1][nt.corpus().word(i)[3]][0]) in ("الله", "لله", "اللهم")]
     assert asked == []
     assert _ctype("2:61:50", 0) is None
 
@@ -109,19 +144,19 @@ def test_mistake_repeats_with_another_word_of_the_same_type(test_db, monkeypatch
     _lesson()
     nt.new_session("777")
     first = _current("777")
-    data, _ = nt.answer("777", first["item"], _wrong("777"))
+    data, _ = nt.answer("777", _card_id("777"), _wrong("777"))
     assert data["feedback"]["correct"] is False and data["feedback"]["explain"]
     seen = [first["item"]]
     while _current("777") and not _current("777")["retry"]:
         cur = _current("777")
         seen.append(cur["item"])
-        nt.answer("777", cur["item"], _right("777"))
+        nt.answer("777", _card_id("777"), _right("777"))
     retry = _current("777")
     assert retry["ctype"] == first["ctype"] and retry["item"] not in seen
-    data, _ = nt.answer("777", retry["item"], _right("777"))
+    data, _ = nt.answer("777", _card_id("777"), _right("777"))
     fin = data["finished"]
     assert fin["size"] == nt.SESSION_SIZE
-    assert nt.CTYPES[first["ctype"]][1] in fin["weak"]
+    assert nt._SKILL["kinds"]["ctypes"][first["ctype"]][1] in fin["weak"]
     assert data["daily_count"] == nt.SESSION_SIZE        # 9 сразу + 1 с повтора
 
 
@@ -141,11 +176,68 @@ def test_stage_two_opens_after_85_percent_of_40(test_db, monkeypatch):
         n = 0
         while _current("777"):
             choice = _wrong("777") if (i == 0 and n < 6) else _right("777")
-            nt.answer("777", _current("777")["item"], choice)
+            nt.answer("777", _card_id("777"), choice)
             n += 1
     assert nt.stage_of("777") == 2
     nt.new_session("777")
     assert nt._load_session("777")["stage"] == 2
+
+
+def _answer_all(user_id, passed=0, rounds=1):
+    data = None
+    for _ in range(rounds):
+        nt.new_session(user_id, passed)
+        while _current(user_id):
+            data, _ = nt.answer(user_id, _card_id(user_id), _right(user_id), passed)
+    return data
+
+
+def test_next_skill_opens_step_by_step(test_db, monkeypatch):
+    """Урок опубликован И предыдущий навык освоен - иначе навык закрыт."""
+    _no_sources(monkeypatch)
+    _lesson()
+    _lesson("اسم وعلامته — часть 1 (Имя и его признаки)")
+    assert [s["id"] for s in nt.open_skills("777")] == ["kinds"]
+    _answer_all("777", rounds=16)                # 40 на ступени 1, затем 40 на ступени 2
+    assert nt.skill_mastered("777", "kinds")
+    assert [s["id"] for s in nt.open_skills("777")] == ["kinds", "signs"]
+    # «Число» ждёт освоения «Признаков исма», хотя урок уже вышел
+    _lesson("الجمع وأنواعه — часть 1")
+    assert [s["id"] for s in nt.open_skills("777")] == ["kinds", "signs"]
+    # новый навык приходит чаще старого
+    skills = []
+    for _ in range(3):
+        nt.new_session("777")
+        while _current("777"):
+            skills.append(_current("777")["skill"])
+            nt.answer("777", _card_id("777"), _right("777"))
+    assert skills.count("signs") > skills.count("kinds")
+
+
+def test_new_skill_is_announced_once(test_db, monkeypatch):
+    _no_sources(monkeypatch)
+    _lesson()
+    _lesson("اسم وعلامته — часть 1")
+    told = [_answer_all("777")["finished"].get("new_skill") for _ in range(18)]
+    assert told.count("Признаки исма") == 1
+
+
+def test_group_that_passed_lectures_gets_skills_at_once(test_db, monkeypatch):
+    _no_sources(monkeypatch)
+    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord["2:141"])
+    _lesson()
+    g = _group()
+    nt.set_group_passed(g["id"], 5)
+    assert nt.group_passed(g["id"]) == 5
+    got = [s["id"] for s in nt.open_skills("777", passed=5)]
+    assert got == ["kinds", "signs", "number", "tense", "bina"]   # уроков по ним ещё нет
+    seen = set()
+    for _ in range(8):
+        nt.new_session("777", 5)
+        while _current("777"):
+            seen.add(_current("777")["skill"])
+            nt.answer("777", _card_id("777"), _right("777"), 5)
+    assert seen == set(got)
 
 
 def test_ten_right_credit_nahw_once_and_tell_the_group(test_db, monkeypatch):
@@ -191,6 +283,8 @@ def test_hidden_for_group_without_nahw_but_open_for_ustaz(test_db, monkeypatch):
     status, data = _call("GET", "/api/muf/nahw", "555")
     assert status == 200 and data["task"] is None
     assert api._dashboard_facts("555")["nahw"] == {"done": 0, "target": 10}
+    # устазу открыты все навыки сразу - ему надо видеть, что сдают студенты
+    assert api._nahw_passed("555") == len(nt.SKILLS) and api._nahw_passed("777") == 0
 
 
 def _call(method, path, user_id, body=None):

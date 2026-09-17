@@ -108,6 +108,8 @@ def seed_extra():
                 "INSERT INTO nahw_answers(user_id, date, skill, ctype, stage, item, correct, retry)"
                 " VALUES('777002','2026-09-10','kinds','ism_al',1,'1:2:1:1',1,0)", [()] * 40)
         conn.execute("DELETE FROM nahw_sessions")
+        # 777003 - как N-1: все навыки открыты лекциями (снимки nhs_*).
+        conn.execute("DELETE FROM nahw_answers WHERE user_id='777003'")
         conn.execute("DELETE FROM nahw_answers WHERE user_id=?", (stand.STUDENT,))
     for phone, days_ago in ((stand.STUDENT, 1), (stand.STUDENT, 7), ("777002", 1)):
         user = db.find_user_by_phone(phone)
@@ -533,6 +535,28 @@ MOCK_JS = """
       await scenes.nh2_part();
       document.querySelector('.nh-opt[data-key="fil"]').click(); await wait(900);
     },
+    // Навыки дальше «Видов слова»: листаем до нужного и отвечаем первой кнопкой.
+    nhs: async function (title) {
+      await scenes.nh_card();
+      for (var i = 0; i < 140; i++) {
+        var c = window.__nahwCard && window.__nahwCard();
+        if ($('nh-more')) { $('nh-more').click(); await wait(900); continue; }
+        if (c && c.skill === title && !$('nh-next')) break;
+        if ($('nh-next')) { $('nh-next').click(); await wait(500); continue; }
+        var o = document.querySelector('.nh-opt:not(:disabled)');
+        if (o) o.click();
+        await wait(600);
+      }
+      var first = document.querySelector('.nh-opt:not(:disabled)');
+      if (first) first.click();
+      await wait(900);
+    },
+    nhs_signs: async function () { await scenes.nhs('Признаки исма'); },
+    nhs_number: async function () { await scenes.nhs('Число'); },
+    nhs_tense: async function () { await scenes.nhs('Время глагола'); },
+    nhs_bina: async function () { await scenes.nhs('معرب и مبني'); },
+    nhs_defin: async function () { await scenes.nhs('معرفة и نكرة'); },
+    nhs_irab: async function () { await scenes.nhs('Иъраб'); },
     nh_done: async function () {
       await scenes.nh_card();
       for (var i = 0; i < 120 && !$('nh-more'); i++) {
@@ -628,7 +652,7 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
+VARIANTS = ["nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
             "kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
             "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
@@ -642,6 +666,8 @@ VARIANTS = ["nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answe
 COMPARE = {
     "knowledge": [("kn_door", "Без предметов · дашборд"), ("kn_learn", "Без предметов · Знания"),
                   ("tj_door", "С таджвидом · дашборд"), ("tj_learn", "С таджвидом · Знания")],
+    "nahw_skills": [("nhs_signs", "Признаки исма"), ("nhs_number", "Число"), ("nhs_tense", "Время глагола"),
+                    ("nhs_bina", "معرب / مبني"), ("nhs_defin", "معرفة / نكرة"), ("nhs_irab", "Иъраб")],
     "nahw": [("tj_door", "Дашборд"), ("nh_hub", "Тренажёры"), ("nh_card", "Карточка"),
              ("nh_answer", "Мимо"), ("nh2_part", "Слитное слово"), ("nh2_answer", "Разбор частей"),
              ("nh_done", "Итог захода")],
@@ -675,6 +701,8 @@ def page(variant):
     # сцен-предложений, «как сейчас» ничего не дорисовывает.
     if variant.startswith("kn_"):
         return stand.dev_index("777004", "Юсуф") + MOCK_CSS + MOCK_JS
+    if variant.startswith("nhs_"):
+        return stand.dev_index("777003", "Ибрахим") + MOCK_CSS + MOCK_JS
     if variant.startswith("nh2_"):
         return stand.dev_index("777002", "Хамза") + MOCK_CSS + MOCK_JS
     if variant.startswith(("les_stu", "tj_", "nh_")):
@@ -683,6 +711,12 @@ def page(variant):
 
 
 def build():
+    # Ибрахим (777003) - как студент N-1: все навыки нахва открыты лекциями.
+    # Группа на стенде одна, поэтому уровень подменяется по человеку.
+    import core.mufradat_api as api
+    import core.nahw_trainer as nt
+    real = api._nahw_passed
+    api._nahw_passed = lambda uid: len(nt.SKILLS) if str(uid) == "777003" else real(uid)
     app = stand.build_app()
     seed_extra()
 
@@ -756,7 +790,7 @@ def main():
         subprocess.run([
             chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
             "--window-size=%d,%d" % (WIDTH, HEIGHT),
-            "--virtual-time-budget=%d" % (90000 if name in ("tj_done", "nh_done", "nh2_part", "nh2_answer")
+            "--virtual-time-budget=%d" % (90000 if name in ("tj_done", "nh_done", "nh2_part", "nh2_answer") or name.startswith("nhs_")
                                           else 17000),
             "--screenshot=%s" % png,
             "http://127.0.0.1:%d/vframe?v=%s" % (PORT, name),

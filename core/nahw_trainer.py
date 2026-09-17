@@ -57,35 +57,6 @@ MIN_POOL_PAGE = 5
 
 CORPUS_PATH = os.path.join(os.path.dirname(__file__), "nahw_corpus.json.gz")
 
-ANSWERS = ("ism", "fil", "harf")
-ANSWER_AR = {"ism": "اسم", "fil": "فعل", "harf": "حرف"}
-ANSWER_RU = {"ism": "Исм", "fil": "Фиаль", "harf": "Харф"}
-
-# Тип случая -> (ответ, подпись для итога захода). Порядок - как в уроке.
-CTYPES = {
-    "ism_al":       ("ism",  "исм с артиклем الـ"),
-    "ism_tanwin":   ("ism",  "исм с танвином"),
-    "ism_jarr":     ("ism",  "исм после харфа джарр"),
-    "ism_plain":    ("ism",  "исм без внешнего признака"),
-    "fil_qad":      ("fil",  "фиаль после قَدْ"),
-    "fil_sa":       ("fil",  "фиаль с سَ / سَوْفَ"),
-    "fil_tat":      ("fil",  "фиаль с تْ на конце"),
-    "fil_madi":     ("fil",  "фиаль прошедшего времени"),
-    "fil_mudari":   ("fil",  "фиаль настоящего-будущего"),
-    "fil_amr":      ("fil",  "фиаль-повеление"),
-    "harf_jarr":    ("harf", "харф джарр"),
-    "harf_other":   ("harf", "другие харфы"),
-    # Ступень 2 - часть слитного слова.
-    "c_harf_pref":  ("harf", "харф, прилипший к слову"),
-    "c_ism":        ("ism",  "исм внутри слитного слова"),
-    "c_fil":        ("fil",  "фиаль внутри слитного слова"),
-    "c_harf":       ("harf", "харф с прилипшим местоимением"),
-}
-
-SKILLS = (
-    {"id": "kinds", "lesson": "أنواع الكلمة", "title": "Виды слова"},
-)
-
 # Не спрашиваются в «Видах слова»: местоимения, указательные, относительные,
 # вопросительные и условные слова, наречия места и времени - это исмы, но
 # узнаются по темам, которых в уроке ещё не было. Показываются в разборе.
@@ -107,10 +78,6 @@ def _is_sign_prefix(seg):
     """ال и سَ - признаки, а не отдельная часть для вопроса."""
     f = _feats(seg)
     return "DET" in f or ("FUT" in f and "PREF" in f)
-
-
-def _answer_of(seg):
-    return {"N": "ism", "V": "fil", "P": "harf"}[seg[1]]
 
 
 def _letters(text):
@@ -176,8 +143,8 @@ def _signs(word, idx, ayah, pos):
     return out
 
 
-def _classify(word, idx, ayah, pos):
-    """(ctype, stage) или None, если эту часть не спрашиваем."""
+def _classify_kinds(word, idx, ayah, pos):
+    """Тип случая или None, если эту часть не спрашиваем."""
     seg = word[idx]
     if _is_sign_prefix(seg) or not _askable(seg) or "SUFF" in _feats(seg):
         return None
@@ -185,22 +152,215 @@ def _classify(word, idx, ayah, pos):
     if rest:
         f = _feats(seg)
         if "PREF" in f:
-            return ("c_harf_pref", 2) if seg[1] == "P" else None
-        return {"N": "c_ism", "V": "c_fil", "P": "c_harf"}[seg[1]], 2
+            return "c_harf_pref" if seg[1] == "P" else None
+        return {"N": "c_ism", "V": "c_fil", "P": "c_harf"}[seg[1]]
     f, signs = _feats(seg), _signs(word, idx, ayah, pos)
     if seg[1] == "N":
         for s in ("al", "tanwin", "jarr"):
             if s in signs:
-                return "ism_" + s, 1
-        return "ism_plain", 1
+                return "ism_" + s
+        return "ism_plain"
     if seg[1] == "V":
         for s in ("qad", "sa", "tat"):
             if s in signs:
-                return "fil_" + s, 1
+                return "fil_" + s
         if "IMPV" in f:
-            return "fil_amr", 1
-        return ("fil_mudari" if "IMPF" in f else "fil_madi"), 1
-    return ("harf_jarr" if "P" in f else "harf_other"), 1
+            return "fil_amr"
+        return "fil_mudari" if "IMPF" in f else "fil_madi"
+    return "harf_jarr" if "P" in f else "harf_other"
+
+
+# ── Навыки дальше «Видов слова» (17.09.2026) ───────────────────────────────
+# Общее правило: спрашиваем только однозначные случаи. Спорное (قَبْلُ/بَعْدُ
+# на дамме, إضافة без ال, составные числительные, مضارع с نون التوكيد) в
+# вопросы не идёт вовсе - пропустить слово лучше, чем научить ошибке.
+
+def _plain_noun(seg):
+    """Обычный исм: не местоимение, не указательное, не наречие и т.п."""
+    f = _feats(seg)
+    return seg[1] == "N" and bool(seg[0]) and not (f & _SKIP_NOUN) and not _is_allah(f)
+
+
+def _lemma(seg):
+    return next((_letters(x[4:]) for x in seg[2].split("|") if x.startswith("LEM:")), "")
+
+
+def _classify_signs(word, idx, ayah, pos):
+    """Признак исма - только когда он у слова ровно один."""
+    seg = word[idx]
+    if not _plain_noun(seg) or "SUFF" in _feats(seg):
+        return None
+    signs = _signs(word, idx, ayah, pos)
+    return "sg_" + signs[0] if len(signs) == 1 else None
+
+
+_NUMBER = {"MS": "s", "FS": "s", "S": "s", "MD": "d", "FD": "d", "D": "d",
+           "MP": "p", "FP": "p", "P": "p"}
+
+
+_COLLECTIVE = {"ناس", "قوم", "نساء", "رهط", "نفر", "اهل", "أهل", "ذريه", "ذرية"}
+
+
+def _classify_number(word, idx, ayah, pos):
+    """Только слова с явной пометкой числа: у «M»/«F» без числа корпус
+    единственное не утверждает."""
+    seg = word[idx]
+    if not _plain_noun(seg) or "PN" in _feats(seg):
+        return None
+    if _lemma(seg) in _COLLECTIVE:
+        return None                   # اسم جمع (ناس، قوم) - не جمع в строгом смысле
+    got = [_NUMBER[x] for x in _feats(seg) if x in _NUMBER]
+    return "nm_" + got[0] if len(got) == 1 else None
+
+
+def _classify_tense(word, idx, ayah, pos):
+    seg, f = word[idx], _feats(word[idx])
+    if seg[1] != "V":
+        return None
+    return "tn_amr" if "IMPV" in f else "tn_mudari" if "IMPF" in f else "tn_madi"
+
+
+def _has_emph_nun(word):
+    return any("EMPH" in _feats(s) and "SUFF" in _feats(s) for s in word)
+
+
+_VAGUE_LEMMAS = {"قبل", "بعد", "غير", "مثل", "سوي", "سوى", "شبه", "كل", "بعض", "اي", "أي"}
+
+
+def _classify_bina(word, idx, ayah, pos):
+    seg, f = word[idx], _feats(word[idx])
+    if not seg[0]:
+        return None
+    if seg[1] == "V":
+        if _has_emph_nun(word):
+            return None               # مبني только при прямом примыкании нуна
+        if "PERF" in f:
+            return "bn_madi"
+        if "IMPV" in f:
+            return "bn_amr"
+        return "bn_mudari_nun" if f & {"3FP", "2FP"} else "bn_mudari"
+    if seg[1] == "P":
+        # Буквы внутри ذَٰلِكَ и هَٰذَا (لام البعد، كاف الخطاب، هاء التنبيه) отдельно
+        # не спрашиваем - слово показывается целым.
+        return None if f & {"DET", "INL", "ADDR", "DIST", "ATT"} else "bn_harf"
+    if _is_allah(f):
+        return None
+    if "PRON" in f:
+        return "bn_pron"
+    if f & {"DEM", "REL"}:
+        return None if f & {"MD", "FD", "D"} else "bn_dem"      # هذان، اللذان - معرب
+    if not _plain_noun(seg) or not f & {"NOM", "ACC", "GEN"}:
+        return None
+    lemma = _lemma(seg)
+    if lemma in _VAGUE_LEMMAS or "عشر" in lemma:
+        return None
+    return "bn_noun"
+
+
+def _classify_defin(word, idx, ayah, pos):
+    seg, f = word[idx], _feats(word[idx])
+    if seg[1] != "N" or not seg[0] or _is_allah(f) or "SUFF" in f:
+        return None
+    if "PRON" in f:
+        return "df_pron"
+    if f & {"DEM", "REL"}:
+        return "df_dem"
+    if not _plain_noun(seg):
+        return None
+    if "PN" in f:
+        return "df_pn"
+    if any("DET" in _feats(x) for x in word[:idx]):
+        return "df_al"
+    if _lemma(seg) in _VAGUE_LEMMAS:
+        return None                   # غير، مثل и с местоимением остаются نكرة
+    if any("PRON" in _feats(x) and "SUFF" in _feats(x) for x in word[idx + 1:]):
+        return "df_mudaf"
+    return "df_indef" if "INDEF" in f else None
+
+
+_CASE = {"NOM": "ir_nom", "ACC": "ir_acc", "GEN": "ir_gen"}
+_MOOD = {"MOOD:IND": "ir_vind", "MOOD:SUBJ": "ir_vsubj", "MOOD:JUS": "ir_vjus"}
+
+
+def _classify_irab(word, idx, ayah, pos):
+    seg, f = word[idx], _feats(word[idx])
+    if seg[1] == "V":
+        if "IMPF" not in f or _has_emph_nun(word) or f & {"3FP", "2FP"}:
+            return None
+        return next((_MOOD[x] for x in f if x in _MOOD), None)
+    if _classify_bina(word, idx, ayah, pos) != "bn_noun":
+        return None
+    return next((_CASE[x] for x in f if x in _CASE), None)
+
+
+def _opt(key, ar, ru):
+    return {"key": key, "ar": ar, "ru": ru}
+
+
+# Порядок - план Умар устаза (knowledge/нахв): так навыки и открываются.
+# lesson - начало темы урока в curriculum_parts; None - письменного урока ещё
+# нет, навык открывается только группе, прошедшей тему на лекциях
+# (scripts/nahw_start_level.py). Урок написан - вписать сюда его тему.
+# ctypes: тип случая -> (ответ, подпись для итога захода).
+SKILLS = (
+    {"id": "kinds", "lesson": "أنواع الكلمة", "title": "Виды слова", "staged": True,
+     "question": "Что это за слово?", "question_part": "Что за выделенная часть слова?",
+     "classify": _classify_kinds,
+     "options": (_opt("ism", "اسم", "Исм"), _opt("fil", "فعل", "Фиаль"), _opt("harf", "حرف", "Харф")),
+     "ctypes": {
+         "ism_al": ("ism", "исм с артиклем الـ"), "ism_tanwin": ("ism", "исм с танвином"),
+         "ism_jarr": ("ism", "исм после харфа джарр"), "ism_plain": ("ism", "исм без внешнего признака"),
+         "fil_qad": ("fil", "фиаль после قَدْ"), "fil_sa": ("fil", "фиаль с سَ / سَوْفَ"),
+         "fil_tat": ("fil", "фиаль с تْ на конце"), "fil_madi": ("fil", "фиаль прошедшего времени"),
+         "fil_mudari": ("fil", "фиаль настоящего-будущего"), "fil_amr": ("fil", "фиаль-повеление"),
+         "harf_jarr": ("harf", "харф джарр"), "harf_other": ("harf", "другие харфы"),
+         # Ступень 2 - часть слитного слова.
+         "c_harf_pref": ("harf", "харф, прилипший к слову"), "c_ism": ("ism", "исм внутри слитного слова"),
+         "c_fil": ("fil", "фиаль внутри слитного слова"), "c_harf": ("harf", "харф с прилипшим местоимением"),
+     }},
+    {"id": "signs", "lesson": "اسم وعلامته", "title": "Признаки исма",
+     "question": "По какому признаку видно, что это исм?", "classify": _classify_signs,
+     "options": (_opt("al", "الـ", "Артикль"), _opt("tanwin", "تنوين", "Танвин"), _opt("jarr", "حرف جر", "Харф джарр")),
+     "ctypes": {"sg_al": ("al", "признак الـ"), "sg_tanwin": ("tanwin", "признак танвин"),
+                "sg_jarr": ("jarr", "признак харф джарр")}},
+    {"id": "number", "lesson": "الجمع وأنواعه", "title": "Число",
+     "question": "В каком числе стоит слово?", "classify": _classify_number,
+     "options": (_opt("s", "مفرد", "Единственное"), _opt("d", "مثنى", "Двойственное"),
+                 _opt("p", "جمع", "Множественное")),
+     "ctypes": {"nm_s": ("s", "единственное число"), "nm_d": ("d", "двойственное число"),
+                "nm_p": ("p", "множественное число")}},
+    {"id": "tense", "lesson": None, "title": "Время глагола",
+     "question": "Какой это глагол?", "classify": _classify_tense,
+     "options": (_opt("madi", "ماض", "Прошедшее"), _opt("mudari", "مضارع", "Наст.-будущее"),
+                 _opt("amr", "أمر", "Повеление")),
+     "ctypes": {"tn_madi": ("madi", "глагол ماض"), "tn_mudari": ("mudari", "глагол مضارع"),
+                "tn_amr": ("amr", "глагол أمر")}},
+    {"id": "bina", "lesson": None, "title": "معرب и مبني",
+     "question": "معرب или مبني?", "classify": _classify_bina,
+     "options": (_opt("murab", "معرب", "Конец меняется"), _opt("mabni", "مبني", "Конец не меняется")),
+     "ctypes": {"bn_noun": ("murab", "исм — معرب"), "bn_mudari": ("murab", "مضارع — معرب"),
+                "bn_madi": ("mabni", "ماض — مبني"), "bn_amr": ("mabni", "أمر — مبني"),
+                "bn_mudari_nun": ("mabni", "مضارع с نون النسوة"), "bn_harf": ("mabni", "харфы — مبني"),
+                "bn_pron": ("mabni", "местоимения — مبني"), "bn_dem": ("mabni", "указательные и относительные")}},
+    {"id": "defin", "lesson": None, "title": "معرفة и نكرة",
+     "question": "معرفة или نكرة?", "classify": _classify_defin,
+     "options": (_opt("marifa", "معرفة", "Определённое"), _opt("nakira", "نكرة", "Неопределённое")),
+     "ctypes": {"df_al": ("marifa", "معرفة с الـ"), "df_pn": ("marifa", "имя собственное"),
+                "df_pron": ("marifa", "местоимение"), "df_dem": ("marifa", "указательные и относительные"),
+                "df_mudaf": ("marifa", "исм с прилипшим местоимением"), "df_indef": ("nakira", "نكرة с танвином")}},
+    {"id": "irab", "lesson": None, "title": "Иъраб",
+     "question": "Какой иъраб у слова?", "classify": _classify_irab,
+     "options": (_opt("raf", "مرفوع", "Раф‘"), _opt("nasb", "منصوب", "Насб"),
+                 _opt("jarr", "مجرور", "Джарр"), _opt("jazm", "مجزوم", "Джазм")),
+     "ctypes": {"ir_nom": ("raf", "исм مرفوع"), "ir_acc": ("nasb", "исм منصوب"), "ir_gen": ("jarr", "исм مجرور"),
+                "ir_vind": ("raf", "مضارع مرفوع"), "ir_vsubj": ("nasb", "مضارع منصوب"),
+                "ir_vjus": ("jazm", "مضارع مجزوم")}},
+)
+_SKILL = {s["id"]: s for s in SKILLS}
+
+
+def _stage(ctype):
+    return 2 if ctype.startswith("c_") else 1
 
 
 class _Corpus:
@@ -215,25 +375,25 @@ class _Corpus:
         self.ayat = data["ayat"]
         keys = sorted(self.ayat, key=lambda k: tuple(int(x) for x in k.split(":")))
         self.ord = {k: i for i, k in enumerate(keys)}
-        self.index = {}          # ctype -> ([ord...], [item...])
+        self.index = {}          # skill -> ctype -> ([ord...], [item...])
         if data.get("index"):
-            # Собран scripts/build_nahw_corpus.py: разбор 77 тысяч слов на
-            # ходу занимает секунды, а первый вход после рестарта бота ждать
-            # не должен.
-            for ctype, (ords, items) in data["index"].items():
-                self.index[ctype] = (ords, items)
+            # Собран scripts/build_nahw_corpus.py: разбор всех слов на ходу
+            # занимает секунды, а первый вход после рестарта ждать не должен.
+            self.index = {sk: {t: (o, i) for t, (o, i) in types.items()}
+                          for sk, types in data["index"].items()}
             return
         for key in keys:
             ayah = self.ayat[key]
             for pos in sorted(ayah, key=int):
                 word = ayah[pos]
                 for idx in range(len(word)):
-                    got = _classify(word, idx, ayah, int(pos))
-                    if not got:
-                        continue
-                    ords, items = self.index.setdefault(got[0], ([], []))
-                    ords.append(self.ord[key])
-                    items.append("%s:%s:%d" % (key, pos, idx))
+                    for skill in SKILLS:
+                        ctype = skill["classify"](word, idx, ayah, int(pos))
+                        if not ctype:
+                            continue
+                        ords, items = self.index.setdefault(skill["id"], {}).setdefault(ctype, ([], []))
+                        ords.append(self.ord[key])
+                        items.append("%s:%s:%d" % (key, pos, idx))
 
     def word(self, item):
         s, a, pos, idx = item.split(":")
@@ -250,17 +410,43 @@ def corpus():
 
 # ── Пул, открытость, статистика ────────────────────────────────────────────
 
-def open_skills():
-    """Навыки, чей урок уже опубликован в этой базе."""
+def _published_topics():
     try:
         with db() as c:
-            topics = [r["topic"] or "" for r in c.execute(
+            return [r["topic"] or "" for r in c.execute(
                 "SELECT topic FROM curriculum_parts"
                 " WHERE subject='n' AND published_at IS NOT NULL").fetchall()]
     except Exception as e:
-        log.error("nahw open_skills error: %s: %s", type(e).__name__, e)
+        log.error("nahw topics error: %s: %s", type(e).__name__, e)
         return []
-    return [s for s in SKILLS if any(t.startswith(s["lesson"]) for t in topics)]
+
+
+def group_passed(group_id):
+    """Сколько первых навыков группа прошла на лекциях (scripts/nahw_start_level.py)."""
+    with db() as c:
+        row = c.execute("SELECT passed FROM nahw_group_start WHERE group_id=?", (group_id,)).fetchone()
+    return row["passed"] if row else 0
+
+
+def set_group_passed(group_id, passed):
+    with db() as c:
+        c.execute("INSERT INTO nahw_group_start(group_id, passed) VALUES(?,?)"
+                  " ON CONFLICT(group_id) DO UPDATE SET passed=excluded.passed", (group_id, passed))
+
+
+def open_skills(user_id=None, passed=0):
+    """Навыки по порядку, пока цепочка не прервётся. Первые `passed` открыты
+    лекциями. Дальше шаг за шагом: урок навыка опубликован в этой базе И
+    предыдущий навык освоен (первому навыку хватает урока)."""
+    topics, out = _published_topics(), []
+    for i, skill in enumerate(SKILLS):
+        if i >= passed:
+            if not skill["lesson"] or not any(t.startswith(skill["lesson"]) for t in topics):
+                break
+            if i > 0 and i - 1 >= passed and not (user_id and skill_mastered(user_id, SKILLS[i - 1]["id"])):
+                break
+        out.append(skill)
+    return out
 
 
 def _pool_limit(user_id):
@@ -301,12 +487,17 @@ def _mastered(history):
 
 
 def stage_of(user_id, skill="kinds"):
+    if not _SKILL[skill].get("staged"):
+        return 1
     return 2 if _mastered(_first_try_history(user_id, skill, stage=1)) else 1
 
 
 def skill_mastered(user_id, skill="kinds"):
-    """Для открытия следующего навыка: ступень 2 держится на 85%."""
-    return stage_of(user_id, skill) == 2 and _mastered(_first_try_history(user_id, skill, stage=2))
+    """Для открытия следующего навыка: 85% на последних 40 (у «Видов слова» -
+    на второй ступени)."""
+    if _SKILL[skill].get("staged"):
+        return stage_of(user_id, skill) == 2 and _mastered(_first_try_history(user_id, skill, stage=2))
+    return _mastered(_first_try_history(user_id, skill))
 
 
 def daily_count(user_id):
@@ -316,7 +507,7 @@ def daily_count(user_id):
     return row["n"]
 
 
-def _weakness(user_id, skill, ctype):
+def _weakness(user_id, skill, ctype=None):
     h = _first_try_history(user_id, skill, ctype=ctype, limit=WEAKNESS_WINDOW)
     return (len(h) - sum(h) + 1) / (len(h) + 2)
 
@@ -330,8 +521,8 @@ def _recent_items(user_id):
     return {r["item"] for r in rows}
 
 
-def _pick_item(ctype, limit, avoid):
-    ords, items = corpus().index.get(ctype, ([], []))
+def _pick_item(skill, ctype, limit, avoid):
+    ords, items = corpus().index.get(skill, {}).get(ctype, ([], []))
     n = bisect.bisect_right(ords, limit)
     if not n:
         return None
@@ -342,24 +533,37 @@ def _pick_item(ctype, limit, avoid):
     return items[random.randrange(n)]
 
 
+def _choose_skill(user_id, skills, passed):
+    """Новый навык (открытый успехами, ещё не освоенный) - втрое чаще:
+    примерно 6 карточек из 10. Остальные - на повторение, слабое чаще."""
+    if len(skills) == 1:
+        return skills[0]["id"]
+    ids = [s["id"] for s in skills]
+    weights = [0.3 + _weakness(user_id, sid) for sid in ids]
+    last = len(skills) - 1
+    if last >= passed and not skill_mastered(user_id, ids[last]):
+        weights[last] = 1.5 * sum(weights[:last])
+    return random.choices(ids, weights)[0]
+
+
 def _choose_ctype(user_id, skill, stage, limit):
-    """Сначала ответ (исм/фиаль/харф), потом тип случая внутри него - оба
-    выбора взвешены слабостью. Без первого шага исмов с фиалями было бы
-    вдвое больше харфов просто потому, что у них больше типов."""
-    open_types = [t for t, (ans, _) in CTYPES.items()
-                  if (stage == 2 or not t.startswith("c_"))
-                  and bisect.bisect_right(corpus().index.get(t, ([], []))[0], limit)]
+    """Сначала ответ, потом тип случая внутри него - оба выбора взвешены
+    слабостью. Без первого шага чаще выпадал бы ответ, у которого просто
+    больше типов случаев."""
+    ctypes, index = _SKILL[skill]["ctypes"], corpus().index.get(skill, {})
+    open_types = [t for t in ctypes
+                  if _stage(t) <= stage and bisect.bisect_right(index.get(t, ([], []))[0], limit)]
     if not open_types:
         return None
     weak = {t: _weakness(user_id, skill, t) for t in open_types}
     # Новая ступень, пока к ней не привык, - вдвое чаще.
     if stage == 2 and len(_first_try_history(user_id, skill, stage=2)) < MASTERY_WINDOW:
         for t in weak:
-            if t.startswith("c_"):
+            if _stage(t) == 2:
                 weak[t] *= 2
     by_answer = {}
     for t in open_types:
-        by_answer.setdefault(CTYPES[t][0], []).append(t)
+        by_answer.setdefault(ctypes[t][0], []).append(t)
     answers = list(by_answer)
     ans = random.choices(answers, [0.3 + max(weak[t] for t in by_answer[a]) for a in answers])[0]
     types = by_answer[ans]
@@ -442,8 +646,43 @@ def _cap(text):
     return text[:1].upper() + text[1:]
 
 
-def explain(item):
-    """Одна-две строки словами урока «Виды слова»."""
+_EXPLAIN = {
+    "sg_al": "В начале слова الـ — это признак исма.",
+    "sg_tanwin": "На конце танвин — это признак исма.",
+    "sg_jarr": "Перед словом харф джарр — это признак исма.",
+    "nm_s": "Слово указывает на одного или одно — مفرد.",
+    "nm_d": "Слово указывает на двоих — مثنى: на конце ـَانِ или ـَيْنِ (нун уходит при إضافة).",
+    "nm_p": "Слово указывает на троих и больше — جمع.",
+    "tn_madi": "Действие уже произошло — ماض.",
+    "tn_mudari": "Начинается с одной из букв أ ن ي ت, действие идёт или будет — مضارع.",
+    "tn_amr": "Повеление — أمر.",
+    "bn_noun": "Конец этого исма меняется по месту в предложении — معرب.",
+    "bn_mudari": "مضارع без نون النسوة и نون التوكيد — معرب.",
+    "bn_madi": "الماضي всегда مبني.",
+    "bn_amr": "الأمر всегда مبني.",
+    "bn_mudari_nun": "К مضارع примкнула نون النسوة — он становится مبني.",
+    "bn_harf": "Все харфы — مبني.",
+    "bn_pron": "Все местоимения — مبني.",
+    "bn_dem": "Указательные и относительные имена (кроме двойственных) — مبني.",
+    "df_al": "С الـ слово становится معرفة.",
+    "df_pn": "Имя собственное — معرفة.",
+    "df_pron": "Местоимение — معرفة.",
+    "df_dem": "Указательные и относительные имена — معرفة.",
+    "df_mudaf": "К слову присоединено местоимение (إضافة) — оно معرفة.",
+    "df_indef": "Танвин, нет ни الـ, ни إضافة — نكرة.",
+    "ir_nom": "По месту в предложении это слово — مرفوع.",
+    "ir_acc": "По месту в предложении это слово — منصوب.",
+    "ir_gen": "После харфа джарр или как مضاف إليه — مجرور.",
+    "ir_vind": "Перед مضارع нет ни ناصب, ни جازم — مرفوع.",
+    "ir_vsubj": "Перед مضارع стоит ناصب (أَنْ، لَنْ، كَيْ، حَتَّى، لِـ) — منصوب.",
+    "ir_vjus": "مضارع под جازم (لَمْ، لَا الناهية، условие и его ответ) — مجزوم.",
+}
+
+
+def explain(item, ctype=None):
+    """Одна-две строки словами уроков."""
+    if ctype in _EXPLAIN:
+        return _EXPLAIN[ctype]
     ayah, word, pos, idx = corpus().word(item)
     seg, f = word[idx], _feats(word[idx])
     signs = _signs(word, idx, ayah, pos)
@@ -458,11 +697,34 @@ def explain(item):
     return "Смысл даёт только вместе с другими словами — это харф (" + _seg_label(seg) + ")."
 
 
-def card_view(item, retry=False):
+_GLUE = {"DET", "ADDR", "DIST", "ATT"}
+# Спрашиваем про слово целиком, хотя корпус режет его на части: у
+# يُؤْمِنَّ нун корня слит с نون النسوة, половина слова выглядела бы ошибкой.
+_WHOLE_WORD = {"bn_mudari_nun"}
+
+
+def _highlighted(word, idx, ctype=None):
+    """Спрашиваемая часть вместе с приросшими к ней буквами (ال، سَ، ذَٰ+لِ+كَ)."""
+    if ctype in _WHOLE_WORD:
+        return set(range(len(word)))
+    glue = lambda seg: bool(_feats(seg) & _GLUE) or _is_sign_prefix(seg) or not seg[0]
+    out, i = {idx}, idx - 1
+    while i >= 0 and glue(word[i]):
+        out.add(i)
+        i -= 1
+    i = idx + 1
+    while i < len(word) and glue(word[i]):
+        out.add(i)
+        i += 1
+    return out
+
+
+def card_view(item, retry=False, ctype=None):
     s, a, pos, idx = item.split(":")
     ayah, word, pos_i, idx_i = corpus().word(item)
     rows = _ayah_words(int(s), int(a))
-    compound = any(x[0] and not _is_sign_prefix(x) for i, x in enumerate(word) if i != idx_i)
+    hl = _highlighted(word, idx_i, ctype)
+    compound = any(x[0] for i, x in enumerate(word) if i not in hl)
     words, target_text, meaning = [], "", ""
     for p, text, tr in rows:
         entry = {"t": text}
@@ -470,7 +732,7 @@ def card_view(item, retry=False):
             parts = split_by_segments(text, word) if compound else None
             if parts:
                 # Слитное слово - выделяется только спрашиваемая часть.
-                entry = {"parts": [{"t": pt, "hl": i == idx_i} for i, pt in enumerate(parts)]}
+                entry = {"parts": [{"t": pt, "hl": i in hl} for i, pt in enumerate(parts)]}
             else:
                 entry["hl"] = True
             target_text = text
@@ -506,33 +768,36 @@ def _save_session(user_id, session):
 
 def _next_card(user_id, session):
     limit, avoid = _pool_limit(user_id), _recent_items(user_id) | set(session["used"])
+    passed = session.get("passed", 0)
     if session["asked"] < session["size"]:
-        ctype = _choose_ctype(user_id, session["skill"], session["stage"], limit)
+        skills = open_skills(user_id, passed)
+        skill = _choose_skill(user_id, skills, passed) if skills else None
+        ctype = skill and _choose_ctype(user_id, skill, stage_of(user_id, skill), limit)
         retry, left = False, 0
     elif session["retry"]:
-        ctype, left = session["retry"].pop(0)
+        skill, ctype, left = session["retry"].pop(0)
         retry = True
     else:
         session["current"] = None
         return
-    item = ctype and _pick_item(ctype, limit, avoid)
+    item = ctype and _pick_item(skill, ctype, limit, avoid)
     if not item:
         session["current"] = None
         return
     if not retry:
         session["asked"] += 1
     session["used"].append(item)
-    session["current"] = {"item": item, "ctype": ctype, "retry": retry, "left": left,
-                          "stage": 2 if ctype.startswith("c_") else 1}
+    session["current"] = {"skill": skill, "item": item, "ctype": ctype, "retry": retry,
+                          "left": left, "stage": _stage(ctype)}
 
 
-def start(user_id):
-    skills = open_skills()
+def start(user_id, passed=0):
+    skills = open_skills(user_id, passed)
     if not skills:
         return None
-    skill = skills[-1]["id"]
-    session = {"skill": skill, "stage": stage_of(user_id, skill), "size": SESSION_SIZE,
-               "asked": 0, "retry": [], "used": [], "results": [], "current": None}
+    session = {"passed": passed, "size": SESSION_SIZE, "asked": 0, "retry": [], "used": [],
+               "results": [], "current": None,
+               "open": [s["id"] for s in skills], "stage": stage_of(user_id)}
     _next_card(user_id, session)
     _save_session(user_id, session)
     return session
@@ -541,66 +806,81 @@ def start(user_id):
 def _summary(session):
     """Что получается и что стоит повторить - по типам случаев, не счётом."""
     by = {}
-    for ctype, ok in session["results"]:
-        by.setdefault(ctype, []).append(ok)
-    good = [CTYPES[t][1] for t, oks in by.items() if all(oks)]
-    weak = [CTYPES[t][1] for t, oks in by.items() if not all(oks)]
-    return {"good": good, "weak": weak}
+    for skill, ctype, ok in session["results"]:
+        by.setdefault((skill, ctype), []).append(ok)
+    label = lambda k: _SKILL[k[0]]["ctypes"][k[1]][1]
+    return {"good": [label(k) for k, oks in by.items() if all(oks)],
+            "weak": [label(k) for k, oks in by.items() if not all(oks)]}
 
 
-def state(user_id, feedback=None):
-    session = _load_session(user_id) or start(user_id)
+def right_answer(cur):
+    return _SKILL[cur["skill"]]["ctypes"][cur["ctype"]][0]
+
+
+def state(user_id, feedback=None, passed=0):
+    session = _load_session(user_id) or start(user_id, passed)
     out = {"daily_count": daily_count(user_id), "daily_target": DAILY_TARGET,
            "feedback": feedback, "source": "Quranic Arabic Corpus · corpus.quran.com"}
     if session is None:
         out["empty"] = True
         return out
-    out["stage"] = session["stage"]
     cur = session["current"]
     if cur is None:
         out["finished"] = dict(_summary(session), size=session["size"],
-                               stage_up=session.get("stage_up", False))
+                               stage_up=session.get("stage_up", False),
+                               new_skill=session.get("new_skill"))
         return out
-    out["card"] = dict(card_view(cur["item"], cur["retry"]),
+    skill = _SKILL[cur["skill"]]
+    view = card_view(cur["item"], cur["retry"], cur["ctype"])
+    out["card"] = dict(view, id=cur["skill"] + "|" + cur["item"], skill=skill["title"],
+                       question=skill.get("question_part", skill["question"]) if view["compound"]
+                       else skill["question"],
                        pos=min(session["asked"], session["size"]), size=session["size"])
-    out["options"] = [{"key": k, "ar": ANSWER_AR[k], "ru": ANSWER_RU[k]} for k in ANSWERS]
+    out["options"] = list(skill["options"])
     return out
 
 
-def answer(user_id, card_id, choice):
+def answer(user_id, card_id, choice, passed=0):
     """(ответ для клиента, достигнута ли норма дня именно этим ответом)."""
     session = _load_session(user_id)
     cur = session["current"] if session else None
-    if not cur or cur["item"] != card_id:
-        return state(user_id), False          # устаревший или двойной тап
-    if choice not in ANSWERS:
+    if not cur or cur["skill"] + "|" + cur["item"] != card_id:
+        return state(user_id, passed=passed), False          # устаревший или двойной тап
+    skill = _SKILL[cur["skill"]]
+    if choice not in [o["key"] for o in skill["options"]]:
         raise ValueError("bad_choice")
-    right = CTYPES[cur["ctype"]][0]
+    right = right_answer(cur)
     correct = choice == right
     before = daily_count(user_id)
     with db() as c:
         c.execute("INSERT INTO nahw_answers(user_id, date, skill, ctype, stage, item, correct, retry)"
                   " VALUES(?,?,?,?,?,?,?,?)",
-                  (str(user_id), get_date(), session["skill"], cur["ctype"], cur["stage"],
+                  (str(user_id), get_date(), cur["skill"], cur["ctype"], cur["stage"],
                    cur["item"], int(correct), int(cur["retry"])))
     if not cur["retry"]:
-        session["results"].append((cur["ctype"], correct))
+        session["results"].append((cur["skill"], cur["ctype"], correct))
     if not correct and cur["left"] < MAX_RETRIES_PER_CARD:
-        session["retry"].append((cur["ctype"], cur["left"] + 1))
+        session["retry"].append((cur["skill"], cur["ctype"], cur["left"] + 1))
     reached = before < DAILY_TARGET <= before + int(correct)
-    feedback = {"correct": correct, "answer": right, "answer_ar": ANSWER_AR[right],
-                "answer_ru": ANSWER_RU[right], "explain": explain(cur["item"]),
-                "breakdown": breakdown(cur["item"]), "word": card_view(cur["item"])["word"],
-                "meaning": card_view(cur["item"])["meaning"]}
-    was_stage = session["stage"]
+    opt = next(o for o in skill["options"] if o["key"] == right)
+    view = card_view(cur["item"])
+    feedback = {"correct": correct, "answer": right, "answer_ar": opt["ar"], "answer_ru": opt["ru"],
+                "explain": explain(cur["item"], cur["ctype"]), "breakdown": breakdown(cur["item"]),
+                "word": view["word"], "meaning": view["meaning"]}
     _next_card(user_id, session)
-    if session["current"] is None and was_stage == 1 and stage_of(user_id, session["skill"]) == 2:
-        session["stage_up"] = True
+    if session["current"] is None:
+        # Итог захода говорит о новом один раз - в тот заход, где оно открылось.
+        if session.get("stage") == 1 and stage_of(user_id) == 2:
+            session["stage_up"] = True
+        now_open = open_skills(user_id, session.get("passed", 0))
+        fresh = [s["title"] for s in now_open if s["id"] not in session.get("open", [])]
+        if fresh:
+            session["new_skill"] = fresh[-1]
     _save_session(user_id, session)
-    return state(user_id, feedback), reached
+    return state(user_id, feedback, passed), reached
 
 
-def new_session(user_id):
+def new_session(user_id, passed=0):
     with db() as c:
         c.execute("DELETE FROM nahw_sessions WHERE user_id=?", (str(user_id),))
-    return state(user_id)
+    return state(user_id, passed=passed)

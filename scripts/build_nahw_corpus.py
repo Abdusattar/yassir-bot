@@ -109,14 +109,15 @@ def main():
         json.dump({"terms": {}, "ayat": result}, f, ensure_ascii=False)
     built = nahw_trainer._Corpus(tmp)
     os.remove(tmp)
-    index = {t: [o, i] for t, (o, i) in built.index.items()}
+    index = {sk: {t: [o, i] for t, (o, i) in types.items()} for sk, types in built.index.items()}
     with gzip.open(OUT, "wt", encoding="utf-8") as f:
         json.dump({"source": "Quranic Arabic Corpus v0.4, corpus.quran.com (GNU GPL);"
                              " арабская редакция mustafa0x/quran-morphology",
                    "terms": json.load(open(TERMS, encoding="utf-8")),
                    "ayat": result, "index": index}, f, ensure_ascii=False, separators=(",", ":"))
     total = sum(len(v) for v in result.values())
-    print("типов случаев: %d" % len(index))
+    for sk, types in index.items():
+        print("  %-7s %s" % (sk, ", ".join("%s %d" % (t, len(v[1])) for t, v in types.items())))
     print("аятов: %d, слов: %d, не сошлось по буквам: %d, не разложилось: %d, файл: %.1f МБ"
           % (len(result), total, mismatched, skipped, os.path.getsize(OUT) / 1e6))
 
