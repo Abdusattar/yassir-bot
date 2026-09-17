@@ -14,6 +14,7 @@
 """
 import logging
 import asyncio
+from core.feed import important
 from datetime import datetime
 
 from core.db import (
@@ -153,7 +154,8 @@ async def _transfer_to_tadabbur(student, group, fallback_id, count, lang, reason
                             group_title=group["title"] or chat_id, prep_link=prep_link)
             else:
                 dm_text = T("return_needs_prep_dm", lang, name=name, prep_link=prep_link)
-            dm_resp = await send_message(student["phone"], dm_text)
+            with important("transfer"):
+                dm_resp = await send_message(student["phone"], dm_text)
             dm_ok = bool(dm_resp and dm_resp.get("ok"))
 
     # Уведомляем группу - коротко и нейтрально, без деталей условий возврата
@@ -606,7 +608,8 @@ async def ask_nameless_students():
         if not (started or day == NAMELESS_REASK_DAY) or not row["dm_ok"]:
             continue
         try:
-            await send_message(phone, T("ask_missing_name_dm", "ru", title=row["title"] or ""))
+            with important("kick"):
+                await send_message(phone, T("ask_missing_name_dm", "ru", title=row["title"] or ""))
         except Exception as e:
             log.error("ask_nameless_students dm %s: %s", phone, e)
 

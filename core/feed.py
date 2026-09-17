@@ -22,7 +22,9 @@
 * **Исходящие бот через getUpdates не получает** — свои сообщения он пишет в
   ленту сам, в момент отправки (см. четыре точки в `core/tg.py`).
 """
+import contextvars
 import logging
+from contextlib import contextmanager
 
 from config import SUPER_ADMIN_IDS
 from core.db import db
@@ -47,6 +49,50 @@ KIND_BY_FIELD = (
 )
 
 
+# ── Важные сообщения (17.09.2026) ────────────────────────────────────────────
+#
+# В ленте всё равно: отметки «м р т», насыха и «открылся урок» стоят в одном
+# ряду, и важное тонет. Типов важного мало НАРОЧНО (решение пользователя):
+# подсветка работает, пока она редкая. Насыху, рейтинги, итоги недели и
+# «открылся навык» сюда не добавлять.
+#
+#   lesson   - открылся урок (всей группе), висит, пока не открыл
+#   kick     - предупреждение: пропуски, нет имени (личное)
+#   announce - объявление, которое шлём сами (переход на YassirApp)
+#   retake   - устаз просит перезаписать сдачу (личное)
+#   transfer - перевод в другую группу (личное)
+#
+# Пометка ставится ТАМ, ГДЕ бот отправляет, а не угадывается по тексту:
+#
+#     with feed.important("lesson", link="lesson:n:12", title="Нахв: ..."):
+#         await send_message(chat_id, text)
+#
+# Отправщиков в core/tg.py одиннадцать, и тянуть параметр через каждый значило
+# бы забыть следующий - поэтому contextvar: record_outgoing читает его сам.
+# `to` - кому адресовано, если сообщение идёт в группу: остальным не покажем.
+NOTICE_TYPES = ("lesson", "kick", "announce", "retake", "transfer")
+_notice = contextvars.ContextVar("feed_notice", default=None)
+
+
+@contextmanager
+def important(ntype, link=None, title=None, to=None):
+    if ntype not in NOTICE_TYPES:
+        raise ValueError("bad notice type: %s" % ntype)
+    token = _notice.set({"type": ntype, "link": link, "title": title,
+                         "to": str(to) if to else None})
+    try:
+        yield
+    finally:
+        _notice.reset(token)
+
+
+def _notice_key(row):
+    """Одно важное на ключ: урок - свой у каждого урока, у остальных - по
+    типу. Предупреждение о пропусках приходит каждый день, длинный урок уходит
+    несколькими сообщениями, вердикт - и в группу, и в личку: карточка одна."""
+    return row["notice"] + "|" + (row["notice_link"] or "")
+
+
 def _kind_and_file(msg):
     """Вид сообщения и file_id самого крупного варианта (у фото Telegram
     присылает лесенку размеров, последний — самый большой)."""
@@ -68,17 +114,19 @@ def forget_chat_type(chat_id):
 
 
 def record(chat_id, text=None, sender_id=None, sender_name=None, is_bot=0,
-           kind="text", file_id=None, message_id=None, reply_to_user=None):
+           kind="text", file_id=None, message_id=None, reply_to_user=None, notice=None):
     """Одна запись ленты. Ошибку глотаем: лента — вещь приятная, но не та,
     ради которой стоит уронить отправку сообщения или обработку апдейта."""
     try:
         with db() as c:
             c.execute("""
                 INSERT INTO feed_messages(chat_id, message_id, sender_id, sender_name,
-                                          is_bot, kind, text, file_id, reply_to_user)
-                VALUES(?,?,?,?,?,?,?,?,?)
+                                          is_bot, kind, text, file_id, reply_to_user,
+                                          notice, notice_link, notice_title)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
             """, (str(chat_id), message_id, sender_id, sender_name,
-                  1 if is_bot else 0, kind, (text or "")[:4000], file_id, reply_to_user))
+                  1 if is_bot else 0, kind, (text or "")[:4000], file_id, reply_to_user,
+                  (notice or {}).get("type"), (notice or {}).get("link"), (notice or {}).get("title")))
     except Exception as e:
         log.error("feed.record error: %s: %s", type(e).__name__, e)
 
@@ -190,6 +238,9 @@ def record_outgoing(chat_id, result=None, text=None, kind="text", file_id=None,
     if not chat_id or _is_staff_chat(chat_id):
         return
     res = (result or {}).get("result") or {}
+    notice = _notice.get()
+    if notice and notice["to"] and not reply_to_user:
+        reply_to_user = notice["to"]
     if not file_id:
         if res.get("voice"):
             file_id = (res["voice"] or {}).get("file_id")
@@ -203,7 +254,8 @@ def record_outgoing(chat_id, result=None, text=None, kind="text", file_id=None,
            kind=kind,
            file_id=file_id,
            message_id=res.get("message_id"),
-           reply_to_user=reply_to_user)
+           reply_to_user=reply_to_user,
+           notice=notice)
 
 
 # ── кому что видно ────────────────────────────────────────────────────────
@@ -315,6 +367,64 @@ def mark_read(phone, last_id):
         log.error("mark_read error: %s: %s", type(e).__name__, e)
 
 
+def open_notices(phone, chats=None):
+    """Важное, которое человек ещё не открыл: по одному на ключ, свежее
+    первым. Адресованное другому (reply_to_user) не показываем."""
+    me = str(phone)
+    chats = chats if chats is not None else feed_chats_for(me)
+    if not chats:
+        return []
+    q = ",".join("?" * len(chats))
+    with db() as c:
+        rows = c.execute(f"""
+            SELECT * FROM feed_messages
+            WHERE notice IS NOT NULL AND chat_id IN ({q})
+              AND (reply_to_user IS NULL OR reply_to_user = ? OR chat_id = ?)
+            ORDER BY id DESC LIMIT 100
+        """, (*chats, me, me)).fetchall()
+        seen = {r["nkey"]: r["last_id"] for r in c.execute(
+            "SELECT nkey, last_id FROM feed_notice_seen WHERE user_id=?", (me,)).fetchall()}
+    out, taken = [], set()
+    for r in rows:
+        key = _notice_key(r)
+        if key in taken or r["id"] <= seen.get(key, 0):
+            continue
+        taken.add(key)
+        out.append(r)
+    return out
+
+
+def mark_notice_seen(phone, feed_id=None, key=None):
+    """Открыл важное - карточка уходит. По id сообщения (тап по карточке)
+    или по ключу (открыл сам урок через «Знания»)."""
+    me = str(phone)
+    try:
+        with db() as c:
+            if feed_id is not None:
+                row = c.execute("SELECT * FROM feed_messages WHERE id=? AND notice IS NOT NULL",
+                                (int(feed_id),)).fetchone()
+                if not row:
+                    return
+                key = _notice_key(row)
+            top = c.execute("SELECT MAX(id) m FROM feed_messages").fetchone()["m"] or 0
+            c.execute("""
+                INSERT INTO feed_notice_seen(user_id, nkey, last_id) VALUES(?,?,?)
+                ON CONFLICT(user_id, nkey) DO UPDATE SET last_id=MAX(last_id, excluded.last_id)
+            """, (me, key, top))
+    except Exception as e:
+        log.error("mark_notice_seen error: %s: %s", type(e).__name__, e)
+
+
+def _notice_out(rows, titles):
+    if not rows:
+        return None
+    r = rows[0]
+    text = r["notice_title"] or (r["text"] or "").strip().split("\n")[0]
+    return {"id": r["id"], "type": r["notice"], "link": r["notice_link"] or "",
+            "text": text, "chat_id": r["chat_id"], "source": titles.get(r["chat_id"]) or "",
+            "count": len(rows)}
+
+
 def _row_out(r, titles, me):
     return {
         "id": r["id"],
@@ -405,11 +515,12 @@ def brief(phone):
             """, chats).fetchone()
 
     titles = _chat_titles(chats)
+    notice = _notice_out(open_notices(me, chats), titles)
     if not rows:
         if not latest:
             return None
         out = _row_out(latest, titles, me)
-        return {"item": out, "unread": 0, "more": False, "top_id": latest["id"]}
+        return {"item": out, "unread": 0, "more": False, "top_id": latest["id"], "notice": notice}
 
     # Адресовано тебе: ответили на твоё сообщение или бот написал в личку.
     mine = [r for r in rows
@@ -428,6 +539,7 @@ def brief(phone):
         "unread": len(mine),
         "more": bool([r for r in others if r not in mine]),
         "top_id": rows[0]["id"],
+        "notice": notice,
     }
 
 

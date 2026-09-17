@@ -297,6 +297,14 @@ def init():
                 last_id INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT DEFAULT (datetime('now'))
             );
+            /* Важные сообщения (17.09.2026, core/feed.py): докуда человек
+               открыл важное по каждому ключу (тип + куда ведёт). */
+            CREATE TABLE IF NOT EXISTS feed_notice_seen(
+                user_id TEXT NOT NULL,
+                nkey TEXT NOT NULL,
+                last_id INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(user_id, nkey)
+            );
             /* Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py).
                Сколько раз букву показывали этому человеку - по нему колода
                идёт равномерно; какие буквы он сегодня ответил верно - по ним
@@ -487,6 +495,11 @@ def _run_migrations(c):
         # (/bonus, отметка голосовой, "у" и т.д.) - те по-прежнему только
         # через /admin реплаем в конкретной группе.
         c.execute("ALTER TABLE users ADD COLUMN is_observer INTEGER DEFAULT 0")
+
+    fcols = [r["name"] for r in c.execute("PRAGMA table_info(feed_messages)").fetchall()]
+    for col in ("notice", "notice_link", "notice_title"):
+        if col not in fcols:
+            c.execute("ALTER TABLE feed_messages ADD COLUMN " + col + " TEXT")
 
     uocols = [r["name"] for r in c.execute("PRAGMA table_info(upgrade_offers)").fetchall()]
     if "channel" not in uocols:

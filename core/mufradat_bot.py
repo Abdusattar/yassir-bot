@@ -538,7 +538,14 @@ async def submit_ustaz_verdict(ustaz_id, submission_id, verdict, words=None):
         if marked:
             text += f"\nОтмечено слов: {marked} — они подсвечены в приложении"
         text += "\nПослушай замечание устаза и начитай заново 🤲"
-    await _notify_student(sub, text)
+    if verdict == VERDICT_RETAKE:
+        # Важное (core/feed.py): карточка на дашборде ведёт в «Работа с устазом».
+        from core.feed import important
+        with important("retake", link="subs", to=sub["student_phone"],
+                       title="Устаз просит перезаписать" + (" — " + place if place else "")):
+            await _notify_student(sub, text)
+    else:
+        await _notify_student(sub, text)
     return {"ok": True, "verdict": verdict, "place": place}
 
 

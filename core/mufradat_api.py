@@ -1202,6 +1202,9 @@ async def handle_lesson(request, user_id):
     keys = _lesson_subject_keys(user_id)
     if keys is not None and item["subject"] not in keys:
         return web.json_response({"error": "not_open"}, status=404)
+    # Открыл урок любым путём - карточка «Открылся урок» с дашборда уходит.
+    from core.feed import mark_notice_seen
+    mark_notice_seen(user_id, key="lesson|lesson:%s:%s" % (item["subject"], part_id))
     return web.json_response(item)
 
 
@@ -1251,6 +1254,18 @@ async def handle_feed_read(request, user_id):
     body = await request.json()
     try:
         mark_read(user_id, int(body.get("last_id", 0)))
+    except (TypeError, ValueError):
+        return web.json_response({"error": "bad_id"}, status=400)
+    return web.json_response({"ok": True})
+
+
+@with_auth
+async def handle_feed_notice(request, user_id):
+    """POST {id} - человек открыл важное сообщение (карточка на дашборде)."""
+    from core.feed import mark_notice_seen
+    body = await request.json()
+    try:
+        mark_notice_seen(user_id, feed_id=int(body.get("id", 0)))
     except (TypeError, ValueError):
         return web.json_response({"error": "bad_id"}, status=400)
     return web.json_response({"ok": True})
@@ -2093,6 +2108,7 @@ def build_app():
     app.router.add_post("/api/muf/nahw/new", handle_nahw_new)
     app.router.add_get("/api/muf/feed", handle_feed)
     app.router.add_post("/api/muf/feed/read", handle_feed_read)
+    app.router.add_post("/api/muf/feed/notice", handle_feed_notice)
     app.router.add_get("/api/muf/feed/media", handle_feed_media)
     app.router.add_get("/api/muf/submissions", handle_submissions)
     app.router.add_get("/api/muf/submissions/audio", handle_submission_audio)

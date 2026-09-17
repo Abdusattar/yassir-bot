@@ -36,6 +36,7 @@
 """
 import asyncio
 import logging
+from core.feed import important
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -390,7 +391,8 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
 
     try:
         addr = "сёстры" if IS_FEMALE else "братья"
-        await send_message(chat_id, T("prep_graduate_announce_new", new_glang, name=name, addr=addr))
+        with important("transfer", to=phone, title="Ты в группе «" + (new_title or "") + "» — добро пожаловать"):
+            await send_message(chat_id, T("prep_graduate_announce_new", new_glang, name=name, addr=addr))
     except Exception as e:
         log.warning("prep graduate new-group announce failed: %s", e)
 

@@ -111,6 +111,18 @@ def seed_extra():
         # 777003 - как N-1: все навыки открыты лекциями (снимки nhs_*).
         conn.execute("DELETE FROM nahw_answers WHERE user_id='777003'")
         conn.execute("DELETE FROM nahw_answers WHERE user_id=?", (stand.STUDENT,))
+    # Важные сообщения (17.09.2026): у 777002 - «открылся урок», у 777003 -
+    # предупреждение о пропусках. Адресные, чтобы не попасть в чужие снимки.
+    from core import feed
+    with sqlite3.connect(db.DB) as conn:
+        conn.execute("DELETE FROM feed_messages WHERE notice IS NOT NULL")
+        conn.execute("DELETE FROM feed_notice_seen")
+        part = conn.execute("SELECT id FROM curriculum_parts WHERE topic LIKE 'أنواع الكلمة%'").fetchone()[0]
+    with feed.important("lesson", link="lesson:n:%s" % part, to="777002",
+                        title="Нахв: أنواع الكلمة (Виды слова)"):
+        feed.record_outgoing(stand.CHAT, text="📘 Нахв: الكلمة — أنواع الكلمة (часть 1/1)")
+    with feed.important("kick", title="Пропусков за месяц: 6 из 10 — прочитай"):
+        feed.record_outgoing("777003", text="⚠️ Ибрахим, в этом месяце 6 пропусков...")
     for phone, days_ago in ((stand.STUDENT, 1), (stand.STUDENT, 7), ("777002", 1)):
         user = db.find_user_by_phone(phone)
         if not user:
@@ -503,6 +515,10 @@ MOCK_JS = """
         await wait(1000);
       }
     },
+    // Важное сообщение на дашборде и тап по нему (17.09.2026).
+    nt_lesson: async function () { await wait(2500); },
+    nt_kick: async function () { await wait(2500); },
+    nt_open: async function () { await wait(2500); $('dash-brief').click(); await wait(1500); },
     // Тренажёр нахва (17.09.2026) - настоящий код, без инъекций.
     nh_hub: async function () {
       await wait(2500); $('dash-trainer').click(); await wait(700);
@@ -678,7 +694,7 @@ MOCK_JS = """
 </script>
 """
 
-VARIANTS = ["nh_auto", "nh_auto_after", "nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
+VARIANTS = ["nt_lesson", "nt_kick", "nt_open", "nh_auto", "nh_auto_after", "nhs_signs", "nhs_number", "nhs_tense", "nhs_bina", "nhs_defin", "nhs_irab", "nh_hub", "nh_card", "nh_answer", "nh_right", "nh2_part", "nh2_answer", "nh_done",
             "kn_door", "kn_learn", "tj_learn", "tj_door", "tj_hub", "tj_card", "tj_answer", "tj_done", "tj_words",
             "les_stu_real_month", "real_lesson", "real_lesson_old",
             "les_stu_now", "les_stu_card", "les_stu_confirm", "les_stu_done", "les_stu_month",
@@ -727,6 +743,10 @@ def page(variant):
     # сцен-предложений, «как сейчас» ничего не дорисовывает.
     if variant.startswith("kn_"):
         return stand.dev_index("777004", "Юсуф") + MOCK_CSS + MOCK_JS
+    if variant == "nt_kick":
+        return stand.dev_index("777003", "Ибрахим") + MOCK_CSS + MOCK_JS
+    if variant.startswith("nt_"):
+        return stand.dev_index("777002", "Хамза") + MOCK_CSS + MOCK_JS
     if variant.startswith("nhs_"):
         return stand.dev_index("777003", "Ибрахим") + MOCK_CSS + MOCK_JS
     if variant.startswith("nh2_"):

@@ -27,6 +27,7 @@ from core.transfers import run_transfer_checks, send_return_nudges
 from core.prep import check_prep_students, send_prep_reminders
 import random
 import core.ai as ai
+from core.feed import important
 import core.sampler as sampler
 import core.nasiha_bank as nasiha_bank
 
@@ -1011,7 +1012,11 @@ async def publish_curriculum_parts():
                 if task_key not in get_group_tasks(group):
                     continue
                 try:
-                    await send_message(group["chat_id"], text)
+                    # Важное (см. core/feed.py): карточка на дашборде ведёт
+                    # прямо в урок и висит, пока студент его не открыл.
+                    with important("lesson", link="lesson:%s:%s" % (subject, part["id"]),
+                                   title=label + ": " + part["topic"]):
+                        await send_message(group["chat_id"], text)
                     await asyncio.sleep(0.3)
                 except Exception as e:
                     log.error("publish_curriculum_parts send error in %s: %s", group["chat_id"], e)
@@ -1432,7 +1437,8 @@ async def app_only_countdown():
             names = " и ".join(SHORT_TASKS[k.strip()].lower() for k in written).capitalize()
             text += "\n\n" + T("app_only_written_note", glang, names=names)
         try:
-            await send_message(chat_id, text)
+            with important("announce"):
+                await send_message(chat_id, text)
             log.info("app_only_countdown: %s, осталось %s", group.get("title"), left)
             await asyncio.sleep(0.3)
         except Exception as e:
@@ -1497,7 +1503,9 @@ async def skip_warnings():
                 if skips >= warn_threshold:
                     warn = await ai.warning_skips(s["name"], skips, transfer_limit, glang, hadith=hadith, ayah=ayah)
                     if warn:
-                        await send_message(s["phone"], "⚠️ " + warn)
+                        with important("kick", title="Пропусков за месяц: %s из %s — прочитай"
+                                                     % (skips, transfer_limit)):
+                            await send_message(s["phone"], "⚠️ " + warn)
                     await asyncio.sleep(0.8)
         except Exception as e:
             log.error("skip_warnings error in %s: %s", chat_id, e)

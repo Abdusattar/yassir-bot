@@ -330,3 +330,68 @@ def test_счётчик_на_чипе_считает_только_адресов
 
     assert n.get(MY_CHAT) == 1
     assert n.get(ME) == 1
+
+
+# ── важные сообщения (17.09.2026) ─────────────────────────────────────────
+
+def _out(chat, text):
+    from core.feed import record_outgoing
+    record_outgoing(chat, result={"ok": True, "result": {"message_id": 1, "text": text}}, text=text)
+
+
+def test_важное_занимает_строку_и_уходит_после_открытия(test_db):
+    from core.feed import important, mark_notice_seen
+    _setup()
+    with important("lesson", link="lesson:n:7", title="Открылся урок · Нахв: Исм"):
+        _out(MY_CHAT, "📘 Нахв: часть первая")
+        _out(MY_CHAT, "продолжение длинного урока")        # урок ушёл двумя сообщениями
+    _out(MY_CHAT, "обычная насыха")                        # без пометки
+
+    n = brief(ME)["notice"]
+    assert (n["type"], n["link"], n["count"]) == ("lesson", "lesson:n:7", 1)
+    assert n["text"] == "Открылся урок · Нахв: Исм"
+    assert brief(FRIEND)["notice"]["type"] == "lesson"     # урок - всей группе
+
+    mark_notice_seen(ME, feed_id=n["id"])
+    assert brief(ME)["notice"] is None
+    assert brief(FRIEND)["notice"] is not None             # у каждого своя отметка
+
+
+def test_урок_открытый_через_знания_тоже_гасит_карточку(test_db):
+    from core.feed import important, mark_notice_seen
+    _setup()
+    with important("lesson", link="lesson:n:7"):
+        _out(MY_CHAT, "📘 Нахв")
+    mark_notice_seen(ME, key="lesson|lesson:n:7")
+    assert brief(ME)["notice"] is None
+
+
+def test_личное_важное_в_группе_видит_только_адресат(test_db):
+    from core.feed import important
+    _setup()
+    with important("retake", link="subs", to=ME, title="Устаз просит перезаписать"):
+        _out(MY_CHAT, "Сатар, нужно пересдать")
+        _out(ME, "Сатар, нужно пересдать")                 # то же в личку - карточка одна
+    assert brief(ME)["notice"]["count"] == 1
+    assert brief(FRIEND) is None or brief(FRIEND)["notice"] is None
+
+
+def test_новое_предупреждение_поднимает_карточку_снова(test_db):
+    from core.feed import important, mark_notice_seen
+    _setup()
+    with important("kick"):
+        _out(ME, "⚠️ пропусков 5")
+    mark_notice_seen(ME, feed_id=brief(ME)["notice"]["id"])
+    assert brief(ME)["notice"] is None
+    with important("kick"):
+        _out(ME, "⚠️ пропусков 6")
+    assert brief(ME)["notice"]["text"] == "⚠️ пропусков 6"
+
+
+def test_чужое_важное_из_чужой_группы_не_видно(test_db):
+    from core.feed import important
+    _setup()
+    with important("announce"):
+        _out(OTHER_CHAT, "📣 переход")
+    got = brief(ME)
+    assert got is None or got["notice"] is None

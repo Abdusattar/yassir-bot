@@ -883,7 +883,9 @@ async def _take_missing_name(phone, group, chat_id, text, sender_name, glang):
         if asked_at is None or (now - asked_at).total_seconds() >= 20 * 3600:
             set_pending_name(phone, group_id, "asked:" + now.isoformat())
             track_unregistered(phone, chat_id)
-            await send_message(chat_id, T("ask_missing_name", glang))
+            from core.feed import important
+            with important("kick", to=phone):
+                await send_message(chat_id, T("ask_missing_name", glang))
         return False
     name = name[:32]
     set_user_name_if_empty(phone, name)
