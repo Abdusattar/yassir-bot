@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import unicodedata
+from datetime import datetime
 
 from config import (SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, REQUIRE_PREP_FOR_NEW_STUDENTS,
                     AI_ANSWER_IF_RELEVANT, AI_ANSWER_QUESTIONS)
@@ -29,6 +30,7 @@ from core.db import (
     get_knowledge, add_knowledge, delete_knowledge, get_yassir_knowledge, lookup_username,
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone, find_known_user_by_phone,
     set_user_name_if_empty, track_unregistered, remove_unregistered, bot_leads_group,
+    get_now,
     format_daily_report, format_period_report, get_period_winner,
     get_missing_students, get_date, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
@@ -846,24 +848,42 @@ def _first_lesson_refusal_today(student_id):
     return True
 
 
+# Сколько после вопроса ответ ещё считается ответом на него.
+MISSING_NAME_ANSWER_SEC = 30 * 60
+
+
 async def _take_missing_name(phone, group, chat_id, text, sender_name, glang):
     """Студент уже в группе, но без имени. Первое сообщение - просим имя и
     запускаем отсчёт до кика; сам отчёт при этом засчитывается как обычно
     (False). Пока ждём - сообщение, похожее на имя, записываем (True)."""
     group_id = group["id"]
-    if not is_pending_name(phone, group_id):
-        set_pending_name(phone, group_id, "")
-        track_unregistered(phone, chat_id)
-        await send_message(chat_id, T("ask_missing_name", glang))
-        return False
+    now = get_now()
+    asked = get_pending_text(phone, group_id) if is_pending_name(phone, group_id) else None
+    asked_at = None
+    if asked and asked.startswith("asked:"):
+        try:
+            asked_at = datetime.fromisoformat(asked[6:])
+        except ValueError:
+            asked_at = None
+    # Имя берём только сразу после вопроса (17.09.2026): ждём его до 7 дней,
+    # и без этого любое «Спасибо» в группе через три дня стало бы именем.
+    fresh = asked_at is not None and (now - asked_at).total_seconds() <= MISSING_NAME_ANSWER_SEC
     raw = (text or "").strip()
-    if not raw or any(check_text(raw).values()):
-        return False
-    name = raw if looks_like_plain_name(raw) else None
+    is_report = bool(raw) and any(check_text(raw).values())
+    name = None
+    if fresh and raw and not is_report:
+        name = raw if looks_like_plain_name(raw) else None
+        if not name and len(raw.split()) <= 6:
+            got = await ai.extract_name(raw)
+            name = None if got == ai.AI_DOWN else (got or "").strip() or None
+            if name and not looks_like_plain_name(name):
+                name = None
     if not name:
-        got = await ai.extract_name(raw)
-        name = None if got == ai.AI_DOWN else (got or "").strip() or None
-    if not name:
+        # Спросить снова, но не чаще раза в сутки - не засорять группу.
+        if asked_at is None or (now - asked_at).total_seconds() >= 20 * 3600:
+            set_pending_name(phone, group_id, "asked:" + now.isoformat())
+            track_unregistered(phone, chat_id)
+            await send_message(chat_id, T("ask_missing_name", glang))
         return False
     name = name[:32]
     set_user_name_if_empty(phone, name)

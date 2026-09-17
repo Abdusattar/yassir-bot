@@ -89,3 +89,27 @@ def test_nameless_student_is_asked_in_dm_and_kicked_after_days(test_db, monkeypa
     asyncio.run(tr.kick_unregistered())
     assert kicked == [(CHAT, PHONE)]
     assert db.find_by_phone(PHONE, g["id"]) is None          # членство снято
+
+
+def test_chat_words_are_never_taken_as_name():
+    for t in ("ок", "Спасибо", "да", "Хорошо", "понял", "Джазакаллаху хайран", "ин шаа Аллах"):
+        assert not db.looks_like_plain_name(t), t
+    for t in ("Рамзан", "Абу Самийя", "Салия. М."):
+        assert db.looks_like_plain_name(t), t
+
+
+def test_late_message_is_not_taken_as_name(test_db, monkeypatch):
+    """Ответом на вопрос считается только сообщение в первые полчаса."""
+    g = _prep()
+    db.mark_dm_ok_by_phone(PHONE)
+    db.add_student("", g["id"], phone=PHONE)
+    sent = _silence(monkeypatch)
+    asyncio.run(h.process_message(chat_id=CHAT, sender=PHONE, text="заучивание", sender_name=""))
+    asked = db.get_pending_text(PHONE, g["id"])
+    from datetime import timedelta, datetime
+    old = datetime.fromisoformat(asked[6:]) - timedelta(hours=2)
+    db.set_pending_name(PHONE, g["id"], "asked:" + old.isoformat())
+    n = len(sent)
+    asyncio.run(h.process_message(chat_id=CHAT, sender=PHONE, text="Бисмиллях", sender_name=""))
+    assert db.find_user_by_phone(PHONE)["name"] == ""
+    assert len(sent) == n                                   # и не переспрашивает раньше суток
