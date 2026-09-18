@@ -13,15 +13,18 @@ Telegram initData (см. mufradat_api.validate_init_data): вне Telegram её 
 токен сессии. Ни телефона, ни SMS, ни пароля: удостоверяет личность сам
 Telegram, как и раньше, просто один раз, а не при каждом запросе.
 
-Почему таблицы лежат в ПРОФИЛЬНОЙ базе (quran_male.db / quran_female.db), а
-не в общей hadiths.db. До 10.09.2026 пол студента и его база выбирались
-криптографически: initData подписана токеном КОНКРЕТНОГО бота, женская
-подпись на мужском порту не проходит HMAC. Заменить это на «профиль в
-параметре URL» значило бы отдать выбор базы клиенту. Здесь профиль выбран до
-выдачи кода, код живёт в базе своего бота, и подтвердить его может только тот
-бот — та же жёсткость, только другим способом. Ошибиться дверью не страшно:
-чужой бот не найдёт человека в user_groups и откажет (см. handle_login_start
-в core/handlers.py).
+Где что лежит. СЕССИИ - в профильной базе (quran_male.db / quran_female.db):
+токен, выданный мужским процессом, женский в своей базе не найдёт, и это
+держит разделение по полу таким же жёстким, каким его делала подпись initData
+токеном конкретного бота. А КОДЫ ВХОДА с 18.09.2026 живут в общей
+sources/hadiths.db с пометкой профиля. Причина: на сайте больше нет кнопок
+«мужская/женская» - человек не должен выбирать сторону сам (решение
+пользователя, после того как сестра открыла приложение через мужской бот).
+Ссылка ведёт в мужской бот; тот ищет человека у себя, потом у соседа
+(core/db.py:other_bot_member) и подтверждает код ДЛЯ ТОГО профиля, где
+человек учится. Вкладка узнаёт профиль из /auth/poll, переспрашивает уже
+женский процесс, и тот выдаёт сессию из СВОЕЙ базы. Сосед в чужую базу не
+пишет никогда - только в общую таблицу кодов.
 
 Токен наружу отдаётся ОДИН раз, в базе лежит только его sha256 — утечка базы
 не даёт войти ни за кого.
@@ -29,7 +32,10 @@ Telegram, как и раньше, просто один раз, а не при �
 import hashlib
 import logging
 import secrets
+import sqlite3
 
+import config
+import core.sampler as sampler   # HADITHS_DB через модуль: тесты подменяют путь там
 from core.db import db, get_now
 
 log = logging.getLogger(__name__)
@@ -51,17 +57,11 @@ LOGIN_START_PREFIX = "login_"
 
 
 def init_web_auth():
-    """Идемпотентно, зовётся из core.db.init() — как остальные наши таблицы."""
+    """Идемпотентно, зовётся из core.db.init() — как остальные наши таблицы.
+    Старая web_login_codes в профильной базе (до 18.09.2026) не трогается и
+    не читается - коды теперь в общей базе, см. _codes."""
     with db() as c:
         c.executescript("""
-            CREATE TABLE IF NOT EXISTS web_login_codes(
-                code TEXT PRIMARY KEY,
-                created_at TEXT,
-                user_id TEXT,
-                claimed_at TEXT,
-                taken INTEGER DEFAULT 0,
-                refused INTEGER DEFAULT 0
-            );
             CREATE TABLE IF NOT EXISTS web_sessions(
                 token_hash TEXT PRIMARY KEY,
                 user_id TEXT,
@@ -74,11 +74,34 @@ def init_web_auth():
             CREATE INDEX IF NOT EXISTS idx_web_sessions_user
                 ON web_sessions(user_id);
         """)
-        # Таблица уже могла быть создана раньше, без этой колонки:
-        # CREATE TABLE IF NOT EXISTS существующую не трогает.
-        cols = [r["name"] for r in c.execute("PRAGMA table_info(web_login_codes)")]
-        if "refused" not in cols:
-            c.execute("ALTER TABLE web_login_codes ADD COLUMN refused INTEGER DEFAULT 0")
+
+
+class _codes:
+    """Соединение с общей базой кодов входа (sources/hadiths.db) - контекст с
+    той же повадкой, что core.db.db(): Row, commit на выходе. Таблица
+    создаётся на месте: отдельного init у общей базы нет (банк насых и след
+    приложения делают так же)."""
+    def __enter__(self):
+        self.c = sqlite3.connect(str(sampler.HADITHS_DB), timeout=5)
+        self.c.row_factory = sqlite3.Row
+        self.c.execute("""
+            CREATE TABLE IF NOT EXISTS web_login_codes(
+                code TEXT PRIMARY KEY,
+                created_at TEXT,
+                user_id TEXT,
+                profile TEXT,
+                claimed_at TEXT,
+                taken INTEGER DEFAULT 0,
+                refused INTEGER DEFAULT 0
+            )
+        """)
+        return self.c
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None:
+            self.c.commit()
+        self.c.close()
+        return False
 
 
 def _hash(token):
@@ -96,7 +119,7 @@ def new_login_code():
     минут нельзя, а в start-параметр Telegram (64 знака, [A-Za-z0-9_-]) он
     влезает с запасом."""
     code = secrets.token_urlsafe(16)
-    with db() as c:
+    with _codes() as c:
         c.execute("INSERT INTO web_login_codes(code, created_at) VALUES(?,?)",
                   (code, _now_iso()))
         # Заодно подметаем протухшие — отдельная уборка ради этой таблицы не нужна.
@@ -108,15 +131,20 @@ def new_login_code():
     return code
 
 
-def claim_login_code(code, user_id):
+def claim_login_code(code, user_id, profile=None):
     """Бот подтвердил вход. Возвращает True, если код был живой и свободный.
+
+    profile - в базе какого бота человек учится, то есть какой процесс выдаст
+    сессию. По умолчанию свой; мужской бот, нашедший сестру у соседа,
+    передаёт сюда «female» (core/handlers.py), и код заберёт женский процесс.
 
     Повторное подтверждение того же кода (человек нажал ссылку дважды) — не
     ошибка, но и не переприсвоение: код уже привязан к первому, кто его занял.
     """
     if not code or not user_id:
         return False
-    with db() as c:
+    profile = profile or config.PROFILE
+    with _codes() as c:
         row = c.execute(
             "SELECT user_id FROM web_login_codes "
             "WHERE code=? AND created_at >= datetime(?, ?)",
@@ -126,8 +154,8 @@ def claim_login_code(code, user_id):
             return False
         if row["user_id"]:
             return row["user_id"] == str(user_id)
-        c.execute("UPDATE web_login_codes SET user_id=?, claimed_at=? WHERE code=?",
-                  (str(user_id), _now_iso(), code))
+        c.execute("UPDATE web_login_codes SET user_id=?, profile=?, claimed_at=? WHERE code=?",
+                  (str(user_id), profile, _now_iso(), code))
         return True
 
 
@@ -141,7 +169,7 @@ def refuse_login_code(code):
     вкладки следующим же опросом."""
     if not code:
         return
-    with db() as c:
+    with _codes() as c:
         c.execute(
             "UPDATE web_login_codes SET refused=1 "
             "WHERE code=? AND user_id IS NULL",
@@ -153,7 +181,7 @@ def poll_login_code(code):
     """Что показать вкладке: 'refused' — не та сторона, None — ещё ждём."""
     if not code:
         return None
-    with db() as c:
+    with _codes() as c:
         row = c.execute(
             "SELECT refused FROM web_login_codes WHERE code=?", (code,)
         ).fetchone()
@@ -162,17 +190,34 @@ def poll_login_code(code):
     return None
 
 
+def login_code_profile(code):
+    """Для какого бота код подтверждён: 'male' / 'female', либо None, пока не
+    подтверждён. Вкладка сравнивает с процессом, который опрашивает, и при
+    несовпадении переспрашивает соседа (см. handle_auth_poll)."""
+    if not code:
+        return None
+    with _codes() as c:
+        row = c.execute(
+            "SELECT profile FROM web_login_codes WHERE code=? AND user_id IS NOT NULL",
+            (code,),
+        ).fetchone()
+    return row["profile"] if row else None
+
+
 def take_session_for_code(code, user_agent=""):
     """Опрос из браузера. Пока код не подтверждён — None. В момент, когда бот
     его подтвердил, ОДИН раз отдаёт свежий токен и гасит код: второй опрос с
     тем же кодом (чужая вкладка, история браузера) уже ничего не получит."""
     if not code:
         return None
-    with db() as c:
+    with _codes() as c:
         row = c.execute(
-            "SELECT user_id, taken FROM web_login_codes WHERE code=?", (code,)
+            "SELECT user_id, taken, profile FROM web_login_codes WHERE code=?", (code,)
         ).fetchone()
         if row is None or not row["user_id"] or row["taken"]:
+            return None
+        # Код подтверждён для соседа - сессию выдаст он, из своей базы.
+        if row["profile"] and row["profile"] != config.PROFILE:
             return None
         c.execute("UPDATE web_login_codes SET taken=1 WHERE code=?", (code,))
         user_id = row["user_id"]

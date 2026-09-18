@@ -73,9 +73,10 @@ from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
 from core.prep import prep_progress
 from core.tg import get_bot_username
 from core.web_auth import (
-    new_login_code, take_session_for_code, poll_login_code, resolve_session,
-    revoke_session, LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
+    new_login_code, take_session_for_code, poll_login_code, login_code_profile,
+    resolve_session, revoke_session, LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
 )
+from core.bots import other_bot, other_profile, JAMAAT_IN
 
 log = logging.getLogger(__name__)
 
@@ -135,7 +136,17 @@ def with_auth(handler):
             user = validate_init_data(raw, TELEGRAM_TOKEN)
             if user is None or not user.get("id"):
                 return web.json_response({"error": "unauthorized"}, status=401)
-            return await handler(request, str(user["id"]))
+            uid = str(user["id"])
+            # Открыто из чужого бота (18.09.2026, Динара): подпись верна, но
+            # человек учится у соседа. Раньше приложение работало наполовину
+            # (мусхаф общий, сдача - «нет группы») и писало его следы в чужую
+            # базу. Теперь ни один запрос не проходит, а приложение по этому
+            # ответу показывает один экран с кнопкой в его бот. Незнакомца
+            # (ни в одной базе) не трогаем - ему приложение объясняет, куда
+            # идти, своими текстами.
+            if not is_app_member(uid) and other_bot_member(uid):
+                return web.json_response(_wrong_bot_payload(), status=403)
+            return await handler(request, uid)
         token = _bearer_token(request)
         user_id = resolve_session(token) if token else None
         # Право спрашивается КАЖДЫЙ раз, а не только при выдаче токена.
@@ -147,6 +158,15 @@ def with_auth(handler):
             return web.json_response({"error": "unauthorized"}, status=401)
         return await handler(request, user_id)
     return wrapped
+
+
+def _wrong_bot_payload():
+    other = other_bot()
+    return {
+        "error": "wrong_bot",
+        "jamaat": other["jamaat"] if other else JAMAAT_IN[other_profile()],
+        "app_link": other["app_link"] if other else "",
+    }
 
 
 def _bearer_token(request):
@@ -916,9 +936,6 @@ async def handle_heartbeat(request, user_id):
         # отдельным запросом: heartbeat и так ходит каждые 20 секунд, а
         # строка обязана оживать без перезагрузки экрана.
         "feed": _feed_brief(user_id),
-        # Открыто не через свой бот (17.09.2026): здесь не своя, а во втором
-        # боте учится. Спрашиваем соседа только у «чужих» - своим незачем.
-        "wrong_bot": (not is_app_member(user_id)) and other_bot_member(user_id),
     })
 
 
@@ -1984,11 +2001,17 @@ async def handle_auth_poll(request):
     code = request.query.get("code", "")
     taken = take_session_for_code(code, request.headers.get("User-Agent", ""))
     if not taken:
-        # Бот увидел код, но человека в своих группах не нашёл - почти всегда
-        # это «выбрал не ту сторону». Пусть вкладка скажет об этом сама, а не
-        # ждёт молча подтверждения, которое не придёт.
+        # Бот увидел код, но человека не нашёл ни у себя, ни у соседа. Пусть
+        # вкладка скажет об этом сама, а не ждёт молча подтверждения,
+        # которое не придёт.
         if poll_login_code(code) == "refused":
             return web.json_response({"refused": True})
+        # Код подтверждён для соседа (18.09.2026): сестра вошла по ссылке в
+        # мужской бот, а сессию ей выдаст женский процесс из своей базы.
+        # Вкладка переспрашивает его по этому ответу.
+        profile = login_code_profile(code)
+        if profile and profile != PROFILE:
+            return web.json_response({"pending": True, "profile": profile})
         return web.json_response({"pending": True})
     token, user_id = taken
     user = find_user_by_phone(user_id)

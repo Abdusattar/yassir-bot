@@ -10,11 +10,17 @@
 первым»). Поэтому обработчик входа обязан стоять ПЕРВЫМ действием в ветке
 лички, до неё.
 """
+import pytest
 import asyncio
 
 import core.db as db
 import core.handlers as h
 from core import web_auth as wa
+
+
+# Коды входа с 18.09.2026 живут в общей базе (sources/hadiths.db) - каждый
+# тест берёт её подменённую, иначе он пишет в настоящий файл разработчика.
+pytestmark = pytest.mark.usefixtures("test_hadiths_db")
 
 
 def _start(monkeypatch, phone, code):

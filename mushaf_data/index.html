@@ -1255,12 +1255,6 @@
     0%, 55% { background: var(--warn-soft); box-shadow: 0 0 0 6px var(--warn-soft); }
     100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
   }
-  /* Открыто не через свой бот (17.09.2026). Не красное - это не долг. */
-  #dash-wrongbot { display: none; flex: 0 0 auto; margin: 20px 0 0; padding: 12px 14px;
-    border-radius: 16px; background: var(--warn-soft); color: var(--warn-ink);
-    border: 1px solid var(--warn); font-size: 14px; line-height: 1.4;
-    direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-  #dash-wrongbot.on { display: block; }
   #dash-board { display: none; flex: 0 0 auto; flex-direction: column; margin: 20px 0 0; overflow: hidden;
     background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
     box-shadow: var(--shadow-sm);
@@ -2851,7 +2845,9 @@
      мусхафа) иначе перевернёт и порядок кнопок, и сами направленные знаки
      (см. wiki/mushaf_yassirapp.md, "Ловушка: RTL-контейнер зеркалит и
      порядок, и сами символы"). */
-  #login {
+  /* #wrongbot (18.09.2026) - тот же экран-карточка, что и вход: приложение
+     открыто через бот другой половины, дальше идти нельзя. */
+  #login, #wrongbot {
     position: fixed; inset: 0; z-index: 100;
     direction: ltr;
     /* body задаёт 'Scheherazade New' - шрифт арабского текста мусхафа.
@@ -2886,7 +2882,7 @@
   }
   .login-sub { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.5; }
   .login-q { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
-  .login-side, .login-alt, .login-go, .login-plain {
+  .login-alt, .login-go, .login-plain {
     display: block; width: 100%;
     font: inherit; font-size: 15px;
     padding: 13px 14px; margin-bottom: 10px;
@@ -2894,7 +2890,7 @@
     border: 1px solid var(--card-border);
     background: var(--card-bg); color: var(--ink);
   }
-  .login-side:hover, .login-alt:hover { border-color: var(--accent); }
+  .login-alt:hover { border-color: var(--accent); }
   /* Единственная закрашенная кнопка на экран - остальное outline
      (см. "Дизайн-система" в wiki). */
   .login-go {
@@ -2932,7 +2928,7 @@
      Правило по id возвращает hidden его смысл. Общее [hidden]{...!important}
      не годится: приложение переключает экраны через style.display, и
      !important в таблице стилей перебил бы даже inline-стиль. */
-  #login[hidden], #dash-logout[hidden] { display: none; }
+  #login[hidden], #wrongbot[hidden], #dash-logout[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -3010,7 +3006,6 @@
        первым и отодвигал двери за первый экран. -->
   <!-- Доска важного (17.09.2026): над пульсом, под дверями - двери остаются
        на первом экране. См. boardRender и core/feed.py. -->
-  <div id="dash-wrongbot" role="alert"></div>
 <div id="dash-board"></div>
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
@@ -3498,28 +3493,24 @@
     <h1>YassirApp</h1>
     <p class="login-sub">Мусхаф, заучивание и слова Корана —<br>для тех, кто учится в Яссире.</p>
 
+    <!-- Сторону (мужская/женская) человек не выбирает (18.09.2026, решение
+         пользователя): ссылка всегда ведёт в мужской бот, тот ищет по обеим
+         базам и подтверждает вход для того бота, где человек учится. -->
     <div id="login-step-side">
       <p id="login-wrong-side" class="login-status bad" hidden>
-        Этот бот тебя не знает — похоже, сторона выбрана не та. Попробуй
-        другую.
+        Я не нашёл тебя среди учащихся. Приложение открывается тем, кто уже
+        учится в Яссире 🤲
       </p>
-      <p class="login-q">В какой группе ты учишься?</p>
-      <button class="login-side" data-profile="male">Мужская группа</button>
-      <button class="login-side" data-profile="female">Женская группа</button>
+      <button id="login-start" class="login-go">Войти через Telegram</button>
     </div>
 
     <div id="login-step-go" hidden>
       <!-- target="_blank": Telegram открывается отдельно, а эта вкладка
            остаётся жить и ждать подтверждения. Уйди мы по ссылке в том же
            окне - опрос оборвался бы на полпути. -->
-      <a id="login-link" class="login-go" target="_blank" rel="noopener">Подтвердить в Telegram</a>
+      <a id="login-link" class="login-go" target="_blank" rel="noopener">Открыть Telegram</a>
       <p id="login-status" class="login-status">Открой ссылку и нажми «Начать» — я жду подтверждения.</p>
-      <!-- Не мелким серым: ошибиться стороной легко, и это первое, что
-           человек ищет глазами, когда понял ошибку (10.09.2026). Класс СВОЙ,
-           не login-side: по нему навешиваются обработчики выбора стороны, и
-           эта кнопка ловила бы их тоже - тап начинал бы вход в профиль
-           "null" одновременно с возвратом к выбору. -->
-      <button id="login-back" class="login-alt">← Не та группа? Выбрать заново</button>
+      <button id="login-back" class="login-alt">← Назад</button>
     </div>
 
     <!-- Подсказка только для iPhone (10.09.2026). Android предлагает
@@ -3530,6 +3521,20 @@
       На iPhone: «Поделиться» → «На экран Домой» — и приложение будет
       открываться со своего значка, как обычное.
     </p>
+  </div>
+</div>
+
+<!-- Открыто через бот другой половины (18.09.2026). Сервер отвечает 403
+     wrong_bot на любой запрос (core/mufradat_api.py), приложение дальше не
+     идёт: один экран и кнопка в свой бот. Кнопка, а не автопереход -
+     молчаливый прыжок между ботами путает сильнее (решение пользователя). -->
+<div id="wrongbot" hidden>
+  <div class="login-card">
+    <div class="login-mark">۩</div>
+    <h1>YassirApp</h1>
+    <p class="login-sub" id="wrongbot-text"></p>
+    <a id="wrongbot-link" class="login-go" href="#">Открыть мой YassirApp</a>
+    <p class="login-status">Там твоя группа, сдачи и задания. Здесь я тебя не записываю, чтобы ничего не перепуталось.</p>
   </div>
 </div>
 
@@ -3591,6 +3596,28 @@
     return;
   }
 
+  // Открыто через бот другой половины (18.09.2026): первый же 403 wrong_bot
+  // из apiCall поднимает этот экран, дальше приложение не работает.
+  var wrongBotShown = false;
+  function showWrongBot(d) {
+    if (wrongBotShown) return;
+    wrongBotShown = true;
+    document.getElementById('wrongbot-text').textContent =
+      'Ты учишься в ' + (d.jamaat || 'другом') + ' джамаате, а это приложение открыто через бот другой половины.';
+    var a = document.getElementById('wrongbot-link');
+    if (d.app_link) {
+      a.href = d.app_link;
+      a.addEventListener('click', function (e) {
+        // Внутри Telegram ссылку t.me открывает сам Telegram: Mini App
+        // соседа поднимается на месте этого.
+        if (tg && tg.openTelegramLink) { e.preventDefault(); tg.openTelegramLink(d.app_link); }
+      });
+    } else {
+      a.hidden = true;
+    }
+    document.getElementById('wrongbot').hidden = false;
+  }
+
   function showLogin() {
     var box = document.getElementById('login');
     var stepSide = document.getElementById('login-step-side');
@@ -3617,9 +3644,8 @@
       document.getElementById('login-ios').hidden = false;
     }
 
-    Array.prototype.forEach.call(document.querySelectorAll('.login-side'), function (b) {
-      b.addEventListener('click', function () { start(b.getAttribute('data-profile')); });
-    });
+    // Всегда мужской бот: он ищет человека по обеим базам (18.09.2026).
+    document.getElementById('login-start').addEventListener('click', function () { start('male'); });
     document.getElementById('login-back').addEventListener('click', function () {
       if (poll) { clearInterval(poll); poll = null; }
       stepGo.hidden = true;
@@ -3631,11 +3657,10 @@
       status.className = 'login-status' + (bad ? ' bad' : '');
     }
 
-    // Профиль (мужской/женский) выбран ДО выдачи кода и решает, у какого
-    // бота человек входит. Это не косметика: у ботов разные базы, и код,
-    // выданный мужским процессом, подтвердить может только мужской бот.
-    // Ошибиться дверью не страшно - чужой бот не найдёт человека в своих
-    // группах и скажет об этом.
+    // profile - чей процесс просим о коде. Ссылка ведёт в этот бот, а вот
+    // сессию выдаст тот, где человек учится: сестре мужской бот подтвердит
+    // код для женского профиля, и опрос ниже переедет к нему сам
+    // (18.09.2026, см. core/web_auth.py).
     function start(profile) {
       stepSide.hidden = true;
       stepGo.hidden = false;
@@ -3674,15 +3699,20 @@
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (!d) return;
-            // Бот не нашёл человека у себя - почти всегда выбрана не та
-            // сторона. Он сказал об этом в Telegram, но человек смотрит
-            // сюда: возвращаем его к выбору сами, не заставляя догадываться.
+            // Бот не нашёл человека ни у себя, ни у соседа. Он сказал об
+            // этом в Telegram, но человек смотрит сюда: говорим и здесь.
             if (d.refused) {
               clearInterval(poll);
               poll = null;
               stepGo.hidden = true;
               stepSide.hidden = false;
               document.getElementById('login-wrong-side').hidden = false;
+              return;
+            }
+            // Код подтверждён для другого бота (сестра вошла через ссылку
+            // в мужской): дальше спрашиваем его процесс - сессия там.
+            if (d.profile && d.profile !== profile) {
+              profile = d.profile;
               return;
             }
             if (!d.token) return;
@@ -4889,9 +4919,6 @@
       var count = document.getElementById('dash-ustaz-count');
       var isUstaz = !!(res.data && res.data.is_ustaz);
       meRevisionRecord = !!(res.data && res.data.revision_record);
-      var wb = document.getElementById('dash-wrongbot');
-      if (res.data && res.data.wrong_bot) { wb.textContent = T('wrong_bot'); wb.classList.add('on'); }
-      else wb.classList.remove('on');
       // Раздел «Проверка сдач» рисуется по этому же признаку. Если человек
       // стоял в оглавлении, когда ответ пришёл, - перерисуем, иначе раздел
       // появился бы только со второго захода.
@@ -8345,6 +8372,9 @@
           saveAuth(null);
           location.reload();
         }
+        // Открыто через бот другой половины (18.09.2026) - один экран с
+        // кнопкой в свой бот, см. showWrongBot.
+        if (r.status === 403 && data && data.error === 'wrong_bot') showWrongBot(data);
         return { status: r.status, data: data };
       });
     }).catch(function () {

@@ -30,7 +30,7 @@ from core.db import (
     set_upgrade_decision, get_pending_upgrade_target, resolve_upgrade_offer,
     get_pending_group_nudge, get_return_nudge_candidates, get_last_return_nudge_at,
     mark_return_nudge_sent, get_last_known_lang, has_learning_group_history,
-    bot_leads_group,
+    bot_leads_group, track_unregistered,
 )
 from core.prep import (
     PREP_MIN_DAYS, announce_prep_graduate_arrival,
@@ -397,6 +397,33 @@ async def send_new_student_prep_redirect(phone, chat_id, display_name, lang):
         await send_message(chat_id, T("new_student_needs_prep_group_notify", lang, name=name))
     else:
         await send_message(chat_id, T("new_student_needs_prep_group_dm_failed", lang, name=name))
+
+
+async def handle_other_bot_member_in_group(chat_id, group_info, uid, display_name):
+    """В группу вошёл (или написал в ней) человек, который учится во ВТОРОМ
+    боте (18.09.2026). Здесь его не регистрируем и имя не спрашиваем - иначе
+    брат по чужой ссылке оказался бы в женской базе. Отсчёт до кика идёт как
+    у любого незарегистрированного (kick_unregistered), а сообщения - один
+    раз: track_unregistered говорит, начат ли отсчёт только что. Говорим ему
+    в личку, не в группу (решение пользователя: группу не засорять), и
+    сообщаем супер-админам."""
+    from core.bots import other_bot, other_profile, JAMAAT_IN
+    if not track_unregistered(uid, chat_id):
+        return
+    title = (group_info["title"] or str(chat_id)) if group_info else str(chat_id)
+    lang = get_group_lang(group_info) if group_info else "ru"
+    other = other_bot()
+    jamaat = other["jamaat"] if other else JAMAAT_IN[other_profile()]
+    if other:
+        dm = T("join_other_bot_dm", lang, title=title, jamaat=jamaat, link=other["chat_link"])
+    else:
+        dm = T("join_other_bot_dm_nolink", lang, title=title, jamaat=jamaat)
+    await send_message(uid, dm)
+    who = (display_name or "").strip() or ("id " + str(uid))
+    for ap in SUPER_ADMIN_IDS:
+        await send_message(ap, "⚠️ В «" + title + "» зашёл человек из второго бота: " + who
+                           + " (id " + str(uid) + "), учится в " + jamaat + " джамаате. "
+                           "Не записан, ссылку на свой бот получил в личку.")
 
 
 async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):

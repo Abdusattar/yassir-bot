@@ -11,6 +11,11 @@ import pytest
 from core import web_auth as wa
 
 
+# Коды входа с 18.09.2026 живут в общей базе (sources/hadiths.db) - каждый
+# тест берёт её подменённую, иначе он пишет в настоящий файл разработчика.
+pytestmark = pytest.mark.usefixtures("test_hadiths_db")
+
+
 def test_code_becomes_token_only_after_bot_confirms(test_db):
     code = wa.new_login_code()
     # Пока бот не подтвердил, браузеру отдавать нечего
@@ -41,9 +46,9 @@ def test_someone_else_cannot_claim_my_code(test_db):
     assert user_id == "12345"
 
 
-def test_expired_code_is_refused(test_db):
+def test_expired_code_is_refused(test_db, test_hadiths_db):
     code = wa.new_login_code()
-    with sqlite3.connect(test_db) as c:
+    with sqlite3.connect(test_hadiths_db) as c:
         c.execute("UPDATE web_login_codes SET created_at=datetime('now','-2 hours')"
                   " WHERE code=?", (code,))
     assert wa.claim_login_code(code, "12345") is False

@@ -19,7 +19,7 @@ from core.db import (
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
     register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
     add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
-    is_service_group, is_app_member,
+    is_service_group, is_app_member, other_bot_member,
     set_observer, unset_observer, is_observer,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
@@ -44,8 +44,9 @@ from core.db import (
 )
 from core.transfers import (
     block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student,
-    send_new_student_prep_redirect,
+    send_new_student_prep_redirect, handle_other_bot_member_in_group,
 )
+from core.bots import other_bot, other_profile, JAMAAT_IN
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 from core.mushaf_words import advance_hifz_pointer
 from core.web_auth import claim_login_code, refuse_login_code, LOGIN_START_PREFIX
@@ -74,10 +75,9 @@ LOGIN_CODE_EXPIRED = (
 )
 
 LOGIN_NOT_A_STUDENT = (
-    "Я пока не вижу тебя в своих группах 🤲\n\n"
-    "Приложение открывается тем, кто уже учится. Если ты в женской группе — "
-    "вход нужно делать через женского бота. А если только собираешься "
-    "начать, напиши своему устазу, он подскажет с чего начать."
+    "Я пока не вижу тебя среди учащихся 🤲\n\n"
+    "Приложение открывается тем, кто уже учится в Яссире. Если только "
+    "собираешься начать, напиши своему устазу, он подскажет с чего начать."
 )
 
 _TASK_NAMES = {
@@ -254,6 +254,26 @@ def may_use_app(phone):
     приложения.
     """
     return is_app_member(phone)
+
+
+async def redirect_to_other_bot(chat_id, phone, text):
+    """Личка: человек учится во втором боте (18.09.2026). У себя не пишем
+    ничего. Со ссылкой входа с сайта - подтверждаем код ДЛЯ ЕГО профиля
+    (сессию выдаст его процесс, см. core/web_auth.py), и вкладка у него
+    открывается сама: говорить, где его бот, тут незачем. Без кода -
+    показываем дорогу в его бот одной строкой."""
+    if text.startswith("/start " + LOGIN_START_PREFIX):
+        code = text.split(" ", 1)[1][len(LOGIN_START_PREFIX):].strip()
+        if claim_login_code(code, phone, profile=other_profile()):
+            await send_message(chat_id, LOGIN_CONFIRMED)
+        else:
+            await send_message(chat_id, LOGIN_CODE_EXPIRED)
+        return
+    other = other_bot()
+    if other:
+        await send_message(chat_id, T("dm_other_bot", "ru", jamaat=other["jamaat"], link=other["chat_link"]))
+    else:
+        await send_message(chat_id, T("dm_other_bot_nolink", "ru", jamaat=JAMAAT_IN[other_profile()]))
 
 
 def is_group_chat(chat_id):
@@ -925,13 +945,23 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # Студент написал боту в личку хотя бы раз — значит, бот теперь может писать
     # ему первым (Telegram запрещает боту инициировать диалог до этого момента)
     if not is_group:
-        # Вход в приложение с сайта, чужой бот (10.09.2026). Человек выбрал
-        # не ту сторону: женщина открыла мужского бота или наоборот. Выходим
-        # ПЕРВЫМ ЖЕ действием, до всего остального - иначе он оставит в чужой
-        # базе строку users (mark_dm_ok_by_phone ниже заводит её даже
-        # незнакомцу). Студентом это никого не делает - им делает только
-        # вход в группу, - но и следа тут быть не должно: человек просто
-        # ошибся дверью.
+        # ── Человек из ВТОРОГО бота (18.09.2026). Учится у соседа, а написал
+        # сюда: сестра нажала «Начать» у мужского бота (Динара, 17.09), или
+        # пришла по ссылке входа с сайта - там сторону больше не выбирают,
+        # ссылка всегда ведёт в мужской бот. Стоит ПЕРВЫМ действием ветки:
+        # ниже mark_dm_ok_by_phone заводит строку users кому угодно, а следа
+        # чужого здесь быть не должно. Супер-админов не трогаем: их id
+        # прописаны в .env обоих ботов, и мужской супер-админ в женском
+        # боте - это управление, а не «ошибся дверью».
+        if not is_admin(phone) and not may_use_app(phone) and other_bot_member(phone):
+            await redirect_to_other_bot(chat_id, phone, text)
+            return
+
+        # Вход в приложение с сайта, незнакомец (10.09.2026): ни в этой базе,
+        # ни у соседа. Выходим до всего остального - иначе он оставит в базе
+        # строку users (mark_dm_ok_by_phone ниже заводит её даже незнакомцу).
+        # Студентом это никого не делает - им делает только вход в группу, -
+        # но и следа тут быть не должно.
         if text.startswith("/start " + LOGIN_START_PREFIX) and not may_use_app(phone):
             refuse_login_code(text.split(" ", 1)[1][len(LOGIN_START_PREFIX):].strip())
             await send_message(chat_id, LOGIN_NOT_A_STUDENT)
@@ -1407,6 +1437,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             if await _take_missing_name(phone, group, chat_id, text, sender_name, glang):
                 return
         if not s_reg:
+            # Учится во втором боте (18.09.2026) - не регистрируем и имя не
+            # спрашиваем, той же дорогой, что при входе в группу (bot.py).
+            if other_bot_member(phone):
+                await handle_other_bot_member_in_group(chat_id, group, phone, sender_name)
+                return
             # Уже известен боту (зарегистрирован где-то ещё) — не спрашиваем имя заново
             existing_user = find_known_user_by_phone(phone)
             if existing_user:

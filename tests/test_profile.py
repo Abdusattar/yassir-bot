@@ -17,6 +17,11 @@ from core import web_auth as wa
 PHONE = "777333"
 
 
+# Коды входа с 18.09.2026 живут в общей базе (sources/hadiths.db) - каждый
+# тест берёт её подменённую, иначе он пишет в настоящий файл разработчика.
+pytestmark = pytest.mark.usefixtures("test_hadiths_db")
+
+
 def _student(phone=PHONE, name="Абдулла"):
     db.save_group("-100902", "N-1", tasks="m,r,t")
     db.add_student(name, db.get_group("-100902")["id"], phone=phone)

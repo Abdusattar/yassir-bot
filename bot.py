@@ -14,7 +14,8 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL, MUFRADAT_API_PORT
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member
+from core.bots import register_self
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.feed import record_incoming
@@ -22,6 +23,7 @@ from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_juz_answer, handle_juz_confirm, handle_prep_onboarding_next
 from core.transfers import (
+    handle_other_bot_member_in_group,
     handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
     send_new_student_prep_redirect,
 )
@@ -60,6 +62,9 @@ async def main():
         log.info("Бот запущен: @%s  [profile=%s]", username, PROFILE)
         # Веб-вход (10.09.2026) собирает из этого ссылку t.me/<бот>?start=login_<код>
         set_bot_username(username)
+        # Представляемся соседу через общую базу (18.09.2026, core/bots.py):
+        # по этой записи второй бот покажет нашим людям дорогу к нам.
+        register_self(username)
         # Единственная точка входа в личке - кнопка "YassirApp" ниже
         # (Menu Button). /mushaf, /invite, /muf раньше жили и в setMyCommands
         # (список по "/"), и как отдельные текстовые команды - решение
@@ -225,6 +230,11 @@ async def main():
                             if user.get("username"):
                                 cache_username(user["username"], uid)
                             glang = get_group_lang(group_info)
+                            # Учится во втором боте (18.09.2026) - не наш,
+                            # у себя не записываем, показываем его бот.
+                            if other_bot_member(uid):
+                                await handle_other_bot_member_in_group(chat_id, group_info, uid, tg_name)
+                                continue
                             existing_user = find_known_user_by_phone(uid)
                             if existing_user:
                                 await handle_known_user_group_join(chat_id, group_info, uid, existing_user)
@@ -356,7 +366,9 @@ async def main():
                         if not tg_name and nm.get("username"):
                             tg_name = nm["username"]
                         glang = get_group_lang(group_info) if group_info else "ru"
-                        if group_info:
+                        if group_info and other_bot_member(uid):
+                            await handle_other_bot_member_in_group(chat_id, group_info, uid, tg_name)
+                        elif group_info:
                             existing_user = find_known_user_by_phone(uid)
                             if existing_user:
                                 await handle_known_user_group_join(chat_id, group_info, uid, existing_user)
