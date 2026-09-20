@@ -1370,6 +1370,38 @@ def other_bot_known(phone):
         return False
 
 
+def other_bot_prep_only(phone):
+    """У соседа человек числится ТОЛЬКО в подготовительной (активен там), и
+    больше ничего: ни активной учебной, ни истории pro/relaxed, ни роли
+    устаза (20.09.2026). Такое членство никем не проверено (Бурулсун), и
+    если человек сам ответил НАШУ половину - верить ответу, а не ему."""
+    path = _other_bot_db_path()
+    if not path:
+        return False
+    try:
+        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            rows = c.execute("""
+                SELECT ug.role, ug.active, g.group_type FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                JOIN groups g ON ug.group_id=g.id
+                WHERE u.phone=?
+            """, (str(phone),)).fetchall()
+        finally:
+            c.close()
+    except sqlite3.Error:
+        return False
+    prep_active = False
+    for role, active, gtype in rows:
+        if role == "admin":
+            return False
+        if gtype in ("pro", "relaxed"):
+            return False
+        if gtype == "prep" and active:
+            prep_active = True
+    return prep_active
+
+
 def ever_learning_student(phone):
     """Хоть раз был студентом pro/relaxed ЭТОЙ базы (активен или нет) - то
     есть его пропустил устаз, половина проверена человеком (20.09.2026).

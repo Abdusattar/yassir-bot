@@ -33,11 +33,12 @@ from core.bots import _connect, other_bot, other_profile, JAMAAT_IN
 from core.db import (
     get_now, get_prep_group, ever_learning_student, other_bot_known,
     deactivate_student, get_groups_by_type, find_by_phone,
-    get_dm_ok_by_phone, remove_unregistered,
+    get_dm_ok_by_phone, remove_unregistered, other_bot_member, other_bot_prep_only,
+    get_prep_students_active,
 )
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
-from core.tg import send_message, send_message_with_buttons, ban_member, unban_member
+from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +89,65 @@ def known_side(uid):
     if other_bot_known(uid):
         return other_profile()
     return None
+
+
+def claimed_by_neighbour(uid):
+    """Считать ли человека человеком СОСЕДА на всех дверях (личка, сайт,
+    группы): учится/устаз там (other_bot_member) или проходил через его
+    устаза (other_bot_known). Исключение (20.09.2026, зеркало Бурулсун): у
+    соседа только подготовительная - никем не проверенная запись, - а сам
+    человек ответил НАШУ половину. Тогда он наш: разворачивать его назад
+    было бы пинг-понгом, а снять его у соседа может только сосед (см.
+    sweep_misplaced_in_prep)."""
+    if not (other_bot_member(uid) or other_bot_known(uid)):
+        return False
+    if other_bot_prep_only(uid) and answered_side(uid) == config.PROFILE:
+        return False
+    return True
+
+
+async def sweep_misplaced_in_prep():
+    """Уборщик (дважды в день вместе с check_prep_students): снять из НАШЕЙ
+    подготовительной тех, кто любому боту ответил другую половину. Ответ
+    общий (user_side), а базу правит только её хозяин - так ответ, данный
+    где угодно, за полдня чинит обе базы."""
+    for s in get_prep_students_active():
+        uid = s["phone"]
+        if not uid:
+            continue
+        side = answered_side(uid)
+        if side is None or side == config.PROFILE:
+            continue
+        await _leave_own_prep(uid)
+        await send_to_neighbour(uid)
+        log.info("side sweep: %s снят с подготовительной - ответил другую половину", uid)
+
+
+def invite_buttons():
+    return [("Ссылка для брата", "inv:male"), ("Ссылка для сестры", "inv:female")]
+
+
+async def send_invite_menu(chat_id, lang="ru"):
+    await send_message_with_buttons(chat_id, T("invite_menu", lang), invite_buttons())
+
+
+async def handle_invite_pick(uid, side, lang="ru"):
+    """Тап «ссылка для брата/сестры»: текст для пересылки со ссылкой на
+    ЛИЧКУ нужного бота (20.09.2026, решение пользователя: в рассылке
+    ссылок нет, их берут здесь). Ссылка на бота безопасна в пересылке -
+    незнакомца там спросят половину, чужого развернут."""
+    if side not in SIDES:
+        return
+    if side == config.PROFILE:
+        link = await get_dm_start_link()
+    else:
+        other = other_bot()
+        link = other["start_link"] if other else None
+    if not link:
+        await send_message(uid, T("invite_no_link", lang))
+        return
+    who = "брата" if side == "male" else "сестры"
+    await send_message(uid, T("invite_forward_text", lang, who=who, link=link))
 
 
 def side_buttons(uid):

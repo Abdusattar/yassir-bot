@@ -15,7 +15,7 @@ from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHA
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member, other_bot_known
-from core.side import handle_side_answer
+from core.side import handle_side_answer, handle_invite_pick, claimed_by_neighbour
 from core.bots import register_self
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
@@ -76,6 +76,15 @@ async def main():
         # список из прежнего setMyCommands иначе останется висеть на
         # серверах Telegram, простого удаления кода тут недостаточно.
         await tg_call("deleteMyCommands", {
+            "scope": {"type": "all_private_chats"},
+            "language_code": "ru",
+        })
+        # Одна команда в списке по «/» (20.09.2026, решение пользователя):
+        # «позвать друга» - ссылки на мужского/женского бота для пересылки.
+        # Команды Telegram - только латиница, поэтому /invite; текстом бот
+        # понимает и /позвать.
+        await tg_call("setMyCommands", {
+            "commands": [{"command": "invite", "description": "Позвать друга — ссылки на ботов"}],
             "scope": {"type": "all_private_chats"},
             "language_code": "ru",
         })
@@ -170,6 +179,12 @@ async def main():
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
                             asyncio.create_task(handle_side_answer(cq_uid, parts[1], pressed_in=cq_chat_id))
+                    # "inv:male" / "inv:female" - «ссылка для брата/сестры»
+                    # (20.09.2026). Только личка, адресат = нажавший.
+                    elif cq_data.startswith("inv:"):
+                        parts = cq_data.split(":", 1)
+                        if len(parts) == 2:
+                            asyncio.create_task(handle_invite_pick(cq_uid, parts[1]))
                     elif cq_data.startswith("ponb:"):
                         parts = cq_data.split(":", 2)
                         if len(parts) == 3 and parts[2] == cq_uid:
@@ -245,7 +260,7 @@ async def main():
                             # у себя не записываем, показываем его бот. То же
                             # для того, кого сосед знает по прошлым группам
                             # (20.09.2026, штрафница сестёр).
-                            if other_bot_member(uid) or other_bot_known(uid):
+                            if claimed_by_neighbour(uid):
                                 await handle_other_bot_member_in_group(chat_id, group_info, uid, tg_name)
                                 continue
                             existing_user = find_known_user_by_phone(uid)
@@ -378,7 +393,7 @@ async def main():
                         if not tg_name and nm.get("username"):
                             tg_name = nm["username"]
                         glang = get_group_lang(group_info) if group_info else "ru"
-                        if group_info and (other_bot_member(uid) or other_bot_known(uid)):
+                        if group_info and claimed_by_neighbour(uid):
                             await handle_other_bot_member_in_group(chat_id, group_info, uid, tg_name)
                         elif group_info:
                             existing_user = find_known_user_by_phone(uid)

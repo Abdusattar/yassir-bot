@@ -51,7 +51,7 @@ from core.bots import other_bot, other_profile, JAMAAT_IN
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 from core.mushaf_words import advance_hifz_pointer
 from core.web_auth import claim_login_code, refuse_login_code, LOGIN_START_PREFIX
-from core.side import offer_way_in, mark_side_by_ustaz, USTAZ_SIDE_WORDS
+from core.side import offer_way_in, mark_side_by_ustaz, USTAZ_SIDE_WORDS, claimed_by_neighbour, send_invite_menu
 
 log = logging.getLogger(__name__)
 
@@ -958,8 +958,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # ...и человек, которого сосед ЗНАЕТ, хоть сейчас и не активен
         # (штрафница сестёр, 20.09.2026): раньше он выглядел незнакомцем и
         # получал ссылку на нашу подготовительную.
-        if not is_admin(phone) and not may_use_app(phone) and (other_bot_member(phone) or other_bot_known(phone)):
+        if not is_admin(phone) and not may_use_app(phone) and claimed_by_neighbour(phone):
             await redirect_to_other_bot(chat_id, phone, text)
+            return
+
+        # «Позвать друга» (20.09.2026): ссылки на ботов берут здесь, в
+        # рассылке их больше нет. Кому угодно - ссылка на бота безопасна.
+        if text.lower() in ("/invite", "/позвать"):
+            await send_invite_menu(chat_id)
             return
 
         # Вход в приложение с сайта, незнакомец (10.09.2026): ни в этой базе,
@@ -1451,7 +1457,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not s_reg:
             # Учится во втором боте (18.09.2026) - не регистрируем и имя не
             # спрашиваем, той же дорогой, что при входе в группу (bot.py).
-            if other_bot_member(phone) or other_bot_known(phone):
+            if claimed_by_neighbour(phone):
                 await handle_other_bot_member_in_group(chat_id, group, phone, sender_name)
                 return
             # Уже известен боту (зарегистрирован где-то ещё) — не спрашиваем имя заново

@@ -353,3 +353,80 @@ def test_female_bot_words_are_mirrored(test_db, world, monkeypatch):
     monkeypatch.setattr(config, "PROFILE", "female")
     assert side.USTAZ_SIDE_WORDS["/брат"] == "male" != config.PROFILE      # чужой → снять
     assert side.USTAZ_SIDE_WORDS["/сестра"] == config.PROFILE               # свой → подтвердить
+
+
+# ── Зеркало Бурулсун: у соседа только prep, а сам ответил нашу половину ─────
+
+def test_prep_only_at_neighbour_plus_own_answer_is_not_redirected(test_db, world, wire):
+    with sqlite3.connect(world["female_db"]) as c:
+        c.execute("INSERT INTO users VALUES(4, 'Канат', '560')")
+        c.execute("INSERT INTO user_groups VALUES(4, 7, 'student', 1)")     # активен в ЖЕНСКОЙ prep
+    assert db.other_bot_member("560") is True and db.other_bot_prep_only("560") is True
+    assert side.claimed_by_neighbour("560") is True          # пока не ответил - сосед его
+    side.remember_side("560", "male")
+    assert side.claimed_by_neighbour("560") is False         # ответил «брат» - наш
+    _dm("560", "/start")
+    assert "https://t.me/+MALEPREP" in wire["sent"][-1][1]  # своя prep, не «твой бот здесь»
+
+
+def test_verified_at_neighbour_stays_theirs_even_with_own_answer(test_db, world):
+    side.remember_side(SISTER_ACTIVE, "male")               # активна в relaxed у сестёр
+    assert side.claimed_by_neighbour(SISTER_ACTIVE) is True
+
+
+def test_sweep_removes_from_our_prep_those_who_answered_the_other_half(test_db, world, wire):
+    side.remember_side(MISPLACED, "female")
+    asyncio.run(side.sweep_misplaced_in_prep())
+    assert (MALE_PREP_CHAT, MISPLACED) in wire["kicked"]
+    assert db.get_learning_group(MISPLACED, include_prep=True) is None
+    assert "yassir_female_bot?start=go" in wire["sent"][-1][1]
+
+
+def test_sweep_leaves_own_and_silent_alone(test_db, world, wire):
+    db.add_student("Заур", db.get_group(MALE_PREP_CHAT)["id"], phone="561")
+    side.remember_side("561", "male")
+    asyncio.run(side.sweep_misplaced_in_prep())
+    assert wire["kicked"] == []
+
+
+# ── «Позвать друга»: ссылок в рассылке нет, ссылки на ботов по кнопке ────────
+
+def test_invite_broadcast_has_no_link_but_buttons(test_db, world, wire, monkeypatch):
+    import core.scheduler as sch
+    monkeypatch.setattr(sch, "send_message_with_buttons", wire_btn(wire))
+    db.mark_dm_ok_by_phone(BROTHER)
+    asyncio.run(sch.invite_friend_broadcast())
+    mine = [(t, b) for c, t, b in wire["sent"] if c == BROTHER]
+    assert len(mine) == 1
+    text, buttons = mine[0]
+    assert "t.me" not in text and "/invite" in text
+    assert [b[1] for b in buttons] == ["inv:male", "inv:female"]
+
+
+def wire_btn(wire):
+    async def fake_btn(cid, text, buttons):
+        wire["sent"].append((str(cid), text, buttons))
+        return {"ok": True}
+    return fake_btn
+
+
+def test_invite_pick_gives_forwardable_text_with_bot_link(test_db, world, wire, monkeypatch):
+    async def own_link():
+        return "https://t.me/yassirquranbot?start=go"
+    monkeypatch.setattr(side, "get_dm_start_link", own_link)
+    asyncio.run(side.handle_invite_pick(BROTHER, "male"))
+    assert "для брата" in wire["sent"][-1][1] and "yassirquranbot?start=go" in wire["sent"][-1][1]
+    asyncio.run(side.handle_invite_pick(BROTHER, "female"))
+    assert "для сестры" in wire["sent"][-1][1] and "yassir_female_bot?start=go" in wire["sent"][-1][1]
+    assert all("t.me/+" not in t for _, t, _ in wire["sent"])
+
+
+def test_invite_command_in_dm_shows_the_menu(test_db, world, wire):
+    _dm(BROTHER, "/позвать")
+    assert wire["sent"][-1][2] is not None and [b[1] for b in wire["sent"][-1][2]] == ["inv:male", "inv:female"]
+
+
+def test_registration_text_mentions_settings_rename(test_db):
+    from core.i18n import T
+    assert "настройки" in T("registered_group", "ru", name="Канат")
+    assert "настройки" in T("registered_group_dm", "ru", name="Канат", link="x")

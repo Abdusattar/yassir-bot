@@ -21,7 +21,8 @@ from core.db import (
     student_ids_with_tasks_since, SERVICE_GROUP_TYPE, groups_with_app_only_date,
 )
 from core.app_trail import users_seen_since
-from core.tg import send_message, tg_call, get_dm_start_link
+from core.tg import send_message, tg_call, get_dm_start_link, send_message_with_buttons
+from core.side import invite_buttons, sweep_misplaced_in_prep
 from core.i18n import T
 from core.transfers import run_transfer_checks, send_return_nudges
 from core.prep import check_prep_students, send_prep_reminders
@@ -1350,12 +1351,10 @@ async def invite_friend_broadcast():
     группа где все студенты находятся") - без дедупа получал бы это
     сообщение по разу за каждую группу (на проде это 181 строка против 104
     реальных людей)."""
-    prep_group = get_prep_group()
-    link = prep_group["invite_link"] if prep_group and prep_group["invite_link"] else ""
-    if not link:
-        log.error("invite_friend_broadcast: prep group has no invite_link, skip")
-        return
-
+    # Ссылки в тексте нет (20.09.2026, решение пользователя): рассылка
+    # пересылается кому угодно, и ссылка на ГРУППУ уводила людей в чужую
+    # половину (Канат). Ссылки на ботов - кнопками под сообщением и по
+    # /invite в любой момент (core/side.py).
     idx = (int(get_setting("invite_friend_last_index") or -1) + 1) % len(_INVITE_FRIEND_KEYS)
     set_setting("invite_friend_last_index", str(idx))
     key = _INVITE_FRIEND_KEYS[idx]
@@ -1372,7 +1371,7 @@ async def invite_friend_broadcast():
 
     for phone, (name, glang) in recipients.items():
         try:
-            await send_message(phone, T(key, glang, link=link))
+            await send_message_with_buttons(phone, T(key, glang), invite_buttons())
             await asyncio.sleep(0.3)
         except Exception as e:
             log.error("invite_friend_broadcast error for %s: %s", name, e)
@@ -1963,6 +1962,7 @@ async def scheduler():
                 # о выполнении условия (≥5 дней) уходило только на СЛЕДУЮЩИЙ вечер.
                 # Утренняя проверка ловит такие случаи на ~14 часов раньше (24.07.2026).
                 await maybe_run("prep_check_morning", check_prep_students)
+                await maybe_run("side_sweep_morning", sweep_misplaced_in_prep)
                 await maybe_run("voice_review_report", voice_review_report)
                 await maybe_run("profile_survey_intro", profile_survey_intro)
                 await maybe_run("profile_survey_nudge", profile_survey_nudge)
@@ -1999,6 +1999,7 @@ async def scheduler():
             elif h == 21 and m == 0:
                 await maybe_run("transfer_check", transfer_check)
                 await maybe_run("prep_check", check_prep_students)
+                await maybe_run("side_sweep", sweep_misplaced_in_prep)
                 await maybe_run("invite_missing_ustaz_to_scaling", invite_missing_ustaz_to_scaling)
             elif wd == 6 and h == 20 and m == 30:
                 await maybe_run("yassir_asks_admin", yassir_asks_admin)
