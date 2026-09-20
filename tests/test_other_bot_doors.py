@@ -27,7 +27,7 @@ STRANGER = "777"    # нигде
 
 
 @pytest.fixture
-def two_bots(tmp_path, monkeypatch):
+def two_bots(tmp_path, monkeypatch, fresh_db):
     """Мужская база - наша, женская лежит рядом (так other_bot_member её и
     находит), оба бота представились в общей базе."""
     other = tmp_path / "quran_female.db"
@@ -46,8 +46,7 @@ def two_bots(tmp_path, monkeypatch):
     bots.register_self("yassir_female_bot")
     monkeypatch.setattr(config, "PROFILE", "male")
     bots.register_self("yassirquranbot")
-    monkeypatch.setattr(db, "DB", str(tmp_path / "quran_male.db"))
-    db.init()
+    monkeypatch.setattr(db, "DB", fresh_db(tmp_path / "quran_male.db"))
     db.save_group("-100901", "N-1", tasks="m,r,t")
     db.add_student("Сатар", db.get_group("-100901")["id"], phone=BROTHER)
     monkeypatch.setattr(h, "SUPER_ADMIN_IDS", [])

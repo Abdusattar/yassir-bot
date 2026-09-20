@@ -33,7 +33,7 @@ N1_CHAT = "-100901"
 
 
 @pytest.fixture
-def world(tmp_path, monkeypatch):
+def world(tmp_path, monkeypatch, fresh_db):
     other = tmp_path / "quran_female.db"
     c = sqlite3.connect(other)
     c.executescript("""
@@ -53,8 +53,7 @@ def world(tmp_path, monkeypatch):
     bots.register_self("yassir_female_bot")
     monkeypatch.setattr(config, "PROFILE", "male")
     bots.register_self("yassirquranbot")
-    monkeypatch.setattr(db, "DB", str(tmp_path / "quran_male.db"))
-    db.init()
+    monkeypatch.setattr(db, "DB", fresh_db(tmp_path / "quran_male.db"))
     db.save_group(N1_CHAT, "N-1", tasks="m,r,t")
     db.save_group(MALE_PREP_CHAT, "Yassir подготовительная", tasks="m,r,t")
     with db.db() as cc:

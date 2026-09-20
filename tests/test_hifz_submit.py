@@ -214,7 +214,7 @@ def test_lost_tail_rule_leaves_room_for_small_differences():
     assert mb.lost_tail(0.0, 151000)           # пустой результат - потеряно всё
 
 
-def test_сдача_из_чужого_бота_говорит_прямо(test_db, tmp_path, monkeypatch):
+def test_сдача_из_чужого_бота_говорит_прямо(test_db, tmp_path, monkeypatch, fresh_db):
     """17.09.2026, Динара: открыла приложение через мужской бот, учится в
     женском. Вместо «нет группы» - «не тот бот»."""
     import sqlite3
@@ -232,8 +232,7 @@ def test_сдача_из_чужого_бота_говорит_прямо(test_db
     c.commit(); c.close()
     own = tmp_path / "quran_male.db"
     monkeypatch.setattr(config, "PROFILE", "male")
-    monkeypatch.setattr(db, "DB", str(own))
-    db.init()
+    monkeypatch.setattr(db, "DB", fresh_db(own))
     res = asyncio.run(mb.submit_hifz_recording("555", b"a", None, 10, 1, 1))
     assert res == {"ok": False, "error": "wrong_bot"}
     assert db.other_bot_member("555") and not db.other_bot_member("777")

@@ -684,6 +684,16 @@ def _migrate_to_score_events(c):
 STUDY_DAY_END_HOUR = 3
 
 
+def _study_now():
+    """«Сейчас» по учебным суткам - то же время минус хвост до трёх ночи.
+
+    От него берутся ВСЕ окна этого модуля: пропуски, стрики, месяцы. Иначе
+    расходится само с собой - зачёт уже лёг на вчерашний день, а окно считает
+    от календарного сегодня, и ещё идущий день выглядит пропущенным
+    (поймано 20.09.2026, в тот же день, что и сам сдвиг)."""
+    return datetime.now(pytz.timezone(TZ)) - timedelta(hours=STUDY_DAY_END_HOUR)
+
+
 def get_date():
     """Учебная дата: то, к какому дню относится действие студента.
 
@@ -691,8 +701,7 @@ def get_date():
     всего, что про день студента - зачёты, счёт пропусков, стрик, дневной
     отчёт, «сегодня» в приложении. Календарь как таковой - get_calendar_date.
     """
-    return (datetime.now(pytz.timezone(TZ))
-            - timedelta(hours=STUDY_DAY_END_HOUR)).date().isoformat()
+    return _study_now().date().isoformat()
 
 
 def get_calendar_date():
@@ -2645,7 +2654,7 @@ def get_days_since_last_report(uid, group_id=None):
         joined = _group_joined_date(uid, group_id)
         if joined and (not added or joined > added):
             added = joined
-    today = datetime.now(tz).date()
+    today = _study_now().date()
     missed = 0
     for i in range(400):
         day = (today - timedelta(days=i)).isoformat()
@@ -2666,7 +2675,7 @@ def get_consecutive_skips(uid):
     tz = pytz.timezone(TZ)
     skips = 0
     for i in range(1, 31):
-        day = (datetime.now(tz).date() - timedelta(days=i)).isoformat()
+        day = (_study_now().date() - timedelta(days=i)).isoformat()
         if day < user["added_date"]:
             break
         if day not in dates:
@@ -2729,7 +2738,7 @@ def get_group_month_progress(group_id, month=None):
 
     month - 'YYYY-MM', по умолчанию текущий."""
     tz = pytz.timezone(TZ)
-    today = datetime.now(tz).date()
+    today = _study_now().date()
     month = month or today.strftime("%Y-%m")
     month_start = month + "-01"
     # Конец месяца: первое число следующего - граница выборки (не включая).
@@ -2780,7 +2789,7 @@ def get_student_month_days(student_id, group_id, month=None):
     Тот же экран потом показывается и самому студенту - одна картина у обоих
     (условие макета)."""
     tz = pytz.timezone(TZ)
-    month = month or datetime.now(tz).date().strftime("%Y-%m")
+    month = month or _study_now().date().strftime("%Y-%m")
     y, m = int(month[:4]), int(month[5:7])
     nxt = f"{y + 1}-01-01" if m == 12 else f"{y}-{m + 1:02d}-01"
     with db() as c:
@@ -2800,8 +2809,8 @@ def get_skip_count_month_detail(uid, group_id=None):
     """Детали окна подсчёта пропусков текущего месяца: начало/конец окна,
     сколько дней сдано, сколько всего дней в окне, сколько пропущено."""
     tz = pytz.timezone(TZ)
-    month_start = datetime.now(tz).replace(day=1).date().isoformat()
-    today = datetime.now(tz).date()
+    month_start = _study_now().replace(day=1).date().isoformat()
+    today = _study_now().date()
     with db() as c:
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
@@ -2839,7 +2848,7 @@ def get_excuse_count_month(uid, group_id):
     в этой группе (12.08.2026, решение пользователя: лимит 3/месяц, дальше
     день считается обычным пропуском - EXCUSE_MONTHLY_LIMIT в handlers.py)."""
     tz = pytz.timezone(TZ)
-    month_start = datetime.now(tz).replace(day=1).date().isoformat()
+    month_start = _study_now().replace(day=1).date().isoformat()
     with db() as c:
         row = c.execute(
             "SELECT COUNT(*) as cnt FROM score_events"
@@ -2851,7 +2860,7 @@ def get_excuse_count_month(uid, group_id):
 
 def get_miss_count_last_30_days(uid, group_id=None):
     tz = pytz.timezone(TZ)
-    today = datetime.now(tz).date()
+    today = _study_now().date()
     with db() as c:
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
@@ -2919,7 +2928,7 @@ def get_streak_days(uid, group_id, group_tasks, for_date=None):
     там день уже закончился по определению."""
     tz = pytz.timezone(TZ)
     dates = _full_task_dates(uid, group_id, group_tasks)
-    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else datetime.now(tz).date()
+    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now().date()
     if for_date is None and anchor.isoformat() not in dates:
         anchor -= timedelta(days=1)
     streak = 0
@@ -2943,7 +2952,7 @@ def get_group_streaks(group_id, group_tasks, for_date=None):
     if not group_tasks:
         return {}
     tz = pytz.timezone(TZ)
-    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else datetime.now(tz).date()
+    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now().date()
     yesterday = anchor - timedelta(days=1)
     placeholders = ",".join("?" * len(group_tasks))
     with db() as c:
@@ -2983,7 +2992,7 @@ def check_no_skip_week(uid):
         if not user:
             return False
     dates = _active_dates(uid, limit=7)
-    today = datetime.now(tz).date()
+    today = _study_now().date()
     for i in range(7):
         day = (today - timedelta(days=i)).isoformat()
         if day < user["added_date"]:
@@ -2995,7 +3004,7 @@ def check_no_skip_week(uid):
 
 def get_lesson_skip_count_month(uid, group_id):
     tz = pytz.timezone(TZ)
-    month_start = datetime.now(tz).replace(day=1).date().isoformat()
+    month_start = _study_now().replace(day=1).date().isoformat()
     with db() as c:
         lessons = c.execute(
             "SELECT id FROM online_lessons WHERE group_id=? AND date>=?",
@@ -3956,7 +3965,7 @@ def format_period_report(group_id, group_title, group_tasks, days=None, start=No
     handlers.py). Либо явные календарные start/end/label (квартал/полугодие/
     год - quarterly_leaders_report, 07.08.2026) - тогда days не нужен."""
     tz = pytz.timezone(TZ)
-    today = datetime.now(tz).date()
+    today = _study_now().date()
     if start is None:
         start = (today - timedelta(days=days - 1)).isoformat()
     if end is None:

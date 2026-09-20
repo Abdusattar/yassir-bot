@@ -39,7 +39,7 @@ from core.prep import (
 import config
 from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.i18n import T, get_group_lang
-from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link
+from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link, pace
 from core.side import known_side, side_buttons, not_here_button, half_word
 
 log = logging.getLogger(__name__)
@@ -720,7 +720,7 @@ async def kick_unregistered():
                             "👉 " + tadabbur["invite_link"]
                         )
                 await send_message(chat_id, msg)
-                await asyncio.sleep(10)
+                await pace(10)          # дать прочитать до кика
             await ban_member(chat_id, uid)
             await unban_member(chat_id, uid)
             if nameless:

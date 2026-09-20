@@ -68,8 +68,20 @@ async def _raw_send(cid, text, reply_to_message_id=None):
             params["reply_to_message_id"] = reply_to_message_id
             params["allow_sending_without_reply"] = True
         last = await tg_call("sendMessage", params)
-        await asyncio.sleep(0.05)
+        await pace(0.05)
     return last
+
+
+# Пауза между обращениями к Telegram: у Bot API есть лимиты, и рассылка без
+# передышки ловит 429. Отдельная функция, а не голый asyncio.sleep, потому что
+# тесты её отключают (tests/conftest.py): полный прогон честно ждал этих пауз
+# и шёл десять минут вместо полутора (20.09.2026).
+PACING = True
+
+
+async def pace(seconds):
+    if PACING:
+        await asyncio.sleep(seconds)
 
 
 async def send_message(chat_id, text, reply_to_message_id=None):

@@ -196,3 +196,28 @@ def test_hidden_for_group_without_tajweed_but_open_for_ustaz(test_db, monkeypatc
     status, data = _call("GET", "/api/muf/tajweed", "555")
     assert status == 200 and data["task"] is None
     assert api._dashboard_facts("555")["tajweed"] == {"done": 0, "target": 4}
+
+
+def test_mistake_on_the_last_card_of_a_batch_also_waits(test_db):
+    """Находка 20.09: на последней карточке порции очередь пуста, вставка
+    «через три» превращалась в позицию 0 — и буква приходила следующим же
+    вопросом. При порции в четыре буквы это каждая четвёртая ошибка."""
+    _female_like_base()
+    tt._sessions.clear()
+    tt.new_session("777")
+    # Три верных — очередь порции пуста, четвёртая карточка последняя.
+    for _ in range(3):
+        tt.answer("777", tt._sessions["777"]["current"]["card"], _right_slot("777"))
+    assert tt._sessions["777"]["queue"] == []
+
+    missed = tt._sessions["777"]["current"]["card"]
+    tt.answer("777", missed, _wrong_slot("777"))
+
+    order = []
+    for _ in range(4):
+        cur = tt._sessions["777"]["current"]["card"]
+        order.append(cur)
+        tt.answer("777", cur, _right_slot("777"))
+
+    assert missed not in order[:3]
+    assert order[3] == missed

@@ -95,6 +95,15 @@ def student(test_db):
     return {"group": group, "student": db.find_by_phone(PHONE, group["id"])}
 
 
+def _joined_first_of_month(group_id, phone="777002"):
+    """Студент, заведённый под замороженным временем. Важно: окна пропусков
+    отсчитываются от users.added_date / user_groups.joined_date, и человек,
+    созданный «настоящим сегодня», обрывает любой цикл на первом шаге —
+    тест тогда проходит при любом поведении."""
+    db.add_student("Ибрахим", group_id, phone=phone)
+    return db.find_by_phone(phone, group_id)["id"]
+
+
 def test_late_night_submission_belongs_to_the_evening(student, monkeypatch):
     """Случай с прода: сдал в 23:57, доделал в 00:15 - это один вечер, а не
     два разных дня, из которых один потом считается пропущенным."""
@@ -163,3 +172,38 @@ def test_night_submission_does_not_leave_an_empty_day(student, monkeypatch):
     assert "2026-09-15" not in dates            # сегодняшний ещё не сдан
     assert detail["missed"] == detail["total"] - len(
         [d for d in dates if detail["start"] <= d <= detail["end"]])
+
+
+def test_open_day_is_not_counted_as_a_skip_at_night(student, monkeypatch):
+    """Находка 20.09: get_date() сдвинулся, а окна пропусков брали
+    КАЛЕНДАРНОЕ «сегодня» — и в час ночи ещё идущий учебный день уже попадал
+    в окно как прошедший. Человек, который сядет за задания в два ночи, к
+    тому моменту уже числился пропустившим."""
+    at(monkeypatch, 12, 0, day=1)
+    uid = _joined_first_of_month(student["group"]["id"])
+    for day in (11, 12, 13, 14):
+        at(monkeypatch, 22, 0, day=day)
+        db.save_report(uid, student["group"]["id"], db.get_date(),
+                       {"m": True, "r": True, "t": True})
+
+    at(monkeypatch, 12, 0, day=15)
+    by_day = db.get_skip_count_month_detail(uid, student["group"]["id"])
+    at(monkeypatch, 1, 0, day=16)            # тот же учебный день, но за полночь
+    by_night = db.get_skip_count_month_detail(uid, student["group"]["id"])
+
+    assert by_night == by_day                      # окно то же самое
+    assert by_night["end"] == "2026-09-14"       # текущий день в счёт не идёт
+
+
+def test_days_since_last_report_counts_by_study_day(student, monkeypatch):
+    """Сдал вечером — в час ночи «дней без сдачи» ноль, а не один. Иначе
+    ночному студенту прилетало бы «три дня не сдаёшь» на день раньше срока
+    (core/scheduler.py: personal_reminders)."""
+    at(monkeypatch, 12, 0, day=1)
+    uid = _joined_first_of_month(student["group"]["id"])
+    at(monkeypatch, 23, 30, day=15)
+    db.save_report(uid, student["group"]["id"], db.get_date(), {"m": True})
+
+    at(monkeypatch, 1, 0, day=16)
+
+    assert db.get_days_since_last_report(uid, student["group"]["id"]) == 0

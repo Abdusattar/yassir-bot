@@ -25,7 +25,7 @@ import sqlite3
 import time
 
 from config import DB, PROFILE
-from core.db import db, get_date, get_now
+from core.db import db, get_date, get_now, in_night_tail
 
 log = logging.getLogger(__name__)
 
@@ -204,7 +204,11 @@ def _compute():
         "best": {"date": best["date"], "total": sum(best["total"])} if best else None,
         "people_total": people_total,
         "quiet_min": _quiet_minutes(stamps),
-        "hour": int(get_now().strftime("%H")),
+        # До скольки часов рисовать линию «сегодня». В хвосте суток (с
+        # полуночи до трёх, когда идёт ещё вчерашний учебный день) реальный
+        # час равен единице, и фронтенд обрезал по нему весь день - двадцать
+        # часов работы джамаата пропадали с главного экрана (20.09.2026).
+        "hour": 23 if in_night_tail() else int(get_now().strftime("%H")),
     }
 
 

@@ -46,7 +46,7 @@ def test_tasks_and_ustaz_reviews_share_one_count(test_db, monkeypatch):
     assert data["people_total"] == 1
 
 
-def test_pair_database_adds_up(test_db, monkeypatch, tmp_path):
+def test_pair_database_adds_up(test_db, monkeypatch, tmp_path, fresh_db):
     """Мужской и женский боты — две базы, но джамаат один: цифры общие."""
     _fresh(monkeypatch, test_db)
     group = _group()
@@ -58,8 +58,7 @@ def test_pair_database_adds_up(test_db, monkeypatch, tmp_path):
     pair = tmp_path / ("quran_%s.db" % ("female" if pulse.PROFILE == "male" else "male"))
     monkeypatch.setattr(pulse, "DB", str(tmp_path / ("quran_%s.db" % pulse.PROFILE)))
     real_db = db.DB
-    monkeypatch.setattr(db, "DB", str(pair))
-    db.init()
+    monkeypatch.setattr(db, "DB", fresh_db(pair))
     db.save_group("-100777002", "Ж-1", tasks="m,r,t")
     g2 = db.get_group("-100777002")
     sid2 = db.add_student("Айша", g2["id"], phone="777002")

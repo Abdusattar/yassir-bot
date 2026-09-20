@@ -21,7 +21,7 @@ from core.db import (
     student_ids_with_tasks_since, SERVICE_GROUP_TYPE, groups_with_app_only_date,
 )
 from core.app_trail import users_seen_since
-from core.tg import send_message, tg_call, get_dm_start_link, send_message_with_buttons
+from core.tg import send_message, tg_call, get_dm_start_link, send_message_with_buttons, pace
 from core.side import invite_buttons, sweep_misplaced_in_prep
 from core.i18n import T
 from core.transfers import run_transfer_checks, send_return_nudges
@@ -90,7 +90,7 @@ async def morning_reminder():
                 closing = ai.SUBMIT_TODAY.get(glang, ai.SUBMIT_TODAY["ru"])
                 msg = base + "\n\n" + names_str + " " + closing
                 await send_message(chat_id, "☀️ " + msg)
-            await asyncio.sleep(1)
+            await pace(1)
         except Exception as e:
             log.error("morning_reminder error in %s: %s", chat_id, e)
 
@@ -194,7 +194,7 @@ async def morning_tadabbur_report():
                             mark_miss_nasiha_sent(phone)
                         except Exception:
                             pass
-                        await asyncio.sleep(0.5)
+                        await pace(0.5)
         except Exception as e:
             log.error("morning_tadabbur_report error in %s: %s", group["chat_id"], e)
 
@@ -310,7 +310,7 @@ async def ustaz_waiting_digest():
                     admin_phone,
                     "🎙 В «" + title + "» ждут проверки в приложении: " + str(len(pending))
                 )
-                await asyncio.sleep(0.3)
+                await pace(0.3)
         except Exception as e:
             log.error("ustaz_waiting_digest error in group %s: %s", group["id"], e)
 
@@ -973,7 +973,7 @@ async def request_curriculum_review():
                         })
                     except Exception as e:
                         log.error("request_curriculum_review copy error for admin=%s: %s", admin_id, e)
-                await asyncio.sleep(0.3)
+                await pace(0.3)
         except Exception as e:
             log.error("request_curriculum_review error for subject=%s: %s", subject, e)
 
@@ -1012,7 +1012,7 @@ async def publish_curriculum_parts():
                     curriculum.open_part(group["id"], part["id"])
                     if not part["published_at"]:
                         mark_curriculum_published(part["id"])
-                    await asyncio.sleep(0.3)
+                    await pace(0.3)
                 except Exception as e:
                     log.error("publish_curriculum_parts send error in %s: %s", group["chat_id"], e)
                     continue
@@ -1070,7 +1070,7 @@ async def subject_readiness_check():
                 for ap in SUPER_ADMIN_IDS:
                     await send_message(ap, "🆕 «%s»: %d из %d прошли порог — с %s начинается %s." % (
                         group["title"], stats[subject], stats["total"], human, label))
-                await asyncio.sleep(0.3)
+                await pace(0.3)
         except Exception as e:
             log.error("subject_readiness_check error in %s: %s", group["chat_id"], e)
 
@@ -1104,7 +1104,7 @@ async def invite_missing_ustaz_to_scaling():
                     needs_invite = False
             if needs_invite:
                 await send_message(uid, text)
-                await asyncio.sleep(0.5)
+                await pace(0.5)
         except Exception as e:
             log.error("invite_missing_ustaz: error for uid=%s: %s", uid, e)
 
@@ -1136,7 +1136,7 @@ async def streak_bonuses():
                     praise = await ai.personal_streak_praise(s["name"], streak, glang, hadith=hadith, ayah=ayah)
                     if praise:
                         await send_message(group["chat_id"], "🌟 " + praise)
-                    await asyncio.sleep(1)
+                    await pace(1)
         except Exception as e:
             log.error("streak_bonuses error in %s: %s", group["chat_id"], e)
 
@@ -1169,7 +1169,7 @@ async def individual_reminders():
                             await send_message(s["phone"], "🤲 " + msg)
                         except Exception:
                             pass
-                    await asyncio.sleep(1)
+                    await pace(1)
         except Exception as e:
             log.error("individual_reminders error in %s: %s", group["chat_id"], e)
 
@@ -1209,7 +1209,7 @@ async def personal_reminders():
                 closing = ai.SUBMIT_TODAY.get(glang, ai.SUBMIT_TODAY["ru"])
                 msg = base + "\n\n" + names_str + " " + closing
                 await send_message(chat_id, "📖 " + msg)
-            await asyncio.sleep(1)
+            await pace(1)
         except Exception as e:
             log.error("personal_reminders error in %s: %s", chat_id, e)
 
@@ -1250,7 +1250,7 @@ async def dm_connect_reminder():
                 "🔔 " + ", ".join(pending) + " — чтобы бот мог присылать личные "
                 "напоминания и предупреждения, перейди по ссылке и нажми Start (один раз):\n" + link
             )
-            await asyncio.sleep(1)
+            await pace(1)
             for admin_phone in get_group_admins(group["id"]):
                 if not admin_phone:
                     continue
@@ -1266,7 +1266,7 @@ async def dm_connect_reminder():
                     "🔔 В группе «" + (group["title"] or chat_id) + "» ещё не нажали Start: "
                     + ", ".join(pending) + " — если сможете, напомните лично 🤲"
                 )
-                await asyncio.sleep(0.3)
+                await pace(0.3)
         except Exception as e:
             log.error("dm_connect_reminder error in %s: %s", chat_id, e)
 
@@ -1294,7 +1294,7 @@ async def profile_survey_intro():
             glang = get_group_lang(group) if group else "ru"
             await send_message(row["phone"], T("profile_survey_q_location", glang, name=row["name"]))
             start_survey(row["phone"])
-            await asyncio.sleep(0.3)
+            await pace(0.3)
         except Exception as e:
             log.error("profile_survey_intro error for %s: %s", row["name"], e)
 
@@ -1319,7 +1319,7 @@ async def profile_survey_nudge():
             }[row["survey_stage"]]
             await send_message(row["phone"], T(key, glang, name=row["name"]))
             touch_survey_stage(row["phone"])
-            await asyncio.sleep(0.3)
+            await pace(0.3)
         except Exception as e:
             log.error("profile_survey_nudge error for %s: %s", row["name"], e)
 
@@ -1372,7 +1372,7 @@ async def invite_friend_broadcast():
     for phone, (name, glang) in recipients.items():
         try:
             await send_message_with_buttons(phone, T(key, glang), invite_buttons())
-            await asyncio.sleep(0.3)
+            await pace(0.3)
         except Exception as e:
             log.error("invite_friend_broadcast error for %s: %s", name, e)
 
@@ -1427,7 +1427,7 @@ async def app_switch_reminder():
             # и «Ассаляму алейкум, !» выглядело бы ошибкой (прод, 15.09.2026).
             who = ", " + name.strip() if (name or "").strip() else ""
             await send_message(phone, T("app_switch_reminder", glang, who=who))
-            await asyncio.sleep(0.3)
+            await pace(0.3)
         except Exception as e:
             log.error("app_switch_reminder error for %s: %s", name, e)
 
@@ -1475,7 +1475,7 @@ async def app_only_countdown():
             with important("announce", until=since):
                 await send_message(chat_id, text)
             log.info("app_only_countdown: %s, осталось %s", group.get("title"), left)
-            await asyncio.sleep(0.3)
+            await pace(0.3)
         except Exception as e:
             log.error("app_only_countdown error for %s: %s", group.get("title"), e)
 
@@ -1507,7 +1507,7 @@ async def evening_report():
                 praise = await ai.group_praise(names, glang, hadith=hadith, ayah=ayah)
                 if praise:
                     await send_message(chat_id, "🌟 " + praise)
-            await asyncio.sleep(1)
+            await pace(1)
         except Exception as e:
             log.error("evening_report error in %s: %s", chat_id, e)
 
@@ -1541,7 +1541,7 @@ async def skip_warnings():
                         with important("kick", title="Пропусков за месяц: %s из %s — прочитай"
                                                      % (skips, transfer_limit)):
                             await send_message(s["phone"], "⚠️ " + warn)
-                    await asyncio.sleep(0.8)
+                    await pace(0.8)
         except Exception as e:
             log.error("skip_warnings error in %s: %s", chat_id, e)
 
@@ -1649,7 +1649,7 @@ async def tadabbur_invite_reminder():
                 if s["phone"]:
                     resp = await send_message(s["phone"], personal_text)
                     sent = bool(resp and resp.get("ok"))
-                    await asyncio.sleep(0.3)
+                    await pace(0.3)
                 if not sent:
                     unreachable.append(s)
 
@@ -1794,7 +1794,7 @@ async def weekly_report():
                     lines.append("• " + roster[sid]["name"] + " — " + str(cnt) + " дн. частично")
                 await send_message(chat_id, "\n".join(lines))
 
-            await asyncio.sleep(1)
+            await pace(1)
         except Exception as e:
             log.error("weekly_report error in %s: %s", chat_id, e)
 
@@ -1821,7 +1821,7 @@ async def monthly_report():
                 praise = await ai.winner_praise(winner["name"], "месяц", winner["points"], glang, hadith=hadith, ayah=ayah)
                 if praise:
                     await send_message(chat_id, praise)
-            await asyncio.sleep(1)
+            await pace(1)
         except Exception as e:
             log.error("monthly_report error in %s: %s", chat_id, e)
 
@@ -1909,7 +1909,7 @@ async def quarterly_leaders_report():
                     praise = await ai.winner_praise(winner["name"], label, winner["points"], glang, hadith=hadith, ayah=ayah)
                     if praise:
                         await send_message(chat_id, praise)
-                await asyncio.sleep(1)
+                await pace(1)
         except Exception as e:
             log.error("quarterly_leaders_report error in %s: %s", chat_id, e)
 

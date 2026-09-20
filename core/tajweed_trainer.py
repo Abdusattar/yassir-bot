@@ -275,6 +275,13 @@ def answer(user_id, card_id, slot):
         # конца больше нет, а подряд повторять - значит проверять память на
         # пять секунд, а не знание места выхода.
         session["missed"].add(card_id)
+        # Доливаем ДО вставки: на последней карточке порции очередь пуста, и
+        # буква встала бы в позицию 0, то есть следующим же вопросом.
+        while len(session["queue"]) < RETRY_AFTER:
+            before_len = len(session["queue"])
+            _refill(session, user_id)
+            if len(session["queue"]) == before_len:
+                break                      # колода меньше, чем отступ
         session["queue"].insert(min(RETRY_AFTER, len(session["queue"])), card_id)
     else:
         session["missed"].discard(card_id)
