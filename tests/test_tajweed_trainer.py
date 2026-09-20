@@ -1,7 +1,11 @@
 """Тренажёр таджвида (14.09.2026): колода только из опубликованных уроков,
-буквы идут равномерно, восемь вариантов из всех 17 мест выхода, ошибка
-повторяется в конце захода, норма 4 буквы засчитывает задание «j»; группе без
-таджвида тренажёр не виден."""
+буквы идут равномерно, восемь вариантов из всех 17 мест выхода, норма 4 буквы
+засчитывает задание «j»; группе без таджвида тренажёр не виден.
+
+С 20.09.2026 карточки идут ЛЕНТОЙ: экрана «Заход окончен» с кнопкой «Ещё
+заход» больше нет (решение пользователя — он вставал стеной каждые четыре
+буквы и спрашивал разрешения продолжить). Ошибка возвращается через три
+карточки, а не «в конец захода»."""
 
 import asyncio
 from collections import Counter
@@ -94,38 +98,58 @@ def test_options_are_eight_real_places_with_the_right_one():
 
 
 def test_letters_come_evenly(test_db):
+    # Равномерность держится и без границ захода: подбор доливает те буквы,
+    # что показывались реже всех.
     _female_like_base()
     tt._sessions.clear()
-    for _ in range(9):                       # 36 показов на 12 букв
-        tt.new_session("777")
-        while tt._sessions["777"]["current"]:
-            tt.answer("777", tt._sessions["777"]["current"]["card"], _right_slot("777"))
+    tt.new_session("777")
+    for _ in range(36):                      # 36 показов на 12 букв
+        tt.answer("777", tt._sessions["777"]["current"]["card"], _right_slot("777"))
     shown = Counter({c["id"]: 0 for c in tt.open_cards()})
     shown.update(tt._shown_counts("777"))
     assert max(shown.values()) - min(shown.values()) <= 1
 
 
-def test_mistake_is_repeated_at_the_end_until_right(test_db):
+def test_the_stream_never_stops(test_db):
+    # Ради чего всё: после нормы дня приходит следующая карточка, а не экран
+    # «Заход окончен» с кнопкой «Ещё заход».
+    _female_like_base()
+    tt._sessions.clear()
+    tt.new_session("777")
+    for _ in range(20):                      # впятеро больше нормы дня
+        card = tt._sessions["777"]["current"]["card"]
+        data, _ = tt.answer("777", card, _right_slot("777"))
+        assert "finished" not in data
+        assert data["card"]["id"]
+    assert data["daily_count"] >= tt.DAILY_TARGET
+    assert data["card"]["day_done"] is True
+    # Точки показывают ход ДНЯ, а не место внутри порции.
+    assert data["card"]["size"] == tt.DAILY_TARGET
+
+
+def test_mistake_comes_back_three_cards_later(test_db):
+    # Ошибка возвращается не сразу и не «в конце захода», а через три
+    # карточки: подряд — это проверка памяти на пять секунд, а не знания
+    # места выхода.
     _female_like_base()
     tt._sessions.clear()
     tt.new_session("777")
     missed = tt._sessions["777"]["current"]["card"]
     data, _ = tt.answer("777", missed, _wrong_slot("777"))
     assert data["feedback"]["correct"] is False
+
     order = []
-    while tt._sessions["777"]["current"]:
+    for _ in range(4):
         cur = tt._sessions["777"]["current"]["card"]
         order.append(cur)
-        slot = _wrong_slot("777") if len(order) == 4 else _right_slot("777")
-        data, _ = tt.answer("777", cur, slot)
-    # три новые, повтор ошибки (снова мимо), ещё раз повтор - верно
-    assert order[3] == missed and order[4] == missed and len(order) == 5
-    fin = data["finished"]
-    assert fin["size"] == 4 and fin["first_right"] == 3
-    assert [x["first"] for x in fin["letters"]] == [False, True, True, True]
-    assert fin["letters"][0]["glyph"] == tt._CARD[missed]["glyph"]
+        data, _ = tt.answer("777", cur, _right_slot("777"))
+
+    assert missed not in order[:3]                   # не сразу
+    assert order[3] == missed                        # ровно через три
+    assert data["card"]["retry"] is False            # ответил верно — метка снята
+    # Показ считается один раз: повтор ошибки не раздувает счётчик, иначе
+    # равномерность подбора перекосило бы в сторону ошибочных букв.
     assert tt._shown_counts("777")[missed] == 1
-    assert data["daily_count"] == 4
 
 
 def test_four_letters_credit_tajweed_once_and_tell_the_group(test_db, monkeypatch):
@@ -146,7 +170,7 @@ def test_four_letters_credit_tajweed_once_and_tell_the_group(test_db, monkeypatc
         card = data["card"]["id"]
         _, data = _call("POST", "/api/muf/tajweed/answer", "777",
                         {"card": card, "slot": _right_slot("777")})
-    assert data["finished"] and data["daily_count"] == 4
+    assert data["daily_count"] == 4 and data["card"]["day_done"] is True
     assert data["task"] == {"done": True}
     assert db.get_today_report(sid, g["id"])["j"] is True
     assert sent == [(g["chat_id"], "Сатар, Таджвид + (через тренажёр).")]

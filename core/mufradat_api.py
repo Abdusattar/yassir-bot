@@ -1156,7 +1156,8 @@ def _tajweed_task_state(user_id):
 
 @with_auth
 async def handle_tajweed_state(request, user_id):
-    """GET - текущая карточка, итог захода или «уроков пока нет»."""
+    """GET - текущая карточка или «уроков пока нет». Итога захода больше
+    нет: карточки идут лентой (20.09.2026)."""
     if not _tajweed_open(user_id):
         return web.json_response({"error": "closed"}, status=403)
     from core.tajweed_trainer import state
@@ -1184,7 +1185,8 @@ async def handle_tajweed_answer(request, user_id):
 
 @with_auth
 async def handle_tajweed_new(request, user_id):
-    """POST - новый заход."""
+    """POST - начать ленту заново. Кнопки в приложении больше нет
+    (20.09.2026), метод остаётся для страниц из кэша телефона."""
     if not _tajweed_open(user_id):
         return web.json_response({"error": "closed"}, status=403)
     from core.tajweed_trainer import new_session

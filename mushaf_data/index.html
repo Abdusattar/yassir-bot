@@ -1920,6 +1920,9 @@
   .tj-dots i.on { background: var(--accent); }
   .tj-dots i.cur { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .tj-dots span { font-size: 13px; color: var(--muted); margin-left: 4px; }
+  /* «норма дня закрыта» - спокойная отметка, не поздравление: человек
+     продолжает по своей воле, и экран не должен его останавливать. */
+  .tj-dots span.tj-day-done { color: var(--ok, #15803d); font-weight: 600; }
   .tj-sum { font-size: 15px; color: var(--ink); line-height: 1.5; }
   .tj-sum b { font-family: 'Scheherazade New', serif; font-size: 1.6em; font-weight: 400; }
   .tj-go {
@@ -3864,6 +3867,7 @@
       tajweed_question: 'Откуда выходит буква?',
       tajweed_retry: 'повторяем',
       tajweed_next: 'Дальше',
+      tajweed_day_done: 'норма дня закрыта',
       tajweed_done_title: 'Заход окончен 🤲',
       tajweed_first_letters: 'Сразу верно: %L%',
       tajweed_retry_letters: 'Запомнили с повтора: %L%',
@@ -11124,32 +11128,20 @@
       return;
     }
 
-    if (d.finished) {
-      var first = d.finished.letters.filter(function (x) { return x.first; });
-      var again = d.finished.letters.filter(function (x) { return !x.first; });
-      var glyphs = function (xs) { return xs.map(function (x) { return '<b>' + x.glyph + '</b>'; }).join(' '); };
-      var html = '<div class="trainer-msg">' + T('tajweed_done_title') + '</div>';
-      if (first.length) html += '<div class="tj-sum">' + T('tajweed_first_letters', { L: glyphs(first) }) + '</div>';
-      if (again.length) html += '<div class="tj-sum">' + T('tajweed_retry_letters', { L: glyphs(again) }) + '</div>';
-      var left = Math.max(0, d.daily_target - d.daily_count);
-      html += '<div class="trainer-info">' + (!d.task ? T('tajweed_today', { N: d.daily_count, M: d.daily_target })
-        : d.task.done ? T('tajweed_task_done') : T('tajweed_task_left', { N: left })) + '</div>';
-      html += '<button class="tj-go" id="tj-more">' + T('tajweed_more') + '</button>';
-      body.innerHTML = html;
-      body.scrollTop = 0;
-      document.getElementById('tj-more').addEventListener('click', function () {
-        this.disabled = true;
-        withAuthCheck(apiCall('/tajweed/new', { method: 'POST' }), renderTajweed);
-      });
-      return;
-    }
-
+    /* Экрана «Заход окончен» здесь больше нет (20.09.2026, решение
+       пользователя): каждые четыре буквы он вставал стеной и спрашивал
+       разрешения продолжить. Норму дня человек видит счётчиком в шапке, а
+       сверх неё занимается по своей воле - карточки идут лентой. */
     var c = d.card;
+    // Точки — ход ДНЯ: сколько разных букв уже ответил верно из нормы.
+    // Раньше они показывали место внутри захода, а захода больше нет.
     var dots = '';
     for (var i = 0; i < c.size; i++) {
-      dots += '<i class="' + (c.retry || i < c.pos - 1 ? 'on' : i === c.pos - 1 ? 'cur' : '') + '"></i>';
+      dots += '<i class="' + (c.day_done || i < c.pos - 1 ? 'on'
+        : i === c.pos - 1 ? 'cur' : '') + '"></i>';
     }
     if (c.retry) dots += '<span>' + T('tajweed_retry') + '</span>';
+    else if (c.day_done) dots += '<span class="tj-day-done">' + T('tajweed_day_done') + '</span>';
     var html = '<div class="tj-dots">' + dots + '</div>';
     html += '<div class="trainer-word-card"><div class="tj-glyph">' + c.glyph + '</div>' +
       (c.note ? '<div class="tj-note">' + tajweedArabic(c.note) + '</div>' : '') + '</div>';

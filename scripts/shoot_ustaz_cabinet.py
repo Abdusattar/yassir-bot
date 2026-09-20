@@ -525,10 +525,12 @@ MOCK_JS = """
       await scenes.tj_card();
       document.querySelector('.tj-opt').click(); await wait(700);
     },
-    // Итог захода: тапаем по кругу, «Дальше» после ошибки, пока не кончится.
+    // Норма дня закрыта, а лента идёт дальше (20.09.2026): экрана «Заход
+    // окончен» с кнопкой «Ещё заход» больше нет. Тапаем по кругу и «Дальше»
+    // после ошибки, пока в ходе дня не загорится подпись.
     tj_done: async function () {
       await scenes.tj_card();
-      for (var i = 0; i < 90 && !$('tj-more'); i++) {
+      for (var i = 0; i < 120 && !document.querySelector('.tj-day-done'); i++) {
         if ($('tj-next')) { $('tj-next').click(); await wait(250); continue; }
         var opts = document.querySelectorAll('.tj-opt:not(:disabled)');
         if (opts.length) opts[i % opts.length].click();
@@ -745,7 +747,7 @@ COMPARE = {
              ("nh_answer", "Мимо"), ("nh2_part", "Слитное слово"), ("nh2_answer", "Разбор частей"),
              ("nh_done", "Итог захода")],
     "tajweed": [("tj_door", "Дашборд"), ("tj_hub", "Тренажёры"),
-                ("tj_card", "Карточка"), ("tj_answer", "После ответа"), ("tj_done", "Итог захода")],
+                ("tj_card", "Карточка"), ("tj_answer", "После ответа"), ("tj_done", "Норма дня закрыта")],
     "lesson_real": [("les_stu_now", "Студент"), ("les_stu_real_month", "Свой месяц"),
                     ("les_list_now", "Устаз · список"), ("student_now", "Устаз · месяц")],
     "lesson_font": [("real_lesson_old", "Было · 14px"), ("real_lesson", "Стало · 17px")],

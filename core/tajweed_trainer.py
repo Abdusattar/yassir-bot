@@ -29,7 +29,15 @@ from core.db import db, get_date
 log = logging.getLogger(__name__)
 
 DAILY_TARGET = 4
-SESSION_SIZE = 4
+# Сколько букв подбираем за раз. Это НЕ «заход» с остановкой в конце
+# (20.09.2026, решение пользователя): карточки идут лентой, и когда порция
+# кончается, подбирается следующая - тем же правилом равномерности. Человек
+# сам решает, когда хватит, а норму дня он и так видит в шапке.
+BATCH_SIZE = 4
+# Через сколько карточек вернуть букву, в которой ошибся. Раньше ошибка
+# уходила «в конец захода», а конца больше нет; три карточки - достаточно,
+# чтобы не угадать по памяти, и мало, чтобы не забыть разбор.
+RETRY_AFTER = 3
 OPTIONS = 8
 SAME_ZONE_DISTRACTORS = 2
 
@@ -133,11 +141,15 @@ def _shown_counts(user_id):
     return {r["card"]: r["shown"] for r in rows}
 
 
-def _pick_session(user_id, cards):
-    """Самые редко показанные, при равенстве — случайные."""
+def _pick_batch(user_id, cards, skip=()):
+    """Самые редко показанные, при равенстве — случайные.
+
+    skip - буквы, которые прямо сейчас в работе: без этого следующая порция
+    могла бы начаться с той же буквы, на которой человек только что стоял."""
     shown = _shown_counts(user_id)
-    order = sorted(cards, key=lambda c: (shown.get(c["id"], 0), random.random()))
-    return [c["id"] for c in order[:SESSION_SIZE]]
+    pool = [c for c in cards if c["id"] not in skip] or list(cards)
+    order = sorted(pool, key=lambda c: (shown.get(c["id"], 0), random.random()))
+    return [c["id"] for c in order[:BATCH_SIZE]]
 
 
 def _options(card):
@@ -175,15 +187,29 @@ def _record(user_id, card_id, correct, first_try):
                       (str(user_id), get_date(), card_id))
 
 
-def _next(session):
-    """Сначала новые буквы захода, потом ошибки — в том порядке, в каком ошибся."""
-    if session["queue"]:
-        card_id, session["retry_now"] = session["queue"].pop(0), False
-    elif session["retry"]:
-        card_id, session["retry_now"] = session["retry"].pop(0), True
-    else:
-        session["current"] = None
+def _refill(session, user_id):
+    """Долить букв, когда порция кончилась. Лента не должна упираться в
+    стену: кто решил закрепить сверх нормы, просто продолжает."""
+    cards = open_cards(user_id)
+    if not cards:
         return
+    busy = set(session["queue"])
+    if session["current"]:
+        busy.add(session["current"]["card"])
+    session["queue"] += _pick_batch(user_id, cards, skip=busy)
+
+
+def _next(session, user_id):
+    """Следующая буква ленты. Очередь никогда не пустеет: кончилась порция -
+    подбираем новую (20.09.2026). Ошибка лежит в самой очереди на три шага
+    вперёд, отдельной пачки «повторов в конце» больше нет."""
+    if not session["queue"]:
+        _refill(session, user_id)
+    if not session["queue"]:
+        session["current"] = None          # колода пуста - уроков ещё нет
+        return
+    card_id = session["queue"].pop(0)
+    session["retry_now"] = card_id in session["missed"]
     session["current"] = {"card": card_id, "options": _options(_CARD[card_id])}
 
 
@@ -192,37 +218,39 @@ def start(user_id):
     if not cards:
         _sessions.pop(str(user_id), None)
         return None
-    queue = _pick_session(user_id, cards)
-    session = {"queue": queue, "retry": [], "current": None, "retry_now": False,
-               "size": len(queue), "first_right": 0, "results": []}
-    _next(session)
+    session = {"queue": _pick_batch(user_id, cards), "current": None,
+               "retry_now": False, "missed": set(), "asked": 0}
+    _next(session, user_id)
     _sessions[str(user_id)] = session
     return session
 
 
 def state(user_id, feedback=None):
-    """Что показать сейчас: карточку, итог захода или «уроков ещё нет»."""
+    """Что показать сейчас: карточку или «уроков ещё нет».
+
+    Экрана «Заход окончен» больше нет (20.09.2026, решение пользователя):
+    каждые четыре буквы он вставал стеной и спрашивал разрешения продолжить,
+    хотя человек и так знает, что норму дня надо закрыть, а сверх неё
+    занимается по своей воле. Ход дня виден в шапке счётчиком."""
     session = _sessions.get(str(user_id)) or start(user_id)
-    out = {"daily_count": daily_count(user_id), "daily_target": DAILY_TARGET,
-           "feedback": feedback}
+    done = daily_count(user_id)
+    out = {"daily_count": done, "daily_target": DAILY_TARGET, "feedback": feedback}
     if session is None:
         out["empty"] = True
         return out
     cur = session["current"]
     if cur is None:
-        # Буквы захода с исходом первой попытки - итог называет их, а не
-        # счёт «0 из 4», который звучит как оценка.
-        out["finished"] = {
-            "size": session["size"], "first_right": session["first_right"],
-            "letters": [{"glyph": _CARD[cid]["glyph"], "note": _CARD[cid]["note"], "first": ok}
-                        for cid, ok in session["results"]],
-        }
+        out["empty"] = True                # колоду отобрали (урок сняли)
         return out
     card = _CARD[cur["card"]]
     out["card"] = {
         "id": card["id"], "glyph": card["glyph"], "note": card["note"],
         "retry": session["retry_now"],
-        "pos": session["size"] - len(session["queue"]), "size": session["size"],
+        # Точки показывают ход ДНЯ, а не порции: порция - внутреннее дело
+        # подбора, человеку про неё знать незачем. Норма закрыта - точки
+        # полны, и это единственное, что меняется на экране.
+        "pos": min(done + 1, DAILY_TARGET), "size": DAILY_TARGET,
+        "day_done": done >= DAILY_TARGET,
     }
     out["options"] = [_MAKHRAJ[m]["ru"] for m in cur["options"]]
     return out
@@ -241,19 +269,25 @@ def answer(user_id, card_id, slot):
     first_try = not session["retry_now"]
     before = daily_count(user_id)
     _record(user_id, card_id, correct, first_try)
-    if first_try:
-        session["results"].append((card_id, correct))
-    if first_try and correct:
-        session["first_right"] += 1
+    session["asked"] += 1
     if not correct:
-        session["retry"].append(card_id)
+        # Ошибка возвращается через три карточки, а не «в конец захода»:
+        # конца больше нет, а подряд повторять - значит проверять память на
+        # пять секунд, а не знание места выхода.
+        session["missed"].add(card_id)
+        session["queue"].insert(min(RETRY_AFTER, len(session["queue"])), card_id)
+    else:
+        session["missed"].discard(card_id)
     reached = before < DAILY_TARGET <= daily_count(user_id)
     feedback = {"correct": correct, "glyph": card["glyph"], "note": card["note"],
                 "answer": _MAKHRAJ[card["makhraj"]]["ru"]}
-    _next(session)
+    _next(session, user_id)
     return state(user_id, feedback), reached
 
 
 def new_session(user_id):
+    """Начать ленту заново. Кнопки «Ещё заход» больше нет (20.09.2026), но
+    метод остаётся: его зовут страницы, оставшиеся в кэше телефона, и он же
+    пригодится, если колода сменилась (устаз опубликовал новый урок)."""
     _sessions.pop(str(user_id), None)
     return state(user_id)
