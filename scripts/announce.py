@@ -37,8 +37,13 @@ def pick_groups(spec):
     if spec.startswith("task:"):
         key = spec[5:].strip()
         return [g for g in groups if key in [t.strip() for t in (g["tasks"] or "").split(",")]]
+    # Группу, названную поимённо, ищем среди ВСЕХ, а не только учебных
+    # (20.09.2026): общие правила джамаата объявляют в Тадаббуре, а его бот
+    # как учебную группу не ведёт - и скрипт отвечал «нет такой группы».
+    # Для all и task: фильтр остаётся: массовая рассылка в служебные чаты
+    # не нужна.
     want = [t.strip() for t in spec.split(",") if t.strip()]
-    found = [g for g in groups if (g["title"] or "").strip() in want]
+    found = [g for g in db.get_all_groups() if (g["title"] or "").strip() in want]
     missing = set(want) - {(g["title"] or "").strip() for g in found}
     if missing:
         raise SystemExit("нет таких групп: " + ", ".join(sorted(missing)))
