@@ -1639,6 +1639,11 @@
     color: var(--muted); letter-spacing: -.01em;
   }
   #my-day .names span.on { color: var(--ink); font-weight: 600; }
+  #my-day .night {
+    font-size: 10.5px; line-height: 1.3; color: var(--muted);
+    letter-spacing: -.01em; text-align: center;
+  }
+  #dash-head #my-day .night { grid-area: night; font-size: 9.5px; }
   /* «Мой день» в шапке (10.09.2026). Заголовок «МОЙ ДЕНЬ» здесь лишний -
      полоски с подписями сами себя объясняют, а место в строке дорого.
      Сетка вместо колонки: полоски и подписи слева друг под другом, «0 из 3»
@@ -1649,7 +1654,7 @@
     padding: 7px 13px 6px; border-radius: 16px;
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-areas: "bars" "names";
+    grid-template-areas: "bars" "names" "night";
     row-gap: 3px; align-items: center;
   }
   /* Числа «0 из 3» справа больше нет (13.09.2026, решение пользователя):
@@ -2979,6 +2984,10 @@
       <span class="cap" id="my-day-cap"></span>
       <span class="bars" id="my-day-bars"></span>
       <span class="names" id="my-day-names"></span>
+      <!-- Хвост суток (20.09.2026): до трёх ночи отметки выше - вчерашние.
+           Без этой строки человек в час ночи видел бы закрытый день и решил,
+           что сегодня уже сдано. -->
+      <span class="night" id="my-day-night" style="display:none"></span>
     </div>
     <!-- Настройки собраны под одну шестерёнку (10.09.2026): язык и тема
          были двумя кнопками в шапке, а теперь живут внутри вместе с
@@ -4168,6 +4177,7 @@
       online_now_n: 'сейчас в онлайне учатся %N%',
       my_day: 'мой день',
       my_day_of: '%N% из %M%',
+      my_day_night: 'Идёт вчерашний день — он закрывается в 3 ночи',
       task_m: 'Заучивание',
       task_r: 'Повторение',
       task_t: 'Слова',
@@ -5024,6 +5034,9 @@
     document.getElementById('my-day-names').innerHTML = day.tasks.map(function (t) {
       return '<span class="' + (t.done ? 'on' : '') + '">' + dayTaskName(t.k) + '</span>';
     }).join('');
+    var night = document.getElementById('my-day-night');
+    night.textContent = day.night ? T('my_day_night') : '';
+    night.style.display = day.night ? '' : 'none';
     // Длинный набор (таджвид, нахв, хадис) - подписям нужен свой размер,
     // см. #dash-head #my-day.many.
     box.classList.toggle('many', day.tasks.length >= 5);

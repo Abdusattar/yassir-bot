@@ -32,7 +32,7 @@ from core.db import (
     set_user_name_if_empty, track_unregistered, remove_unregistered, bot_leads_group,
     get_now,
     format_daily_report, format_period_report, get_period_winner,
-    get_missing_students, get_date, db, get_setting, get_prep_group,
+    get_missing_students, get_date, in_night_tail, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
     looks_like_plain_name,
     save_voice_submission, has_app_submissions, mark_voice_reviewed, save_submission_review,
@@ -2172,5 +2172,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         reply += " " + T("remaining", glang) + " " + ", ".join(wait_list)
     if now_complete:
         reply += "\n" + T("all_done", glang)
+    # Сдача после полуночи идёт за вчерашний день (20.09.2026, учебный день
+    # кончается в три ночи - см. get_date). Говорим об этом сразу: иначе
+    # человек, сдавший в 00:30, увидит «осталось» по вчерашнему дню и не
+    # поймёт, про какой день речь.
+    if in_night_tail():
+        reply += "\n" + T("night_tail_note", glang)
     await send_message(chat_id, reply)
 

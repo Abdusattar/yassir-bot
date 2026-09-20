@@ -33,7 +33,7 @@ from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
 from core.app_trail import add_trail, ua_short
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
-    count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, get_all_groups,
+    count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, in_night_tail, get_all_groups,
     get_student_submissions, get_submission_audio, find_user_by_phone,
     get_open_retakes, has_submission_for_unit,
     get_submission, VERDICT_ACCEPTED, VERDICT_RETAKE,
@@ -1414,6 +1414,10 @@ def _my_day(user):
         "tasks": tasks,
         "done": sum(1 for t in tasks if t["done"]),
         "total": len(tasks),
+        # Идёт хвост суток: до трёх ночи «сегодня» - это ещё вчерашний день
+        # (20.09.2026, см. core/db.py: get_date). Без подписи человек в час
+        # ночи видел бы вчерашние отметки и думал, что новый день уже сдан.
+        "night": in_night_tail(),
     }
 
 

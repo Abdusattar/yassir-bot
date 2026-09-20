@@ -17,4 +17,7 @@ def test_prep_student_gets_my_day(test_db):
     assert day == {
         "tasks": [{"k": "m", "done": True}, {"k": "r", "done": False}, {"k": "t", "done": False}],
         "done": 1, "total": 3,
+        # Хвост суток (20.09.2026): до трёх ночи идёт вчерашний учебный день,
+        # и приложение подписывает это под полосой. Днём - False.
+        "night": db.in_night_tail(),
     }
