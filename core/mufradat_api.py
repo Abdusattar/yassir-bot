@@ -817,6 +817,30 @@ async def handle_hifz_submit(request, user_id):
 
 
 @with_auth
+async def handle_invite_links(request, user_id):
+    """GET - ссылки на ЛИЧКУ обоих ботов, для пересылки другу (20.09.2026).
+
+    Ссылка на бота безопасна в пересылке: незнакомца там спросят половину, а
+    человека соседа развернут к своему боту (core/side.py). Поэтому отдаём
+    обе, без проверок кто спрашивает - «позвать друга» позволено всем.
+
+    Тот же смысл, что у команды /invite в личке; в приложении она нужна
+    потому, что кнопка меню в чате занята самим приложением."""
+    from core.tg import get_dm_start_link
+    from core.bots import other_bot, other_profile
+
+    own = await get_dm_start_link()
+    other = other_bot()
+    links = {PROFILE: own}
+    if other:
+        links[other_profile()] = other["start_link"]
+    return web.json_response({
+        "male": links.get("male"),
+        "female": links.get("female"),
+    })
+
+
+@with_auth
 async def handle_revision_credit(request, user_id):
     """POST - кнопка "🔁" в #topbar на странице чтения (30.08.2026).
     Подтверждение ("вы сделали повторение...?") уже показано на фронтенде
@@ -2204,6 +2228,7 @@ def build_app():
     app.router.add_get("/api/muf/ustaz/revision_audio", handle_ustaz_revision_audio)
     app.router.add_post("/api/muf/ustaz/revision_verdict", handle_ustaz_revision_verdict)
     app.router.add_post("/api/muf/revision", handle_revision_credit)
+    app.router.add_get("/api/muf/invite", handle_invite_links)
     app.router.add_post("/api/muf/heartbeat", handle_heartbeat)
     app.router.add_post("/api/muf/fitlog", handle_fit_log)
     app.router.add_get("/api/muf/ustaz/waiting", handle_ustaz_waiting)

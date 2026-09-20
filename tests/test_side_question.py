@@ -398,7 +398,10 @@ def test_invite_broadcast_has_no_link_but_buttons(test_db, world, wire, monkeypa
     mine = [(t, b) for c, t, b in wire["sent"] if c == BROTHER]
     assert len(mine) == 1
     text, buttons = mine[0]
-    assert "t.me" not in text and "/invite" in text
+    # Ссылок в самом тексте нет (решение пользователя 20.09): их берут по
+    # кнопкам или в приложении - на дашборде этого действия не держим, оно
+    # живёт в настройках («шестерёнка → Позвать друга»).
+    assert "t.me" not in text and "YassirApp" in text
     assert [b[1] for b in buttons] == ["inv:male", "inv:female"]
 
 

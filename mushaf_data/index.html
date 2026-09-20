@@ -3048,6 +3048,7 @@
     <span class="text"><span class="label" data-i18n="dash_learn">Знания</span><span class="sub" id="dash-learn-sub" data-i18n="dash_learn_how">Как работаем</span></span>
   </div>
   </div>
+
   <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
        в скрипте. Пустой каркас: наполняется после ответа /pulse.
        Стоит ПОД дверями с 10.09.2026: двери - это то, ради чего человек
@@ -3143,6 +3144,21 @@
     <input class="s-inp s-lab2" id="sett-country" hidden maxlength="60"
            placeholder="Какая страна?" autocomplete="off">
     <p class="s-hint" id="sett-place-hint"></p>
+  </div>
+
+  <!-- «Позвать друга» (20.09.2026). На дашборде не держим: главный экран
+       отвечает на вопрос «что мне сделать сейчас», а приглашают раз в
+       месяц. Ссылка ведёт в ЛИЧКУ бота нужной половины - там новичка
+       спросят, брат он или сестра (core/side.py), поэтому её не страшно
+       пересылать. Отправляет сам человек: открываем телеграмное окно
+       «кому», бот ничего никому не шлёт. -->
+  <div class="s-card">
+    <label class="s-lab" data-i18n="invite_call">Позвать друга</label>
+    <p class="s-hint" id="invite-say" data-i18n="invite_who">Кому отправишь ссылку?</p>
+    <div class="s-seg" id="invite-pick">
+      <button type="button" id="invite-male" data-i18n="invite_brother">Брату</button>
+      <button type="button" id="invite-female" data-i18n="invite_sister">Сестре</button>
+    </div>
   </div>
 
   <div class="s-card">
@@ -4189,6 +4205,15 @@
       my_day: 'мой день',
       my_day_of: '%N% из %M%',
       my_day_night: 'Идёт вчерашний день — он закрывается в 3 ночи',
+      // «Позвать друга» (20.09.2026): ссылка ведёт в личку бота нужной
+      // половины, а не в группу — там человека и спросят, брат он или сестра.
+      invite_call: 'Позвать друга',
+      invite_who: 'Кому отправишь ссылку?',
+      invite_brother: 'Брату',
+      invite_sister: 'Сестре',
+      invite_ready: 'Ссылка скопирована — отправь её другу',
+      invite_none: 'Ссылка пока не готова, попробуй позже',
+      invite_text: 'Ассаляму алейкум! Присоединяйся к нам учить Коран: %L%',
       task_m: 'Заучивание',
       task_r: 'Повторение',
       task_t: 'Слова',
@@ -4831,6 +4856,10 @@
     markLang();
     markTheme();
     if (!profileLoaded) settLoadProfile();
+    // Ссылки для «позвать друга» тянем здесь, а не на дашборде: на главном
+    // экране этого действия больше нет (20.09.2026).
+    inviteLoad();
+    inviteSay(T('invite_who'));
   }
   function settClose() { settBox.classList.remove('on'); }
 
@@ -9883,6 +9912,50 @@
   }
 
   document.getElementById('dash-learn').addEventListener('click', openLearn);
+
+  /* ─── «Позвать друга» (20.09.2026) ────────────────────────────────────
+     Команда /invite в личке осталась, но кнопка меню в чате занята самим
+     приложением, и списка команд там не видно - пользователь не нашёл её у
+     своего же бота. Здесь она на виду.
+
+     Отправляет не бот, а сам человек: открываем телеграмное окно «кому
+     отправить» с готовым текстом (openTelegramLink + t.me/share). Вне
+     Telegram - кладём ссылку в буфер. Ссылка ведёт в ЛИЧКУ бота нужной
+     половины: там новичка спросят, брат он или сестра, и отправят в свою
+     подготовительную (core/side.py), поэтому пересылать её безопасно. */
+  var inviteLinks = null;
+
+  function inviteSay(text) {
+    var el = document.getElementById('invite-say');
+    if (el) el.textContent = text;
+  }
+
+  function inviteLoad() {
+    if (inviteLinks) return;
+    withAuthCheck(apiCall('/invite'), function (d) { inviteLinks = d || {}; });
+  }
+
+  function inviteShare(side) {
+    var link = inviteLinks && inviteLinks[side];
+    if (!link) { inviteSay(T('invite_none')); return; }
+    var text = T('invite_text', { L: '' }).replace(/\s*$/, '');
+    var tgApi = window.Telegram && window.Telegram.WebApp;
+    if (tgApi && tgApi.openTelegramLink) {
+      tgApi.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) +
+                             '&text=' + encodeURIComponent(text));
+      return;
+    }
+    var full = T('invite_text', { L: link });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(full).then(function () { inviteSay(T('invite_ready')); },
+                                               function () { inviteSay(full); });
+    } else {
+      inviteSay(full);
+    }
+  }
+
+  document.getElementById('invite-male').addEventListener('click', function () { inviteShare('male'); });
+  document.getElementById('invite-female').addEventListener('click', function () { inviteShare('female'); });
   document.getElementById('learn-zoom').addEventListener('click', function () {
     this.classList.remove('visible');
   });

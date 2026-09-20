@@ -83,10 +83,18 @@ async def main():
         # «позвать друга» - ссылки на мужского/женского бота для пересылки.
         # Команды Telegram - только латиница, поэтому /invite; текстом бот
         # понимает и /позвать.
+        invite_cmd = [{"command": "invite", "description": "Позвать друга — ссылки на ботов"}]
         await tg_call("setMyCommands", {
-            "commands": [{"command": "invite", "description": "Позвать друга — ссылки на ботов"}],
+            "commands": invite_cmd,
             "scope": {"type": "all_private_chats"},
             "language_code": "ru",
+        })
+        # И для языка по умолчанию (20.09.2026): у кого в Telegram интерфейс
+        # не русский, ru-список не показывается вовсе - команды не было видно
+        # даже по «/» (поймал пользователь на своём боте).
+        await tg_call("setMyCommands", {
+            "commands": invite_cmd,
+            "scope": {"type": "all_private_chats"},
         })
         # Menu Button - кнопка слева от поля ввода в личке (единственная,
         # web_app-типа - см. выше).
