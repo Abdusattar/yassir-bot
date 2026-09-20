@@ -840,19 +840,25 @@ async def handle_revision_submit(request, user_id):
         reader = await request.multipart()
     except Exception:
         return web.json_response({"error": "bad_form"}, status=400)
-    audio, fields = None, {}
+    # Кусков может быть несколько: audio, audio1, audio2... Так приходит
+    # чтение, которое прерывалось и было продолжено (20.09.2026). Порядок
+    # задаёт имя поля, а не порядок частей формы.
+    audio, fields = {}, {}
+    total = 0
     while True:
         part = await reader.next()
         if part is None:
             break
-        if part.name == "audio":
+        if part.name and part.name.startswith("audio"):
             data = await part.read(decode=False)
-            if len(data) > HIFZ_MAX_UPLOAD_BYTES:
+            total += len(data)
+            if total > HIFZ_MAX_UPLOAD_BYTES:
                 return web.json_response({"error": "too_big"}, status=413)
-            audio = data
+            audio[part.name] = data
         else:
             fields[part.name] = (await part.read(decode=False)).decode("utf-8", "replace")
-    if not audio:
+    parts = [audio[k] for k in sorted(audio, key=lambda n: (len(n), n)) if audio[k]]
+    if not parts:
         return web.json_response({"error": "no_audio"}, status=400)
     try:
         client_ms = int(float(fields.get("ms", 0)))
@@ -864,7 +870,7 @@ async def handle_revision_submit(request, user_id):
         page_to = int(fields.get("page_to", 0)) or None
     except (ValueError, TypeError):
         page_to = None
-    result = await submit_revision_recording(user_id, audio, client_ms=client_ms, page_to=page_to)
+    result = await submit_revision_recording(user_id, parts, client_ms=client_ms, page_to=page_to)
     return web.json_response(result, status=200 if result.get("ok") else 400)
 
 

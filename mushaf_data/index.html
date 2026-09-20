@@ -4170,6 +4170,13 @@
       revision_rec_start: 'Записать всё повторение',
       revision_rec_hint: 'Одной записью до своего места, листать можно',
       revision_rec_sent: 'Отправлено устазу, повторение засчитано 🤲',
+      // Обрыв записи (20.09.2026). Ни слова про технику: ребёнку важно,
+      // сколько он прочитал и что делать дальше.
+      rec_broken: 'Запись прервалась. Ты прочитал %T%',
+      rec_listen_tail: 'Послушать конец',
+      rec_continue: 'Продолжить чтение',
+      rec_fresh: 'Начать заново',
+      rec_continue_hint: 'Читай дальше с того места, где остановился',
       added_mywords: '✅ В «Мои слова»',
       bookmark_none: 'Закладка ещё не сохранена',
       meaning_missing: 'перевод смысла для этой страницы ещё не загружен',
@@ -7256,7 +7263,10 @@
     return exp - sec >= 5 && sec < 0.8 * exp;
   }
   var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null,
-              mode: null };   // mode: null - сдача 40+40, 'revision' - запись повторения
+              mode: null,     // mode: null - сдача 40+40, 'revision' - запись повторения
+              // Сегмент - один поток MediaRecorder. Продолжение после обрыва
+              // начинает новый, поэтому куски нумеруются (20.09.2026).
+              seg: 0, saved: [] };
 
   function hifzSubmitLines() {
     var lines = hifzTextLines();
@@ -7342,6 +7352,115 @@
     return new Promise(function (resolve) {
       canvas.toBlob(function (b) { resolve(b); }, 'image/png');
     });
+  }
+
+  /* ─── Начитанное живёт на телефоне (20.09.2026) ───────────────────────
+     Запись раньше копилась только в памяти вкладки и становилась файлом
+     по «Стоп». Telegram перезапускает вкладку - при сворачивании, повороте,
+     нехватке памяти - и восемь минут чтения исчезали (живой случай Бекхана
+     из G-10, у него же «⚠ коротко» на половине записей).
+
+     Теперь MediaRecorder отдаёт кусок каждые пять секунд, и каждый кусок
+     сразу ложится в IndexedDB. Куски ОДНОГО потока вместе дают исправный
+     файл; продолжение после обрыва - это новый поток, поэтому у него свой
+     номер сегмента, а сшивает их сервер (ffmpeg concat).
+
+     Всё это только для повторения: у сдачи 40+40 записи короткие, а место
+     (страница, строка, этап) после перезапуска пришлось бы ещё и угадывать. */
+  var REC_DB_NAME = 'yassir-rec', REC_STORE = 'parts';
+  var REC_KEEP_MS = 18 * 3600 * 1000;   // старше - это вчерашнее чтение
+  var REC_SLICE_MS = 5000;
+
+  function recDb() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(); return; }
+      var req = indexedDB.open(REC_DB_NAME, 1);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(REC_STORE)) {
+          db.createObjectStore(REC_STORE, { keyPath: 'id', autoIncrement: true });
+        }
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function recStoreDo(mode, fn) {
+    return recDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(REC_STORE, mode);
+        var out = fn(tx.objectStore(REC_STORE));
+        tx.oncomplete = function () { db.close(); resolve(out && out.result !== undefined ? out.result : out); };
+        tx.onerror = function () { db.close(); reject(tx.error); };
+      });
+    });
+  }
+
+  /* Место записи: у повторения оно одно на всех («с начала Аль-Бакары»), у
+     сдачи 40+40 - страница, строка и этап. Продолжать можно только там же,
+     иначе чтение одной страницы допишется к другой. */
+  function recPlace() {
+    // Разбор устаза - короткая реплика поверх чужой сдачи, продолжать в ней
+    // нечего, и путать её с чтением студента нельзя.
+    if (typeof reviewCommentMode !== 'undefined' && reviewCommentMode) return null;
+    if (rec.mode === 'revision') return 'revision';
+    return 'hifz:' + currentPage + ':' + hifz.line + ':' + hifz.stage +
+           (hifzRetakeMode ? ':retake' : '');
+  }
+
+  function recPartSave(seg, blob, ms) {
+    var place = recPlace();
+    if (!place) return Promise.resolve();
+    return recStoreDo('readwrite', function (st) {
+      st.add({ seg: seg, at: Date.now(), ms: ms, blob: blob, place: place });
+    }).catch(function () { /* нет места или приватный режим - живём как раньше */ });
+  }
+
+  function recPartsLoad() {
+    var place = recPlace();
+    if (!place) return Promise.resolve([]);
+    return recStoreDo('readonly', function (st) { return st.getAll(); })
+      .then(function (rows) {
+        var all = rows || [];
+        // Вчерашнее и чужое место не предлагаем и не храним: начитанное
+        // относится к одному чтению, а не к телефону вообще.
+        var stale = all.some(function (r) {
+          return Date.now() - r.at >= REC_KEEP_MS || (r.place || 'revision') !== place;
+        });
+        if (stale) recPartsWipe();
+        var mine = all.filter(function (r) {
+          return Date.now() - r.at < REC_KEEP_MS && (r.place || 'revision') === place;
+        });
+        mine.sort(function (a, b) { return a.seg - b.seg || a.id - b.id; });
+        return stale ? [] : mine;
+      }).catch(function () { return []; });
+  }
+
+  function recPartsWipe() {
+    return recStoreDo('readwrite', function (st) { st.clear(); })
+      .catch(function () { /* нечего чистить */ });
+  }
+
+  /* Куски одного сегмента - один файл. Сервер получит их как audio, audio1,
+     audio2 и сошьёт (core/mufradat_bot.py: transcode_parts_to_ogg). */
+  function recSegments(rows) {
+    var out = [], cur = null, seg = null;
+    rows.forEach(function (r) {
+      if (r.seg !== seg) { cur = []; out.push(cur); seg = r.seg; }
+      cur.push(r.blob);
+    });
+    return out.map(function (blobs) {
+      return new Blob(blobs, { type: blobs[0] ? blobs[0].type : 'audio/webm' });
+    });
+  }
+
+  function recSavedMs(rows) {
+    // В каждом куске лежит время на момент записи - после обрыва это
+    // единственный след того, сколько человек начитал.
+    var by = {};
+    rows.forEach(function (r) { by[r.seg] = Math.max(by[r.seg] || 0, r.ms || 0); });
+    return Object.keys(by).reduce(function (a, k) { return a + by[k]; }, 0);
   }
 
   function hifzRecRelease() {
@@ -7437,6 +7556,7 @@
     if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
     rec.mr = null; rec.chunks = []; rec.blob = null;
     rec.accMs = 0; rec.paused = false; rec.resent = false;
+    rec.seg = 0; rec.saved = [];
     var a = document.getElementById('hifz-rec-audio');
     a.pause(); a.removeAttribute('src');
     hifzRecPlayerShow(false);
@@ -7502,6 +7622,11 @@
       rec:    recRow,
       done:   [['hifz-rec-again', 'hifz_rec_again', ''],
                ['hifz-rec-send', 'hifz_rec_send', 'primary']],
+      // Чтение оборвалось и ждёт человека (20.09.2026): послушать конец,
+      // продолжить (главное действие) и начать заново - последним.
+      broken: [['hifz-rec-tail', 'rec_listen_tail', ''],
+               ['hifz-rec-continue', 'rec_continue', 'primary'],
+               ['hifz-rec-fresh', 'rec_fresh', '']],
       sending: []
     };
     (defs[state] || []).forEach(function (d) {
@@ -7596,9 +7721,20 @@
       } catch (e) {
         rec.mr = new MediaRecorder(stream);
       }
-      rec.mr.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
+      rec.mr.ondataavailable = function (e) {
+        if (!e.data || !e.data.size) return;
+        rec.chunks.push(e.data);
+        // Держим последнее сохранение: «Стоп» приходит сразу за куском, и
+        // отправлять надо уже после того, как он лёг на телефон.
+        rec.saving = recPartSave(rec.seg, e.data, hifzRecElapsed());
+      };
       rec.mr.onstop = function () {
         hifzWakeOff();
+        // Перечитываем то, что лежит на телефоне: там и прежние сегменты, и
+        // только что дописанный - из них и собирается отправка.
+        (rec.saving || Promise.resolve()).then(recPartsLoad).then(function (rows) {
+          rec.saved = rows;
+        });
         rec.blob = new Blob(rec.chunks, { type: rec.chunks[0] ? rec.chunks[0].type : 'audio/webm' });
         // Дорожку здесь НЕ глушим (см. hifzRecStream): иначе "перезаписать"
         // снова вызовет вопрос про микрофон. Микрофон отпускается при
@@ -7618,10 +7754,15 @@
           T(rec.hitLimit ? 'hifz_rec_hint_limit' : 'hifz_rec_hint_done');
         hifzRecButtons('done');
       };
-      rec.mr.start();
+      // Кусками, а не одним куском в памяти (20.09.2026): оборвалась вкладка -
+      // начитанное уже лежит на телефоне. Так пишутся обе записи: сдача
+      // второго и третьего этапа не короче повторения.
+      rec.mr.start(REC_SLICE_MS);
       hifzWakeOn();             // читает долго - экран гасить нельзя
       rec.t0 = Date.now();
-      rec.accMs = 0;
+      // accMs мог прийти из прерванной записи - тогда таймер идёт дальше, а
+      // не с нуля (см. revisionRecResume).
+      rec.accMs = rec.accMs || 0;
       rec.paused = false;
       rec.hitLimit = false;
       rec.tick = setInterval(function () {
@@ -7677,7 +7818,14 @@
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
     hifzLinesToPng(hifzSubmitLines()).then(function (png) {
       var fd = new FormData();
-      fd.append('audio', rec.blob, 'rec');
+      // Куски прерванного чтения (20.09.2026) - сервер сошьёт их в одну
+      // запись; одиночная сдача уходит как раньше.
+      var segs = rec.saved.length ? recSegments(rec.saved) : [];
+      if (segs.length) {
+        segs.forEach(function (b, i) { fd.append(i ? 'audio' + i : 'audio', b, 'rec' + i); });
+      } else {
+        fd.append('audio', rec.blob, 'rec');
+      }
       if (png) fd.append('image', png, 'lines.png');
       fd.append('page', String(currentPage));
       fd.append('line', String(hifz.line));
@@ -7699,6 +7847,7 @@
                         n: (res.ok && res.data.ok) ? 'ok' : String(res.data && res.data.error) });
       if (res.ok && res.data.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        recPartsWipe();     // дошло до устаза - держать на телефоне незачем
         // Пересдача (см. subsRetake): та же единица уходит устазу заново, но
         // указатель "где я" не двигается и повторы не спрашиваются - студент
         // не проходит место второй раз, он его переcдаёт.
@@ -7768,13 +7917,89 @@
     document.getElementById('hifz-rec').classList.add('visible');
     hifzRecPad();
     trail('rev_open', { p: currentPage });
+    // Осталось начитанное с прошлого раза - предложим продолжить.
+    recOfferResume().then(function (had) { if (had) hifzRecPad(); });
+  }
+
+  /* ─── Прерванное чтение (20.09.2026) ─────────────────────────────────
+     Открыли запись повторения, а на телефоне лежит начитанное - значит в
+     прошлый раз вкладку оборвали. Предлагаем послушать конец и продолжить;
+     «начать заново» стоит последним, чтобы не смахнуть работу случайно. */
+  function recOfferResume() {
+    return recPartsLoad().then(function (rows) {
+      if (!rows.length) return false;
+      var ms = recSavedMs(rows);
+      if (ms < 10000) { recPartsWipe(); return false; }   // пара секунд - не жалко
+      rec.saved = rows;
+      rec.accMs = ms;
+      rec.seg = rows[rows.length - 1].seg + 1;            // продолжение - новый поток
+      document.getElementById('hifz-rec-hint').textContent =
+        T('rec_broken', { T: hifzRecMmss(ms) });
+      document.getElementById('hifz-rec-timer').style.display = '';
+      document.getElementById('hifz-rec-timer').textContent = hifzRecMmss(ms);
+      hifzRecButtons('broken');
+      trail('rev_broken', { ms: ms });
+      return true;
+    }).catch(function () { return false; });
+  }
+
+  function hifzRecMmss(ms) {
+    var s = Math.floor((ms || 0) / 1000);
+    return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+  }
+
+  /* Последние пятнадцать секунд - чтобы вспомнить место в мусхафе. Играем
+     ПОСЛЕДНИЙ сегмент: он и есть конец чтения. */
+  function recPlayTail() {
+    var segs = recSegments(rec.saved);
+    if (!segs.length) return;
+    var blob = segs[segs.length - 1];
+    if (rec.url) URL.revokeObjectURL(rec.url);
+    rec.url = URL.createObjectURL(blob);
+    var a = document.getElementById('hifz-rec-audio');
+    a.src = rec.url;
+    hifzRecPlayerShow(true);
+    a.addEventListener('loadedmetadata', function once() {
+      a.removeEventListener('loadedmetadata', once);
+      var d = a.duration;
+      if (isFinite(d) && d > 15) a.currentTime = d - 15;
+      a.play();
+    });
+    // У webm из Chrome длительность бывает неизвестна до конца файла -
+    // тогда просто играем с начала последнего куска, он и так короткий.
+    a.play().catch(function () { /* ждём loadedmetadata */ });
+  }
+
+  function recResume() {
+    hifzRecPlayerShow(false);
+    document.getElementById('hifz-rec-hint').textContent = T('rec_continue_hint');
+    hifzRecStart();              // accMs и seg уже выставлены, таймер пойдёт дальше
+  }
+
+  function recFresh() {
+    recPartsWipe();
+    rec.saved = []; rec.accMs = 0; rec.seg = 0;
+    hifzRecPlayerShow(false);
+    document.getElementById('hifz-rec-timer').style.display = 'none';
+    document.getElementById('hifz-rec-hint').textContent =
+      T(rec.mode === 'revision' ? 'revision_rec_hint' : 'hifz_rec_hint_idle');
+    hifzRecButtons('idle');
   }
 
   function revisionRecSend() {
     hifzRecButtons('sending');
     document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_sending');
     var fd = new FormData();
-    fd.append('audio', rec.blob, 'rec');
+    // Сегментов бывает несколько - чтение прерывалось и продолжалось. Сервер
+    // сошьёт их в одно голосовое (20.09.2026).
+    var segs = rec.saved.length ? recSegments(rec.saved) : [];
+    if (segs.length && rec.blob) {
+      // Последний сегмент уже лежит в хранилище целиком - берём оттуда,
+      // чтобы не отправить его дважды.
+      segs.forEach(function (b, i) { fd.append(i ? 'audio' + i : 'audio', b, 'rec' + i); });
+    } else {
+      fd.append('audio', rec.blob, 'rec');
+    }
     fd.append('ms', String(rec.ms || 0));
     fd.append('page_to', String(currentPage));
     fetch(apiBase() + '/revision/submit', { method: 'POST', headers: authHeaders(), body: fd })
@@ -7783,6 +8008,7 @@
         trail('rev_submit', { ms: rec.ms || 0, n: (res.ok && res.data.ok) ? 'ok' : String(res.data && res.data.error) });
         if (res.ok && res.data.ok) {
           document.getElementById('hifz-rec-hint').textContent = T('revision_rec_sent');
+          recPartsWipe();       // дошло до устаза - на телефоне держать незачем
           setTimeout(hifzRecClose, 1500);
           return;
         }
@@ -7817,6 +8043,9 @@
     hifzRecButtons('idle');
     document.getElementById('hifz-rec').classList.add('visible');
     hifzRecPad();
+    // Оборвалось на этом же месте - предложим дочитать, а не начинать заново
+    // (20.09.2026: на втором и третьем этапе запись идёт минутами).
+    recOfferResume().then(function (had) { if (had) hifzRecPad(); });
   }
 
   document.getElementById('hifz-submit').addEventListener('click', function () {
@@ -7833,6 +8062,9 @@
     if (id === 'hifz-rec-go') hifzRecStart();
     else if (id === 'hifz-rec-pause') hifzRecPause();
     else if (id === 'hifz-rec-stop') hifzRecStop();
+    else if (id === 'hifz-rec-tail') recPlayTail();
+    else if (id === 'hifz-rec-continue') recResume();
+    else if (id === 'hifz-rec-fresh') recFresh();
     else if (id === 'hifz-rec-again') { hifzRecReset();
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
       hifzRecButtons('idle'); }

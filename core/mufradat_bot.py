@@ -149,7 +149,11 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
         page_to = int(pointer["page"])
     page_to = max(REVISION_FIRST_PAGE, int(page_to or REVISION_FIRST_PAGE))
 
-    ogg, err = await transcode_checked(audio_bytes, client_ms)
+    # audio_bytes может быть списком кусков: чтение прервалось, человек
+    # продолжил, и каждое продолжение - отдельный поток MediaRecorder
+    # (20.09.2026).
+    parts = list(audio_bytes) if isinstance(audio_bytes, (list, tuple)) else [audio_bytes]
+    ogg, err = await transcode_checked_parts(parts, client_ms)
     if not ogg:
         return {"ok": False, "error": err}
 
@@ -245,6 +249,84 @@ async def transcode_to_ogg(audio_bytes):
         ["-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000"], audio_bytes, via_file=True)
 
 
+async def transcode_parts_to_ogg(parts):
+    """Куски записи -> одно ogg. Кусок появляется, когда чтение прервалось и
+    человек продолжил (20.09.2026): продолжение - это новый поток
+    MediaRecorder со своим заголовком, байтами такие файлы не склеить.
+
+    Каждый кусок переводим в ogg по отдельности (тем же путём, что одиночную
+    запись), а потом сшиваем concat-демуксером с `-c copy`: перекодировать
+    второй раз незачем, а на двухчасовом чтении это минуты работы."""
+    parts = [p for p in parts if p]
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return await transcode_to_ogg(parts[0])
+
+    oggs = []
+    for part in parts:
+        one = await transcode_to_ogg(part)
+        if not one:
+            log.error("склейка записи: кусок не перевёлся, кусков %d", len(parts))
+            return None
+        oggs.append(one)
+    return await _concat_oggs(oggs)
+
+
+async def _concat_oggs(oggs):
+    """ffmpeg concat по списку временных файлов. None - не вышло."""
+    import os
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="yassir-rec-")
+    paths = []
+    try:
+        for i, data in enumerate(oggs):
+            path = os.path.join(tmp, "part%02d.ogg" % i)
+            with open(path, "wb") as f:
+                f.write(data)
+            paths.append(path)
+        listing = os.path.join(tmp, "parts.txt")
+        with open(listing, "w", encoding="utf-8") as f:
+            for path in paths:
+                # Формат concat-демуксера; имена наши, кавычек в них нет.
+                f.write("file '%s'\n" % path)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-f", "concat", "-safe", "0", "-i", listing,
+                "-c", "copy", "-f", "ogg", "pipe:1",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+        except (FileNotFoundError, OSError) as e:
+            log.error("ffmpeg недоступен для склейки: %s: %s", type(e).__name__, e)
+            return None
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=_FFMPEG_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.kill()
+            log.error("склейка не уложилась в %s сек", _FFMPEG_TIMEOUT)
+            return None
+        if proc.returncode != 0 or not out:
+            log.error("склейка вернула %s: %s", proc.returncode, (err or b"")[:200])
+            return None
+        return out
+    finally:
+        for path in paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        try:
+            os.remove(os.path.join(tmp, "parts.txt"))
+        except OSError:
+            pass
+        try:
+            os.rmdir(tmp)
+        except OSError:
+            pass
+
+
 # Запись дошла не целиком (17.09.2026, Саламат: страница из приложения шла
 # 14-15 сек вместо ~2 минут, речь обрывалась на полуслове). «Заметно короче»
 # - и на столько секунд, и на такую долю от таймера записи на телефоне.
@@ -294,6 +376,25 @@ async def audio_seconds(data):
             os.remove(path)
         except OSError:
             pass
+
+
+async def transcode_checked_parts(parts, client_ms):
+    """(ogg, ошибка) для записи из нескольких кусков (20.09.2026).
+
+    Один кусок - обычный путь со всеми его повторами через файл. Несколько -
+    склейка, и проверяем только итог: перебирать куски по одному бесполезно,
+    целым файл делает именно склейка."""
+    parts = [p for p in parts if p]
+    if len(parts) <= 1:
+        return await transcode_checked(parts[0] if parts else b"", client_ms)
+    ogg = await transcode_parts_to_ogg(parts)
+    if not ogg:
+        return None, "bad_audio"
+    sec = await audio_seconds(ogg)
+    if lost_tail(sec, client_ms):
+        log.warning("склеенная запись короче таймера: %s с из %.1f", sec, (client_ms or 0) / 1000)
+        return None, "incomplete"
+    return ogg, None
 
 
 async def transcode_checked(audio_bytes, client_ms):
