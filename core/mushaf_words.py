@@ -751,6 +751,26 @@ def get_hifz_progress(user_id, page_number, stage, half):
     return row[0] if row else 0
 
 
+def set_hifz_progress(user_id, page_number, stage, half, count):
+    """Ставит ТОЧНОЕ число повторов по единице (20.09.2026). Нужно полю
+    «сколько всего» в панели: оно показывает накопленное и правится поверх,
+    иначе исправить промах (натапал лишнего) было нечем, а набранное
+    человеком число молча складывалось с уже стоявшим - случай пользователя
+    19.09: два раза +10, потом вписал число и получил вдвое больше."""
+    count = max(0, min(int(count), HIFZ_PROGRESS_TARGET))
+    now = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_HIFZ_PROGRESS_SCHEMA)
+        conn.execute(
+            "INSERT INTO mushaf_hifz_progress "
+            "(user_id, page_number, stage, half, count, updated_at) VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(user_id, page_number, stage, half) DO UPDATE SET "
+            "count = excluded.count, updated_at = excluded.updated_at",
+            (user_id, page_number, stage, half, count, now)
+        )
+    return count
+
+
 def add_hifz_progress(user_id, page_number, stage, half, delta):
     """Прибавляет к уже накопленному ДЕЛЬТУ ("сколько сделал сегодня"),
     не заменяет число целиком - случайно занизить счёт нельзя. Возвращает

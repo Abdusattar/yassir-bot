@@ -65,8 +65,8 @@ from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
     get_reading_bookmark, set_reading_bookmark,
     get_hifz_pointer, set_hifz_pointer,
-    get_hifz_progress, add_hifz_progress, HIFZ_PROGRESS_TARGET,
-    check_new_words_for_line, page_text_line_count,
+    get_hifz_progress, add_hifz_progress, set_hifz_progress, HIFZ_PROGRESS_TARGET,
+    check_new_words_for_line, page_text_line_count, next_hifz_position,
 )
 from core.pulse import get_pulse
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
@@ -543,6 +543,63 @@ async def handle_bookmark_set(request, user_id):
     return web.json_response({"page": page})
 
 
+def _hifz_unit_done(user_id, user, group, pointer):
+    """Работать на этом месте уже нечего. На этапе 1 строку закрывает одна
+    сдача; на этапах 2/3 единицу закрывает не сдача, а счётчик 40+40."""
+    if pointer["stage"] == 1:
+        return has_submission_for_unit(user["id"], group["id"], pointer["page"],
+                                       pointer["line"], pointer["stage"])
+    # Половина листа считается по ЧИСЛУ ТЕКСТОВЫХ строк этой страницы, той же
+    # формулой, что и в приложении (hifzHalf): листы с названием суры короче,
+    # и зашитая пятнадцатка увела бы счётчик не туда.
+    half = 0 if pointer["stage"] == 3 else (
+        0 if pointer["line"] < page_text_line_count(pointer["page"]) // 2 else 1)
+    return get_hifz_progress(user_id, pointer["page"], pointer["stage"],
+                             half) >= HIFZ_PROGRESS_TARGET
+
+
+def _hifz_catch_up(user_id):
+    """Догнать указатель, если он стоит на уже закрытой единице (20.09.2026).
+
+    Зачем. Стена пересдачи (13.09.2026) не даёт указателю перейти ГРАНИЦУ -
+    сменить этап или страницу, - пока есть незакрытый долг. Сам шаг делает
+    приложение сразу после сдачи, и если в тот момент стена стояла, шаг
+    просто не состоялся. А когда студент долг закрывает, вперёд его никто не
+    двигает: место так и остаётся на сданной единице.
+
+    Живой случай пользователя 19.09: сдал четыре пересдачи на стр. 16, и
+    место осталось на ПОСЛЕДНЕЙ СТРОКЕ первой половины (этап 1) вместо
+    перехода на саму первую половину (этап 2). Ставил руками через
+    «поправить» и с первого раза попал во вторую половину. Замер на проде
+    20.09: так стоят 12 человек в обеих базах, восьмерым уже ничто не мешает,
+    самый старый случай - с 09.09.
+
+    Чиним на чтении указателя: любой вход в приложение подтягивает место
+    вперёд. Двигаем, только когда долгов НЕТ (иначе спорили бы со стеной) и
+    единица закрыта; шагаем циклом, чтобы не ползти по шагу за заход, но с
+    потолком - на случай, если однажды next_hifz_position зациклится."""
+    pointer = get_hifz_pointer(user_id)
+    if not pointer:
+        return pointer
+    user = find_user_by_phone(user_id)
+    group = get_learning_group(user_id, include_prep=True) if user else None
+    if not user or not group:
+        return pointer
+    if get_open_retakes(user["id"], group["id"]):
+        return pointer
+    for _ in range(40):
+        if not _hifz_unit_done(user_id, user, group, pointer):
+            break
+        page, line, stage = next_hifz_position(pointer["page"], pointer["line"], pointer["stage"])
+        if (page, line, stage) == (pointer["page"], pointer["line"], pointer["stage"]):
+            break   # дальше идти некуда (последняя страница)
+        set_hifz_pointer(user_id, page, line, stage)
+        log.info("hifz catch-up: %s %s -> %s", user_id,
+                 (pointer["page"], pointer["line"], pointer["stage"]), (page, line, stage))
+        pointer = {"page": page, "line": line, "stage": stage}
+    return pointer
+
+
 def _hifz_retakes(user_id):
     """Незакрытые пересдачи студента и признак «ход закрыт» (13.09.2026).
 
@@ -560,19 +617,7 @@ def _hifz_retakes(user_id):
         return {"retakes": [], "done": False}
     retakes = get_open_retakes(user["id"], group["id"])
     pointer = get_hifz_pointer(user_id)
-    done = False
-    if pointer and retakes:
-        if pointer["stage"] == 1:
-            done = has_submission_for_unit(user["id"], group["id"], pointer["page"],
-                                           pointer["line"], pointer["stage"])
-        else:
-            # Половина листа считается по ЧИСЛУ ТЕКСТОВЫХ строк этой страницы,
-            # той же формулой, что и в приложении (hifzHalf): листы с названием
-            # суры короче, и зашитая пятнадцатка увела бы счётчик не туда.
-            half = 0 if pointer["stage"] == 3 else (
-                0 if pointer["line"] < page_text_line_count(pointer["page"]) // 2 else 1)
-            done = get_hifz_progress(user_id, pointer["page"], pointer["stage"],
-                                     half) >= HIFZ_PROGRESS_TARGET
+    done = bool(pointer and retakes and _hifz_unit_done(user_id, user, group, pointer))
     return {
         "retakes": [{"page": r["hifz_page"], "line": r["hifz_line"],
                      "stage": r["hifz_stage"],
@@ -588,7 +633,7 @@ async def handle_hifz_get(request, user_id):
     """GET - указатель режима заучивания 40+40: где студент сейчас.
     null, если он ещё ни разу не входил в режим (тогда фронтенд один раз
     спрашивает строчку)."""
-    data = {"pointer": get_hifz_pointer(user_id)}
+    data = {"pointer": _hifz_catch_up(user_id)}
     data.update(_hifz_retakes(user_id))
     return web.json_response(data)
 
@@ -661,17 +706,26 @@ async def handle_hifz_progress_get(request, user_id):
 
 @with_auth
 async def handle_hifz_progress_add(request, user_id):
-    """POST {page, stage, half, delta} - "сколько добавил сегодня" к
-    единице этапа 2/3 (03.09.2026). Дельта, не абсолютное число - так
-    нельзя случайно занизить уже сохранённый счёт. `closed` в ответе
-    говорит фронтенду, дошло ли до 80 - только тогда указатель должен
-    сдвинуться дальше, частичная сдача его не трогает."""
+    """POST {page, stage, half, delta|count} - повторы по единице этапа 2/3
+    (03.09.2026). `closed` в ответе говорит фронтенду, дошло ли до 80 -
+    только тогда указатель должен сдвинуться дальше, частичная сдача его не
+    трогает.
+
+    Два способа намеренно (20.09.2026): чипы «+10/+20/+40» и тапы по счётчику
+    шлют ДЕЛЬТУ (каждый тап отдельно, терять их нельзя), а поле «вписать
+    число» шлёт ТОЧНОЕ число. Раньше поле тоже складывалось: человек,
+    натапавший 20 и вписавший «20», получал 40 - случай пользователя 19.09.
+    Точное число ещё и единственный способ исправить промах: уменьшить
+    дельтой нельзя."""
     try:
         body = await request.json()
         page = int(body["page"])
         stage = int(body["stage"])
         half = int(body["half"])
-        delta = int(body["delta"])
+        exact = body.get("count")
+        delta = 0 if exact is not None else int(body["delta"])
+        if exact is not None:
+            exact = int(exact)
     except (json.JSONDecodeError, ValueError, KeyError, TypeError):
         return web.json_response({"error": "bad_pointer"}, status=400)
     if not (_READING_FIRST_PAGE <= page <= _READING_LAST_PAGE):
@@ -685,9 +739,16 @@ async def handle_hifz_progress_add(request, user_id):
     # иначе счёт всех строк одной половины слился бы в одно число. Отсюда и
     # потолок 14 — больше пятнадцати строк на листе мединского мусхафа нет.
     max_half = 14 if stage == 1 else 1
-    if stage not in (1, 2, 3) or not (0 <= half <= max_half)             or not (1 <= delta <= HIFZ_PROGRESS_TARGET):
+    if stage not in (1, 2, 3) or not (0 <= half <= max_half):
         return web.json_response({"error": "bad_pointer"}, status=400)
-    count = add_hifz_progress(user_id, page, stage, half, delta)
+    if exact is not None:
+        if not (0 <= exact <= HIFZ_PROGRESS_TARGET):
+            return web.json_response({"error": "bad_pointer"}, status=400)
+        count = set_hifz_progress(user_id, page, stage, half, exact)
+    else:
+        if not (1 <= delta <= HIFZ_PROGRESS_TARGET):
+            return web.json_response({"error": "bad_pointer"}, status=400)
+        count = add_hifz_progress(user_id, page, stage, half, delta)
     return web.json_response({
         "count": count, "target": HIFZ_PROGRESS_TARGET,
         "closed": count >= HIFZ_PROGRESS_TARGET,

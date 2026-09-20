@@ -2342,6 +2342,14 @@
     background: var(--accent); color: #fff; font: inherit; font-size: 14px; font-weight: 600;
     cursor: pointer;
   }
+  .subs-todo-why {
+    font-size: 13px; line-height: 1.45; color: var(--muted);
+    margin: 0 0 10px; padding: 0 2px;
+  }
+  .subs-wall-note {
+    display: block; font-size: 12.5px; font-weight: 600;
+    color: var(--warn, #b45309); margin-top: 2px;
+  }
   .subs-todo-hint {
     font-size: 12px; color: var(--ink); background: var(--marker-soft, #f5edd8);
     border-radius: 8px; padding: 7px 9px; margin-top: 8px;
@@ -3346,7 +3354,7 @@
            успешной отправки. Строка (этап 1) закрывается одной сдачей,
            этой панели не видит. -->
       <div id="hifz-progress">
-        <p class="hp-title" data-i18n="hifz_progress_title">Сколько сделал сегодня?</p>
+        <p class="hp-title" data-i18n="hifz_progress_title">Сколько повторов по этой единице?</p>
         <div class="hp-prev">
           <span data-i18n="hifz_progress_was">Было по этапу</span>
           <span><b id="hifz-progress-count">0</b> <span data-i18n="hifz_progress_of">из</span> <span id="hifz-progress-target">80</span></span>
@@ -3355,7 +3363,7 @@
           <button type="button" data-add="10">+10</button>
           <button type="button" data-add="20">+20</button>
           <button type="button" data-add="40">+40</button>
-          <button type="button" id="hifz-progress-own" data-i18n="hifz_progress_own">своё</button>
+          <button type="button" id="hifz-progress-own" data-i18n="hifz_progress_own">вписать число</button>
         </div>
         <!-- Кнопки «ок» рядом с полем больше нет (10.09.2026, решение
              пользователя). Она была мелкой и стояла в двух шагах от большой
@@ -3366,9 +3374,10 @@
              ли. Enter в поле работает как раньше - для тех, кто хочет
              добавить ещё раз, не закрывая панель. -->
         <div class="hp-own-row" id="hifz-progress-own-row" style="display:none">
-          <input id="hifz-progress-own-input" type="number" min="1" max="80"
+          <input id="hifz-progress-own-input" type="number" min="0" max="80"
                  inputmode="numeric" data-i18n-ph="hifz_progress_own_ph"
-                 placeholder="сколько раз">
+                 placeholder="всего повторов">
+          <p class="hp-hint" data-i18n="hifz_progress_own_hint">Это итог по единице, не добавка.</p>
         </div>
         <button type="button" id="hifz-progress-save" class="hp-save" data-i18n="hifz_progress_save">Сохранить и продолжить</button>
       </div>
@@ -3455,6 +3464,7 @@
   <div id="subs-topbar">
     <button id="subs-back" data-i18n="back_dashboard">← Дашборд</button>
     <span data-i18n="subs_title">Работа с устазом</span>
+    <span id="subs-wall-note" class="subs-wall-note" data-i18n="subs_wall_note" style="display:none">Сначала пересдай, потом дальше</span>
   </div>
   <div id="subs-body"></div>
 </div>
@@ -3866,7 +3876,9 @@
       look_sub: 'разбор устаза',
       rec_review_text: 'Замечание устаза — переслушать',
       subs_todo_title: 'ПЕРЕСДАТЬ — %N%',
+      subs_todo_why: 'Устаз просит переделать это место. Пока оно не пересдано, дальше по мусхафу я тебя не пущу — иначе новое ляжет на невыученное.',
       subs_todo_hint: 'Пересдай — путь открыт.',
+      subs_wall_note: 'Сначала пересдай, потом дальше',
       subs_waiting_quiet: 'на проверке %N% — ждёт устаза, от тебя ничего не нужно',
       subs_review_from: 'Ответил %N%',
       subs_review_voice: 'голосовой разбор',
@@ -4053,11 +4065,12 @@
       hifz_progress_looking_only: 'глядя %N%/40',
       hifz_progress_both: 'глядя 40/40 ✓ · не глядя %N%/40',
       hifz_progress_done: 'глядя 40/40 ✓ · не глядя 40/40 ✓',
-      hifz_progress_title: 'Сколько сделал сегодня?',
-      hifz_progress_was: 'Было по этапу',
+      hifz_progress_title: 'Сколько повторов по этой единице?',
+      hifz_progress_was: 'Сейчас',
       hifz_progress_of: 'из',
-      hifz_progress_own: 'своё',
-      hifz_progress_own_ph: 'сколько раз',
+      hifz_progress_own: 'вписать число',
+      hifz_progress_own_ph: 'всего повторов',
+      hifz_progress_own_hint: 'Это итог по единице, не добавка.',
       hifz_progress_save: 'Сохранить и продолжить',
       hifz_progress_close: 'Этап закрыт, дальше →',
       tab_mushaf: '📗 Мусхаф',
@@ -6814,7 +6827,7 @@
       if (res.data && res.data.error === 'retake_pending') {
         hifzDebt = { retakes: res.data.retakes || [], done: true };
         hifzExit();
-        openSubs();
+        openSubs(true);
       }
     }).catch(function () {});
   }
@@ -6997,7 +7010,7 @@
         (to.stage !== hifz.stage || to.page !== currentPage)) {
       hifzDebt.done = true;       // своё место доработано, дальше только долг
       hifzExit();
-      openSubs();
+      openSubs(true);
       return;
     }
 
@@ -7027,7 +7040,7 @@
          нечего, он намотает 40+40 на сданной единице и упрётся только в
          конце (случай пользователя 13.09: «а он уже поработал над новым»).
          Ведём сразу туда, где долги лежат по порядку и объяснены. */
-      if (hifzWall()) { openSubs(); return; }
+      if (hifzWall()) { openSubs(true); return; }
       hifzEnter();
     });
   });
@@ -7895,13 +7908,18 @@
     }).catch(function () {});
   }
 
-  // Дельта, не абсолютное число - каждый тап прибавляет и сохраняется
-  // сразу же на сервере, а не копится локально до отдельного "сохранить":
-  // так тап не потеряется, если студент уйдёт со страницы раньше.
-  function hifzProgressSubmitDelta(delta) {
+  /* Чипы «+10/+20/+40» и тапы по счётчику шлют ДЕЛЬТУ и сохраняются сразу
+     же на сервере, а не копятся локально до отдельного «сохранить»: так тап
+     не потеряется, если студент уйдёт со страницы раньше. Поле «вписать
+     число» шлёт ТОЧНОЕ число (20.09.2026): оно читается как итог, а
+     складывалось - человек, натапавший 20 и вписавший «20», получал 40
+     (случай пользователя 19.09). Точное число ещё и единственный способ
+     исправить промах: уменьшить дельтой нельзя. */
+  function hifzProgressSubmit(body) {
     var page = currentPage, stage = hifz.stage, half = hifzProgressHalf();
+    body.page = page; body.stage = stage; body.half = half;
     return apiCall('/hifz/progress', {
-      method: 'POST', body: { page: page, stage: stage, half: half, delta: delta }
+      method: 'POST', body: body
     }).then(function (res) {
       if (!(res.data && typeof res.data.count === 'number')) return;
       hifzProgressCache[hifzProgressKey(page, stage, half)] =
@@ -7909,6 +7927,8 @@
       hifzProgressRenderPanel(res.data.count);
     }).catch(function () {});
   }
+  function hifzProgressSubmitDelta(delta) { return hifzProgressSubmit({ delta: delta }); }
+  function hifzProgressSubmitCount(count) { return hifzProgressSubmit({ count: count }); }
 
   document.getElementById('hifz-progress-chips').addEventListener('click', function (e) {
     var addBtn = e.target.closest('button[data-add]');
@@ -7916,7 +7936,13 @@
     if (e.target.id === 'hifz-progress-own') {
       document.getElementById('hifz-progress-chips').style.display = 'none';
       document.getElementById('hifz-progress-own-row').style.display = 'flex';
-      document.getElementById('hifz-progress-own-input').focus();
+      var inp = document.getElementById('hifz-progress-own-input');
+      // Показываем накопленное прямо в поле: человек правит ИТОГ, а не
+      // вводит добавку в пустоту - сразу видно, от чего он пляшет.
+      var cur = hifzProgressCache[hifzProgressKey(currentPage, hifz.stage, hifzProgressHalf())];
+      inp.value = cur ? cur.count : 0;
+      inp.focus();
+      inp.select();
     }
   });
   // Возвращает промис отправки (или null, если вводить было нечего) - нижняя
@@ -7927,7 +7953,9 @@
     document.getElementById('hifz-progress-chips').style.display = 'flex';
     document.getElementById('hifz-progress-own-row').style.display = 'none';
     input.value = '';
-    if (isFinite(n) && n > 0) return hifzProgressSubmitDelta(Math.min(n, HIFZ_PROGRESS_TARGET));
+    if (isFinite(n) && n >= 0) {
+      return hifzProgressSubmitCount(Math.max(0, Math.min(n, HIFZ_PROGRESS_TARGET)));
+    }
     return null;
   }
   document.getElementById('hifz-progress-own-input').addEventListener('keydown', function (e) {
@@ -9510,7 +9538,18 @@
     if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
 
-  function openSubs() {
+  /* Стена пересдачи привела человека сюда (20.09.2026). Раньше экран просто
+     подменялся молча: студент жал «дальше» и оказывался в другом месте без
+     единого слова - приходилось догадываться. Теперь короткая строка в шапке
+     экрана говорит, что произошло, а подробности он читает в блоке
+     «ПЕРЕСДАТЬ». Гасим её при обычном заходе с дашборда. */
+  function subsWallNote(on) {
+    var el = document.getElementById('subs-wall-note');
+    if (el) el.style.display = on ? 'block' : 'none';
+  }
+
+  function openSubs(fromWall) {
+    subsWallNote(!!fromWall);
     document.getElementById('dashboard').style.display = 'none';
     // Раньше сюда приходили только с дашборда, и мусхаф гасить было не нужно.
     // С 13.09.2026 сюда же ведёт закрытый ход пересдачи - прямо из заучивания,
@@ -9577,8 +9616,13 @@
           '</div></div>';
       });
       if (todo.length) {
+        // «Почему» стоит НАД строками (20.09.2026): человека сюда приводит
+        // стена, и правило он должен прочитать раньше списка, а не после
+        // него. Прежняя подпись «Пересдай — путь открыт» осталась внизу как
+        // короткий итог.
         html += '<div class="subs-todo"><div class="hd">' +
           T('subs_todo_title', { N: todo.length }) + '</div><div class="body" id="subs-todo-rows">' +
+          '<div class="subs-todo-why">' + T('subs_todo_why') + '</div>' +
           todo.map(function (it) { return subsRow(it, today); }).join('') +
           '<div class="subs-todo-hint">' + T('subs_todo_hint') + '</div></div></div>';
       }
