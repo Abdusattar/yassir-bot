@@ -577,16 +577,45 @@
   /* Захват прогресса 40+40 (03.09.2026) - см. #hifz-rec .actions выше,
      та же палитра кнопок, отдельный блок ниже записи. */
   #hifz-progress { display: none; text-align: left; margin-top: 6px; }
-  #hifz-progress .hp-title {
-    font-size: 13.5px; font-weight: 600; color: var(--ink); margin: 4px 0 2px;
-  }
-  #hifz-progress .hp-prev {
+  /* Две строки методики - главное в панели, всё остальное тихо рядом. */
+  #hifz-progress .hp-rows { margin: 2px 0 10px; }
+  #hifz-progress .hp-row {
     display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 12.5px; color: var(--muted);
-    padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--chrome-border);
+    padding: 3px 0; color: var(--muted); font-size: 13px;
   }
-  #hifz-progress .hp-prev b { color: var(--ink); font-variant-numeric: tabular-nums; }
-  #hifz-progress .hp-chips, #hifz-progress .hp-own-row { display: flex; gap: 8px; }
+  #hifz-progress .hp-row .val { font-variant-numeric: tabular-nums; }
+  #hifz-progress .hp-row .val b { font-size: 19px; font-weight: 700; color: var(--ink); }
+  #hifz-progress .hp-row .val i { font-style: normal; font-size: 13px; }
+  /* Строка «глядя» гаснет, когда её сорок набраны: работа идёт по памяти. */
+  #hifz-progress .hp-row.done .val b { color: var(--ok); }
+  #hifz-progress .hp-row.idle { opacity: .45; }
+  /* Полоса на все 80 с засечкой на сороковом: видно, где кончается «глядя». */
+  #hifz-progress .hp-bar {
+    position: relative; height: 6px; border-radius: 3px;
+    background: var(--chrome-border); overflow: hidden; margin-bottom: 12px;
+  }
+  #hifz-progress .hp-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  #hifz-progress .hp-bar u {
+    position: absolute; left: 50%; top: 0; width: 1px; height: 100%;
+    background: var(--bg); opacity: .9;
+  }
+  #hifz-progress .hp-adjust {
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    margin-bottom: 8px;
+  }
+  #hifz-progress .hp-adjust b {
+    min-width: 46px; text-align: center; font-size: 17px; font-weight: 700;
+    color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  #hifz-progress .hp-adjust button {
+    width: 42px; height: 42px; border-radius: 21px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 600 19px inherit; line-height: 1;
+  }
+  #hifz-progress .hp-adjust button:disabled { opacity: .35; cursor: default; }
+  #hifz-progress .hp-chips { display: flex; gap: 8px; }
+  #hifz-progress .hp-own-row { display: flex; gap: 6px; flex-direction: column; }
+  #hifz-progress .hp-hint { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
   #hifz-progress .hp-chips button, #hifz-progress .hp-own-row button {
     flex: 1; padding: 11px 8px; border-radius: 10px; cursor: pointer;
     border: 1px solid var(--chrome-border); background: transparent;
@@ -3353,16 +3382,31 @@
       <!-- Захват прогресса 40+40 (03.09.2026) - только этапы 2/3, после
            успешной отправки. Строка (этап 1) закрывается одной сдачей,
            этой панели не видит. -->
+      <!-- Панель подтверждает, а не спрашивает (20.09.2026, аудит по просьбе
+           пользователя). Было: «Сколько сделал сегодня?» + чипы +10/+20/+40,
+           то есть ВТОРОЙ способ ввести то же число, которое человек весь
+           вечер набивал счётчиком у 🔊 - отсюда и «натапал 20, вписал 20,
+           стало 40». Теперь панель показывает, что уже засчитано, тем же
+           языком, что счётчик и шапка («глядя 40/40», «по памяти 12/40», не
+           «52 из 80» - вопрос пользователя 20.09), и даёт поправить. -->
       <div id="hifz-progress">
-        <p class="hp-title" data-i18n="hifz_progress_title">Сколько повторов по этой единице?</p>
-        <div class="hp-prev">
-          <span data-i18n="hifz_progress_was">Было по этапу</span>
-          <span><b id="hifz-progress-count">0</b> <span data-i18n="hifz_progress_of">из</span> <span id="hifz-progress-target">80</span></span>
+        <div class="hp-rows">
+          <div class="hp-row" id="hp-row-look">
+            <span class="lbl" data-i18n="hifz_count_looking">глядя</span>
+            <span class="val"><b id="hp-look-n">0</b><i>/40</i></span>
+          </div>
+          <div class="hp-row" id="hp-row-mem">
+            <span class="lbl" data-i18n="hifz_count_memory">по памяти</span>
+            <span class="val"><b id="hp-mem-n">0</b><i>/40</i></span>
+          </div>
+        </div>
+        <div class="hp-bar"><i id="hifz-progress-bar"></i><u></u></div>
+        <div class="hp-adjust">
+          <button type="button" id="hifz-progress-minus" aria-label="минус один повтор">−</button>
+          <b id="hifz-progress-count">0</b>
+          <button type="button" id="hifz-progress-plus" aria-label="плюс один повтор">+</button>
         </div>
         <div class="hp-chips" id="hifz-progress-chips">
-          <button type="button" data-add="10">+10</button>
-          <button type="button" data-add="20">+20</button>
-          <button type="button" data-add="40">+40</button>
           <button type="button" id="hifz-progress-own" data-i18n="hifz_progress_own">вписать число</button>
         </div>
         <!-- Кнопки «ок» рядом с полем больше нет (10.09.2026, решение
@@ -3377,9 +3421,9 @@
           <input id="hifz-progress-own-input" type="number" min="0" max="80"
                  inputmode="numeric" data-i18n-ph="hifz_progress_own_ph"
                  placeholder="всего повторов">
-          <p class="hp-hint" data-i18n="hifz_progress_own_hint">Это итог по единице, не добавка.</p>
+          <p class="hp-hint" data-i18n="hifz_progress_own_hint">Это итог по этому месту, не добавка.</p>
         </div>
-        <button type="button" id="hifz-progress-save" class="hp-save" data-i18n="hifz_progress_save">Сохранить и продолжить</button>
+        <button type="button" id="hifz-progress-save" class="hp-save" data-i18n="hifz_progress_save">Готово</button>
       </div>
     </div>
   </div>
@@ -4065,14 +4109,11 @@
       hifz_progress_looking_only: 'глядя %N%/40',
       hifz_progress_both: 'глядя 40/40 ✓ · не глядя %N%/40',
       hifz_progress_done: 'глядя 40/40 ✓ · не глядя 40/40 ✓',
-      hifz_progress_title: 'Сколько повторов по этой единице?',
-      hifz_progress_was: 'Сейчас',
-      hifz_progress_of: 'из',
       hifz_progress_own: 'вписать число',
       hifz_progress_own_ph: 'всего повторов',
-      hifz_progress_own_hint: 'Это итог по единице, не добавка.',
-      hifz_progress_save: 'Сохранить и продолжить',
-      hifz_progress_close: 'Этап закрыт, дальше →',
+      hifz_progress_own_hint: 'Это итог по этому месту, не добавка.',
+      hifz_progress_save: 'Готово',
+      hifz_progress_close: 'Дальше: %P%',
       tab_mushaf: '📗 Мусхаф',
       btn_finish: '✅ Закончить',
       btn_rating: '🏆 Рейтинг',
@@ -6979,9 +7020,10 @@
 
   /* Следующий шаг методики. Порядок жёсткий, отказа нет: метод 40+40 не
      предусматривает возврата (решение пользователя 01.09.2026). */
-  function hifzNext() {
-    /* Куда шагнём. Считаем ДО того, как двинуть указатель: от этого зависит,
-       не упрётся ли шаг в стену пересдачи. */
+  /* Куда шагнём. Считаем ДО того, как двинуть указатель: от этого зависит,
+     не упрётся ли шаг в стену пересдачи. Вынесено из hifzNext 20.09.2026 -
+     то же место называет подпись кнопки «Дальше: …» в панели повторов. */
+  function hifzNextPosition() {
     var to = { line: hifz.line, stage: hifz.stage, page: currentPage };
     if (hifz.stage === 1) {
       var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
@@ -6997,6 +7039,11 @@
     } else if (currentPage < LAST_PAGE) {          // страница закрыта — дальше
       to.stage = 1; to.line = 0; to.page = currentPage + 1;
     }
+    return to;
+  }
+
+  function hifzNext() {
+    var to = hifzNextPosition();
 
     /* Стена пересдачи (13.09.2026, решение пользователя). Внутри этапа строки
        идут свободно - долг не мешает доделать то, что начал. Закрыта СМЕНА
@@ -7882,12 +7929,50 @@
   });
 
   function hifzProgressRenderPanel(count) {
+    var look = Math.min(40, count), mem = Math.max(0, count - 40);
+    document.getElementById('hp-look-n').textContent = look;
+    document.getElementById('hp-mem-n').textContent = mem;
+    var rowLook = document.getElementById('hp-row-look');
+    var rowMem = document.getElementById('hp-row-mem');
+    rowLook.classList.toggle('done', look >= 40);
+    // Пока сорок «глядя» не набраны, вторая строка приглушена: по методике
+    // до неё ещё не дошли, и яркий ноль рядом читался бы как долг.
+    rowMem.classList.toggle('idle', look < 40);
+    rowMem.classList.toggle('done', mem >= 40);
+    document.getElementById('hifz-progress-bar').style.width =
+      Math.min(100, count / HIFZ_PROGRESS_TARGET * 100) + '%';
     document.getElementById('hifz-progress-count').textContent = count;
-    document.getElementById('hifz-progress-target').textContent = HIFZ_PROGRESS_TARGET;
+    document.getElementById('hifz-progress-minus').disabled = count <= 0;
+    document.getElementById('hifz-progress-plus').disabled = count >= HIFZ_PROGRESS_TARGET;
     var btn = document.getElementById('hifz-progress-save');
     var closed = count >= HIFZ_PROGRESS_TARGET;
-    btn.textContent = closed ? T('hifz_progress_close') : T('hifz_progress_save');
+    // Кнопка называет ровно то, что произойдёт. Раньше «Сохранить и
+    // продолжить» обещала переход и при 40, хотя панель просто закрывалась.
+    btn.textContent = closed
+      ? T('hifz_progress_close', { P: hifzNextPlaceText() })
+      : T('hifz_progress_save');
     btn.classList.toggle('closing', closed);
+  }
+
+  /* Куда поведёт «Дальше»: то же место и теми же словами, что покажет шапка
+     после шага. Чужая страница называется одним номером: сколько на ней
+     строк, мы узнаем только когда загрузим её. */
+  function hifzPlaceText(page, line, stage) {
+    if (page !== currentPage) return T('page_n', { N: page });
+    if (stage === 1) {
+      var r = hifzHalfRange(hifzHalf(line));
+      return T('page_n', { N: page }) + ' · ' +
+        T('hifz_line_of', { N: line - r[0] + 1, M: r[1] - r[0] + 1 });
+    }
+    if (stage === 2) {
+      var rr = hifzHalfRange(hifzHalf(line));
+      return T('page_n', { N: page }) + ' · ' + T('hifz_lines_range', { A: rr[0] + 1, B: rr[1] + 1 });
+    }
+    return T('page_n', { N: page }) + ' · ' + T('hifz_whole');
+  }
+  function hifzNextPlaceText() {
+    var n = hifzNextPosition();
+    return n ? hifzPlaceText(n.page, n.line, n.stage) : '';
   }
 
   // Открывается вместо мгновенного hifzNext() после успешной сдачи на
@@ -7897,6 +7982,11 @@
   function hifzProgressOpen() {
     var page = currentPage, stage = hifz.stage, half = hifzProgressHalf();
     document.getElementById('hifz-rec-actions').style.display = 'none';
+    // Таймер и плеер своё отработали: запись ушла устазу, переслушивать её
+    // здесь незачем, а место они занимают и уводят взгляд с подтверждения
+    // (аудит 20.09). Обратно их вернёт hifzRecReset при следующей записи.
+    document.getElementById('hifz-rec-timer').style.display = 'none';
+    hifzRecPlayerShow(false);
     document.getElementById('hifz-progress').style.display = 'block';
     var key = hifzProgressKey(page, stage, half);
     var cached = hifzProgressCache[key];
@@ -7927,12 +8017,23 @@
       hifzProgressRenderPanel(res.data.count);
     }).catch(function () {});
   }
-  function hifzProgressSubmitDelta(delta) { return hifzProgressSubmit({ delta: delta }); }
   function hifzProgressSubmitCount(count) { return hifzProgressSubmit({ count: count }); }
 
+  /* Шаг ровно один повтор - как тап по счётчику у 🔊. Чипов «+10/+20/+40»
+     больше нет: они появились, когда счётчика не было, и с ним стали вторым
+     способом ввести то же число (аудит 20.09). Крупное число вписывается. */
+  function hifzProgressStep(delta) {
+    var key = hifzProgressKey(currentPage, hifz.stage, hifzProgressHalf());
+    var p = hifzProgressCache[key] || { count: 0 };
+    var next = Math.max(0, Math.min(HIFZ_PROGRESS_TARGET, p.count + delta));
+    if (next === p.count) return;
+    hifzProgressRenderPanel(next);          // рисуем сразу, ответ придёт следом
+    hifzProgressSubmitCount(next);
+  }
+  document.getElementById('hifz-progress-minus').addEventListener('click', function () { hifzProgressStep(-1); });
+  document.getElementById('hifz-progress-plus').addEventListener('click', function () { hifzProgressStep(1); });
+
   document.getElementById('hifz-progress-chips').addEventListener('click', function (e) {
-    var addBtn = e.target.closest('button[data-add]');
-    if (addBtn) { hifzProgressSubmitDelta(parseInt(addBtn.getAttribute('data-add'), 10)); return; }
     if (e.target.id === 'hifz-progress-own') {
       document.getElementById('hifz-progress-chips').style.display = 'none';
       document.getElementById('hifz-progress-own-row').style.display = 'flex';
