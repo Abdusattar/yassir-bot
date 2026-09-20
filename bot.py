@@ -14,7 +14,8 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL, MUFRADAT_API_PORT
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member, other_bot_known
+from core.side import handle_side_answer
 from core.bots import register_self
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
@@ -23,7 +24,7 @@ from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_juz_answer, handle_juz_confirm, handle_prep_onboarding_next
 from core.transfers import (
-    handle_other_bot_member_in_group,
+    handle_other_bot_member_in_group, greet_new_member,
     handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
     send_new_student_prep_redirect,
 )
@@ -159,6 +160,16 @@ async def main():
                     # подготовительной (13.08.2026, 6 экранов вместо потока из 9
                     # сообщений). Только личка - но uid всё равно сверяем, для
                     # единообразия с остальными callback-веткам.
+                    # "side:male:<uid>" / "side:female:<uid>" - «ты брат или
+                    # сестра» (20.09.2026, core/side.py). Кнопка бывает и в
+                    # ГРУППЕ (приветствие подготовительной, «мне не сюда») -
+                    # принимаем тап только от адресата.
+                    elif cq_data.startswith("side:"):
+                        parts = cq_data.split(":", 2)
+                        if len(parts) == 3 and parts[2] == cq_uid:
+                            if cq_chat_id and cq_message_id:
+                                await remove_message_keyboard(cq_chat_id, cq_message_id)
+                            asyncio.create_task(handle_side_answer(cq_uid, parts[1], pressed_in=cq_chat_id))
                     elif cq_data.startswith("ponb:"):
                         parts = cq_data.split(":", 2)
                         if len(parts) == 3 and parts[2] == cq_uid:
@@ -231,8 +242,10 @@ async def main():
                                 cache_username(user["username"], uid)
                             glang = get_group_lang(group_info)
                             # Учится во втором боте (18.09.2026) - не наш,
-                            # у себя не записываем, показываем его бот.
-                            if other_bot_member(uid):
+                            # у себя не записываем, показываем его бот. То же
+                            # для того, кого сосед знает по прошлым группам
+                            # (20.09.2026, штрафница сестёр).
+                            if other_bot_member(uid) or other_bot_known(uid):
                                 await handle_other_bot_member_in_group(chat_id, group_info, uid, tg_name)
                                 continue
                             existing_user = find_known_user_by_phone(uid)
@@ -254,9 +267,8 @@ async def main():
                                     await send_new_student_prep_redirect(uid, chat_id, tg_name, glang)
                                 else:
                                     set_pending_name(uid, group_info["id"], "")
-                                    greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
                                     log.info("chat_member: greeting new user %s in chat %s", uid, chat_id)
-                                    await send_message(chat_id, greeting + T("ask_name", glang))
+                                    await greet_new_member(chat_id, group_info, uid, tg_name, glang)
                     continue
 
                 mr = upd.get("message_reaction")
@@ -366,7 +378,7 @@ async def main():
                         if not tg_name and nm.get("username"):
                             tg_name = nm["username"]
                         glang = get_group_lang(group_info) if group_info else "ru"
-                        if group_info and other_bot_member(uid):
+                        if group_info and (other_bot_member(uid) or other_bot_known(uid)):
                             await handle_other_bot_member_in_group(chat_id, group_info, uid, tg_name)
                         elif group_info:
                             existing_user = find_known_user_by_phone(uid)
@@ -384,8 +396,7 @@ async def main():
                                     await send_new_student_prep_redirect(uid, chat_id, tg_name, glang)
                                 else:
                                     set_pending_name(uid, group_info["id"], "")
-                                    greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
-                                    await send_message(chat_id, greeting + T("ask_name", glang))
+                                    await greet_new_member(chat_id, group_info, uid, tg_name, glang)
 
                 if (text or is_media) and chat_id:
                     message_id = msg.get("message_id")

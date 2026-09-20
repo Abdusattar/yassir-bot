@@ -183,7 +183,7 @@ def test_join_onboarding_not_double_sent_on_chat_member_and_new_chat_members(tes
 
     group_sent = []
 
-    async def fake_group_msg(chat_id, name, glang, dm_ok):
+    async def fake_group_msg(chat_id, name, glang, dm_ok, uid=None):
         group_sent.append(name)
     monkeypatch.setattr(transfers, "send_prep_onboarding_group_message", fake_group_msg)
 

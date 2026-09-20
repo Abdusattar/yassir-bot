@@ -683,14 +683,21 @@ def _group_title(group_id):
 # заводили, чтобы не дублировать то же сообщение в тот же день.
 
 
-async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok):
+async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok, uid=None):
+    """Приветствие называет половину («группа братьев») и несёт кнопку «мне
+    не сюда» (20.09.2026, core/side.py) - вторая после первого приветствия
+    возможность уйти к соседу, если пришёл по пересланной ссылке."""
+    from core.side import half_word, not_here_button
     if dm_ok:
-        await send_message(chat_id, T("prep_onboarding_group_dm_ready", glang, name=name))
+        text = T("prep_onboarding_group_dm_ready", glang, name=name, half=half_word())
     else:
         link = await get_dm_start_link()
-        await send_message(chat_id, T(
-            "prep_onboarding_group_dm_needed", glang, name=name, link=link or "https://t.me/"
-        ))
+        text = T("prep_onboarding_group_dm_needed", glang, name=name, half=half_word(),
+                 link=link or "https://t.me/")
+    if uid:
+        await send_message_with_buttons(chat_id, text, [not_here_button(uid)])
+    else:
+        await send_message(chat_id, text)
 
 
 async def _onboarding_lang(phone):

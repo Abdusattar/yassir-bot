@@ -19,7 +19,7 @@ from core.db import (
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
     register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
     add_group_admin, remove_group_admin, get_group_admins, is_any_group_admin,
-    is_service_group, is_app_member, other_bot_member,
+    is_service_group, is_app_member, other_bot_member, other_bot_known,
     set_observer, unset_observer, is_observer,
     is_pending_name, set_pending_name, get_pending_text, clear_pending_name,
     get_today_report, save_report, check_text, count_checkmarks, is_checkmarks_only,
@@ -45,11 +45,13 @@ from core.db import (
 from core.transfers import (
     block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student,
     send_new_student_prep_redirect, handle_other_bot_member_in_group,
+    kick_active_student_back_from_prep,
 )
 from core.bots import other_bot, other_profile, JAMAAT_IN
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 from core.mushaf_words import advance_hifz_pointer
 from core.web_auth import claim_login_code, refuse_login_code, LOGIN_START_PREFIX
+from core.side import offer_way_in
 
 log = logging.getLogger(__name__)
 
@@ -953,7 +955,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # чужого здесь быть не должно. Супер-админов не трогаем: их id
         # прописаны в .env обоих ботов, и мужской супер-админ в женском
         # боте - это управление, а не «ошибся дверью».
-        if not is_admin(phone) and not may_use_app(phone) and other_bot_member(phone):
+        # ...и человек, которого сосед ЗНАЕТ, хоть сейчас и не активен
+        # (штрафница сестёр, 20.09.2026): раньше он выглядел незнакомцем и
+        # получал ссылку на нашу подготовительную.
+        if not is_admin(phone) and not may_use_app(phone) and (other_bot_member(phone) or other_bot_known(phone)):
             await redirect_to_other_bot(chat_id, phone, text)
             return
 
@@ -965,6 +970,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if text.startswith("/start " + LOGIN_START_PREFIX) and not may_use_app(phone):
             refuse_login_code(text.split(" ", 1)[1][len(LOGIN_START_PREFIX):].strip())
             await send_message(chat_id, LOGIN_NOT_A_STUDENT)
+            # Раньше тут был тупик: «не вижу тебя» - и всё. Бурулсун 19.09
+            # написала ещё раз и получила ссылку на мужскую подготовительную
+            # как незнакомка. Теперь дорога даётся сразу, и с вопросом о
+            # половине, если бот её не знает (core/side.py).
+            await offer_way_in(chat_id, phone)
             return
 
         was_dm_ok = get_dm_ok_by_phone(phone)
@@ -1329,9 +1339,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # Раньше отправляли в группу "напиши там" без ссылки - если группу
         # никто не подсказал, человек терялся. Ссылка та же, что везде
         # (invite_friend/DM-регистрация) - единая точка входа (25.08.2026).
-        prep = get_prep_group()
-        link = prep["invite_link"] if prep and prep["invite_link"] else ""
-        await send_message(chat_id, T("dm_cold_message_explain", "ru", link=link))
+        # С 20.09.2026 ссылка на подготовительную даётся только тому, чью
+        # половину бот знает; остальным - вопрос «брат или сестра»
+        # (core/side.py, случай Бурулсун).
+        await offer_way_in(chat_id, phone)
         return
 
     group = get_group(chat_id)
@@ -1439,7 +1450,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not s_reg:
             # Учится во втором боте (18.09.2026) - не регистрируем и имя не
             # спрашиваем, той же дорогой, что при входе в группу (bot.py).
-            if other_bot_member(phone):
+            if other_bot_member(phone) or other_bot_known(phone):
                 await handle_other_bot_member_in_group(chat_id, group, phone, sender_name)
                 return
             # Уже известен боту (зарегистрирован где-то ещё) — не спрашиваем имя заново
@@ -1448,6 +1459,14 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 gtype_chk = group["group_type"] or "relaxed"
                 if gtype_chk != "tadabbur":
                     existing_lg = get_learning_group(phone)
+                    if existing_lg and gtype_chk == "prep":
+                        # Активный студент написал в подготовительной, а его
+                        # вход бот не видел (Муса 12→19.09: вошёл в дни
+                        # переезда чата). Тот же guard, что на входе
+                        # (handle_known_user_group_join): кик обратно, своя
+                        # группа не трогается - а не «перевод» В prep.
+                        await kick_active_student_back_from_prep(chat_id, phone, existing_user, existing_lg)
+                        return
                     if existing_lg and existing_lg["id"] != group_id:
                         # Известный активный студент написал текстом в другой
                         # активной группе (не через join-событие) - тот же
@@ -1545,7 +1564,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 if gtype == "prep":
                     from core.prep import send_prep_onboarding_group_message, send_prep_onboarding_dm
                     dm_ok_now = get_dm_ok_by_phone(phone)
-                    await send_prep_onboarding_group_message(chat_id, new_name, glang, dm_ok_now)
+                    await send_prep_onboarding_group_message(chat_id, new_name, glang, dm_ok_now, uid=phone)
                     if dm_ok_now:
                         # 6 сообщений + 3 фото, ~5 сек - не блокируем очередь
                         # этого же отправителя (bot.py: lock на chat_id+sender),

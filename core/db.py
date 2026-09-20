@@ -967,7 +967,9 @@ def get_return_nudge_candidates():
         """).fetchall()
     # Учится во втором боте (17.09.2026) - он не «выпал», он просто однажды
     # написал не тому боту. Звать сестру в мужскую подготовительную нельзя.
-    return [r for r in rows if not other_bot_member(r["phone"])]
+    # И проходил через устаза соседа (20.09.2026) - штрафница сестёр тоже
+    # не наша, пусть её зовёт её бот.
+    return [r for r in rows if not other_bot_member(r["phone"]) and not other_bot_known(r["phone"])]
 
 
 def get_last_known_lang(phone):
@@ -1334,6 +1336,53 @@ def other_bot_member(phone):
         return row is not None
     except sqlite3.Error:
         return False
+
+
+def other_bot_known(phone):
+    """Проходил ли человек через устаза ВТОРОГО бота (20.09.2026): хоть раз
+    был студентом pro/relaxed у соседа (активен или нет) или его устазом.
+
+    Чем отличается от other_bot_member: та смотрит только active=1, и
+    штрафница сестёр (кикнута за пропуски, нигде не активна) для мужского
+    бота выглядела незнакомкой - получала ссылку на МУЖСКУЮ подготовительную
+    (карта дверей 20.09, клетки A6/B6/C6/F6). Подготовительная соседа
+    сюда намеренно НЕ входит: запись в неё никто не проверял (Бурулсун
+    19.09 - сестра, записанная в мужскую prep), доверять ей нельзя."""
+    path = _other_bot_db_path()
+    if not path:
+        return False
+    try:
+        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            row = c.execute("""
+                SELECT 1 FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                JOIN groups g ON ug.group_id=g.id
+                WHERE u.phone=?
+                  AND (ug.role='admin'
+                       OR (ug.role='student' AND g.group_type IN ('pro','relaxed')))
+                LIMIT 1
+            """, (str(phone),)).fetchone()
+        finally:
+            c.close()
+        return row is not None
+    except sqlite3.Error:
+        return False
+
+
+def ever_learning_student(phone):
+    """Хоть раз был студентом pro/relaxed ЭТОЙ базы (активен или нет) - то
+    есть его пропустил устаз, половина проверена человеком (20.09.2026).
+    Подготовительная не считается по той же причине, что в other_bot_known."""
+    with db() as c:
+        row = c.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN users u ON u.id=ug.user_id
+            JOIN groups g ON g.id=ug.group_id
+            WHERE u.phone=? AND ug.role='student' AND g.group_type IN ('pro','relaxed')
+            LIMIT 1
+        """, (str(phone),)).fetchone()
+    return row is not None
 
 
 def get_learning_group(phone, include_prep=False):

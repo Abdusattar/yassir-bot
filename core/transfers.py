@@ -36,9 +36,11 @@ from core.prep import (
     PREP_MIN_DAYS, announce_prep_graduate_arrival,
     send_prep_onboarding_group_message, send_prep_onboarding_dm,
 )
+import config
 from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.i18n import T, get_group_lang
 from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link
+from core.side import known_side, side_buttons, not_here_button, half_word
 
 log = logging.getLogger(__name__)
 
@@ -426,6 +428,44 @@ async def handle_other_bot_member_in_group(chat_id, group_info, uid, display_nam
                            "Не записан, ссылку на свой бот получил в личку.")
 
 
+async def kick_active_student_back_from_prep(chat_id, uid, existing_user, existing_group):
+    """Активный студент pro/relaxed оказался в подготовительной - по чужой
+    ссылке, случайно и т.п. Подготовительная ему не нужна: кикаем обратно,
+    текущую группу не трогаем (раньше это ошибочно обрабатывалось как
+    автоперевод, см. transfer_active_student - баг нашли 02.08.2026 на
+    Мустафе). Вынесено из handle_known_user_group_join 20.09.2026: тот же
+    случай приходит и СООБЩЕНИЕМ в подготовительной, когда вход бот
+    пропустил (Муса, 12→19.09: вошёл в дни переезда чата, а через неделю
+    написал - и handlers.py перевёл его В подготовительную, выкинув из
+    своей группы)."""
+    try:
+        await ban_member(chat_id, uid)
+        await unban_member(chat_id, uid)
+    except Exception as e:
+        log.error("Kick from prep (already active elsewhere) failed for %s in %s: %s", uid, chat_id, e)
+    lang = get_group_lang(existing_group)
+    text = T("prep_not_needed", lang, name=existing_user["name"],
+              group=existing_group["title"] or existing_group["chat_id"])
+    target = uid if get_dm_ok_by_phone(uid) else existing_group["chat_id"]
+    await send_message(target, text)
+    log.info("Blocked prep entry for already-active student %s (group=%s)",
+              existing_user["name"], existing_group["id"])
+
+
+async def greet_new_member(chat_id, group_info, uid, tg_name, glang):
+    """Первое слово незнакомцу, вошедшему в группу (оба пути входа в bot.py).
+    В подготовительной приветствие сразу называет половину («группа
+    братьев») и даёт кнопку «мне не сюда» (20.09.2026, случай Каната -
+    пришёл по пересланной ссылке в женскую). Ссылку на группу соседа тут
+    не показываем (правило 02.08), кнопка ведёт к его БОТУ."""
+    greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
+    if (group_info["group_type"] or "relaxed") == "prep":
+        text = greeting + T("prep_door_line", glang, half=half_word()) + "\n" + T("ask_name", glang)
+        await send_message_with_buttons(chat_id, text, [not_here_button(uid)])
+    else:
+        await send_message(chat_id, greeting + T("ask_name", glang))
+
+
 async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
     """Общая логика для уже известного пользователя, вступившего в группу по
     приглашению (chat_member update) или добавленного вручную (new_chat_members).
@@ -446,24 +486,7 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
     gtype = group_info["group_type"] or "relaxed"
 
     if existing_group and gtype == "prep":
-        # Уже активен в pro/relaxed (значит не штрафник и не новенький -
-        # у них existing_group всегда пусто, см. докстринг выше) и просто
-        # зашёл в подготовительную - по чужой ссылке, случайно и т.п.
-        # Подготовительная ему не нужна: кикаем обратно, текущую группу не
-        # трогаем (раньше это ошибочно обрабатывалось как автоперевод,
-        # см. transfer_active_student - баг нашли 02.08.2026 на Мустафе).
-        try:
-            await ban_member(chat_id, uid)
-            await unban_member(chat_id, uid)
-        except Exception as e:
-            log.error("Kick from prep (already active elsewhere) failed for %s in %s: %s", uid, chat_id, e)
-        lang = get_group_lang(existing_group)
-        text = T("prep_not_needed", lang, name=existing_user["name"],
-                  group=existing_group["title"] or existing_group["chat_id"])
-        target = uid if get_dm_ok_by_phone(uid) else existing_group["chat_id"]
-        await send_message(target, text)
-        log.info("Blocked prep entry for already-active student %s (group=%s)",
-                  existing_user["name"], existing_group["id"])
+        await kick_active_student_back_from_prep(chat_id, uid, existing_user, existing_group)
         return
 
     if existing_group and bot_leads_group(gtype):
@@ -500,7 +523,7 @@ async def handle_known_user_group_join(chat_id, group_info, uid, existing_user):
         # регистрации (найдено 25.08.2026 на живом студенте).
         dm_ok_now = get_dm_ok_by_phone(uid)
         glang = get_group_lang(group_info)
-        await send_prep_onboarding_group_message(chat_id, existing_user["name"], glang, dm_ok_now)
+        await send_prep_onboarding_group_message(chat_id, existing_user["name"], glang, dm_ok_now, uid=uid)
         if dm_ok_now:
             asyncio.create_task(send_prep_onboarding_dm(uid, glang))
     await announce_prep_graduate_arrival(chat_id, group_info["id"], uid)
@@ -738,9 +761,24 @@ async def send_return_nudges():
             if not link:
                 continue  # некуда звать - не шлём полу-сообщение без ссылки
 
-            resp = await send_message(phone, T(
-                "return_nudge_dm", get_last_known_lang(phone), name=student["name"], days=PREP_MIN_DAYS, link=link
-            ))
+            # Половина известна только тем, кого пропустил устаз или кто сам
+            # ответил (20.09.2026, решение пользователя: «пока не слать, а
+            # после идентификации»). Остальным - тот же тёплый текст, но
+            # вместо ссылки вопрос: ответ сразу превращается в правильную
+            # дорогу и запоминается. Бурулсун 19.09 сутки числилась в
+            # мужской prep - ссылку в «вернись» получила бы мужскую.
+            side = known_side(phone)
+            if side and side != config.PROFILE:
+                continue   # человек соседа - пусть зовёт его бот
+            lang = get_last_known_lang(phone)
+            if side is None:
+                resp = await send_message_with_buttons(
+                    phone, T("return_nudge_ask", lang, name=student["name"], days=PREP_MIN_DAYS),
+                    side_buttons(phone))
+            else:
+                resp = await send_message(phone, T(
+                    "return_nudge_dm", lang, name=student["name"], days=PREP_MIN_DAYS, link=link
+                ))
             if resp and resp.get("ok"):
                 mark_return_nudge_sent(phone)
                 log.info("Return nudge sent to %s", student["name"])

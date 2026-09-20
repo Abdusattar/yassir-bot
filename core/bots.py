@@ -45,6 +45,17 @@ def _connect():
             updated_at TEXT
         )
     """)
+    # Ответ человека «я брат / я сестра» (20.09.2026, core/side.py). Лежит в
+    # ОБЩЕЙ базе намеренно: ответ один на обоих ботов - сестра, ответившая
+    # мужскому боту, у женского уже опознана.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_side(
+            user_id TEXT PRIMARY KEY,
+            side TEXT,
+            answered_at TEXT,
+            via_profile TEXT
+        )
+    """)
     return c
 
 
@@ -89,6 +100,10 @@ def other_bot():
         "profile": other_profile(),
         "username": row["username"],
         "chat_link": chat_link,
+        # Ссылка с готовой кнопкой «Начать» - как get_dm_start_link у себя.
+        # Именно её даём тому, кого отправляем к соседу: там его встретит
+        # холодная ветка соседа и выдаст ПРАВИЛЬНУЮ подготовительную.
+        "start_link": chat_link + "?start=go",
         # Прямая ссылка приложения открывает Mini App соседа из любого места;
         # если у него она не заведена - хотя бы чат, там кнопка меню.
         "app_link": row["app_link"] or chat_link,

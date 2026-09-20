@@ -1,0 +1,164 @@
+"""Брат или сестра - вопрос тому, чью половину бот не знает (20.09.2026).
+
+Откуда взялось. 19.09 Бурулсун пришла с сайта в мужского бота (кнопка на
+сайте одна и ведёт в мужской), тот не нашёл её ни у себя, ни у соседа и
+как любому незнакомцу дал ссылку на СВОЮ подготовительную - мужскую.
+Новичка бот отличить не может ни по имени, ни по базам; единственный, кто
+знает половину, - сам человек. Решение пользователя: первым вопросом
+незнакомцу - «ты брат или сестра», и оттуда вести в правильную сторону.
+
+Когда половина известна и без вопроса:
+  - человек ответил раньше (общая таблица user_side, один ответ на оба бота);
+  - хоть раз был студентом pro/relaxed этой базы - его пропустил устаз;
+  - хоть раз был студентом pro/relaxed у соседа - то же, но там.
+Подготовительная в обе стороны НЕ считается: запись туда никто не
+проверял, Бурулсун сутки числилась активной студенткой мужской prep.
+
+Куда вести. Своей половине - ссылка на свою подготовительную, как раньше.
+Другой половине - ссылка на ЛИЧКУ бота соседа, не на его группу (решение
+пользователя 20.09): ссылку на группу выдаёт только свой бот и только в
+личке, а ссылка на бота безопасна даже нажатой по ошибке - сосед развернёт
+чужого обратно. Перед этим, если человек по ошибке уже записан в НАШУ
+подготовительную, снимаем его у себя (иначе сосед увидит его активным у
+нас и отправит назад - пинг-понг, найден 20.09 до выкладки).
+
+Три места, где спрашиваем: холодная личка, отказ после входа с сайта,
+рассылка «вернись» тем, чья половина неизвестна. Четвёртое - кнопка «мне
+не сюда» в приветствии подготовительной (пересланная ссылка, случай Каната).
+"""
+import logging
+
+import config
+from core.bots import _connect, other_bot, other_profile, JAMAAT_IN
+from core.db import (
+    get_now, get_prep_group, ever_learning_student, other_bot_known,
+    deactivate_student, get_groups_by_type, find_by_phone,
+)
+from core.i18n import T
+from core.tg import send_message, send_message_with_buttons, ban_member, unban_member
+
+log = logging.getLogger(__name__)
+
+SIDES = ("male", "female")
+
+# Как назвать половину в приветствии подготовительной: «группа братьев».
+HALF_OF = {"male": "братьев", "female": "сестёр"}
+
+
+def half_word():
+    return HALF_OF.get(config.PROFILE, "братьев")
+
+
+def answered_side(uid):
+    """Что человек ответил сам, любому из ботов. None - не отвечал."""
+    try:
+        with _connect() as c:
+            row = c.execute("SELECT side FROM user_side WHERE user_id=?", (str(uid),)).fetchone()
+    except Exception as e:
+        log.error("user_side: не прочитался (%s)", e)
+        return None
+    return row["side"] if row and row["side"] in SIDES else None
+
+
+def remember_side(uid, side):
+    if side not in SIDES:
+        return
+    try:
+        with _connect() as c:
+            c.execute(
+                "INSERT INTO user_side(user_id, side, answered_at, via_profile) VALUES(?,?,?,?)"
+                " ON CONFLICT(user_id) DO UPDATE SET side=excluded.side,"
+                " answered_at=excluded.answered_at, via_profile=excluded.via_profile",
+                (str(uid), side, get_now().strftime("%Y-%m-%d %H:%M:%S"), config.PROFILE),
+            )
+    except Exception as e:
+        log.error("user_side: не записался (%s)", e)
+
+
+def known_side(uid):
+    """'male' / 'female' / None. Порядок: свой ответ человека, потом
+    устаз этой базы, потом устаз соседа."""
+    side = answered_side(uid)
+    if side:
+        return side
+    if ever_learning_student(uid):
+        return config.PROFILE
+    if other_bot_known(uid):
+        return other_profile()
+    return None
+
+
+def side_buttons(uid):
+    return [("Я брат", "side:male:" + str(uid)), ("Я сестра", "side:female:" + str(uid))]
+
+
+def not_here_button(uid):
+    """Одна кнопка для приветствия в подготовительной: «я сестра, мне не
+    сюда» у братьев и наоборот. uid в data - кнопка публичная, в группе,
+    bot.py принимает тап только от адресата."""
+    other = other_profile()
+    label = "Я сестра, мне не сюда" if other == "female" else "Я брат, мне не сюда"
+    return (label, "side:" + other + ":" + str(uid))
+
+
+def own_prep_link():
+    prep = get_prep_group()
+    return prep["invite_link"] if prep and prep["invite_link"] else ""
+
+
+async def offer_way_in(chat_id, uid, lang="ru"):
+    """Незнакомцу в личке: если половина известна - сразу дорога, иначе
+    вопрос. Строку users у себя не заводит (ответ живёт в общей базе)."""
+    side = known_side(uid)
+    if side == config.PROFILE:
+        await send_message(chat_id, T("dm_cold_message_explain", lang, link=own_prep_link()))
+    elif side:
+        await send_to_neighbour(chat_id, lang)
+    else:
+        await send_message_with_buttons(chat_id, T("side_question", lang), side_buttons(uid))
+
+
+async def send_to_neighbour(chat_id, lang="ru"):
+    other = other_bot()
+    if other:
+        return await send_message(chat_id, T("side_other_link", lang, jamaat=other["jamaat"], link=other["start_link"]))
+    return await send_message(chat_id, T("side_other_nolink", lang, jamaat=JAMAAT_IN[other_profile()]))
+
+
+async def _leave_own_prep(uid):
+    """Человек по ошибке уже записан активным в НАШУ подготовительную
+    (Бурулсун 19.09): снимаем у себя и убираем из чата, иначе сосед увидит
+    его активным здесь и отправит назад."""
+    for prep in get_groups_by_type("prep"):
+        s = find_by_phone(uid, prep["id"])
+        if not s:
+            continue
+        deactivate_student(s["id"], prep["id"])
+        try:
+            await ban_member(prep["chat_id"], uid)
+            await unban_member(prep["chat_id"], uid)
+        except Exception as e:
+            log.error("side: не убрал %s из подготовительной %s: %s", uid, prep["chat_id"], e)
+        log.info("side: %s снят с нашей подготовительной %s - половина другая", uid, prep["id"])
+
+
+async def handle_side_answer(uid, side, lang="ru", pressed_in=None):
+    """Тап по кнопке. uid уже сверен с нажавшим в bot.py. Ответ уходит в
+    личку. pressed_in - чат, где нажали (для кнопки в приветствии
+    подготовительной): если личка закрыта (Start не нажимал), ссылку на
+    бота соседа даём прямо там - она безопасна публично; ссылку на СВОЮ
+    группу в группе не показываем никогда (правило 02.08)."""
+    if side not in SIDES:
+        return
+    remember_side(uid, side)
+    if side == config.PROFILE:
+        link = own_prep_link()
+        if link:
+            await send_message(uid, T("side_own_link", lang, link=link))
+        else:
+            log.error("side: у подготовительной нет invite_link, дорогу дать нечем")
+        return
+    await _leave_own_prep(uid)
+    resp = await send_to_neighbour(uid, lang)
+    if pressed_in and str(pressed_in) != str(uid) and not (resp and resp.get("ok")):
+        await send_to_neighbour(pressed_in, lang)
