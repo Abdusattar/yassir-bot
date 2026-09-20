@@ -7348,6 +7348,38 @@
     if (rec.stream) { rec.stream.getTracks().forEach(function (t) { t.stop(); }); rec.stream = null; }
   }
 
+  /* Экран не должен гаснуть, пока человек читает (20.09.2026). Запись живёт
+     в памяти вкладки и становится файлом только по «Стоп»: уснул экран,
+     Telegram перезапустил вкладку - и восьми минут чтения нет. Живой случай
+     Бекхана из G-10, и те же обрывки у других детей.
+
+     Замок теряется, когда вкладка уходит в фон, поэтому берём его заново при
+     возвращении (см. слушателя ниже). Поддерживается не везде - там, где
+     API нет, молча живём как раньше. */
+  function hifzWakeOn() {
+    if (rec.wake || !navigator.wakeLock) return;
+    try {
+      navigator.wakeLock.request('screen').then(function (lock) {
+        rec.wake = lock;
+        lock.addEventListener('release', function () { rec.wake = null; });
+      }).catch(function () { rec.wake = null; });
+    } catch (e) { rec.wake = null; }
+  }
+
+  function hifzWakeOff() {
+    if (!rec.wake) return;
+    try { rec.wake.release(); } catch (e) { /* уже отпущен */ }
+    rec.wake = null;
+  }
+
+  function hifzRecActive() {
+    return !!(rec.mr && (rec.mr.state === 'recording' || rec.mr.state === 'paused'));
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && hifzRecActive()) hifzWakeOn();
+  });
+
   /* ─── Плеер своей записи (13.09.2026) ──────────────────────────────────
      Тот же, что слушает разбор устаза (#look-play и соседи - стили общие).
      До этого тут стоял системный <audio controls>: серая полоса, которая на
@@ -7399,6 +7431,7 @@
 
   function hifzRecReset() {
     if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
+    hifzWakeOff();
     // Микрофон здесь НЕ отпускаем: hifzRecReset зовётся и при "перезаписать",
     // а повторный захват - это повторный вопрос студенту.
     if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
@@ -7565,6 +7598,7 @@
       }
       rec.mr.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
       rec.mr.onstop = function () {
+        hifzWakeOff();
         rec.blob = new Blob(rec.chunks, { type: rec.chunks[0] ? rec.chunks[0].type : 'audio/webm' });
         // Дорожку здесь НЕ глушим (см. hifzRecStream): иначе "перезаписать"
         // снова вызовет вопрос про микрофон. Микрофон отпускается при
@@ -7585,6 +7619,7 @@
         hifzRecButtons('done');
       };
       rec.mr.start();
+      hifzWakeOn();             // читает долго - экран гасить нельзя
       rec.t0 = Date.now();
       rec.accMs = 0;
       rec.paused = false;
