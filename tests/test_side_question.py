@@ -287,3 +287,69 @@ def test_female_bot_wording_is_mirrored(test_db, world, wire, monkeypatch):
     assert side.half_word() == "сестёр"
     assert side.not_here_button("1")[0] == "Я брат, мне не сюда"
     assert side.not_here_button("1")[1] == "side:male:1"
+
+
+# ── Устаз отмечает половину реплаем: /сестра, /брат, /нетуда ─────────────────
+
+USTAZ = "31"
+
+
+def _ustaz_reply(word, target, chat=MALE_PREP_CHAT, sender=USTAZ):
+    asyncio.run(h.process_message(chat_id=chat, sender=sender, text=word, sender_name="Умар",
+                                  reply_to_id=target, reply_to_message_id=5))
+
+
+@pytest.fixture
+def ustaz(world, monkeypatch):
+    db.add_group_admin(db.get_group(MALE_PREP_CHAT)["id"], USTAZ)
+    monkeypatch.setattr(side, "SUPER_ADMIN_IDS", ["1"])
+
+
+def test_ustaz_sister_word_removes_and_tells_in_dm(test_db, world, wire, ustaz):
+    db.mark_dm_ok_by_phone(MISPLACED)
+    _ustaz_reply("/сестра", MISPLACED)
+    assert (MALE_PREP_CHAT, MISPLACED) in wire["kicked"]
+    assert side.known_side(MISPLACED) == "female"
+    assert db.get_learning_group(MISPLACED, include_prep=True) is None
+    dm = [t for c, t, _ in wire["sent"] if c == MISPLACED]
+    assert len(dm) == 1 and "yassir_female_bot?start=go" in dm[0] and "Устаз подсказал" in dm[0]
+    group = [t for c, t, _ in wire["sent"] if c == MALE_PREP_CHAT]
+    assert len(group) == 1 and "снят" in group[0] and "Написал в личку" in group[0]
+    assert any(c == "1" for c, _, _ in wire["sent"])     # супер-админу сказано
+
+
+def test_ustaz_word_with_closed_dm_says_nothing_to_the_person(test_db, world, wire, ustaz):
+    _ustaz_reply("/нетуда", MISPLACED)
+    assert (MALE_PREP_CHAT, MISPLACED) in wire["kicked"]
+    assert all(c != MISPLACED for c, _, _ in wire["sent"])
+    group = [t for c, t, _ in wire["sent"] if c == MALE_PREP_CHAT]
+    assert len(group) == 1 and "закрыта" in group[0]
+
+
+def test_ustaz_brother_word_confirms_own_half_without_kick(test_db, world, wire, ustaz):
+    _ustaz_reply("/брат", MISPLACED)
+    assert wire["kicked"] == []
+    assert side.known_side(MISPLACED) == "male"
+    group = [t for c, t, _ in wire["sent"] if c == MALE_PREP_CHAT]
+    assert len(group) == 1 and "половина своя" in group[0]
+
+
+def test_ustaz_word_without_reply_explains(test_db, world, wire, ustaz):
+    asyncio.run(h.process_message(chat_id=MALE_PREP_CHAT, sender=USTAZ, text="/сестра", sender_name="Умар"))
+    assert wire["kicked"] == []
+    assert "реплаем" in wire["sent"][-1][1]
+
+
+def test_non_ustaz_cannot_use_the_word(test_db, world, wire, ustaz):
+    """Не устаз (незнакомец в чате) пишет /сестра реплаем - слово не
+    работает, адресата не трогаем. (Активный студент тут не годится: его
+    самого выкинет prep-guard, и это правильно.)"""
+    _ustaz_reply("/сестра", MISPLACED, sender=STRANGER)
+    assert (MALE_PREP_CHAT, MISPLACED) not in wire["kicked"]
+    assert side.known_side(MISPLACED) is None
+
+
+def test_female_bot_words_are_mirrored(test_db, world, monkeypatch):
+    monkeypatch.setattr(config, "PROFILE", "female")
+    assert side.USTAZ_SIDE_WORDS["/брат"] == "male" != config.PROFILE      # чужой → снять
+    assert side.USTAZ_SIDE_WORDS["/сестра"] == config.PROFILE               # свой → подтвердить

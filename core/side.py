@@ -33,7 +33,9 @@ from core.bots import _connect, other_bot, other_profile, JAMAAT_IN
 from core.db import (
     get_now, get_prep_group, ever_learning_student, other_bot_known,
     deactivate_student, get_groups_by_type, find_by_phone,
+    get_dm_ok_by_phone, remove_unregistered,
 )
+from config import SUPER_ADMIN_IDS
 from core.i18n import T
 from core.tg import send_message, send_message_with_buttons, ban_member, unban_member
 
@@ -140,6 +142,65 @@ async def _leave_own_prep(uid):
         except Exception as e:
             log.error("side: не убрал %s из подготовительной %s: %s", uid, prep["chat_id"], e)
         log.info("side: %s снят с нашей подготовительной %s - половина другая", uid, prep["id"])
+
+
+# Слова устаза в реплае → половина. `/сестра` и `/брат` называют, кого
+# устаз видит (в тоне проекта: не «ты ошибся», а «это сестра»); `/нетуда` -
+# просто «другая половина». Своя половина - подтверждение, чужая - снятие.
+USTAZ_SIDE_WORDS = {"/сестра": "female", "/брат": "male", "/нетуда": None, "/notme": None}
+
+
+async def mark_side_by_ustaz(chat_id, group_info, uid, word, lang="ru"):
+    """Устаз реплаем отметил половину человека (20.09.2026, решение
+    пользователя). Возвращает текст подтверждения устазу."""
+    target = USTAZ_SIDE_WORDS.get(word)
+    if target is None:
+        target = other_profile()
+    if target == config.PROFILE:
+        remember_side(uid, target)
+        s = find_by_phone(uid, group_info["id"])
+        who = (s["name"] if s and s["name"] else "id " + str(uid))
+        log.info("side: %s подтверждён устазом как свой в %s", uid, chat_id)
+        return "✅ Принято: " + who + " — " + ("брат" if target == "male" else "сестра") + ", половина своя."
+    return await mark_not_here(chat_id, group_info, uid, lang)
+
+
+async def mark_not_here(chat_id, group_info, uid, lang="ru"):
+    """Устаз отметил, что человек с другой половины. Запоминаем половину
+    как другую, снимаем из этой группы и из наших подготовительных,
+    убираем из чата. Личка открыта - мягко пишем туда дорогу к боту
+    соседа; закрыта - не пишем никуда: после кика чат человеку недоступен,
+    строка в группе бессмысленна. Возвращает текст подтверждения устазу."""
+    other = other_profile()
+    remember_side(uid, other)
+    s = find_by_phone(uid, group_info["id"])
+    if s:
+        deactivate_student(s["id"], group_info["id"])
+    await _leave_own_prep(uid)
+    remove_unregistered(uid, chat_id)
+    try:
+        await ban_member(chat_id, uid)
+        await unban_member(chat_id, uid)
+    except Exception as e:
+        log.error("side: не убрал %s из %s по отметке устаза: %s", uid, chat_id, e)
+    who = (s["name"] if s and s["name"] else "id " + str(uid))
+    jamaat = JAMAAT_IN[other]
+    told = False
+    if get_dm_ok_by_phone(uid):
+        ob = other_bot()
+        if ob:
+            resp = await send_message(uid, T("side_moved_by_ustaz", lang, jamaat=jamaat, link=ob["start_link"]))
+        else:
+            resp = await send_message(uid, T("side_moved_by_ustaz_nolink", lang, jamaat=jamaat))
+        told = bool(resp and resp.get("ok"))
+    title = group_info["title"] or str(chat_id)
+    for ap in SUPER_ADMIN_IDS:
+        await send_message(ap, "⚠️ Устаз отметил в «" + title + "»: " + who + " (id " + str(uid)
+                           + ") - половина другая (" + jamaat + " джамаат). Снят из группы"
+                           + (", дорога к своему боту ушла в личку." if told else ", личка закрыта - написать не смог."))
+    log.info("side: %s отмечен устазом как чужой в %s (told=%s)", uid, chat_id, told)
+    return ("✅ " + who + " снят: половина другая. "
+            + ("Написал в личку, куда идти." if told else "Личка у меня с ним закрыта — сказать не смог, подскажите сами."))
 
 
 async def handle_side_answer(uid, side, lang="ru", pressed_in=None):

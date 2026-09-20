@@ -51,7 +51,7 @@ from core.bots import other_bot, other_profile, JAMAAT_IN
 from core.quran_ref import strip_quran_confirmed_words, find_unconfirmed_words
 from core.mushaf_words import advance_hifz_pointer
 from core.web_auth import claim_login_code, refuse_login_code, LOGIN_START_PREFIX
-from core.side import offer_way_in
+from core.side import offer_way_in, mark_side_by_ustaz, USTAZ_SIDE_WORDS
 
 log = logging.getLogger(__name__)
 
@@ -1418,7 +1418,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
     # ── Устаз реплаем отмечает голосовую сдачу как проверенную ─────────────────
     # (любой реплай — текст, эмодзи или свой голосовой с разбором ошибки)
-    if reply_to_message_id and is_group_admin(phone, group_id):
+    # Команды реплаем (/remove, /сестра, /брат, /нетуда) - не разбор.
+    if reply_to_message_id and is_group_admin(phone, group_id) and not (text or "").startswith("/"):
         mark_voice_reviewed(chat_id, reply_to_message_id)
         # Разбор устаза сохраняем ОТ ЛЮБОГО устаза (04.09.2026): студенту в
         # кабинете "Сдачи" нужен ответ своего устаза, а он в большинстве
@@ -1791,6 +1792,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         return
 
     # ── Студенты ──────────────────────────────────────────────────────────────
+    # Устаз реплаем отметил человека с другой половины (20.09.2026,
+    # core/side.py:mark_not_here). Единственная отметка пола, которой бот
+    # верит кроме ответа самого человека.
+    if text.lower() in USTAZ_SIDE_WORDS and is_group_admin(phone, group_id):
+        if not reply_to_id:
+            await send_message(chat_id, "Ответь реплаем на сообщение человека и напиши " + text)
+            return
+        await send_message(chat_id, await mark_side_by_ustaz(chat_id, group, str(reply_to_id), text.lower(), glang))
+        return
+
     if text == "/remove" and reply_to_id and is_group_admin(phone, group_id):
         for s in get_students(group_id):
             if s["phone"] == str(reply_to_id):
