@@ -6967,6 +6967,7 @@
      стр. 2-106 (пилот) - на прочих страницах play() получит 404 и кнопка
      сама молча выключится, ничего не обещая. */
   var HIFZ_LISTEN_PAUSE_MS = 1200;
+  var HUSARY_AUDIO_VER = 2;
   var hifzListenAudio = new Audio();
   var hifzListenTimer = null;
   var hifzListening = false;
@@ -6982,7 +6983,11 @@
 
   function hifzAudioUrl() {
     var page = ('000' + currentPage).slice(-3);
-    return 'audio/husary/page_' + page + '_' + hifzAudioSlot() + '.mp3';
+    // ?v - версия нарезки: 21.09.2026 файлы пересобраны без щелчков на
+    // краях под теми же именами, а сервер не шлёт Cache-Control - без
+    // метки телефон ещё дни играл бы старое из кэша. Пересобрали снова -
+    // поднять число.
+    return 'audio/husary/page_' + page + '_' + hifzAudioSlot() + '.mp3?v=' + HUSARY_AUDIO_VER;
   }
 
   function hifzListenButtons() {

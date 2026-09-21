@@ -219,80 +219,52 @@ def download_verse(verse_key, timings):
     return None
 
 
-def cut(src, start_ms, end_ms, dest):
-    cmd = [FFMPEG, "-y", "-loglevel", "error",
-           "-ss", f"{start_ms / 1000:.3f}", "-to", f"{end_ms / 1000:.3f}",
-           "-i", src, "-acodec", "copy", dest]
-    return subprocess.run(cmd, capture_output=True).returncode == 0
+# Край каждого отрезка - плавный вход/выход. Резка копированием (-acodec
+# copy, до 21.09.2026) шла по границе mp3-кадра посреди волны, и на стыках
+# слышалось «кыйч»: замер скачка - 1394 против 238 в обычном месте записи.
+FADE_SEC = 0.012
+BITRATE = "128k"   # как у исходников Husary Muallim (128 кбит/с, 44.1 кГц)
 
 
-def concat(parts, dest):
-    if not parts:
+def build_unit(sources, dest):
+    """Собрать единицу ОДНИМ проходом ffmpeg (21.09.2026).
+
+    sources - список (путь_к_mp3_аята, start_ms, end_ms) по порядку чтения.
+    Каждый отрезок вырезается точно по отсчётам (atrim после декодирования,
+    а не по кадрам mp3), на краях - FADE_SEC, потом concat и одно
+    кодирование. Пишем во временный файл рядом и переименовываем только при
+    успехе: обрыв не оставит битый файл под готовым именем."""
+    if not sources:
         return False
-    if len(parts) == 1:
-        shutil.copy(parts[0], dest)
-        return True
-    list_file = dest + ".txt"
-    try:
-        with open(list_file, "w", encoding="utf-8") as f:
-            for p in parts:
-                f.write(f"file '{os.path.abspath(p)}'\n")
-        cmd = [FFMPEG, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
-               "-i", list_file, "-acodec", "copy", dest]
-        return subprocess.run(cmd, capture_output=True).returncode == 0
-    finally:
-        if os.path.exists(list_file):
-            os.remove(list_file)
+    cmd = [FFMPEG, "-y", "-loglevel", "error"]
+    for path, _, _ in sources:
+        cmd += ["-i", path]
+    chains, labels = [], []
+    for i, (_, start_ms, end_ms) in enumerate(sources):
+        dur = max(0.0, (end_ms - start_ms) / 1000)
+        fade = min(FADE_SEC, dur / 4)
+        chains.append(
+            f"[{i}:a]atrim=start={start_ms / 1000:.3f}:end={end_ms / 1000:.3f},"
+            f"asetpts=PTS-STARTPTS,"
+            f"afade=t=in:st=0:d={fade:.3f},"
+            f"afade=t=out:st={max(0.0, dur - fade):.3f}:d={fade:.3f}[a{i}]")
+        labels.append(f"[a{i}]")
+    graph = ";".join(chains) + ";" + "".join(labels) + f"concat=n={len(sources)}:v=0:a=1[out]"
+    tmp = dest[:-4] + ".tmp.mp3"   # ffmpeg берёт формат по расширению
+    cmd += ["-filter_complex", graph, "-map", "[out]",
+            "-c:a", "libmp3lame", "-b:a", BITRATE, "-ar", "44100", tmp]
+    ok = subprocess.run(cmd, capture_output=True).returncode == 0
+    if ok:
+        os.replace(tmp, dest)
+    elif os.path.exists(tmp):
+        os.remove(tmp)
+    return ok
 
 
 # ── Сборка одной строки/перехода в список (verse_key, start_ms, end_ms) ──
 
-def line_word_segments(page_number, line_idx, timings_cache):
-    """Токены строки, разбитые на подряд идущие по одному аяту куски —
-    каждый кусок физически лежит в СВОЁМ mp3 (аят), резать общий диапазон
-    по всей строке нельзя, если она пересекает границу аята."""
-    lines = text_lines(page_number)
-    line = lines[line_idx]
-    out = []
-    for t in line.get("tokens") or []:
-        if t.get("type") != "word":
-            continue
-        vk = f"{t['surah']}:{t['ayah']}"
-        timings = timings_cache.setdefault(t["surah"], fetch_chapter_timings(t["surah"]))
-        seg = word_segment_ms(vk, t["position"], timings)
-        if not seg:
-            continue
-        start_ms, end_ms = seg
-        if out and out[-1][0] == vk:
-            out[-1] = (vk, out[-1][1], end_ms)  # тот же аят - расширяем диапазон
-        else:
-            out.append((vk, start_ms, end_ms))
-    return out
-
-
-def tail_word_segments(page_number, line_idx, timings_cache):
-    next_line, foreign, count = tail_tokens(page_number, line_idx)
-    if not count or not next_line:
-        return []
-    toks = (next_line.get("tokens") or [])[:count]
-    out = []
-    for t in toks:
-        if t.get("type") != "word":
-            continue
-        vk = f"{t['surah']}:{t['ayah']}"
-        timings = timings_cache.setdefault(t["surah"], fetch_chapter_timings(t["surah"]))
-        seg = word_segment_ms(vk, t["position"], timings)
-        if not seg:
-            continue
-        start_ms, end_ms = seg
-        if out and out[-1][0] == vk:
-            out[-1] = (vk, out[-1][1], end_ms)
-        else:
-            out.append((vk, start_ms, end_ms))
-    return out
-
-
-def unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=False):
+def unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=False,
+                       tail_apart=False):
     """Токены НЕСКОЛЬКИХ строк подряд, слитые в один список (verse_key,
     start_ms, end_ms) - соседние токены ОДНОГО аята объединяются в общий
     непрерывный отрезок ДАЖЕ через границу строки.
@@ -317,7 +289,7 @@ def unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=
         if not seg:
             return
         start_ms, end_ms = seg
-        if out and out[-1][0] == vk:
+        if out and out[-1] is not None and out[-1][0] == vk:
             out[-1] = (vk, out[-1][1], end_ms)
         else:
             out.append((vk, start_ms, end_ms))
@@ -329,19 +301,26 @@ def unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=
 
     if tail_from_last:
         next_line, foreign, count = tail_tokens(page_number, line_indices[-1])
+        # tail_apart - переходное слово отдельным отрезком, даже если оно из
+        # того же аята. У строки так было всегда: Хусари-Muallim после
+        # отрывка молчит, давая ученику повторить (стр. 5, строка 0: конец
+        # строки 11.9 с, переходное слово с 20.9 с), и слитый отрезок
+        # захватил бы эти девять секунд тишины (поймано 21.09.2026).
+        if tail_apart:
+            out.append(None)
         if count and next_line:
             for t in (next_line.get("tokens") or [])[:count]:
                 if t.get("type") == "word":
                     add_token(t)
 
-    return out
+    return [x for x in out if x is not None]
 
 
 # ── Обработка страницы ────────────────────────────────────────────────
 
-def process_page(page_number, out_dir, timings_cache):
+def process_page(page_number, out_dir, timings_cache, force=False):
     full_marker = os.path.join(out_dir, f"page_{page_number:03d}_full.mp3")
-    if os.path.exists(full_marker):
+    if os.path.exists(full_marker) and not force:
         print(f"стр. {page_number}: уже готова, пропуск")
         return
     lines = text_lines(page_number)
@@ -351,104 +330,46 @@ def process_page(page_number, out_dir, timings_cache):
     n = len(lines)
     print(f"\n=== стр. {page_number} ({n} строк) ===")
 
-    tmp_dir = os.path.join(out_dir, "_tmp")
-    os.makedirs(tmp_dir, exist_ok=True)
+    def sources_of(segs):
+        """(verse_key, start_ms, end_ms) -> (путь к mp3 аята, start_ms, end_ms)."""
+        out = []
+        for vk, s, e in segs:
+            timings = next((t for t in timings_cache.values() if vk in t), {})
+            src = download_verse(vk, timings)
+            if src:
+                out.append((src, s, e))
+        return out
 
-    def cut_segments(segs, tag):
-        """Список (verse_key, start_ms, end_ms) -> список нарезанных файлов."""
-        parts = []
-        for j, (vk, s, e) in enumerate(segs):
-            timings = None
-            for chap, t in timings_cache.items():
-                if vk in t:
-                    timings = t
-                    break
-            src = download_verse(vk, timings or {})
-            if not src:
-                continue
-            dest = os.path.join(tmp_dir, f"p{page_number}_{tag}_{j}.mp3")
-            if cut(src, s, e, dest):
-                parts.append(dest)
-        return parts
+    def make(line_indices, dest, label, tail_apart=False):
+        # Пропуск пофайлово: обрыв посреди страницы не заставит пересобирать
+        # уже готовое. full - последним, он же маркер «страница готова».
+        if os.path.exists(dest) and not force:
+            return
+        if not unit_word_segments(page_number, line_indices, timings_cache):
+            # Пустые ряды (декоративная рамка стр. 1-2): файла быть не должно,
+            # иначе останется одно переходное слово из ниоткуда (02.09.2026).
+            return
+        segs = unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=True,
+                                  tail_apart=tail_apart)
+        ok = build_unit(sources_of(segs), dest)
+        print(f"  {label}: {'OK' if ok else 'ОШИБКА'}")
 
     mid = n // 2
 
     def group_slot(idx):
         return f"first_{idx}" if idx < mid else f"second_{idx - mid}"
 
-    # Каждая строка отдельно: content + свой переход. Пропуск ПОФАЙЛОВО
-    # (не только по всей странице) - их логика резки не менялась между
-    # версиями генератора, пересчитывать уже готовые незачем (реальный
-    # случай 02.09.2026: правился только шов половин/страницы целиком,
-    # пользователь спросил "зачем перезаписываешь строки, их нарезка была
-    # нормальной" - справедливо, раньше это тратило CPU впустую).
+    # Строка = её слова + переходное слово следующей строки отдельным
+    # отрезком (пауза Muallim между ними не нужна, см. unit_word_segments).
     for li in range(n):
-        out = os.path.join(out_dir, f"page_{page_number:03d}_{group_slot(li)}.mp3")
-        if os.path.exists(out):
-            continue
-        segs = line_word_segments(page_number, li, timings_cache)
-        if not segs:
-            # Пустая строка. На стр. 1-2 в печати часть рядов пуста
-            # (декоративная рамка начала Корана) - файла быть не должно:
-            # иначе останется одно переходное слово со следующей строки,
-            # и студент, нажав "Слушать", услышит слово из ниоткуда
-            # (поймано 02.09.2026 после приведения раскладки к печатной).
-            continue
-        content = cut_segments(segs, f"l{li}c")
-        tsegs = tail_word_segments(page_number, li, timings_cache)
-        trans = cut_segments(tsegs, f"l{li}t")
-        parts = content + trans
-        if not parts:
-            print(f"  строка {li}: нет сегментов")
-            continue
-        ok = concat(parts, out)
-        print(f"  строка {li} [{group_slot(li)}]: {'OK' if ok else 'ОШИБКА'}")
-
-    # Половины и страница целиком: единый список сегментов через ВСЕ их
-    # строки (unit_word_segments), не склейка уже нарезанных построчных
-    # кусочков - та давала слышимый шов на стыке строк внутри одного аята
-    # (поймано пользователем на слух 02.09.2026, см. докстрочку функции).
+        make([li], os.path.join(out_dir, f"page_{page_number:03d}_{group_slot(li)}.mp3"),
+             f"строка {li} [{group_slot(li)}]", tail_apart=True)
     for half, label in ((0, "first_half"), (1, "second_half")):
         r0, r1 = half_range(page_number, half)
-        if r0 > r1:
-            continue
-        out = os.path.join(out_dir, f"page_{page_number:03d}_{label}.mp3")
-        if os.path.exists(out):
-            continue
-        content_segs = unit_word_segments(page_number, list(range(r0, r1 + 1)), timings_cache)
-        if not content_segs:
-            continue  # половина без текста (см. комментарий про пустые строки выше)
-        segs = unit_word_segments(page_number, list(range(r0, r1 + 1)), timings_cache, tail_from_last=True)
-        parts = cut_segments(segs, label)
-        ok = concat(parts, out)
-        print(f"  {label}: {'OK' if ok else 'ОШИБКА'}")
-
-    # Страница целиком - тот же принцип.
-    segs = unit_word_segments(page_number, list(range(n)), timings_cache, tail_from_last=True)
-    parts = cut_segments(segs, "full")
-    # full.mp3 - маркер "страница полностью готова" для пропуска при
-    # повторном запуске (process_page выше). Обрыв процесса ПОСЛЕ concat,
-    # но не полностью атомарный путь мог оставить файл, который resume
-    # принял бы за готовый, хотя он битый (реальный случай 02.09.2026,
-    # стр. 89 - full.mp3 совпал по размеру с first_half.mp3, потому что
-    # процесс прервался как раз на этом шаге). Пишем во временное имя,
-    # переименовываем ТОЛЬКО при успехе - os.replace атомарен на одной
-    # файловой системе.
-    out = os.path.join(out_dir, f"page_{page_number:03d}_full.mp3")
-    # ffmpeg выбирает формат по РАСШИРЕНИЮ файла - ".mp3.building" он не
-    # узнаёт как mp3 и падает ("Unable to choose an output format"),
-    # поймано 02.09.2026 на живом прогоне (все 18 страниц пилота "full"
-    # ОШИБКА, хотя строки и половины - ОК). Держим ".mp3" у временного
-    # имени, кладём его в tmp_dir (тот и так чистится в конце функции).
-    tmp_out = os.path.join(tmp_dir, f"page_{page_number:03d}_full.mp3")
-    ok = concat(parts, tmp_out)
-    if ok:
-        os.replace(tmp_out, out)
-    elif os.path.exists(tmp_out):
-        os.remove(tmp_out)
-    print(f"  full: {'OK' if ok else 'ОШИБКА'}")
-
-    shutil.rmtree(tmp_dir, ignore_errors=True)
+        if r0 <= r1:
+            make(list(range(r0, r1 + 1)),
+                 os.path.join(out_dir, f"page_{page_number:03d}_{label}.mp3"), label)
+    make(list(range(n)), full_marker, "full")
 
 
 def parse_pages(spec):
@@ -466,6 +387,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pages", required=True, help="напр. 2-10 или 5,7,9")
     ap.add_argument("--out", default=os.path.join(DATA_DIR, "audio", "husary"))
+    ap.add_argument("--force", action="store_true",
+                    help="пересобрать и готовые файлы (перенарезка 21.09.2026)")
     args = ap.parse_args()
 
     print(f"ffmpeg: {FFMPEG}")
@@ -473,7 +396,7 @@ def main():
 
     timings_cache = {}
     for page in parse_pages(args.pages):
-        process_page(page, args.out, timings_cache)
+        process_page(page, args.out, timings_cache, force=args.force)
 
     print("\nГотово. Файлы:")
     for f in sorted(os.listdir(args.out)):
