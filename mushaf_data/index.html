@@ -7434,6 +7434,9 @@
     // нечего, и путать её с чтением студента нельзя.
     if (typeof reviewCommentMode !== 'undefined' && reviewCommentMode) return null;
     if (rec.mode === 'revision') return 'revision';
+    // Первый этап - одна строчка, секунды чтения: оборвалось - проще
+    // перечитать, чем продолжать (21.09.2026, решение пользователя).
+    if (hifz.stage === 1) return null;
     return 'hifz:' + currentPage + ':' + hifz.line + ':' + hifz.stage +
            (hifzRetakeMode ? ':retake' : '');
   }
