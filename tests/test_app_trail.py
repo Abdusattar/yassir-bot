@@ -62,3 +62,27 @@ def test_heartbeat_takes_trail_batch_and_still_works_without_body(test_db, test_
     assert _heartbeat(api.build_app, "201", {"trail": [{"e": "fix", "p": 6, "l": 3, "s": 1}]}) == 200
     rows = trail.get_trail("201")
     assert len(rows) == 1 and rows[0]["event"] == "fix" and rows[0]["page"] == 6
+
+
+def test_heartbeat_remembers_phone_timezone(test_db, test_hadiths_db, monkeypatch):
+    """Пояс телефона (21.09.2026): студент за границей сдаёт в свой вечер, а
+    по Бишкеку уже ночь. Пока только копим - настоящее IANA-имя, мусор мимо,
+    неизвестный пояс остаётся NULL (= Бишкек)."""
+    import core.db as db
+    monkeypatch.setattr(api, "validate_init_data", lambda raw, token: {"id": raw})
+    monkeypatch.setattr(api, "_tz_seen", {})
+    db.save_group("-100777", "TZ Group")
+    db.add_student("Арген", db.get_group("-100777")["id"], phone="301")
+
+    def tz_of():
+        with db.db() as c:
+            return c.execute("SELECT tz FROM users WHERE phone='301'").fetchone()["tz"]
+
+    assert _heartbeat(api.build_app, "301", None) == 200
+    assert tz_of() is None
+    assert _heartbeat(api.build_app, "301", {"tz": "Mars/Olympus"}) == 200
+    assert tz_of() is None
+    assert _heartbeat(api.build_app, "301", {"tz": "Europe/London"}) == 200
+    assert tz_of() == "Europe/London"
+    assert _heartbeat(api.build_app, "301", {"tz": "Asia/Bishkek", "trail": [{"e": "open"}]}) == 200
+    assert tz_of() == "Asia/Bishkek"

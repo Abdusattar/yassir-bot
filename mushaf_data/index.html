@@ -5002,10 +5002,21 @@
   var meRevisionRecord = false;
   var ONLINE_BADGE_MIN = 3; // меньше - не показываем совсем (решение
   // пользователя 30.08.2026 - 1-2 "онлайн" выглядит бедно, не украшает)
+  function phoneTz() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }
+    catch (e) { return ''; }
+  }
+
   function sendHeartbeat() {
     var opts = { method: 'POST' };
     var batch = null;
     if (trailBuf.length) { batch = trailBuf; trailBuf = []; opts.body = { trail: batch }; }
+    // Пояс телефона (21.09.2026): учебный день кончается в три ночи, а у
+    // студента за границей три ночи наступают не по Бишкеку. Telegram пояс
+    // боту не сообщает - знает только сам телефон. Пишется на сервере лишь
+    // при смене.
+    var tz = phoneTz();
+    if (tz) { opts.body = opts.body || {}; opts.body.tz = tz; }
     apiCall('/heartbeat', opts).then(function (res) {
       // Не дошло - вернём пачку в буфер, следующий heartbeat заберёт.
       if (batch && res.status === 0) trailBuf = batch.concat(trailBuf).slice(-200);

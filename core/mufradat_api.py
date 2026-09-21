@@ -45,7 +45,7 @@ from core.db import (
     get_profile, update_profile, revision_record_required, get_revision_recordings,
     get_revision_recording, get_rejected_revisions,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
-    remove_lesson_attendance,
+    remove_lesson_attendance, set_user_tz,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -982,6 +982,9 @@ def _online_count():
     return mine + _online_pair()
 
 
+_tz_seen = {}   # user_id -> последний пояс, уже сверенный с базой
+
+
 @with_auth
 async def handle_heartbeat(request, user_id):
     """POST - "я сейчас держу YassirApp открытым", шлётся с фронтенда
@@ -1002,6 +1005,13 @@ async def handle_heartbeat(request, user_id):
             body = None
         if isinstance(body, dict) and body.get("trail"):
             add_trail(user_id, PROFILE, body["trail"], request.headers.get("User-Agent", ""))
+        # Пояс телефона (21.09.2026): Telegram боту его не сообщает, а
+        # приложение знает. Пишем в базу только при смене - heartbeat
+        # ходит каждые 20 секунд.
+        tz = body.get("tz") if isinstance(body, dict) else None
+        if isinstance(tz, str) and _tz_seen.get(user_id) != tz:
+            set_user_tz(user_id, tz[:64])
+            _tz_seen[user_id] = tz
     admin_groups = get_admin_groups(user_id)
     # Счётчик считаем ПО ОКНУ (04.09.2026), не по всей истории: красный
     # счётчик на двери в этом проекте всегда означает долг, а хвост

@@ -462,6 +462,11 @@ def _run_migrations(c):
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
         c.execute("ALTER TABLE users ADD COLUMN dm_ok INTEGER DEFAULT 0")
+    if "tz" not in ucols:
+        # Часовой пояс телефона (21.09.2026): IANA-имя из приложения,
+        # «Europe/London». NULL - не знаем, живёт по Бишкеку. Пока только
+        # копится; учебный день по нему не считается.
+        c.execute("ALTER TABLE users ADD COLUMN tz TEXT")
     if "survey_stage" not in ucols:
         # NULL - анкета ещё не начата, 'asked_location'/'asked_age' - ждём
         # ответа на соответствующий вопрос, 'done' - оба ответа получены
@@ -4067,6 +4072,17 @@ def revision_record_required(phone, today=None):
         return False
     year = int((today or get_date())[:4])
     return year - int(row["survey_birth_year"]) <= REVISION_RECORD_MAX_AGE
+
+
+def set_user_tz(phone, tz):
+    """Пояс телефона студента (21.09.2026). Только настоящее IANA-имя - из
+    приложения может прийти что угодно. True - записано."""
+    if not tz or tz not in pytz.all_timezones_set:
+        return False
+    with db() as c:
+        cur = c.execute("UPDATE users SET tz=? WHERE phone=? AND (tz IS NULL OR tz<>?)",
+                        (tz, str(phone), tz))
+        return cur.rowcount > 0
 
 
 def set_student_birth_year(phone, year, locked=True):
