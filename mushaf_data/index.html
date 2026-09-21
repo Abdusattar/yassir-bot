@@ -790,6 +790,10 @@
     overflow-x: hidden;
     overscroll-behavior-x: none;
     touch-action: pan-y;
+    /* Перемер кегля (замер при 40px, потом настоящий) меняет высоту всего
+       листа; «якорь прокрутки» браузера при этом сам двигал место чтения.
+       Место держим сами - см. mushafScrollShare (21.09.2026). */
+    overflow-anchor: none;
     -webkit-overflow-scrolling: touch;
   }
   #ayah-text {
@@ -2974,6 +2978,49 @@
      не годится: приложение переключает экраны через style.display, и
      !important в таблице стилей перебил бы даже inline-стиль. */
   #login[hidden], #wrongbot[hidden], #dash-logout[hidden] { display: none; }
+
+  /* ─── Чтение лёжа (21.09.2026) ─────────────────────────────────────────
+     Просьба братьев: стоя экран узкий, буквы мелкие. Лёжа (класс .land
+     ставит mushafOrientationApply по MUSHAF_LAND_QUERY - телефон, не
+     планшет) колонка идёт во всю ширину, а кегль за ней (mushafMaxFont).
+     По высоте лёжа всего ~390px, поэтому хром ужат: меню внизу убрано,
+     строка страниц уехала в конец листа, шапка тоньше. Класса нет на
+     «Смысле», «Моих словах» и в заучивании - там всё как стоя.
+     Вырез камеры лёжа сбоку: без viewport-fit=cover Safari сам держит
+     страницу в безопасной зоне, env() здесь - для WebView, где это не так. */
+  #app.land #ayah-text { max-width: none; }
+  #app.land #page-wrap {
+    flex-direction: column; align-items: stretch;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  #app.land #topbar {
+    padding-top: 3px; padding-bottom: 3px;
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+  #app.land #tabbar { display: none !important; }
+  /* Строка страниц в конце листа - обычный блок под текстом. */
+  #app.land #page-wrap > #page-nav {
+    margin: 18px 0 8px; border: 1px solid var(--chrome-border);
+    border-radius: 12px; padding: 6px 10px;
+  }
+
+  /* Запись повторения лёжа - одна низкая строка вместо шторки в полэкрана:
+     время, подсказка, кнопки в ряд. Место под ней добирает hifzRecPad. */
+  #app.land #hifz-rec.rev .card {
+    max-width: none; display: flex; align-items: center; gap: 12px;
+    padding: 8px 44px 8px max(14px, env(safe-area-inset-left));
+    border-radius: 12px 12px 0 0;
+  }
+  #app.land #hifz-rec.rev .place { display: none; }
+  #app.land #hifz-rec.rev .timer { font-size: 22px; margin: 0; flex: 0 0 auto; }
+  #app.land #hifz-rec.rev .hint { flex: 1 1 0; min-width: 0; text-align: left; min-height: 0; }
+  /* Плеер не сжимается в точку на узком SE: уступает подсказка. */
+  #app.land #hifz-rec.rev .player { flex: 1 1 auto; min-width: 170px; margin: 0; }
+  #app.land #hifz-rec.rev .actions { margin: 0; flex: 0 0 auto; }
+  #app.land #hifz-rec.rev .actions button { flex: 0 0 auto; min-width: 104px; padding: 9px 12px; }
+  #app.land #hifz-rec.rev #hifz-rec-close { top: 50%; transform: translateY(-50%); }
 </style>
 </head>
 <body>
@@ -5869,6 +5916,20 @@
   // (quran-stroka, 560px колонка -> 35.4px, у них ровно 35.43px).
   var MUSHAF_MEASURE_BASE = 40;   // техническая база замера, не то, что видит студент
   var MUSHAF_MIN_FONT_SIZE = 14;
+  // Лёжа (21.09.2026, просьба братьев: «стоя экран узкий, читать трудно»)
+  // потолка по сути нет - колонка во всю ширину, и буквы идут за ней. 64 -
+  // только страховка от кривого замера. Что считается «лёжа» - mushafLandscape.
+  var MUSHAF_MAX_FONT_LAND = 64;
+  var MUSHAF_LAND_QUERY = '(orientation: landscape) and (max-height: 500px)';
+  function mushafLandscape() {
+    return !!(window.matchMedia && window.matchMedia(MUSHAF_LAND_QUERY).matches);
+  }
+  // Решает не одна ориентация, а класс .land (mushafOrientationApply):
+  // лёжа он есть только на листе чтения вне заучивания.
+  function mushafMaxFont() {
+    var app = document.getElementById('app');
+    return app && app.classList.contains('land') ? MUSHAF_MAX_FONT_LAND : MUSHAF_MAX_FONT_SIZE;
+  }
   var MUSHAF_MAX_FONT_SIZE = 34;  // чтобы на рыхлых страницах (Аль-Фатиха) текст
                                   // не раздувался на всю ширину десктопа
   var MUSHAF_FIT_SAFETY = 0.985;  // чтобы строка не упиралась в край впритык
@@ -5969,7 +6030,7 @@
     var avail = el.clientWidth;
     if (!lines || !avail) return null;
     var font = MUSHAF_MEASURE_BASE * avail / (w * mushafFitK) * MUSHAF_FIT_SAFETY;
-    font = Math.min(MUSHAF_MAX_FONT_SIZE, Math.max(MUSHAF_MIN_FONT_SIZE, font));
+    font = Math.min(mushafMaxFont(), Math.max(MUSHAF_MIN_FONT_SIZE, font));
     el.style.fontSize = font.toFixed(1) + 'px';
     return { font: font, capped: false, lines: lines, avail: avail, w: w,
              why: 'table k' + mushafFitK.toFixed(3) };
@@ -6017,9 +6078,9 @@
     if (!maxW) return null;
 
     var fitted = MUSHAF_MEASURE_BASE * (avail / maxW) * MUSHAF_FIT_SAFETY;
-    fitted = Math.min(MUSHAF_MAX_FONT_SIZE, Math.max(MUSHAF_MIN_FONT_SIZE, fitted));
+    fitted = Math.min(mushafMaxFont(), Math.max(MUSHAF_MIN_FONT_SIZE, fitted));
     var full = lines.length >= MUSHAF_FULL_PAGE_LINES;
-    var capped = full && fitted >= MUSHAF_MAX_FONT_SIZE;
+    var capped = full && fitted >= mushafMaxFont();
     if (capped && !trustCap && mushafFitTrusted) fitted = mushafFitTrusted;
     else if (full && !capped) mushafFitTrusted = fitted;
     el.style.fontSize = fitted.toFixed(1) + 'px';
@@ -6248,6 +6309,12 @@
       }
     });
     var reveal = function () {
+      // Новый лист - с начала (21.09.2026). Стоя лист почти всегда влезает
+      // целиком, и прокрутка не сбрасывалась никогда; лёжа дочитал до строки
+      // страниц внизу, нажал «›» - и следующий лист открывался сразу в конце.
+      // Тот же лист, нарисованный заново (пометки устаза), место не теряет.
+      var shown = document.getElementById('ayah-text').getAttribute('data-page');
+      if (shown !== String(data.page)) document.getElementById('page-wrap').scrollTop = 0;
       document.getElementById('ayah-text').innerHTML = html;
       // Номер листа на самом тексте - по нему mushafFitPredict берёт ширину.
       document.getElementById('ayah-text').setAttribute('data-page', data.page);
@@ -7627,7 +7694,7 @@
     hifzRecReset();
     rec.mode = null;
     hifzRecRelease();   // панель закрыта - микрофон отпущен, индикатор гаснет
-    document.getElementById('hifz-rec').classList.remove('visible');
+    document.getElementById('hifz-rec').classList.remove('visible', 'rev');
     // Свёрнутый разбор живёт только внутри этой панели: закрылась - и слушать
     // его здесь больше негде, кнопка не должна остаться висеть.
     lookStopAudio();
@@ -7962,6 +8029,7 @@
     hifzListenStop();
     hifzRecReset();
     rec.mode = 'revision';
+    document.getElementById('hifz-rec').classList.add('rev');
     // Повторение всегда начинается с начала Аль-Бакары (16.09.2026, решение
     // пользователя): открыли запись - лист сразу первый, искать его руками не
     // надо. Закладка чтения от этого не двигается (её ставит только 🔖),
@@ -8779,10 +8847,82 @@
     if (e.key === 'Enter') pageJumpInput.blur();
   });
 
+  /* Чтение лёжа (21.09.2026). Стоя строка страниц (« ‹ стр. N › 🔖) висит
+     над текстом, лёжа по высоте каждая строка на счету - она уезжает в конец
+     листа: дочитал и тут же листаешь или ставишь закладку. Узел переносится
+     целиком, обработчики остаются с ним. */
+  var mushafWasLand = null;
+  // Метка родного места строки страниц: между ней и листом стоит шапка
+  // заучивания, «перед листом» - уже не то место (поймано сравнением снимков).
+  var pageNavHome = document.createComment('page-nav');
+  document.getElementById('page-nav').parentNode.insertBefore(
+    pageNavHome, document.getElementById('page-nav'));
+  var mushafScrollShare = 0;   // где в листе был читающий, долей высоты
+  // Прокрутку, которую сделал не человек, а перестройка экрана, в «место
+  // чтения» не берём: WebKit шлёт её ДО события resize, при уже новом
+  // размере (поймано сравнением: 0.50 -> 0.33 на WebKit, в Chrome нет), и
+  // после поворота - пока идут перемеры кегля.
+  var mushafViewSize = window.innerWidth + 'x' + window.innerHeight;
+  var mushafRestoreUntil = 0;
+  pageWrap.addEventListener('scroll', function () {
+    if (window.innerWidth + 'x' + window.innerHeight !== mushafViewSize) return;
+    if (Date.now() < mushafRestoreUntil) return;
+    var span = pageWrap.scrollHeight - pageWrap.clientHeight;
+    mushafScrollShare = span > 0 ? pageWrap.scrollTop / span : 0;
+  }, { passive: true });
+
+  // Режим лёжа - только на листе чтения и вне заучивания (21.09.2026):
+  // «Смысл» листается той же строкой страниц, и уносить её в лист нельзя, а
+  // заучивание лёжа - отдельный следующий шаг. Вкладки и вход в заучивание
+  // меняют классы - за ними следит наблюдатель ниже, их код не тронут.
+  function mushafOrientationApply() {
+    var app = document.getElementById('app');
+    var view = document.getElementById('view-page');
+    var land = mushafLandscape() && view.classList.contains('active') &&
+               !app.classList.contains('hifz');
+    var nav = document.getElementById('page-nav');
+    if (land && nav.parentNode !== pageWrap) pageWrap.appendChild(nav);
+    if (!land && nav.parentNode === pageWrap) pageNavHome.parentNode.insertBefore(nav, pageNavHome.nextSibling);
+    app.classList.toggle('land', land);
+    if (land === mushafWasLand) return false;
+    mushafWasLand = land;
+    // Доверенный кегль полного листа из другой ориентации здесь чужой.
+    mushafFitTrusted = null;
+    return true;
+  }
+
   window.addEventListener('resize', function () {
+    var turned = mushafOrientationApply();
+    var share = mushafScrollShare;
+    var resized = mushafViewSize !== window.innerWidth + 'x' + window.innerHeight;
+    mushafViewSize = window.innerWidth + 'x' + window.innerHeight;
     var keys = Object.keys(cache);
     if (keys.length) mushafFitSchedule();
+    if (typeof hifzRecPad === 'function') hifzRecPad();
+    // После поворота (и любой смены размера лёжа) кегль и высота листа
+    // другие - возвращаем читающего на ту же долю листа, а не в начало.
+    // Повторно - после поздних перемеров.
+    if (turned || (resized && mushafWasLand)) {
+      var restores = [0].concat(MUSHAF_REFIT_DELAYS.map(function (ms) { return ms + 50; }));
+      mushafRestoreUntil = Date.now() + restores[restores.length - 1] + 100;
+      restores.forEach(function (ms) {
+        setTimeout(function () {
+          var span = pageWrap.scrollHeight - pageWrap.clientHeight;
+          if (span > 0) pageWrap.scrollTop = share * span;
+        }, ms);
+      });
+    }
   });
+  mushafOrientationApply();
+  if (window.MutationObserver) {
+    var landWatch = new MutationObserver(function () {
+      // Режим сменился не поворотом (вкладка, заучивание) - потолок кегля
+      // другой, лист надо перемерить.
+      if (mushafOrientationApply() && Object.keys(cache).length) mushafFitSchedule();
+    });
+    landWatch.observe(document.getElementById('app'), { attributes: true, attributeFilter: ['class'] });
+    landWatch.observe(document.getElementById('view-page'), { attributes: true, attributeFilter: ['class'] });
+  }
 
   var startPage = FIRST_PAGE;
   try {
