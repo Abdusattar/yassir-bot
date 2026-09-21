@@ -378,6 +378,29 @@ async def audio_seconds(data):
             pass
 
 
+# Начало потока записи: у webm (Chrome/Android) это заголовок EBML, у mp4
+# (Safari/iOS) - коробка ftyp. Один поток MediaRecorder - один заголовок.
+_STREAM_HEADS = (bytes.fromhex("1a45dfa3"), b"ftyp")
+
+
+def stream_heads(data):
+    """Сколько потоков записи слеплено в один файл. Больше одного - к записи
+    прилипли чужие попытки (21.09.2026: «Перезаписать» не стирал куски на
+    телефоне, и начало сдачи звучало трижды). Длина по ffprobe такое не
+    ловит: у склейки время начинается заново, и файл кажется короче."""
+    if not data:
+        return 0
+    return max(data.count(h) for h in _STREAM_HEADS)
+
+
+def _warn_glued(parts):
+    for i, part in enumerate(parts):
+        n = stream_heads(part)
+        if n > 1:
+            log.warning("запись склеена из %d потоков (кусок %d, %d байт) - "
+                        "к сдаче прилипли прежние попытки", n, i, len(part))
+
+
 async def transcode_checked_parts(parts, client_ms):
     """(ogg, ошибка) для записи из нескольких кусков (20.09.2026).
 
@@ -385,6 +408,7 @@ async def transcode_checked_parts(parts, client_ms):
     склейка, и проверяем только итог: перебирать куски по одному бесполезно,
     целым файл делает именно склейка."""
     parts = [p for p in parts if p]
+    _warn_glued(parts)
     if len(parts) <= 1:
         return await transcode_checked(parts[0] if parts else b"", client_ms)
     ogg = await transcode_parts_to_ogg(parts)
@@ -539,7 +563,9 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
                            "stage": first["hifz_stage"]},
             }
 
-    ogg, err = await transcode_checked(audio_bytes, client_ms)
+    # Список кусков - чтение прерывалось и продолжалось (20.09.2026).
+    parts = list(audio_bytes) if isinstance(audio_bytes, (list, tuple)) else [audio_bytes]
+    ogg, err = await transcode_checked_parts(parts, client_ms)
     if not ogg:
         return {"ok": False, "error": err}
     sec = await audio_seconds(ogg)

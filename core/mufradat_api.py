@@ -769,22 +769,30 @@ async def handle_hifz_submit(request, user_id):
     except Exception:
         return web.json_response({"error": "bad_form"}, status=400)
 
-    audio, image, fields = None, None, {}
+    # Кусков записи может быть несколько (audio, audio1, audio2...): чтение
+    # прервалось и продолжилось. До 21.09.2026 здесь читалось только
+    # «audio», и продолжение в сдаче 40+40 молча пропадало.
+    audio, image, fields = {}, None, {}
+    total = 0
     while True:
         part = await reader.next()
         if part is None:
             break
-        if part.name in ("audio", "image"):
+        if part.name and (part.name.startswith("audio") or part.name == "image"):
             data = await part.read(decode=False)
             if len(data) > HIFZ_MAX_UPLOAD_BYTES:
                 return web.json_response({"error": "too_big"}, status=413)
-            if part.name == "audio":
-                audio = data
-            else:
+            if part.name == "image":
                 image = data
+                continue
+            total += len(data)
+            if total > HIFZ_MAX_UPLOAD_BYTES:
+                return web.json_response({"error": "too_big"}, status=413)
+            audio[part.name] = data
         else:
             fields[part.name] = (await part.read(decode=False)).decode("utf-8", "replace")
 
+    audio = [audio[k] for k in sorted(audio, key=lambda n: (len(n), n)) if audio[k]]
     if not audio:
         return web.json_response({"error": "no_audio"}, status=400)
     try:

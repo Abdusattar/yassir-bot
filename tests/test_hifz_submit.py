@@ -239,3 +239,24 @@ def test_сдача_из_чужого_бота_говорит_прямо(test_db
     db.mark_dm_ok_by_phone("555")
     db.mark_dm_ok_by_phone("777")
     assert [r["phone"] for r in db.get_return_nudge_candidates()] == ["777"]
+
+
+def test_hifz_submit_joins_continued_reading(test_db, monkeypatch):
+    """Сдача 40+40 после обрыва приходит кусками. До 21.09.2026 сервер брал
+    только первый - продолжение молча пропадало."""
+    _setup_group()
+    db.add_student("Test Student", db.get_group("-100902")["id"], phone="999000111")
+    sent = _capture(monkeypatch)
+    joined = []
+
+    async def fake_concat(oggs):
+        joined.append(oggs)
+        return b"+".join(oggs)
+
+    monkeypatch.setattr(mb, "_concat_oggs", fake_concat)
+
+    res = asyncio.run(mb.submit_hifz_recording("999000111", [b"A", b"B"], b"PNG", 5, 2, 1))
+
+    assert res["ok"] is True
+    assert joined == [[b"OGG:A", b"OGG:B"]]
+    assert sent["voice"][0][2] == b"OGG:A+OGG:B"

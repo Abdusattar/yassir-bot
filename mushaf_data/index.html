@@ -7738,7 +7738,13 @@
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_no_mic');
       return;
     }
+    // Запись с нуля (не продолжение обрыва - у того seg > 0) начинается с
+    // чистого хранилища: что бы там ни осталось, к этой записи оно не
+    // относится. Ждём очистки, иначе она сотрёт и первый новый кусок.
+    var clean = (!rec.seg && recPlace()) ? recPartsWipe() : Promise.resolve();
     hifzRecStream().then(function (stream) {
+      return clean.then(function () { return stream; });
+    }).then(function (stream) {
       rec.chunks = [];
       // Формат не навязываем: Chrome/Android даёт webm/opus, Safari/iOS —
       // mp4/aac. Оба приводит к ogg сервер (ffmpeg), Telegram принимает
@@ -7849,8 +7855,10 @@
       var fd = new FormData();
       // Куски прерванного чтения (20.09.2026) - сервер сошьёт их в одну
       // запись; одиночная сдача уходит как раньше.
+      // Один сегмент - это ровно запись в плеере, её и шлём: так на сервер
+      // не попадёт ничего, кроме того, что студент сейчас слышал.
       var segs = rec.saved.length ? recSegments(rec.saved) : [];
-      if (segs.length) {
+      if (segs.length > 1) {
         segs.forEach(function (b, i) { fd.append(i ? 'audio' + i : 'audio', b, 'rec' + i); });
       } else {
         fd.append('audio', rec.blob, 'rec');
@@ -8022,7 +8030,7 @@
     // Сегментов бывает несколько - чтение прерывалось и продолжалось. Сервер
     // сошьёт их в одно голосовое (20.09.2026).
     var segs = rec.saved.length ? recSegments(rec.saved) : [];
-    if (segs.length && rec.blob) {
+    if (segs.length > 1 && rec.blob) {
       // Последний сегмент уже лежит в хранилище целиком - берём оттуда,
       // чтобы не отправить его дважды.
       segs.forEach(function (b, i) { fd.append(i ? 'audio' + i : 'audio', b, 'rec' + i); });
@@ -8095,6 +8103,10 @@
     else if (id === 'hifz-rec-continue') recResume();
     else if (id === 'hifz-rec-fresh') recFresh();
     else if (id === 'hifz-rec-again') { hifzRecReset();
+      // Прежняя попытка лежит на телефоне кусками - её надо стереть, иначе
+      // она уйдёт вместе с новой (21.09.2026: у пользователя начало сдачи
+      // прозвучало трижды - два «Перезаписать» и третья попытка).
+      if (recPlace()) recPartsWipe();
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_idle');
       hifzRecButtons('idle'); }
     else if (id === 'hifz-rec-send') { if (reviewCommentMode) reviewCommentSend(); else hifzRecSend(); }

@@ -99,3 +99,19 @@ def test_checked_parts_accept_a_full_join():
     ogg, err = asyncio.run(mb.transcode_checked_parts(parts, client_ms=4000))
 
     assert ogg and err is None
+
+
+def test_stream_heads_counts_glued_attempts(caplog):
+    """21.09.2026: «Перезаписать» не стирал куски на телефоне, и прежние
+    попытки уходили вместе с новой - начало сдачи звучало трижды. Длина по
+    ffprobe этого не видит (у склейки время начинается заново), а заголовки
+    потоков видно: у одной записи он один."""
+    one = _tone(2)
+    glued = _tone(1) + _tone(1, freq=660) + one
+
+    assert mb.stream_heads(one) == 1
+    assert mb.stream_heads(glued) == 3
+    assert mb.stream_heads(b"") == 0
+
+    asyncio.run(mb.transcode_checked_parts([glued], client_ms=2000))
+    assert "склеена из 3 потоков" in caplog.text
