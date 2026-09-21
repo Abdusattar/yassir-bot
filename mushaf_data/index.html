@@ -2989,8 +2989,11 @@
      Вырез камеры лёжа сбоку: без viewport-fit=cover Safari сам держит
      страницу в безопасной зоне, env() здесь - для WebView, где это не так. */
   #app.land #ayah-text { max-width: none; }
+  /* justify-content с центра на начало: в колонке «по центру» лист выше
+     экрана вылезал ВВЕРХ, за край, куда прокрутка не достаёт, - верх листа
+     срезало «потолком» (пользователь со своего Android, 21.09.2026). */
   #app.land #page-wrap {
-    flex-direction: column; align-items: stretch;
+    flex-direction: column; align-items: stretch; justify-content: flex-start;
     padding-left: max(12px, env(safe-area-inset-left));
     padding-right: max(12px, env(safe-area-inset-right));
   }
@@ -3000,6 +3003,14 @@
     padding-right: max(10px, env(safe-area-inset-right));
   }
   #app.land #tabbar { display: none !important; }
+  /* Прокрутка лёжа встаёт на границу строки (21.09.2026, пользователь со
+     своего телефона: верхняя строка срезана наполовину). Строка лёжа ~100px,
+     остановка посреди неё - строку не прочесть; теперь сверху всегда целая
+     строка: название суры, басмала или строка мусхафа. Строка страниц в
+     конце - своя точка, чтобы до неё можно было докрутить. */
+  #app.land #page-wrap { scroll-snap-type: y mandatory; }
+  #app.land #ayah-text > * { scroll-snap-align: start; }
+  #app.land #page-wrap > #page-nav { scroll-snap-align: end; }
   /* Строка страниц в конце листа - обычный блок под текстом. */
   #app.land #page-wrap > #page-nav {
     margin: 18px 0 8px; border: 1px solid var(--chrome-border);

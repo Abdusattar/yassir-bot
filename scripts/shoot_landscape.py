@@ -81,6 +81,10 @@ MEASURE = """() => {
     col: el.clientWidth, land: app.classList.contains('land'),
     nav_in_page: nav.parentNode === wrap,
     tabbar: tab.offsetHeight, read_h: wrap.clientHeight, top: wrap.scrollTop,
+    // Верх листа за краем: первый блок выше области чтения при прокрутке 0
+    // (так лёжа срезало верх - «потолок», 21.09.2026).
+    cut_top: wrap.scrollTop === 0 && el.firstElementChild ?
+      Math.round(wrap.getBoundingClientRect().top - el.firstElementChild.getBoundingClientRect().top) : 0,
     page: el.getAttribute('data-page'),
     doc_overflow_x: document.documentElement.scrollWidth - document.documentElement.clientWidth
   };
@@ -225,10 +229,12 @@ def main():
                     if m and scene == "turn" and (m["page"] != str(PAGE + 1) or m["top"] > 0):
                         problems.append(f"{engine} turn {size[0]}: лист {m['page']}, прокрутка {m['top']}")
                     if m and scene in ("mushaf", "mush_end", "turn", "rev_rec"):
-                        extra = (f"  лист {m['page']} сверху {m['top']} кегль {m['font']} "
+                        extra = (f"  лист {m['page']} сверху {m['top']} срез {m['cut_top']} кегль {m['font']} "
                                  f"колонка {m['col']} вылезло {m['over_px']}px "
                                  f"высота чтения {m['read_h']} меню {m['tabbar']} "
                                  f"стр.в конце {m['nav_in_page']} бок.скролл {m['doc_overflow_x']}")
+                        if m["cut_top"] > 0:
+                            problems.append(f"{engine} {scene} {size[0]}: верх листа срезан на {m['cut_top']}px")
                         if m["over_px"] > 1 or m["doc_overflow_x"] > 0:
                             problems.append(f"{engine} {scene} {size[0]}: вылезает {m}")
                     print(f"  {scene:<9} {size[0]:<8} {tag}{extra}")
