@@ -128,6 +128,13 @@ def invite_buttons():
 
 
 async def send_invite_menu(chat_id, lang="ru"):
+    # Есть общий бот (22.09.2026) - ссылка одна, выбирать «брату/сестре»
+    # незачем: @YassirAppBot спросит новичка сам.
+    from core.bots import app_invite_link
+    link = app_invite_link()
+    if link:
+        await send_message(chat_id, T("invite_forward_one", lang, link=link))
+        return
     await send_message_with_buttons(chat_id, T("invite_menu", lang), invite_buttons())
 
 

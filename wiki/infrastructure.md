@@ -138,6 +138,10 @@ Bot API как `chat_id`.
 - сертификат один на три имени: `certbot --nginx -d yassir.ddns.net
   -d yassirilm.com -d www.yassirilm.com --expand`;
 - `MUSHAF_URL=https://yassirilm.com/` в `.env` и `.env.female`.
+- `TELEGRAM_TOKEN_APP=...` — токен общего бота @YassirAppBot (22.09.2026,
+  `core/app_bot.py`). Только в `.env` МУЖСКОГО бота: у Telegram один
+  слушатель на токен, два процесса на одном токене теряли бы сообщения.
+  В `.env.female` его быть не должно.
 
 Старый адрес продолжает работать — ничего не ломается, переезд постепенный.
 

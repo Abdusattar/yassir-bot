@@ -76,7 +76,7 @@ from core.web_auth import (
     new_login_code, take_session_for_code, poll_login_code, login_code_profile,
     resolve_session, revoke_session, LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
 )
-from core.bots import other_bot, other_profile, JAMAAT_IN
+from core.bots import other_bot, other_profile, JAMAAT_IN, app_bot_username
 
 log = logging.getLogger(__name__)
 
@@ -841,7 +841,7 @@ async def handle_invite_links(request, user_id):
     Тот же смысл, что у команды /invite в личке; в приложении она нужна
     потому, что кнопка меню в чате занята самим приложением."""
     from core.tg import get_dm_start_link
-    from core.bots import other_bot, other_profile
+    from core.bots import other_bot, other_profile, app_invite_link
 
     own = await get_dm_start_link()
     other = other_bot()
@@ -849,6 +849,10 @@ async def handle_invite_links(request, user_id):
     if other:
         links[other_profile()] = other["start_link"]
     return web.json_response({
+        # Одна ссылка на обе половины (22.09.2026): @YassirAppBot спросит
+        # новичка сам. Приложение показывает её вместо двух кнопок, а пока
+        # общего бота нет - старые две.
+        "app": app_invite_link(),
         "male": links.get("male"),
         "female": links.get("female"),
     })
@@ -2138,7 +2142,10 @@ async def handle_auth_start(request):
     """POST - браузер просит код. В ответ ссылка в бота: человек нажимает
     «Начать», бот узнаёт его по Telegram ID и подтверждает (см.
     core/handlers.py). Ни телефона, ни SMS."""
-    username = get_bot_username()
+    # Общая дверь (22.09.2026): ссылка ведёт в @YassirAppBot - он найдёт
+    # человека в обеих базах и подтвердит код для ЕГО половины. Нет общего
+    # бота (токен не задан) - вход идёт через свой бот, как до 22.09.
+    username = app_bot_username() or get_bot_username()
     if not username:
         # Ссылку собрать не из чего. Бывает только до первого успешного getMe.
         return web.json_response({"error": "bot_unknown"}, status=503)

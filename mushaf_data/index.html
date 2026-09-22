@@ -1314,6 +1314,7 @@
   #sett .s-hint.bad { color: var(--no); }
   #sett .s-hint.ok { color: var(--accent); }
   #sett .s-seg { display: flex; gap: 6px; }
+  #sett .s-seg[hidden] { display: none; }
   #sett .s-seg button {
     flex: 1; font: inherit; font-size: 13px; padding: 10px 4px;
     border-radius: 12px; cursor: pointer;
@@ -3423,6 +3424,12 @@
       <button type="button" id="invite-male" data-i18n="invite_brother">Брату</button>
       <button type="button" id="invite-female" data-i18n="invite_sister">Сестре</button>
     </div>
+    <!-- Одна ссылка на @YassirAppBot (22.09.2026): он сам спросит новичка,
+         брат он или сестра. Показывается вместо двух кнопок, когда сервер
+         отдал inviteLinks.app. -->
+    <div class="s-seg" id="invite-one" hidden>
+      <button type="button" id="invite-app" data-i18n="invite_send">Отправить ссылку</button>
+    </div>
   </div>
 
   <div class="s-card">
@@ -4482,6 +4489,8 @@
       invite_call: 'Позвать друга',
       invite_who: 'Кому отправишь ссылку?',
       invite_brother: 'Брату',
+      invite_send: 'Отправить ссылку',
+      invite_one_hint: 'Ссылка одна для братьев и сестёр — бот сам спросит, куда направить.',
       invite_sister: 'Сестре',
       invite_ready: 'Ссылка скопирована — отправь её другу',
       invite_none: 'Ссылка пока не готова, попробуй позже',
@@ -5131,7 +5140,6 @@
     // Ссылки для «позвать друга» тянем здесь, а не на дашборде: на главном
     // экране этого действия больше нет (20.09.2026).
     inviteLoad();
-    inviteSay(T('invite_who'));
   }
   function settClose() { settBox.classList.remove('on'); }
 
@@ -10570,9 +10578,19 @@
     if (el) el.textContent = text;
   }
 
+  function inviteApply() {
+    var one = !!(inviteLinks && inviteLinks.app);
+    document.getElementById('invite-pick').hidden = one;
+    document.getElementById('invite-one').hidden = !one;
+    inviteSay(T(one ? 'invite_one_hint' : 'invite_who'));
+  }
+
   function inviteLoad() {
-    if (inviteLinks) return;
-    withAuthCheck(apiCall('/invite'), function (d) { inviteLinks = d || {}; });
+    if (inviteLinks) { inviteApply(); return; }
+    withAuthCheck(apiCall('/invite'), function (d) {
+      inviteLinks = d || {};
+      inviteApply();
+    });
   }
 
   function inviteShare(side) {
@@ -10594,6 +10612,7 @@
     }
   }
 
+  document.getElementById('invite-app').addEventListener('click', function () { inviteShare('app'); });
   document.getElementById('invite-male').addEventListener('click', function () { inviteShare('male'); });
   document.getElementById('invite-female').addEventListener('click', function () { inviteShare('female'); });
   document.getElementById('learn-zoom').addEventListener('click', function () {

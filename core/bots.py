@@ -109,3 +109,45 @@ def other_bot():
         "app_link": row["app_link"] or chat_link,
         "jamaat": JAMAAT_IN[other_profile()],
     }
+
+
+# ── Общий бот @YassirAppBot (22.09.2026, core/app_bot.py) ───────────────────
+# Лежит в той же таблице под профилем "app": его слушает мужской процесс, а
+# ссылку на него (вход с сайта, «позвать друга») собирают оба.
+APP_PROFILE = "app"
+
+
+def register_app(username):
+    username = (username or "").lstrip("@")
+    if not username:
+        return
+    try:
+        with _connect() as c:
+            c.execute(
+                "INSERT INTO bot_registry(profile, username, app_link, updated_at)"
+                " VALUES(?,?,'',?)"
+                " ON CONFLICT(profile) DO UPDATE SET username=excluded.username,"
+                " updated_at=excluded.updated_at",
+                (APP_PROFILE, username, get_now().strftime("%Y-%m-%d %H:%M:%S")),
+            )
+    except sqlite3.Error as e:
+        log.error("bot_registry: общий бот не записался (%s)", e)
+
+
+def app_bot_username():
+    """Имя общего бота или "" - если он ни разу не запускался (нет токена)."""
+    if not os.path.exists(str(sampler.HADITHS_DB)):
+        return ""
+    try:
+        with _connect() as c:
+            row = c.execute("SELECT username FROM bot_registry WHERE profile=?",
+                            (APP_PROFILE,)).fetchone()
+    except sqlite3.Error as e:
+        log.error("bot_registry: общий бот не прочитался (%s)", e)
+        return ""
+    return (row["username"] or "") if row else ""
+
+
+def app_invite_link():
+    name = app_bot_username()
+    return ("https://t.me/" + name + "?start=go") if name else None
