@@ -3429,6 +3429,11 @@
          отдал inviteLinks.app. -->
     <div class="s-seg" id="invite-one" hidden>
       <button type="button" id="invite-app" data-i18n="invite_send">Отправить ссылку</button>
+      <!-- Переписка бывает не в Telegram (22.09.2026, вопрос пользователя):
+           телеграмное окно «кому» WhatsApp не показывает, а скопированный
+           текст вставляется куда угодно. Сам Telegram другу всё равно
+           нужен - ссылка t.me, - но доставить её можно чем угодно. -->
+      <button type="button" id="invite-copy" data-i18n="invite_copy">Скопировать</button>
     </div>
   </div>
 
@@ -4490,6 +4495,7 @@
       invite_who: 'Кому отправишь ссылку?',
       invite_brother: 'Брату',
       invite_send: 'Отправить ссылку',
+      invite_copy: 'Скопировать',
       invite_one_hint: 'Ссылка одна для братьев и сестёр — бот сам спросит, куда направить.',
       invite_sister: 'Сестре',
       invite_ready: 'Ссылка скопирована — отправь её другу',
@@ -10593,6 +10599,32 @@
     });
   }
 
+  function inviteCopy(side) {
+    var link = inviteLinks && inviteLinks[side || 'app'];
+    if (!link) { inviteSay(T('invite_none')); return; }
+    var full = T('invite_text', { L: link });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(full).then(function () { inviteSay(T('invite_ready')); },
+                                               function () { inviteSay(full); });
+      return;
+    }
+    // Старый iOS без clipboard API: временное поле и execCommand. Не вышло -
+    // показываем текст целиком, его можно выделить пальцем.
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = full;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:absolute;left:-9999px;top:0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      inviteSay(ok ? T('invite_ready') : full);
+    } catch (e) {
+      inviteSay(full);
+    }
+  }
+
   function inviteShare(side) {
     var link = inviteLinks && inviteLinks[side];
     if (!link) { inviteSay(T('invite_none')); return; }
@@ -10603,16 +10635,11 @@
                              '&text=' + encodeURIComponent(text));
       return;
     }
-    var full = T('invite_text', { L: link });
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(full).then(function () { inviteSay(T('invite_ready')); },
-                                               function () { inviteSay(full); });
-    } else {
-      inviteSay(full);
-    }
+    inviteCopy(side);
   }
 
   document.getElementById('invite-app').addEventListener('click', function () { inviteShare('app'); });
+  document.getElementById('invite-copy').addEventListener('click', function () { inviteCopy('app'); });
   document.getElementById('invite-male').addEventListener('click', function () { inviteShare('male'); });
   document.getElementById('invite-female').addEventListener('click', function () { inviteShare('female'); });
   document.getElementById('learn-zoom').addEventListener('click', function () {
