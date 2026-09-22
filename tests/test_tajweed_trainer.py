@@ -1,5 +1,5 @@
 """Тренажёр таджвида (14.09.2026): колода только из опубликованных уроков,
-буквы идут равномерно, восемь вариантов из всех 17 мест выхода, норма 4 буквы
+буквы идут равномерно, OPTIONS (четыре) варианта из всех 17 мест выхода, норма 4 буквы
 засчитывает задание «j»; группе без таджвида тренажёр не виден.
 
 С 20.09.2026 карточки идут ЛЕНТОЙ: экрана «Заход окончен» с кнопкой «Ещё
@@ -88,11 +88,11 @@ def test_deck_only_from_published_lessons(test_db):
     assert glyphs == set("ءهعحغخفبموقك")
 
 
-def test_options_are_eight_real_places_with_the_right_one():
+def test_options_are_four_real_places_with_the_right_one():
     ids = {m["id"] for m in tt.MAKHARIJ}
     for card in tt.CARDS:
         opts = tt._options(card)
-        assert len(opts) == 8 and len(set(opts)) == 8
+        assert len(opts) == tt.OPTIONS == 4 and len(set(opts)) == 4
         assert card["makhraj"] in opts and set(opts) <= ids
         assert opts == sorted(opts, key=tt._ORDER.get)      # от горла к губам
 
@@ -164,7 +164,7 @@ def test_four_letters_credit_tajweed_once_and_tell_the_group(test_db, monkeypatc
     _female_like_base()
 
     status, data = _call("GET", "/api/muf/tajweed", "777")
-    assert status == 200 and len(data["options"]) == 8
+    assert status == 200 and len(data["options"]) == 4
     assert data["task"] == {"done": False}
     for _ in range(4):
         card = data["card"]["id"]
