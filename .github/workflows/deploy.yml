@@ -58,6 +58,27 @@ jobs:
               cp ~/yassir-bot/mushaf_data/$f /var/www/yassir-app/$f
             done
             sudo systemctl restart yassir-bot
+            # Женский бот - в том же деплое (23.09.2026). Раньше его
+            # перезапускали руками, и однажды он неделю крутил код от 26.07:
+            # файлы на диске общие (одна директория), а Python читает модули
+            # только при старте. Пользовательский сервис, поэтому через
+            # sudo -u stursunkul и его XDG_RUNTIME_DIR - системный systemctl
+            # его не видит (см. wiki/infrastructure.md).
+            sudo -u stursunkul XDG_RUNTIME_DIR=/run/user/$(id -u stursunkul) \
+              systemctl --user restart yassir-bot-female.service
+            # Проверка, что оба ДЕЙСТВИТЕЛЬНО поднялись. is-active мало:
+            # сервис с Restart=always успевает отрапортовать active и упасть
+            # снова. Спрашиваем сам процесс - его HTTP-порт открывается
+            # только после успешного getMe и инициализации базы (bot.py).
+            # Раньше женский невольно работал канарейкой (плохой коммит
+            # ломал сперва одну половину); теперь вместо канарейки - эта
+            # проверка: не ответили оба - деплой падает красным, а не молчит.
+            sleep 12
+            curl -fsS -m 5 localhost:8081/api/muf/version > /dev/null \
+              || { echo "МУЖСКОЙ бот не отвечает после рестарта"; exit 1; }
+            curl -fsS -m 5 localhost:8082/api/muf/version > /dev/null \
+              || { echo "ЖЕНСКИЙ бот не отвечает после рестарта"; exit 1; }
+            echo "Оба бота живы"
             # Печатаем реальный HEAD - в логе Actions сразу видно, что
             # выкатилось, без похода на сервер.
             git -C ~/yassir-bot log --oneline -1
