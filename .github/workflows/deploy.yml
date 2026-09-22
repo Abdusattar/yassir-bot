@@ -64,8 +64,17 @@ jobs:
             # только при старте. Пользовательский сервис, поэтому через
             # sudo -u stursunkul и его XDG_RUNTIME_DIR - системный systemctl
             # его не видит (см. wiki/infrastructure.md).
-            sudo -u stursunkul XDG_RUNTIME_DIR=/run/user/$(id -u stursunkul) \
-              systemctl --user restart yassir-bot-female.service
+            # sudo тут НЕ нужен и не разрешён: деплой ходит на сервер
+            # ровно этим пользователем, а его sudoers пускает только
+            # `systemctl restart yassir-bot` (поймано первым же прогоном,
+            # 23.09.2026). Из других учёток - через sudo -u stursunkul.
+            if [ "$(id -un)" = "stursunkul" ]; then
+              XDG_RUNTIME_DIR=/run/user/$(id -u) \
+                systemctl --user restart yassir-bot-female.service
+            else
+              sudo -u stursunkul XDG_RUNTIME_DIR=/run/user/$(id -u stursunkul) \
+                systemctl --user restart yassir-bot-female.service
+            fi
             # Проверка, что оба ДЕЙСТВИТЕЛЬНО поднялись. is-active мало:
             # сервис с Restart=always успевает отрапортовать active и упасть
             # снова. Спрашиваем сам процесс - его HTTP-порт открывается
