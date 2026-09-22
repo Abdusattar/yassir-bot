@@ -289,3 +289,30 @@ def test_app_answer_too_early_is_refused(test_db, monkeypatch):
 
     assert _api("/api/muf/prep/juz", "555", {"knows": False})[0] == 409
     assert prep._get_prep_row("555") is not None
+
+
+def test_second_prep_stint_does_not_reuse_old_answer(test_db, monkeypatch):
+    """Живой случай 22.09.2026 - Шиваза Арафат: в августе Н-1 подтверждён,
+    11.09 кикнут из группы за пропуски, 13.09 снова в подготовительной.
+    Ответ первого захода не должен действовать во втором: нового вопроса бы
+    не задали, а после 5 дней увело бы в Н-1 без Умар устаза."""
+    g = _setup_prep_group()
+    n1 = _setup_n1_group()
+    db.add_student("Шиваза", g["id"], phone="p7")
+    st = db.find_by_phone("p7", g["id"])
+    # августовский заход: ответ записан датой того входа
+    db.add_bonus(st["id"], g["id"], "2026-08-10", 0, "prep_juz_answer",
+                 subcategory="N-1", note=str(n1["id"]))
+    monkeypatch.setattr(prep, "count_report_days_since", lambda *a: prep.PREP_MIN_DAYS)
+    sent = _capture(monkeypatch)
+
+    # второй заход (вход сегодня): вопрос заново, а не выпуск по старому ответу
+    assert prep.graduation_question("p7") == {"ask": True, "days": prep.PREP_MIN_DAYS}
+    asyncio.run(prep.check_prep_students())
+    assert prep._get_prep_row("p7") is not None
+    assert _group_of("p7") is None
+
+    # и ответить можно - защита от двойного тапа не путает заходы
+    asyncio.run(prep.handle_juz_answer("p7", True))
+    assert prep.graduation_question("p7") == {"pending": True}
+    assert any(x[0] == "btn" and x[1] == prep._PREP_GRADUATE_ADMIN_ID for x in sent)

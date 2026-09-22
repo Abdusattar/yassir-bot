@@ -151,12 +151,12 @@ async def check_prep_students():
         elapsed = s["elapsed"] or 0
 
         if days_done >= PREP_MIN_DAYS:
-            if not _has_prep_offer(s["id"], group_id):
+            if not _has_prep_offer(s["id"], group_id, joined):
                 # Объявление в группу — один раз (мотивация остальным)
                 add_bonus(s["id"], group_id, joined, 0, "prep_offer")
                 await send_message(s["chat_id"], T("prep_success_group", glang, name=s["name"], days=days_done))
 
-            answer = _get_juz_answer(s["id"], group_id)
+            answer = _get_juz_answer(s["id"], group_id, joined)
             today = get_date()
             if not answer:
                 # Вопрос студенту в личку про джуз — повторяем КАЖДУЮ проверку,
@@ -470,7 +470,7 @@ async def remind_ustaz_about_graduate(phone):
     if days_done < PREP_MIN_DAYS:
         return None
     glang = row["lang"] or "ru"
-    answer = _get_juz_answer(row["uid"], row["gid"])
+    answer = _get_juz_answer(row["uid"], row["gid"], row["joined_date"])
     if answer and answer[0] == "pending_confirm":
         return None   # ждём Умар устаза - торопить некого
     if answer:
@@ -569,7 +569,7 @@ def graduation_question(phone):
     days_done = count_report_days_since(row["uid"], row["gid"], row["joined_date"])
     if days_done < PREP_MIN_DAYS:
         return None
-    answer = _get_juz_answer(row["uid"], row["gid"])
+    answer = _get_juz_answer(row["uid"], row["gid"], row["joined_date"])
     if not answer:
         return {"ask": True, "days": days_done}
     if answer[0] == "pending_confirm":
@@ -588,7 +588,7 @@ async def handle_juz_answer(phone, knows_juz):
     row = _get_prep_row(phone)
     if not row:
         return  # уже не в подготовительной (например, повторный тап после перевода)
-    if _has_juz_answer(row["uid"], row["gid"]):
+    if _has_juz_answer(row["uid"], row["gid"], row["joined_date"]):
         return  # уже отвечал - не обрабатываем повторно (защита от двойного тапа)
 
     if knows_juz:
@@ -631,7 +631,7 @@ async def handle_juz_confirm(phone, confirmed):
     row = _get_prep_row(phone)
     if not row:
         return  # успел выйти из подготовительной иначе, пока Умар решал
-    answer = _get_juz_answer(row["uid"], row["gid"])
+    answer = _get_juz_answer(row["uid"], row["gid"], row["joined_date"])
     if not answer or answer[0] != "pending_confirm":
         return  # уже решено (повторный тап Умара) или маркера нет вовсе
 
@@ -655,11 +655,18 @@ async def handle_juz_confirm(phone, confirmed):
              row["name"], target_type, target["title"], confirmed)
 
 
-def _has_prep_offer(user_id, group_id):
+# Отметки выпуска - ЗА ТЕКУЩИЙ ЗАХОД в подготовительную (22.09.2026). Их
+# дата - дата входа (add_bonus(..., joined_date, ...)), а человек может
+# пройти подготовительную дважды: кикнут из группы за пропуски - вернулся.
+# Без этого фильтра второй заход видел ответ первого: новый вопрос не
+# задавался, а после 5 дней человека отправляло туда, куда решили в прошлый
+# раз (живой случай - Шиваза Арафат: Н-1 в августе, кик 11.09, снова в prep
+# 13.09 - его увело бы в Н-1 без Умар устаза).
+def _has_prep_offer(user_id, group_id, joined_date):
     with db() as c:
         return c.execute(
-            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_offer'",
-            (user_id, group_id)
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_offer' AND date=?",
+            (user_id, group_id, joined_date)
         ).fetchone() is not None
 
 
@@ -676,19 +683,19 @@ def _has_nudge_today(user_id, group_id, today, category):
         ).fetchone() is not None
 
 
-def _has_juz_answer(user_id, group_id):
+def _has_juz_answer(user_id, group_id, joined_date):
     with db() as c:
         return c.execute(
-            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer'",
-            (user_id, group_id)
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer' AND date=?",
+            (user_id, group_id, joined_date)
         ).fetchone() is not None
 
 
-def _get_juz_answer(user_id, group_id):
+def _get_juz_answer(user_id, group_id, joined_date):
     with db() as c:
         row = c.execute(
-            "SELECT subcategory, note FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer'",
-            (user_id, group_id)
+            "SELECT subcategory, note FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer' AND date=?",
+            (user_id, group_id, joined_date)
         ).fetchone()
     return (row["subcategory"], int(row["note"])) if row else None
 
