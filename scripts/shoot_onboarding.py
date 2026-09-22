@@ -323,7 +323,8 @@ SCENE_SCRIPT = """
       await goFullPage();
       $('btn-hifz').click(); await wait(900);
       line(1).click(); await wait(700);
-      $('hifz-big-btn').click(); await wait(900);
+      // «Крупно» с 22.09.2026 - это телефон лёжа: кадр снимается в
+      // альбомной рамке (LANDSCAPE_SCENES), кнопки больше нет.
     },
 
     rec: async function () {
@@ -647,6 +648,9 @@ def build_app():
 
 # ─── съёмка ───────────────────────────────────────────────────────────────
 
+# Сцены, которые снимаются телефоном лёжа (22.09.2026: «Крупно» - это поворот).
+LANDSCAPE_SCENES = {"big": (844, 390)}
+
 def shoot(chrome, out_dir, only=None):
     from PIL import Image
 
@@ -657,11 +661,12 @@ def shoot(chrome, out_dir, only=None):
             continue
         png = out_dir / ("%s.png" % scene)
         who = "&as=ustaz" if scene.startswith("u_") else ""
+        w, h = LANDSCAPE_SCENES.get(scene, (390, 844))
         subprocess.run([
             chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
-            "--window-size=390,844", "--virtual-time-budget=17000",
+            "--window-size=%d,%d" % (w, h), "--virtual-time-budget=17000",
             "--screenshot=%s" % png,
-            "http://127.0.0.1:%d/frame?w=390&h=844&scene=%s%s" % (PORT, scene, who),
+            "http://127.0.0.1:%d/frame?w=%d&h=%d&scene=%s%s" % (PORT, w, h, scene, who),
         ], check=True, capture_output=True)
         if not png.exists():
             raise SystemExit("сцена %s не снялась" % scene)

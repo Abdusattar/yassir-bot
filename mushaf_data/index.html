@@ -651,6 +651,9 @@
     color: var(--accent-ink); font-weight: 600;
   }
   #hifz-foot button:disabled { opacity: .4; cursor: default; }
+  /* Без «Крупно» (22.09.2026) место в полосе отдано счётчику: по нему
+     тапают вслепую, чем шире мишень, тем вернее. */
+  #app:not(.land) #hifz-count { flex: 1 1 auto; }
 
   /* Прослушать: компактная круглая кнопка (не текстовая, как соседи) —
      иконка сама объясняет назначение, а вкл/выкл читается по заливке,
@@ -688,6 +691,28 @@
   }
   .mushaf-line.hifz-has-tail { opacity: 1; }
   .mushaf-line.hifz-has-tail > span:not(.hifz-tail) { opacity: .42; }
+  /* Этап 2 стоя (22.09.2026, решение пользователя): видна только своя
+     половина и переход. visibility, а не display: половина остаётся на
+     СВОЁМ месте листа - хафиз помнит, что вторая половина внизу, - а на
+     месте чужой просто пусто. Проверку устаза и разбор не трогаем. */
+  #app.hifz.hifz-s2:not(.land):not(.hifz-pick):not(.review):not(.look) #ayah-text > .hifz-off {
+    visibility: hidden;
+  }
+  /* Переход, когда единица кончилась последней строкой листа: слова с
+     первой строки СЛЕДУЮЩЕГО листа отдельной строкой под листом (22.09).
+     Раньше его было видно только в «Крупно» и только на этапе 1. Чужой
+     лист - свой шрифт, поэтому обычный Scheherazade (.tail-plain). */
+  /* direction: rtl своя - #ayah-text может стоять в ltr, и тогда начало
+     следующей строки уезжало влево (поймано снимком). */
+  .hifz-xtail {
+    direction: rtl; display: flex; gap: .3em; justify-content: flex-start;
+    margin-top: .25em; padding-top: .2em;
+    border-top: 1px dashed var(--chrome-border);
+  }
+  .hifz-xtail > span {
+    opacity: .5; border-radius: 3px;
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+  }
   /* Выбор строчки: спрашивается один раз, поэтому подсказка крупная. */
   #app.hifz-pick .mushaf-line { cursor: pointer; border-radius: 4px; }
   #app.hifz-pick.pick-line .mushaf-line:active {
@@ -718,7 +743,6 @@
      всё равно были бы выключены, пока идёт выбор. */
   #hifz-units { display: none; gap: 8px; flex: 1 1 auto; }
   #app.hifz-pick #hifz-units { display: flex; }
-  #app.hifz-pick #hifz-big-btn,
   #app.hifz-pick #hifz-submit { display: none; }
   /* Плашка «Место не изменено» после ✕ посреди выбора (13.09.2026). */
   #hifz-note {
@@ -1909,7 +1933,9 @@
   .tj-note .tj-ar { font-size: 1.35em; color: var(--ink); }
   .tj-q { font-size: 15px; font-weight: 600; color: var(--ink); }
   /* До трёх строк на кнопке: надпись - ужатый эталон лекции. */
-  .trainer-opt.tj-opt { font-size: 15px; line-height: 1.28; min-height: 64px; padding: 9px 8px; }
+  /* Вариантов четыре, а не восемь (22.09.2026) - кнопки выше и крупнее:
+     надписи мест до трёх строк, палец попадает без прицеливания. */
+  .trainer-opt.tj-opt { font-size: 16px; line-height: 1.3; min-height: 88px; padding: 10px 10px; }
   .trainer-opt.tj-opt:disabled { opacity: .55; }
   /* Итог ответа - на самих кнопках (14.09.2026): нажатая краснеет при
      ошибке, верная зеленеет всегда. Плашка сверху сдвигала карточку, а
@@ -2778,6 +2804,28 @@
     line-height: 1.3;
     color: var(--ink);
   }
+  /* Строка мусхафа со словом вопроса (22.09.2026). Без карточки-подложки:
+     строка и есть вопрос, рамка вокруг неё только сузила бы её. Крупно
+     (~30px), переносится в два ряда - читать важнее, чем узнать вид листа.
+     Слово - зелёной подложкой, как в тренажёре нахва. */
+  .trainer-ctx { width: 100%; max-width: 520px; text-align: center; margin: 6px 0 4px; }
+  .trainer-line {
+    font-family: 'Scheherazade New', serif; direction: rtl;
+    font-size: 30px; line-height: 1.95; color: var(--ink);
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .28em;
+  }
+  .trainer-line .tl-w.on {
+    background: var(--ok-soft); box-shadow: 0 0 0 2px var(--ok);
+    border-radius: 8px; padding: 0 .18em;
+  }
+  /* Номер аята - кружком, а не орнаментными скобками ﴾﴿: вынутые из
+     мусхафа в rtl-строку, они зеркалились и читались «)١٠(» (снимок). */
+  .trainer-line .tl-ae {
+    color: var(--muted); font-size: .5em; align-self: center;
+    border: 1px solid var(--card-border); border-radius: 999px;
+    min-width: 1.9em; padding: 0 .35em; line-height: 1.9; text-align: center;
+  }
+  .trainer-range { font-size: 12.5px; color: var(--muted); align-self: center; }
 
   /* Полоса прогресса "Общий вес" - визуальный эквивалент score10/10,
      не только цифра в тексте. */
@@ -3017,21 +3065,100 @@
     border-radius: 12px; padding: 6px 10px;
   }
 
-  /* Запись повторения лёжа - одна низкая строка вместо шторки в полэкрана:
-     время, подсказка, кнопки в ряд. Место под ней добирает hifzRecPad. */
-  #app.land #hifz-rec.rev .card {
+  /* Лёжа - только текст (22.09.2026, решение пользователя): шапка висит
+     НАД листом, а не в потоке, и сама уезжает вверх через несколько секунд
+     (класс .bare, landChromeShow). Касание по пустому месту листа
+     возвращает её. В потоке она при каждом появлении сдвигала бы весь
+     текст. Отступы --tg-* - полный экран Telegram (requestFullscreen): там
+     его кнопки «закрыть/меню» лежат поверх нашей страницы, шапка и первая
+     строка листа встают под них, а не за них. Без полного экрана эти
+     переменные нулевые. */
+  #app.land { position: relative; }
+  #app.land #topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 40;
+    padding-top: calc(3px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  #app.land.bare #topbar { transform: translateY(-100%); box-shadow: none; }
+  #app.land #page-wrap {
+    padding-top: calc(6px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    /* Равен отступу сверху: иначе прилипание к строке оставляло лист на
+       прокрутке 6px, и новый лист открывался «не с начала» (сверка снимков). */
+    scroll-padding-top: calc(6px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    padding-left: max(12px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px));
+  }
+
+  /* Запись лёжа - одна низкая строка вместо шторки в полэкрана: время,
+     подсказка, кнопки в ряд. Место под ней добирает hifzRecPad. С 22.09 -
+     и запись сдачи 40+40, не только повторения. Исключение - подтверждение
+     повторов после отправки (.prog, hifzProgressOpen): там две строки
+     методики и «−/+», в полосу они не ложатся, остаётся карточка. */
+  #app.land #hifz-rec:not(.prog) .card {
     max-width: none; display: flex; align-items: center; gap: 12px;
-    padding: 8px 44px 8px max(14px, env(safe-area-inset-left));
+    /* Снизу - полоска «домой» айфона: без отступа кнопки ложились на неё. */
+    padding: 8px 44px max(8px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left));
     border-radius: 12px 12px 0 0;
   }
-  #app.land #hifz-rec.rev .place { display: none; }
-  #app.land #hifz-rec.rev .timer { font-size: 22px; margin: 0; flex: 0 0 auto; }
-  #app.land #hifz-rec.rev .hint { flex: 1 1 0; min-width: 0; text-align: left; min-height: 0; }
+  #app.land #hifz-rec:not(.prog) .place { display: none; }
+  #app.land #hifz-rec:not(.prog) .timer { font-size: 22px; margin: 0; flex: 0 0 auto; }
+  #app.land #hifz-rec:not(.prog) .hint { flex: 1 1 0; min-width: 0; text-align: left; min-height: 0; }
   /* Плеер не сжимается в точку на узком SE: уступает подсказка. */
-  #app.land #hifz-rec.rev .player { flex: 1 1 auto; min-width: 170px; margin: 0; }
-  #app.land #hifz-rec.rev .actions { margin: 0; flex: 0 0 auto; }
-  #app.land #hifz-rec.rev .actions button { flex: 0 0 auto; min-width: 104px; padding: 9px 12px; }
-  #app.land #hifz-rec.rev #hifz-rec-close { top: 50%; transform: translateY(-50%); }
+  #app.land #hifz-rec:not(.prog) .player { flex: 1 1 auto; min-width: 170px; margin: 0; }
+  #app.land #hifz-rec:not(.prog) .actions { margin: 0; flex: 0 0 auto; }
+  #app.land #hifz-rec:not(.prog) .actions button { flex: 0 0 auto; min-width: 104px; padding: 9px 12px; }
+  #app.land #hifz-rec:not(.prog) #hifz-rec-close { top: 50%; transform: translateY(-50%); }
+  #app.land #hifz-rec.prog .card { max-height: 100dvh; overflow-y: auto; }
+
+  /* ─── Заучивание лёжа (22.09.2026, решение пользователя) ───────────────
+     Лёжа и есть «Крупно», на всех трёх этапах, и строка при этом как в
+     мусхафе - целиком. Остаются только строки своей единицы и переход
+     (.hifz-off прячет остальное, ставит hifzApply). Слева узкая колонка -
+     счётчик, 🔊, Сдать: лёжа мало высоты, а не ширины, и колонка в 78px
+     отнимает у букв ~9%. Слева - потому что арабская строка кончается
+     слева: дочитал повтор, палец уже у счётчика. Колонка не прячется
+     никогда; шапка - как при чтении (.bare). Выбор места - весь лист и
+     шапка на месте: это вопрос человеку, прятать его нельзя. */
+  /* Вырез камеры лёжа сбоку: колонка шире на его ширину, иначе он съедал
+     бы её. */
+  #app.land.hifz { --rail-w: calc(78px + env(safe-area-inset-left, 0px)); }
+  #app.land.hifz #hifz-head {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 41;
+    padding-top: calc(5px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    padding-left: max(12px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  #app.land.hifz.bare #hifz-head { transform: translateY(-100%); box-shadow: none; }
+  #app.land.hifz #hifz-foot {
+    position: absolute; left: 0; top: 0; bottom: 0; z-index: 40;
+    width: var(--rail-w); box-sizing: border-box;
+    flex-direction: column; justify-content: center; gap: 10px;
+    padding: 10px 8px max(10px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
+    border-top: none; border-right: 1px solid var(--chrome-border);
+  }
+  #app.land.hifz #hifz-foot button { width: 100%; }
+  #app.land.hifz #hifz-foot .hifz-listen-btn { width: 44px; height: 44px; align-self: center; }
+  /* Счётчик в колонке - высокая мишень: по нему тапают вслепую. */
+  #app.land.hifz #hifz-count { align-self: stretch; padding: 14px 4px 10px; border-radius: 14px; }
+  #app.land.hifz #hifz-count .c-n b { font-size: 30px; }
+  #app.land.hifz #hifz-count .c-bar { height: 5px; margin-top: 8px; }
+  #app.land.hifz #hifz-submit { padding: 10px 2px; font-size: 12px; white-space: normal; line-height: 1.25; }
+  #app.land.hifz #hifz-units { flex-direction: column; flex: 0 0 auto; align-self: stretch; }
+  #app.land.hifz #hifz-units button { padding: 10px 2px; font-size: 11.5px; }
+  #app.land.hifz #page-wrap {
+    padding-left: calc(var(--rail-w) + 12px);
+    padding-top: calc(10px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    scroll-padding-top: calc(10px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  }
+  /* Единица короче экрана (строка, половина на большом телефоне) - по
+     центру высоты. Длиннее - auto схлопывается в 0, верх не срезается. */
+  #app.land.hifz:not(.hifz-pick) #ayah-text { margin-top: auto; margin-bottom: auto; }
+  #app.land.hifz:not(.hifz-pick) #ayah-text > .hifz-off { display: none; }
+  #app.land.hifz #hifz-rec { left: var(--rail-w); }
+  #app.land.hifz #hifz-rec .card { border-radius: 12px 12px 0 0; }
 </style>
 </head>
 <body>
@@ -3415,7 +3542,10 @@
   </div>
 
   <div id="hifz-foot">
-    <button id="hifz-big-btn">Крупно</button>
+    <!-- «Крупно» убрано 22.09.2026 (решение пользователя): крупно теперь
+         лёжа, на всех этапах и строкой как в мусхафе, а про поворот
+         говорит подсказка (rotateHintMaybe). Сам экран #hifz-big и его код
+         остались, но с интерфейса больше не достижимы. -->
     <!-- Прослушать Хусари (Muallim) — вкл/выкл, играет ТЕКУЩУЮ единицу
          по кругу с паузой между повторами (02.09.2026). Та же кнопка
          живёт и в «Крупно» (#hifz-big-listen-btn) — состояние общее,
@@ -4157,6 +4287,8 @@
       hifz_pick_half: 'Верхняя или нижняя?',
       hifz_pick_half_sub: 'тапни по половине',
       hifz_pick_cancel: 'Место не изменено',
+      trainer_range_to: 'словарь: до стр. %N%',
+      hifz_rotate_hint: 'Поверните телефон — строки крупнее, как в мусхафе. Не поворачивается — снимите блокировку поворота',
       hifz_unit_line: 'Строка',
       hifz_unit_half: 'Половина',
       hifz_unit_page: 'Страница',
@@ -5932,8 +6064,15 @@
   // только страховка от кривого замера. Что считается «лёжа» - mushafLandscape.
   var MUSHAF_MAX_FONT_LAND = 64;
   var MUSHAF_LAND_QUERY = '(orientation: landscape) and (max-height: 500px)';
+  // Полный экран Telegram включили мы (landFullscreen). Экран в нём выше на
+  // шапку Telegram и может перерасти max-height запроса - без этой поправки
+  // лёжа выключилось бы, полный экран сняли бы, лёжа включилось бы снова -
+  // по кругу. Пока полный экран наш и телефон лежит, это всё ещё «лёжа».
+  var mushafTgFullOurs = false;
   function mushafLandscape() {
-    return !!(window.matchMedia && window.matchMedia(MUSHAF_LAND_QUERY).matches);
+    if (!window.matchMedia) return false;
+    if (window.matchMedia(MUSHAF_LAND_QUERY).matches) return true;
+    return mushafTgFullOurs && window.matchMedia('(orientation: landscape)').matches;
   }
   // Решает не одна ориентация, а класс .land (mushafOrientationApply):
   // лёжа он есть только на листе чтения вне заучивания.
@@ -6840,12 +6979,18 @@
     return half === 0 ? [0, mid - 1] : [mid, n - 1];
   }
 
+  var hifzShownUnit = null;
   function hifzApply() {
     var app = document.getElementById('app');
     app.classList.toggle('hifz', hifz.on);
     app.classList.toggle('hifz-pick', hifz.on && hifz.picking);
     app.classList.toggle('pick-line', hifz.picking && hifz.unit !== 'half');
     app.classList.toggle('pick-half', hifz.picking && hifz.unit === 'half');
+    app.classList.toggle('hifz-s2', hifz.on && !hifz.picking && hifz.stage === 2);
+    var box = document.getElementById('ayah-text');
+    Array.prototype.forEach.call(box.children, function (el) { el.classList.remove('hifz-off'); });
+    var oldX = box.querySelector('.hifz-xtail');
+    if (oldX) oldX.parentNode.removeChild(oldX);
     var rows = document.querySelectorAll('#ayah-text .mushaf-line');
     Array.prototype.forEach.call(rows, function (row) {
       row.classList.remove('hifz-lit', 'hifz-dim', 'hifz-has-tail',
@@ -6890,8 +7035,46 @@
     }
     // На последней строчке листа переход физически на следующей странице —
     // подсветить на этом листе нечего. Отдельной полосы внизу больше нет
-    // (02.09.2026): она отъедала место у самого мусхафа. Переходное слово
-    // видно в «Крупно», там оно и так дорисовывается к строке.
+    // (02.09.2026): она отъедала место у самого мусхафа. С 22.09.2026
+    // «Крупно» убрано, и переход с чужого листа встаёт отдельной строкой
+    // под листом (.hifz-xtail) - на любом этапе, стоя и лёжа.
+    var lastShown = tailCount && rows[tailLine] ? rows[tailLine] : rows[lit[lit.length - 1]];
+    if (tailCount && !rows[tailLine]) {
+      var src = hifzTailLine(lit[lit.length - 1]);
+      if (src && src.foreign) {
+        var x = document.createElement('div');
+        x.className = 'hifz-xtail';
+        var xh = '';
+        for (var q = 0; q < tailCount && q < src.line.tokens.length; q++) {
+          var tk = src.line.tokens[q];
+          if (tk.type !== 'word') continue;
+          // Те же атрибуты, что у слова на листе: тап - перевод, двойной -
+          // «Мои слова» (обработчик #ayah-text их и ждёт).
+          var tr = tk.translation ? ' data-tr="' + escapeAttr(tk.translation) + '"' +
+            ' data-surah="' + tk.surah + '" data-ayah="' + tk.ayah + '" data-pos="' + tk.position + '"' +
+            ' data-arabic="' + escapeAttr(tk.html) + '"' : '';
+          xh += '<span class="tail-plain"' + tr + '>' + tk.html + '</span>';
+        }
+        x.innerHTML = xh;
+        box.appendChild(x);
+        lastShown = x;
+      }
+    }
+    // Всё вне своей единицы и перехода - .hifz-off: лёжа прячется, на
+    // этапе 2 стоя становится пустым местом (CSS решает, что с ним делать).
+    var firstLit = rows[lit[0]], inside = false;
+    Array.prototype.forEach.call(box.children, function (el) {
+      if (el === firstLit) inside = true;
+      if (!inside) el.classList.add('hifz-off');
+      if (el === lastShown) inside = false;
+      else if (!inside && el !== firstLit) el.classList.add('hifz-off');
+    });
+    // Лёжа сменилась единица - показываем её с начала.
+    var unitKey = currentPage + ':' + hifz.stage + ':' + lit[0];
+    if (app.classList.contains('land') && unitKey !== hifzShownUnit) {
+      document.getElementById('page-wrap').scrollTop = 0;
+    }
+    hifzShownUnit = unitKey;
     hifzHead();
   }
 
@@ -6978,8 +7161,6 @@
       where.textContent = T('page_n', { N: currentPage }) + ' · ' + T('hifz_whole');
       sub.textContent = hifzProgressSubText(3, 0);
     }
-    document.getElementById('hifz-big-btn').disabled = hifz.picking || hifz.stage !== 1;
-    document.getElementById('hifz-big-btn').textContent = T('hifz_big');
     document.getElementById('hifz-submit').textContent = T('hifz_submit');
     document.getElementById('hifz-submit').disabled = hifz.picking;
     fix.textContent = T('hifz_fix');
@@ -7152,7 +7333,7 @@
 
   // Короткая плашка внизу листа, сама уходит. Одна на всё приложение.
   var hifzNoteTimer = null;
-  function hifzNote(text) {
+  function hifzNote(text, ms) {
     var el = document.getElementById('hifz-note');
     if (!el) {
       el = document.createElement('div');
@@ -7162,7 +7343,7 @@
     el.textContent = text;
     el.classList.add('visible');
     if (hifzNoteTimer) clearTimeout(hifzNoteTimer);
-    hifzNoteTimer = setTimeout(function () { el.classList.remove('visible'); }, 2500);
+    hifzNoteTimer = setTimeout(function () { el.classList.remove('visible'); }, ms || 2500);
   }
 
   /* Следующий шаг методики. Порядок жёсткий, отказа нет: метод 40+40 не
@@ -7236,6 +7417,9 @@
          Ведём сразу туда, где долги лежат по порядку и объяснены. */
       if (hifzWall()) { openSubs(true); return; }
       hifzEnter();
+      // Место уже есть (не выбор) - подсказать про поворот. Чуть позже: лист
+      // мог уехать на другую страницу, плашка не должна мелькнуть до него.
+      setTimeout(function () { if (hifz.on && !hifz.picking) rotateHintMaybe(); }, 700);
     });
   });
   document.getElementById('hifz-close').addEventListener('click', hifzExit);
@@ -7333,10 +7517,6 @@
       size -= 1;
     }
   }
-  document.getElementById('hifz-big-btn').addEventListener('click', function () {
-    document.getElementById('hifz-big').classList.add('visible');
-    hifzBigRender();
-  });
   document.getElementById('hifz-big-words').addEventListener('click', function (e) {
     var el = e.target.closest ? e.target.closest('[data-tr]') : null;
     if (el) showWordPopup(el);
@@ -7697,6 +7877,7 @@
     // возвращаем в исходное состояние.
     document.getElementById('hifz-rec-actions').style.display = '';
     document.getElementById('hifz-progress').style.display = 'none';
+    document.getElementById('hifz-rec').classList.remove('prog');
     document.getElementById('hifz-progress-chips').style.display = 'flex';
     document.getElementById('hifz-progress-own-row').style.display = 'none';
   }
@@ -8411,6 +8592,7 @@
     document.getElementById('hifz-rec-timer').style.display = 'none';
     hifzRecPlayerShow(false);
     document.getElementById('hifz-progress').style.display = 'block';
+    document.getElementById('hifz-rec').classList.add('prog');
     var key = hifzProgressKey(page, stage, half);
     var cached = hifzProgressCache[key];
     hifzProgressRenderPanel(cached ? cached.count : 0);
@@ -8863,6 +9045,7 @@
      листа: дочитал и тут же листаешь или ставишь закладку. Узел переносится
      целиком, обработчики остаются с ним. */
   var mushafWasLand = null;
+  var mushafWasHifzLand = false;
   // Метка родного места строки страниц: между ней и листом стоит шапка
   // заучивания, «перед листом» - уже не то место (поймано сравнением снимков).
   var pageNavHome = document.createComment('page-nav');
@@ -8882,6 +9065,112 @@
     mushafScrollShare = span > 0 ? pageWrap.scrollTop / span : 0;
   }, { passive: true });
 
+  /* Лёжа - только текст (22.09.2026, решение пользователя). Повернул
+     телефон - шапка видна несколько секунд и уезжает; касание по пустому
+     месту листа (между строками, поля) - вернуть её, ещё касание - убрать.
+     Двойное касание не годится: одно касание по слову уже открывает
+     перевод, двойное - добавляет в «Мои слова». Поэтому слова, строка
+     страниц и кнопки здесь не считаются. Выход из режима - повернуть
+     телефон обратно, отдельного жеста нет. */
+  var LAND_CHROME_MS = 3500;
+  var landChromeTimer = null;
+  function landChromeShow() {
+    var app = document.getElementById('app');
+    app.classList.remove('bare');
+    clearTimeout(landChromeTimer);
+    landChromeTimer = setTimeout(function () {
+      if (app.classList.contains('land') && !app.classList.contains('hifz-pick')) app.classList.add('bare');
+    }, LAND_CHROME_MS);
+  }
+  function landChromeHide() {
+    clearTimeout(landChromeTimer);
+    document.getElementById('app').classList.add('bare');
+  }
+  function landChromeReset() {
+    clearTimeout(landChromeTimer);
+    document.getElementById('app').classList.remove('bare');
+  }
+  // Касание, после которого палец ехал (прокрутка, свайп страницы), - не
+  // касание: иначе каждое перелистывание дёргало бы шапку.
+  var landTouchX = 0, landTouchY = 0, landTouchMovedAt = 0;
+  pageWrap.addEventListener('touchstart', function (e) {
+    landTouchX = e.touches[0].clientX; landTouchY = e.touches[0].clientY;
+  }, { passive: true });
+  pageWrap.addEventListener('touchmove', function (e) {
+    var t = e.touches[0];
+    if (Math.abs(t.clientX - landTouchX) + Math.abs(t.clientY - landTouchY) > 10) landTouchMovedAt = Date.now();
+  }, { passive: true });
+  pageWrap.addEventListener('click', function (e) {
+    var app = document.getElementById('app');
+    if (!app.classList.contains('land')) return;
+    if (Date.now() - landTouchMovedAt < 600) return;
+    // Выбор места: касание по строке - ответ на вопрос, а не шапка.
+    if (app.classList.contains('hifz-pick')) return;
+    if (e.target.closest('[data-tr], #page-nav, button, a, input')) return;
+    if (app.classList.contains('bare')) landChromeShow(); else landChromeHide();
+  });
+  // Пока человек что-то нажимает в шапке, она не уезжает из-под пальца.
+  ['topbar', 'hifz-head'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      if (document.getElementById('app').classList.contains('land')) landChromeShow();
+    });
+  });
+
+  /* Подсказка про поворот вместо кнопки «Крупно» (22.09.2026, решение
+     пользователя). Показываем при входе в заучивание стоя до 5 раз и
+     перестаём, как только человек дважды заучивал лёжа - значит, знает.
+     Счёт в браузере: это удобство одного телефона, а не данные. */
+  var ROTATE_HINT_KEY = 'yassir_rotate_hint';
+  var ROTATE_HINT_MAX = 5, ROTATE_HINT_LEARNED = 2;
+  function rotateHintState() {
+    try { return JSON.parse(localStorage.getItem(ROTATE_HINT_KEY) || 'null') || { shown: 0, land: 0 }; }
+    catch (e) { return { shown: 0, land: 0 }; }
+  }
+  function rotateHintSave(st) {
+    try { localStorage.setItem(ROTATE_HINT_KEY, JSON.stringify(st)); } catch (e) {}
+  }
+  function rotateHintLearned() {
+    var st = rotateHintState();
+    st.land = (st.land || 0) + 1;
+    rotateHintSave(st);
+  }
+  function rotateHintMaybe() {
+    // Только телефон стоя: на компьютере и планшете лёжа ничего не даёт.
+    if (!window.matchMedia || !window.matchMedia('(orientation: portrait) and (max-width: 500px)').matches) return;
+    var st = rotateHintState();
+    if (st.shown >= ROTATE_HINT_MAX || st.land >= ROTATE_HINT_LEARNED) return;
+    st.shown++;
+    rotateHintSave(st);
+    hifzNote(T('hifz_rotate_hint'), 5000);
+  }
+
+  /* Полный экран Telegram лёжа (22.09.2026): убирает и шапку самого
+     Telegram - по высоте лёжа это ещё почти строка. Только в Telegram 8.0+
+     (на сайте и в старом Telegram - как было). Снимаем только то, что
+     включили сами: человек мог держать полный экран и без нас. */
+  var tgFull = window.Telegram && window.Telegram.WebApp;
+  var tgFullOk = !!(tgFull && tgFull.initData && tgFull.isVersionAtLeast &&
+                    tgFull.isVersionAtLeast('8.0') && tgFull.requestFullscreen);
+  if (tgFullOk) {
+    tgFull.onEvent('fullscreenChanged', function () {
+      // Вышел сам кнопкой Telegram - больше не наш, не возвращаем силой.
+      if (!tgFull.isFullscreen) mushafTgFullOurs = false;
+    });
+    tgFull.onEvent('fullscreenFailed', function () { mushafTgFullOurs = false; });
+  }
+  function landFullscreen(on) {
+    if (!tgFullOk) return;
+    try {
+      if (on && !tgFull.isFullscreen) {
+        mushafTgFullOurs = true;
+        tgFull.requestFullscreen();
+      } else if (!on && mushafTgFullOurs) {
+        mushafTgFullOurs = false;
+        if (tgFull.isFullscreen) tgFull.exitFullscreen();
+      }
+    } catch (e) {}
+  }
+
   // Режим лёжа - только на листе чтения и вне заучивания (21.09.2026):
   // «Смысл» листается той же строкой страниц, и уносить её в лист нельзя, а
   // заучивание лёжа - отдельный следующий шаг. Вкладки и вход в заучивание
@@ -8889,14 +9178,34 @@
   function mushafOrientationApply() {
     var app = document.getElementById('app');
     var view = document.getElementById('view-page');
+    // Мусхаф закрыт (вернулись на дашборд) - тоже не «лёжа»: иначе полный
+    // экран Telegram остался бы на дашборде под его кнопками.
+    // Заучивание лёжа с 22.09.2026 тоже «лёжа» (там оно и есть «Крупно»).
+    // Проверка сдачи устазом и разбор у студента - как было, стоя-вёрстка:
+    // там низ занят вердиктом и плеером, колонке счётчика места нет.
     var land = mushafLandscape() && view.classList.contains('active') &&
-               !app.classList.contains('hifz');
+               !app.classList.contains('review') && !app.classList.contains('look') &&
+               app.style.display !== 'none';
     var nav = document.getElementById('page-nav');
     if (land && nav.parentNode !== pageWrap) pageWrap.appendChild(nav);
     if (!land && nav.parentNode === pageWrap) pageNavHome.parentNode.insertBefore(nav, pageNavHome.nextSibling);
     app.classList.toggle('land', land);
-    if (land === mushafWasLand) return false;
+    // Выбор места - вопрос человеку, шапка с ним не уезжает.
+    if (land && app.classList.contains('hifz-pick') && app.classList.contains('bare')) landChromeShow();
+    // Вход в заучивание лёжа и выход из него - тоже смена режима: колонка
+    // счётчика отнимает ширину, кегль надо перемерить (иначе строка вылезала
+    // на 55-70px - поймано снимком).
+    var hifzLand = land && app.classList.contains('hifz');
+    var hifzLandChanged = hifzLand !== mushafWasHifzLand;
+    if (hifzLand && !mushafWasHifzLand) rotateHintLearned();
+    mushafWasHifzLand = hifzLand;
+    if (land === mushafWasLand) {
+      if (hifzLandChanged) mushafFitTrusted = null;
+      return hifzLandChanged;
+    }
     mushafWasLand = land;
+    if (land) landChromeShow(); else landChromeReset();
+    landFullscreen(land);
     // Доверенный кегль полного листа из другой ориентации здесь чужой.
     mushafFitTrusted = null;
     return true;
@@ -8929,9 +9238,13 @@
     var landWatch = new MutationObserver(function () {
       // Режим сменился не поворотом (вкладка, заучивание) - потолок кегля
       // другой, лист надо перемерить.
-      if (mushafOrientationApply() && Object.keys(cache).length) mushafFitSchedule();
+      // Закрытый мусхаф не меряем: скрытый лист дал бы ложный кегль, при
+      // открытии режим сменится ещё раз и перемер будет уже на виду.
+      if (mushafOrientationApply() && Object.keys(cache).length &&
+          document.getElementById('app').style.display !== 'none') mushafFitSchedule();
     });
-    landWatch.observe(document.getElementById('app'), { attributes: true, attributeFilter: ['class'] });
+    // style - закрытие/открытие мусхафа (display), см. mushafOrientationApply.
+    landWatch.observe(document.getElementById('app'), { attributes: true, attributeFilter: ['class', 'style'] });
     landWatch.observe(document.getElementById('view-page'), { attributes: true, attributeFilter: ['class'] });
   }
 
@@ -9770,8 +10083,8 @@
          'Приложение спросит, с какой строчки начинаешь. Внизу выбери, что заучиваешь: строку, половину листа или всю страницу. Потом тапни по самой строке.'],
         ['pointer', 'Место отмечено',
          'Наверху видно, где ты стоишь: страница, строчка и этап. Ошибся — «поправить» вернёт выбор. Дальше приложение ведёт само: строчки первой половины, половина целиком, строчки второй, вторая половина, вся страница.'],
-        ['big', '«Крупно» — здесь делаешь 40 + 40',
-         'Строка на весь экран, к ней добавлено первое слово следующей — чтобы стык не рвался. 40 раз читаешь глядя, потом 40 раз по памяти. 🔊 читает это же место голосом Хусари, по кругу. Тап по слову — дословный перевод.'],
+        ['big', 'Поверни телефон — крупно, как в мусхафе',
+         'Лёжа остаются только твои строки, во всю ширину, и первое слово следующей — чтобы стык не рвался. Строка не ломается, она такая же, как на листе. Слева счётчик: тап — один повтор, 40 раз глядя, потом 40 по памяти. 🔊 читает это же место голосом Хусари, по кругу. Тап по слову — перевод. Повернул обратно — снова весь лист.'],
         ['rec', 'Готов — «🎙 Сдать», потом «Записать»',
          'Читаешь вслух то, что заучил. Запись уходит устазу вместе с картинкой листа: ему видно, какое место ты сдавал.'],
         ['progress', 'На половине и странице — отметь повторы',
@@ -9798,16 +10111,16 @@
       steps: [
         ['trainer_start', 'Скажи, докуда дошёл',
          'В первый раз тренажёр спросит страницу мусхафа. Слова он берёт не с неё одной, а со всего пути от начала до неё — это и есть твой словарь.'],
-        ['trainer_q', 'Слово и восемь переводов',
-         'Показывает слово из твоего словаря, ты выбираешь верный перевод. Сверху видно, сколько слов пройдено сегодня и сколько из них верно, а под этим — с какой страницы слово.'],
+        ['trainer_q', 'Слово в своей строке и восемь переводов',
+         'Тренажёр показывает строку мусхафа, откуда взято слово, само слово выделено зелёным. Соседние слова помогают вспомнить, что оно значит именно здесь. Выбери верный перевод. Сверху видно, сколько слов пройдено сегодня и сколько из них верно.'],
         ['trainer_answer', 'Ошибаться — часть работы',
          'После ответа сразу виден верный перевод. Ответил верно — сегодня это слово больше не спросят, очередь за другими. Ошибся — слово само уходит в «Мои слова» и начинает попадаться чаще: каждый третий вопрос берётся оттуда. Выйдет из списка, когда ответишь по нему верно три раза подряд. А хорошо закреплённое слово тренажёр отложит примерно на два месяца и потом вернёт — проверить, осталось ли оно в памяти.'],
         ['trainer_daily', '40 слов, из них 20 верно — задание закрыто',
          'Пилюля сверху держит оба числа. Слова считаются разные: одно и то же слово, отвеченное десять раз, засчитается за одно. Верным слово становится, когда ответил по нему верно хотя бы раз за день. Наберутся оба числа — задание «Слова» закроется само, а в группу уйдёт отметка.'],
-        ['trainer_range', '➖ ➕ — граница словаря',
+        ['trainer_range', '➖ ➕ — докуда словарь',
          '➕ двигает закладку на страницу вперёд, ➖ возвращает назад. Выучил новую страницу — расширь, и её слова войдут в тренажёр.'],
         ['word_tap', 'Тап по слову — перевод',
-         'Работает прямо на листе, и в «Крупно» тоже. Тапнул — увидел, что значит слово, ничего никуда не уходит.'],
+         'Работает прямо на листе — и стоя, и лёжа, и в заучивании. Тапнул — увидел, что значит слово, ничего никуда не уходит.'],
         ['word_add', 'Двойной тап — слово в «Мои слова»',
          'Так и собираются забытые. Заметил при повторении, что слово не вспоминается, — два тапа, и тренажёр будет спрашивать его чаще.'],
         ['mywords', 'Список «Мои слова»',
@@ -12007,18 +12320,25 @@
     // страница сверху, счёт за сеанс в середине. Теперь это одна мелкая
     // строка, а прогресс уехал под варианты - он важен, но не в момент
     // выбора ответа.
+    /* Слово в своей строке мусхафа (22.09.2026, решение пользователя):
+       вспоминают перевод по соседям - так крепче связь с аятом, и строка
+       снимает двусмысленность (перевод дан для ЭТОГО места). Строка вынута
+       отдельно и может лечь в два ряда - здесь важнее прочесть, чем узнать
+       вид листа (в заучивании - наоборот). Пока строка грузится - слово
+       одно, как раньше. Убрано: «стр. N · слово со стр. N · верно» (счёт
+       и так в шапке, место видно по строке) и «Общий вес» (он на экране
+       «Закончить»). */
     var html = renderFeedbackBanner(d.feedback);
-    html += '<div class="trainer-info">' + T('page_n', { N: d.bookmark_page }) +
-      ' · ' + T('word_from_page_n', { N: d.word_page }) +
-      ' · ' + T('correct_today', { N: d.daily_correct, M: d.daily_correct_target }) + '</div>';
-    html += '<div class="trainer-word-card"><div class="trainer-word">' + d.arabic + '</div></div>';
+    html += '<div class="trainer-ctx" id="tr-ctx"><div class="trainer-word">' + d.arabic + '</div></div>';
     html += '<div class="trainer-options">';
     d.options.forEach(function (opt, i) {
       html += '<button class="trainer-opt" data-slot="' + i + '">' + opt + '</button>';
     });
     html += '</div>';
-    html += renderOverallScore(d.overall_score);
-    html += '<div class="trainer-pagebar"><button id="tr-dec">➖</button><button id="tr-inc">➕</button></div>';
+    // ➖ ➕ подписаны: без подписи посреди вопроса они читались загадкой.
+    html += '<div class="trainer-pagebar"><button id="tr-dec">➖</button>' +
+      '<span class="trainer-range">' + T('trainer_range_to', { N: d.bookmark_page }) + '</span>' +
+      '<button id="tr-inc">➕</button></div>';
     html += '<div class="trainer-actions"><button id="tr-end">' + T('btn_finish') +
       '</button><button id="tr-top">' + T('btn_rating') + '</button></div>';
     body.innerHTML = html;
@@ -12032,6 +12352,59 @@
     document.getElementById('tr-inc').addEventListener('click', function () { stepPage(1); });
     document.getElementById('tr-end').addEventListener('click', endSession);
     document.getElementById('tr-top').addEventListener('click', showLeaderboard);
+    trainerLineShow(d);
+  }
+
+  /* Строка мусхафа со словом вопроса. Лист берём тем же page*.json, что
+     читает мусхаф (кэш на сеанс). Слово ищется по точному месту: аят может
+     начаться на одном листе и кончиться на следующем, поэтому смотрим оба.
+     Склеенное слово («مِن قَبْلِكُمْ» - одна голова с переводом на
+     несколько слов) выделяем целиком: сколько слов в arabic, столько и
+     красим подряд. */
+  var trainerPages = {};
+  function trainerPageLines(page) {
+    if (trainerPages[page]) return trainerPages[page];
+    trainerPages[page] = fetch('page' + page + '.json')
+      .then(function (r) { if (!r.ok) throw new Error('page ' + page); return r.json(); })
+      .then(function (data) { return (data.lines || []).filter(function (l) { return l.type === 'text'; }); })
+      .catch(function () { delete trainerPages[page]; return []; });
+    return trainerPages[page];
+  }
+  function trainerFindLine(lines, d) {
+    for (var i = 0; i < lines.length; i++) {
+      var toks = lines[i].tokens || [];
+      for (var j = 0; j < toks.length; j++) {
+        var t = toks[j];
+        if (t.type === 'word' && t.surah === d.word_surah && t.ayah === d.word_ayah && t.position === d.word_pos) {
+          return { tokens: toks, at: j };
+        }
+      }
+    }
+    return null;
+  }
+  function trainerLineShow(d) {
+    if (!d || !d.word_pos || !d.word_page) return;
+    var wordId = d.word_id;
+    Promise.all([trainerPageLines(d.word_page), trainerPageLines(d.word_page + 1)]).then(function (res) {
+      var box = document.getElementById('tr-ctx');
+      // Пока грузилось, ответили и пришёл другой вопрос - не наш.
+      if (!box || !trainerState || trainerState.word_id !== wordId) return;
+      var hit = trainerFindLine(res[0], d) || trainerFindLine(res[1], d);
+      if (!hit) return;
+      var glued = String(d.arabic).trim().split(/\s+/).length;
+      var html = '', lit = 0;
+      hit.tokens.forEach(function (t, k) {
+        if (t.type === 'word') {
+          var on = k >= hit.at && lit < glued;
+          if (on) lit++;
+          html += '<span class="tl-w' + (on ? ' on' : '') + '">' + t.html + '</span>';
+        } else if (t.type === 'ayah_end') {
+          html += '<span class="tl-ae">' + t.html + '</span>';
+        }
+      });
+      box.innerHTML = '<div class="trainer-line">' + html + '</div>';
+      box.classList.add('has-line');
+    });
   }
 
   function pickAnswer(wordId, slot) {

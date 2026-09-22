@@ -171,3 +171,19 @@ def test_варианты_различаются_по_смыслу():
 
     assert q is not None
     assert len(set(q["options"])) == len(q["options"])
+
+
+def test_вопрос_несёт_точное_место_слова(monkeypatch):
+    """22.09.2026: тренажёр показывает строку мусхафа со словом - для этого
+    вопрос отдаёт суру, аят и позицию слова. Старый вопрос из памяти (до
+    выкладки, без позиции) не падает: позиция просто None."""
+    import core.mufradat_api as api
+    monkeypatch.setattr(api, "get_current_page", lambda uid: 3)
+    monkeypatch.setattr(api, "page_for_ayah", lambda s, a: 3)
+    monkeypatch.setattr(api, "_daily_fields", lambda uid, st=None: {})
+    state = {"arabic": "أَلِيمٌ", "options": ["a", "b"], "word_id": 7,
+             "surah": 2, "ayah": 10, "position": 3}
+    p = api._question_payload(1, state, None)
+    assert (p["word_surah"], p["word_ayah"], p["word_pos"], p["word_page"]) == (2, 10, 3, 3)
+    del state["position"]
+    assert api._question_payload(1, state, None)["word_pos"] is None

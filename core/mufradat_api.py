@@ -196,6 +196,11 @@ def _question_payload(user_id, state, overall_score, feedback=None, status=None)
         "overall_score": overall_score,
         "bookmark_page": get_current_page(user_id),
         "word_page": page_for_ayah(state["surah"], state["ayah"]),
+        # Точное место слова (22.09.2026): тренажёр показывает его строку
+        # мусхафа, слово в ней выделено. Вопрос, созданный до выкладки, -
+        # без позиции, тогда фронт покажет одно слово, как раньше.
+        "word_surah": state["surah"], "word_ayah": state["ayah"],
+        "word_pos": state.get("position"),
         **_daily_fields(user_id, status),
     }
     if feedback is not None:
@@ -226,6 +231,7 @@ def _new_question(user_id, start_score10):
     state = {
         "word_id": q["word"]["progress_key"], "target": q["word"]["translation"], "options": q["options"],
         "arabic": q["word"]["arabic_text"], "surah": q["word"]["surah_number"], "ayah": q["word"]["ayah_number"],
+        "position": q["word"]["position"],
         "start_score10": start_score10 if start_score10 is not None else (
             overall_score["score10"] if overall_score else None
         ),

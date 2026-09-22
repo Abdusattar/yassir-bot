@@ -60,9 +60,16 @@ SCENES = {
                  ("document.getElementById('btn-prev').click()", 2500)],
     "rev_rec":  [("document.getElementById('dash-mushaf').click()", 2000),
                  ("document.getElementById('btn-revision').click()", 2000)],
+    # Лёжа только текст (22.09.2026): шапка уезжает сама, касание по пустому
+    # месту возвращает, касание по слову - нет (там перевод).
+    "bare":     [("document.getElementById('dash-mushaf').click()", 4500)],
+    "tap":      [("document.getElementById('dash-mushaf').click()", 4500),
+                 ("document.getElementById('page-wrap').click()", 700)],
+    "tap_word": [("document.getElementById('dash-mushaf').click()", 4500),
+                 ("document.querySelector('#ayah-text [data-tr]').click()", 700)],
 }
 # Что лёжа меняется намеренно - там сравнение с HEAD не требуется.
-CHANGED_LAND = {"mushaf", "mush_end", "turn", "rev_rec"}
+CHANGED_LAND = {"mushaf", "mush_end", "turn", "rev_rec", "bare", "tap", "tap_word", "hifz"}
 
 MEASURE = """() => {
   var el = document.getElementById('ayah-text');
@@ -76,7 +83,9 @@ MEASURE = """() => {
   var nav = document.getElementById('page-nav');
   var wrap = document.getElementById('page-wrap');
   var tab = document.getElementById('tabbar');
+  var bar = document.getElementById('topbar').getBoundingClientRect();
   return {
+    bar_bottom: Math.round(bar.bottom),
     font: getComputedStyle(el).fontSize, over_px: over, lines: lines.length,
     col: el.clientWidth, land: app.classList.contains('land'),
     nav_in_page: nav.parentNode === wrap,
@@ -228,6 +237,12 @@ def main():
                     extra = ""
                     if m and scene == "turn" and (m["page"] != str(PAGE + 1) or m["top"] > 0):
                         problems.append(f"{engine} turn {size[0]}: лист {m['page']}, прокрутка {m['top']}")
+                    # Шапка лёжа: видна после «tap», спрятана после «bare» и «tap_word».
+                    if m and land and scene in ("bare", "tap", "tap_word"):
+                        shown = m["bar_bottom"] > 0
+                        if shown != (scene == "tap"):
+                            problems.append(f"{engine} {scene} {size[0]}: шапка {'видна' if shown else 'спрятана'}")
+                        extra = f"  шапка низ {m['bar_bottom']}"
                     if m and scene in ("mushaf", "mush_end", "turn", "rev_rec"):
                         extra = (f"  лист {m['page']} сверху {m['top']} срез {m['cut_top']} кегль {m['font']} "
                                  f"колонка {m['col']} вылезло {m['over_px']}px "
