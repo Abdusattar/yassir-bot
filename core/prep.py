@@ -588,8 +588,10 @@ async def handle_juz_answer(phone, knows_juz):
     row = _get_prep_row(phone)
     if not row:
         return  # уже не в подготовительной (например, повторный тап после перевода)
-    if _has_juz_answer(row["uid"], row["gid"], row["joined_date"]):
-        return  # уже отвечал - не обрабатываем повторно (защита от двойного тапа)
+    if _get_juz_answer(row["uid"], row["gid"], row["joined_date"]):
+        # уже отвечал (или действует решение прошлого захода) - не
+        # обрабатываем повторно: двойной тап, старая кнопка в личке
+        return
 
     if knows_juz:
         # pending_confirm одновременно и маркер "уже ответил" (не спросит
@@ -655,13 +657,17 @@ async def handle_juz_confirm(phone, confirmed):
              row["name"], target_type, target["title"], confirmed)
 
 
-# Отметки выпуска - ЗА ТЕКУЩИЙ ЗАХОД в подготовительную (22.09.2026). Их
-# дата - дата входа (add_bonus(..., joined_date, ...)), а человек может
-# пройти подготовительную дважды: кикнут из группы за пропуски - вернулся.
-# Без этого фильтра второй заход видел ответ первого: новый вопрос не
-# задавался, а после 5 дней человека отправляло туда, куда решили в прошлый
-# раз (живой случай - Шиваза Арафат: Н-1 в августе, кик 11.09, снова в prep
-# 13.09 - его увело бы в Н-1 без Умар устаза).
+# Заходы в подготовительную (22.09.2026). Человек может пройти её дважды:
+# кикнут из группы за пропуски - вернулся (живой случай - Шиваза Арафат: Н-1
+# в августе, кик 11.09, снова в prep 13.09). Отметки пишутся датой входа
+# (add_bonus(..., joined_date, ...)), и вход заново обновляет joined_date.
+#   - Объявление «прошёл подготовительную» - за каждый заход: второй раз
+#     тоже заслужено.
+#   - Ответ про джуз - НЕ спрашивается повторно (решение пользователя): при
+#     возврате действует решение прошлого захода - Шиваза снова в Н-1, где
+#     его уже подтвердил Умар устаз; ответивший «не знаю» - снова в relaxed.
+#     Подготовительную при этом проходит полностью: «штрафное в
+#     подготовительной - само по себе хорошее воспитание».
 def _has_prep_offer(user_id, group_id, joined_date):
     with db() as c:
         return c.execute(
@@ -683,18 +689,23 @@ def _has_nudge_today(user_id, group_id, today, category):
         ).fetchone() is not None
 
 
-def _has_juz_answer(user_id, group_id, joined_date):
-    with db() as c:
-        return c.execute(
-            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer' AND date=?",
-            (user_id, group_id, joined_date)
-        ).fetchone() is not None
-
-
 def _get_juz_answer(user_id, group_id, joined_date):
+    """Ответ этого захода, а если его нет - решение прошлого захода.
+    Прошлое берётся только решённое: «ждём Умар устаза» из прошлого захода
+    ответом не считается (его так никто и не решил), как и группа, которой
+    больше нет, - тогда спрашиваем заново."""
     with db() as c:
         row = c.execute(
             "SELECT subcategory, note FROM score_events WHERE student_id=? AND group_id=? AND category='prep_juz_answer' AND date=?",
+            (user_id, group_id, joined_date)
+        ).fetchone()
+        if row:
+            return (row["subcategory"], int(row["note"]))
+        row = c.execute(
+            "SELECT e.subcategory, e.note FROM score_events e JOIN groups g ON g.id=CAST(e.note AS INTEGER)"
+            " WHERE e.student_id=? AND e.group_id=? AND e.category='prep_juz_answer'"
+            " AND e.date<? AND e.subcategory!='pending_confirm' AND g.active=1"
+            " ORDER BY e.date DESC LIMIT 1",
             (user_id, group_id, joined_date)
         ).fetchone()
     return (row["subcategory"], int(row["note"])) if row else None

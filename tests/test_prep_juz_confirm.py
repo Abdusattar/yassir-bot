@@ -291,28 +291,42 @@ def test_app_answer_too_early_is_refused(test_db, monkeypatch):
     assert prep._get_prep_row("555") is not None
 
 
-def test_second_prep_stint_does_not_reuse_old_answer(test_db, monkeypatch):
-    """Живой случай 22.09.2026 - Шиваза Арафат: в августе Н-1 подтверждён,
-    11.09 кикнут из группы за пропуски, 13.09 снова в подготовительной.
-    Ответ первого захода не должен действовать во втором: нового вопроса бы
-    не задали, а после 5 дней увело бы в Н-1 без Умар устаза."""
+def test_second_prep_stint_reuses_old_decision(test_db, monkeypatch):
+    """Живой случай 22.09.2026 - Шиваза Арафат: в августе Н-1 подтверждён
+    Умар устазом, 11.09 кикнут из группы за пропуски, 13.09 снова в
+    подготовительной. Решение пользователя: подготовительную проходит
+    полностью, но про джуз повторно не спрашиваем - после 5 полных дней
+    обратно в Н-1. Раньше 5 дней - никуда."""
     g = _setup_prep_group()
     n1 = _setup_n1_group()
     db.add_student("Шиваза", g["id"], phone="p7")
     st = db.find_by_phone("p7", g["id"])
-    # августовский заход: ответ записан датой того входа
     db.add_bonus(st["id"], g["id"], "2026-08-10", 0, "prep_juz_answer",
                  subcategory="N-1", note=str(n1["id"]))
-    monkeypatch.setattr(prep, "count_report_days_since", lambda *a: prep.PREP_MIN_DAYS)
     sent = _capture(monkeypatch)
 
-    # второй заход (вход сегодня): вопрос заново, а не выпуск по старому ответу
-    assert prep.graduation_question("p7") == {"ask": True, "days": prep.PREP_MIN_DAYS}
-    asyncio.run(prep.check_prep_students())
+    asyncio.run(prep.check_prep_students())          # 0 полных дней
     assert prep._get_prep_row("p7") is not None
-    assert _group_of("p7") is None
 
-    # и ответить можно - защита от двойного тапа не путает заходы
-    asyncio.run(prep.handle_juz_answer("p7", True))
-    assert prep.graduation_question("p7") == {"pending": True}
-    assert any(x[0] == "btn" and x[1] == prep._PREP_GRADUATE_ADMIN_ID for x in sent)
+    monkeypatch.setattr(prep, "count_report_days_since", lambda *a: prep.PREP_MIN_DAYS)
+    assert prep.graduation_question("p7") is None    # карточки с вопросом нет
+    asyncio.run(prep.check_prep_students())
+
+    assert _group_of("p7") == n1["id"]
+    assert prep._get_prep_row("p7") is None
+    assert not any(x[0] == "btn" for x in sent)      # ни вопроса, ни запроса устазу
+
+
+def test_unresolved_old_answer_asks_again(test_db, monkeypatch):
+    """В прошлом заходе ответил «знаю», но Умар устаз так и не решил -
+    это не решение: во втором заходе вопрос задаётся заново."""
+    g = _setup_prep_group()
+    _setup_n1_group()
+    db.add_student("Азим", g["id"], phone="p8")
+    st = db.find_by_phone("p8", g["id"])
+    db.add_bonus(st["id"], g["id"], "2026-08-10", 0, "prep_juz_answer",
+                 subcategory="pending_confirm", note="0")
+    monkeypatch.setattr(prep, "count_report_days_since", lambda *a: prep.PREP_MIN_DAYS)
+    _capture(monkeypatch)
+
+    assert prep.graduation_question("p8") == {"ask": True, "days": prep.PREP_MIN_DAYS}
