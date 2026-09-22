@@ -833,6 +833,16 @@
     overflow-anchor: none;
     -webkit-overflow-scrolling: touch;
   }
+  /* Текст Корана не выделяется (22.09.2026, пользователь с телефона): в
+     Chrome на Android касание по слову выделяло его и открывало панель
+     «найти в Google» (Touch to Search) поверх нашего перевода. Без
+     выделения её нет, а тап - перевод, двойной - «Мои слова» - работают как
+     были. -webkit-touch-callout - то же меню айфона на долгое нажатие.
+     Цена - слово из мусхафа не скопировать, в чтении это не нужно. */
+  #ayah-text, #hifz-big-words, .trainer-line, .trainer-word {
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
   #ayah-text {
     direction: rtl;
     line-height: 2.0;
