@@ -144,24 +144,25 @@ def test_count_report_days_since_ignores_partial_days(test_db):
 
 
 def test_count_report_days_since_counts_full_days(test_db):
-    from datetime import timedelta
-    from core.db import get_now
+    from datetime import date, timedelta
     save_group("-100561", "Группа О", tasks="m,r,t")
     g = get_group("-100561")
     sid = add_student("Бахтияр", g["id"])
-    yesterday = (get_now() - timedelta(days=1)).date().isoformat()
+    # День студента кончается в три ночи (core/db.get_date), поэтому «вчера»
+    # отсчитываем от УЧЕБНОГО дня: календарное «вчера» с полуночи до трёх
+    # совпадает с сегодняшним, и оба отчёта легли бы на одну дату.
+    yesterday = (date.fromisoformat(get_date()) - timedelta(days=1)).isoformat()
     save_report(sid, g["id"], yesterday, {"m": True, "r": True, "t": True})
     save_report(sid, g["id"], get_date(), {"m": True, "r": True, "t": True})
     assert count_report_days_since(sid, g["id"], yesterday) == 2
 
 
 def test_count_report_days_since_respects_lower_bound(test_db):
-    from datetime import timedelta
-    from core.db import get_now
+    from datetime import date, timedelta
     save_group("-100562", "Группа П", tasks="m,r,t")
     g = get_group("-100562")
     sid = add_student("Умар", g["id"])
-    old_day = (get_now() - timedelta(days=20)).date().isoformat()
+    old_day = (date.fromisoformat(get_date()) - timedelta(days=20)).isoformat()
     save_report(sid, g["id"], old_day, {"m": True, "r": True, "t": True})
     save_report(sid, g["id"], get_date(), {"m": True, "r": True, "t": True})
     assert count_report_days_since(sid, g["id"], get_date()) == 1
