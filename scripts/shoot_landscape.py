@@ -48,9 +48,11 @@ SCENES = {
     "mush_end": [("document.getElementById('dash-mushaf').click()", 2500),
                  ("var w=document.getElementById('page-wrap');w.scrollTop=w.scrollHeight", 600)],
     "meaning":  [("document.getElementById('dash-mushaf').click()", 2000),
-                 ("document.getElementById('tab-meaning').click()", 1500)],
+                 # 📜 наверху с 22.09.2026; в прежней версии - вкладка внизу.
+                 ("(document.getElementById('btn-meaning') || document.getElementById('tab-meaning')).click()", 1500)],
     "mywords":  [("document.getElementById('dash-mushaf').click()", 2000),
-                 ("document.getElementById('tab-mywords').click()", 1500)],
+                 # «Мои слова» с 22.09.2026 - только из тренажёра слов.
+                 ("document.getElementById('trainer-tab-mywords').click()", 1500)],
     "trainer":  [("document.getElementById('dash-trainer').click()", 2500)],
     "hifz":     [("document.getElementById('dash-mushaf').click()", 2000),
                  ("document.getElementById('btn-hifz').click()", 2000)],
@@ -89,7 +91,7 @@ MEASURE = """() => {
     font: getComputedStyle(el).fontSize, over_px: over, lines: lines.length,
     col: el.clientWidth, land: app.classList.contains('land'),
     nav_in_page: nav.parentNode === wrap,
-    tabbar: tab.offsetHeight, read_h: wrap.clientHeight, top: wrap.scrollTop,
+    tabbar: tab ? tab.offsetHeight : 0, read_h: wrap.clientHeight, top: wrap.scrollTop,
     // Верх листа за краем: первый блок выше области чтения при прокрутке 0
     // (так лёжа срезало верх - «потолок», 21.09.2026).
     cut_top: wrap.scrollTop === 0 && el.firstElementChild ?

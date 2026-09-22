@@ -27,7 +27,7 @@ from core import mushaf_words               # noqa: E402
 from aiohttp import web                     # noqa: E402
 
 OUT = ROOT / "logs" / "hifz_land"
-PORT = 8811
+PORT = int(__import__("os").environ.get("HIFZ_PORT", "8811"))
 PAGE = 3
 SIZES = [("stoya", 390, 844), ("se", 667, 375), ("i14", 844, 390)]
 
@@ -53,7 +53,12 @@ MEASURE = """() => {
   var foot = document.getElementById('hifz-foot').getBoundingClientRect();
   var lines = el.querySelectorAll('.mushaf-line'), over = 0;
   for (var i = 0; i < lines.length; i++) over = Math.max(over, lines[i].scrollWidth - lines[i].clientWidth);
-  return { land: app.classList.contains('land'), bare: app.classList.contains('bare'),
+  var xt = el.querySelector('.hifz-xtail'), wr = wrap.getBoundingClientRect();
+  var first = Array.prototype.filter.call(el.children, function (c) {
+    return getComputedStyle(c).display !== 'none'; })[0];
+  return { xt_cut: xt ? Math.round(xt.getBoundingClientRect().bottom - wr.bottom) : null,
+           first_under_head: first ? Math.round(head.bottom - first.getBoundingClientRect().top) : null,
+           land: app.classList.contains('land'), bare: app.classList.contains('bare'),
            font: getComputedStyle(el).fontSize, shown: shown, xtail: !!el.querySelector('.hifz-xtail'),
            head_bottom: Math.round(head.bottom), foot: [Math.round(foot.left), Math.round(foot.width), Math.round(foot.height)],
            over: over, big_btn: !!document.getElementById('hifz-big-btn'),
@@ -133,6 +138,12 @@ def main():
                     problems.append(f"{scene} {name}: land={m['land']}")
                 if scene in ("s1end", "s2b") and not m["xtail"]:
                     problems.append(f"{scene} {name}: нет перехода с чужого листа")
+                # Только стоя: лёжа этапы 2-3 длиннее экрана и прокручиваются,
+                # переход там и должен быть ниже края.
+                if not land and m["xt_cut"] is not None and m["xt_cut"] > 0 and scene != "rec":
+                    problems.append(f"{scene} {name}: переход обрезан снизу на {m['xt_cut']}px")
+                if land and scene not in ("bare", "pick") and m["first_under_head"] and m["first_under_head"] > 2:
+                    problems.append(f"{scene} {name}: первая строка под шапкой на {m['first_under_head']}px")
                 if scene == "bare" and land and m["head_bottom"] > 0:
                     problems.append(f"{scene} {name}: шапка не уехала")
                 if scene == "pick" and land and m["head_bottom"] <= 0:

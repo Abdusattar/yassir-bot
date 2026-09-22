@@ -247,7 +247,7 @@
   }
   #topbar .topbar-left { display: flex; align-items: center; gap: 8px; }
   #topbar .topbar-right { display: flex; align-items: center; gap: 8px; }
-  #btn-revision {
+  #btn-revision, #btn-meaning {
     background: none; border: none; font-size: 18px; padding: 2px 4px;
     cursor: pointer; line-height: 1;
   }
@@ -361,8 +361,7 @@
      студент привык видеть весь лист. */
   /* !important обязателен: switchTab ставит #page-nav/#tabbar инлайновый
      display, а инлайн бьёт обычное правило. */
-  #app.hifz #page-nav,
-  #app.hifz #tabbar { display: none !important; }
+  #app.hifz #page-nav { display: none !important; }
   /* Исключение — «поправить» (13.09.2026, просьба пользователя). В обычном
      заучивании страница идёт за указателем, уходить с неё незачем и нельзя
      (см. pageTurnBlocked). А когда человек ставит место заново, перескок
@@ -654,6 +653,8 @@
   /* Без «Крупно» (22.09.2026) место в полосе отдано счётчику: по нему
      тапают вслепую, чем шире мишень, тем вернее. */
   #app:not(.land) #hifz-count { flex: 1 1 auto; }
+  /* Цифра под размер мишени: в широкой коробке 17px терялись. */
+  #app:not(.land) #hifz-count .c-n b { font-size: 23px; }
 
   /* Прослушать: компактная круглая кнопка (не текстовая, как соседи) —
      иконка сама объясняет назначение, а вкл/выкл читается по заливке,
@@ -691,12 +692,15 @@
   }
   .mushaf-line.hifz-has-tail { opacity: 1; }
   .mushaf-line.hifz-has-tail > span:not(.hifz-tail) { opacity: .42; }
-  /* Этап 2 стоя (22.09.2026, решение пользователя): видна только своя
-     половина и переход. visibility, а не display: половина остаётся на
-     СВОЁМ месте листа - хафиз помнит, что вторая половина внизу, - а на
-     месте чужой просто пусто. Проверку устаза и разбор не трогаем. */
+  /* Этап 2 стоя (22.09.2026, решение пользователя): своя половина и
+     переход, чужая - силуэтом. Не display: половина остаётся на СВОЁМ месте
+     листа - хафиз помнит, что вторая половина внизу. Не пустота
+     (visibility: hidden, первый заход): на снимке пустые полэкрана
+     читались как «лист не догрузился», а шрифт стоя всё равно держит
+     ширина - спрятанная половина места буквам не давала. Силуэт держит
+     вид листа, а прочесть его нельзя. Проверку устаза и разбор не трогаем. */
   #app.hifz.hifz-s2:not(.land):not(.hifz-pick):not(.review):not(.look) #ayah-text > .hifz-off {
-    visibility: hidden;
+    opacity: .12;
   }
   /* Переход, когда единица кончилась последней строкой листа: слова с
      первой строки СЛЕДУЮЩЕГО листа отдельной строкой под листом (22.09).
@@ -709,6 +713,11 @@
     margin-top: .25em; padding-top: .2em;
     border-top: 1px dashed var(--chrome-border);
   }
+  /* Переход под целым листом стоя (этап 3, последняя строка) - лист и так
+     во весь экран. Строки чуть плотнее, переход ниже ростом: иначе он
+     уходил за низ и был виден наполовину (снимок 22.09.2026). */
+  #app.hifz.hifz-xt:not(.land) #ayah-text { line-height: 1.86; }
+  #app.hifz.hifz-xt:not(.land) .hifz-xtail { line-height: 1.5; margin-top: .1em; }
   .hifz-xtail > span {
     opacity: .5; border-radius: 3px;
     background: color-mix(in srgb, var(--marker-color) 16%, transparent);
@@ -747,11 +756,15 @@
   /* Плашка «Место не изменено» после ✕ посреди выбора (13.09.2026). */
   #hifz-note {
     position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 8px);
+    /* Своя ширина по тексту, а не «сколько осталось от середины экрана»:
+       иначе плашка сжималась в узкий столбик в пять строк (22.09.2026). */
+    width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box; text-align: center;
     padding: 9px 14px; border-radius: 12px; background: var(--ink); color: var(--card-bg);
     font: 500 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60;
   }
   #hifz-note.visible { opacity: 1; transform: translate(-50%, 0); }
+  #hifz-note small { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 400; opacity: .75; }
   #hifz-units button {
     flex: 1; padding: 9px 6px; border-radius: 9px; cursor: pointer;
     border: 1px solid var(--chrome-border); background: transparent;
@@ -925,8 +938,11 @@
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
+    /* Полоса внизу экрана (22.09.2026): граница сверху, снизу - полоска
+       «домой» айфона. */
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
     background: var(--chrome-bg);
-    border-bottom: 1px solid var(--chrome-border);
+    border-top: 1px solid var(--chrome-border);
     flex: 0 0 auto;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
@@ -963,7 +979,21 @@
      « «К закладке» остаётся в навигационной группе - она просто переносит.
      Отступ логический: полоса живёт в rtl, margin-left увёл бы его не в ту
      сторону - проверено скриншотом. */
-  #btn-bookmark-go { margin-inline-start: 16px; }
+  /* 🔖 отодвинута от листания: это меню, а не шаг по страницам. */
+  #btn-bookmark { margin-inline-start: 16px; }
+  #bm-menu {
+    display: none; position: fixed; z-index: 80; min-width: 240px; padding: 6px;
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .18); direction: ltr;
+    font: 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #bm-menu.on { display: block; }
+  #bm-menu button {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    padding: 11px 12px; border-radius: 9px; font: inherit; color: var(--ink); cursor: pointer;
+  }
+  #bm-menu button:active { background: var(--accent-soft); }
+  #bm-menu small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
   #page-indicator {
     font-size: 13px; color: var(--muted);
     cursor: pointer; padding: 4px 10px; border-radius: 8px;
@@ -1312,6 +1342,26 @@
     0%, 55% { background: var(--warn-soft); box-shadow: 0 0 0 6px var(--warn-soft); }
     100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
   }
+  /* Карточка выпускника подготовительной - единственное место дашборда, где
+     ждут ответа, поэтому она заметнее доски: акцентная рамка, две кнопки. */
+  #dash-grad {
+    display: none; flex: 0 0 auto; margin: 14px 0 12px; padding: 15px 15px 14px;
+    background: var(--card-bg); border: 1.5px solid var(--accent); border-radius: 18px;
+    box-shadow: var(--shadow-sm); direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #dash-grad.on { display: block; }
+  #dash-grad .g-h { font-size: 15px; font-weight: 700; color: var(--ink); }
+  #dash-grad .g-t { font-size: 13.5px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+  #dash-grad .g-btns { display: flex; gap: 8px; margin-top: 12px; }
+  #dash-grad .g-btns button {
+    flex: 1; padding: 11px 8px; border-radius: 12px; cursor: pointer;
+    font: 600 13.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    border: 1px solid var(--card-border); background: transparent; color: var(--ink);
+  }
+  #dash-grad .g-btns button:first-child { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  #dash-grad .g-btns button:disabled { opacity: .5; }
+  #dash-grad.wait .g-btns { display: none; }
   #dash-board { display: none; flex: 0 0 auto; flex-direction: column; margin: 20px 0 0; overflow: hidden;
     background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
     box-shadow: var(--shadow-sm);
@@ -3050,7 +3100,6 @@
     padding-left: max(10px, env(safe-area-inset-left));
     padding-right: max(10px, env(safe-area-inset-right));
   }
-  #app.land #tabbar { display: none !important; }
   /* Прокрутка лёжа встаёт на границу строки (21.09.2026, пользователь со
      своего телефона: верхняя строка срезана наполовину). Строка лёжа ~100px,
      остановка посреди неё - строку не прочесть; теперь сверху всегда целая
@@ -3082,10 +3131,11 @@
   }
   #app.land.bare #topbar { transform: translateY(-100%); box-shadow: none; }
   #app.land #page-wrap {
-    padding-top: calc(6px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    /* 36px - высота шапки: пока она видна, начало листа не уходит под неё. */
+    padding-top: calc(36px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
     /* Равен отступу сверху: иначе прилипание к строке оставляло лист на
        прокрутке 6px, и новый лист открывался «не с начала» (сверка снимков). */
-    scroll-padding-top: calc(6px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    scroll-padding-top: calc(36px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
     padding-left: max(12px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
     padding-right: max(12px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px));
   }
@@ -3148,15 +3198,22 @@
   #app.land.hifz #hifz-submit { padding: 10px 2px; font-size: 12px; white-space: normal; line-height: 1.25; }
   #app.land.hifz #hifz-units { flex-direction: column; flex: 0 0 auto; align-self: stretch; }
   #app.land.hifz #hifz-units button { padding: 10px 2px; font-size: 11.5px; }
+  /* Сверху отступ на высоту шапки: при входе она видна, и без него верх
+     первой строки уходил под неё. Отступ только в начале листа - при
+     прокрутке уезжает вместе с текстом. */
   #app.land.hifz #page-wrap {
     padding-left: calc(var(--rail-w) + 12px);
-    padding-top: calc(10px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
-    scroll-padding-top: calc(10px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    padding-top: calc(40px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    scroll-padding-top: calc(40px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
   }
   /* Единица короче экрана (строка, половина на большом телефоне) - по
      центру высоты. Длиннее - auto схлопывается в 0, верх не срезается. */
   #app.land.hifz:not(.hifz-pick) #ayah-text { margin-top: auto; margin-bottom: auto; }
   #app.land.hifz:not(.hifz-pick) #ayah-text > .hifz-off { display: none; }
+  /* Подложка своей строки нужна, чтобы отличить её от приглушённых. Лёжа
+     приглушённых нет - всё на экране своё, и сплошные полосы только шумят.
+     Выделенным остаётся переход. */
+  #app.land.hifz:not(.hifz-pick) .mushaf-line.hifz-lit { background: none; box-shadow: none; }
   #app.land.hifz #hifz-rec { left: var(--rail-w); }
   #app.land.hifz #hifz-rec .card { border-radius: 12px 12px 0 0; }
 </style>
@@ -3197,6 +3254,18 @@
     <span class="b-n" id="brief-n"></span>
     <span class="b-dot" id="brief-dot"></span>
     <span class="b-go">›</span>
+  </div>
+  <!-- Выпуск из подготовительной (22.09.2026, «теперь истина - база»):
+       вопрос про джуз задаёт карточка, а не только личка бота. Ответ
+       переводит в группу сразу, в базе - вступать в Telegram-группу для
+       этого не нужно. Показывает dashGrad по факту prep_grad из пульса. -->
+  <div id="dash-grad">
+    <div class="g-h" id="grad-h"></div>
+    <div class="g-t" id="grad-t"></div>
+    <div class="g-btns" id="grad-btns">
+      <button id="grad-yes"></button>
+      <button id="grad-no"></button>
+    </div>
   </div>
   <div id="dash-doors" class="three">
   <!-- Своя дверь студента (04.09.2026, экран "Сдачи" из макета 01.09): свои
@@ -3436,24 +3505,10 @@
            тренажёр. -->
       <button id="btn-hifz" title="Заучивание 40+40">📖</button>
       <button id="btn-revision" title="Отметить повторение">🔁</button>
+      <!-- 📜 «Смысл» наверху (22.09.2026): нижнего меню больше нет. -->
+      <button id="btn-meaning" title="Смысл">📜</button>
       <span id="ayah-range"></span>
     </div>
-  </div>
-  <div id="page-nav">
-    <!-- Порядок в DOM - "наоборот" от желаемой картинки (30.08.2026):
-         #page-nav наследует dir="rtl", flex-контейнер визуально переставляет
-         детей в обратном порядке относительно DOM. Middle-тройка (btn-next/
-         page-indicator/btn-prev) НЕ трогается - её собственный визуальный
-         результат уже верный (см. CSS-комментарий у .page-nav-util). Итог на
-         экране слева направо: 🔖 « ‹ стр. N › » - подтверждено пользователем
-         и headless-скриншотом. -->
-    <button id="btn-go-baqara" class="page-nav-util" title="Начало Аль-Бакара">»</button>
-    <button id="btn-next">‹</button>
-    <span id="page-indicator">—</span>
-    <input id="page-jump-input" type="number" inputmode="numeric">
-    <button id="btn-prev">›</button>
-    <button id="btn-bookmark-go" class="page-nav-util" title="К закладке">«</button>
-    <button id="btn-bookmark-save" class="page-nav-util" title="Сохранить закладку"><span class="icon-gold">🔖</span></button>
   </div>
 
   <!-- Режим заучивания: своя шапка вместо #page-nav и своя нижняя полоса
@@ -3498,6 +3553,28 @@
        тапом/кликом, но уже здесь, по строке (см. #mywords-list ниже). -->
   <div id="view-mywords" class="view">
     <div id="mywords-list"></div>
+  </div>
+
+  <!-- Строка страниц ВНИЗУ (22.09.2026, решение пользователя): в печатном
+       мушафе номер страницы стоит внизу, и низ - то, чем работаешь во время
+       чтения (листание, закладка); вверху - что начать (📖 🔁 📜). Нижнего
+       меню больше нет. #page-nav наследует dir="rtl": flex переставляет детей
+       в обратном порядке, на экране слева направо 🔖 ‹ стр. N ›. -->
+  <div id="page-nav">
+    <button id="btn-next">‹</button>
+    <span id="page-indicator">—</span>
+    <input id="page-jump-input" type="number" inputmode="numeric">
+    <button id="btn-prev">›</button>
+    <!-- 🔖 - одна кнопка с меню вместо трёх значков 🔖 « » (22.09.2026):
+         « и » читались как «в начало/в конец», а значили закладку и
+         начало Бакары. Сохранение теперь пункт меню - случайный тап при
+         листании больше не перезаписывает место. -->
+    <button id="btn-bookmark" class="page-nav-util" title="Закладка"><span class="icon-gold">🔖</span></button>
+  </div>
+  <div id="bm-menu">
+    <button id="btn-bookmark-save"><span data-i18n="bm_save">🔖 Сохранить закладку здесь</span><small data-i18n="bm_save_sub">эта страница станет закладкой</small></button>
+    <button id="btn-bookmark-go"><span data-i18n="bm_go">↩ К закладке</span><small id="bm-go-sub" data-i18n="bm_go_sub">страница, где остановился</small></button>
+    <button id="btn-go-baqara"><span data-i18n="bm_baqara">⤒ Начало Аль-Бакары</span><small data-i18n="bm_baqara_sub">отсюда начинается повторение</small></button>
   </div>
 
   <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
@@ -3644,28 +3721,9 @@
     </div>
   </div>
 
-  <div id="tabbar">
-    <!-- Контекстная панель (30.08.2026, решение пользователя) - на любом
-         сабвью показываются только ПУТИ КУДА ИДТИ, не текущее место (см.
-         switchTab), текст+иконка как в #trainer-tabbar:
-           Страница: Смысл, Мои слова, Тренажёр (3 кнопки)
-           Смысл: пусто - идти отсюда некуда, назад ведёт шапка
-           Мои слова: Тренажёр (1) - назад ведёт шапка
-         Возврата тут больше нет (09.09.2026, общее правило навигации):
-         "← Откуда" стоит слева вверху (#mushaf-back, подпись ставит
-         switchTab), низ - только пути и действия. -->
-    <button id="tab-meaning" class="tab-btn" data-i18n="tab_meaning_full">📜 Смысл</button>
-    <!-- ⭐, не 🔖 (30.08.2026, пользователь поймал путаницу с закладкой
-         страницы, у которой тот же 🔖) - совпадает с реальным именем
-         таблицы в БД (mushaf_starred_words, "starred" = отмечено
-         звёздочкой), две разные функции больше не выглядят одинаково. -->
-    <button id="tab-mywords" class="tab-btn" data-i18n-html="tab_mywords_gold"><span class="icon-gold">⭐</span> Мои слова</button>
-    <!-- Прямой переход в Тренажёр без дашборда (30.08.2026, решение
-         пользователя) - НЕ switchTab (уводит из #app целиком), поэтому
-         .active никогда не проставляется - после клика вкладки всё равно
-         не видны (см. openTrainer). -->
-    <button id="tab-trainer" class="tab-btn" data-i18n="tab_trainer_full">🌱 Тренажёр</button>
-  </div>
+  <!-- Нижнего меню (#tabbar: Смысл, Мои слова, Тренажёр) нет с 22.09.2026:
+       📜 - наверху, «Мои слова» - в тренажёре слов, тренажёры - с дашборда.
+       Внизу строка страниц. -->
 </div>
 
 <div id="trainer">
@@ -4288,7 +4346,21 @@
       hifz_pick_half_sub: 'тапни по половине',
       hifz_pick_cancel: 'Место не изменено',
       trainer_range_to: 'словарь: до стр. %N%',
-      hifz_rotate_hint: 'Поверните телефон — строки крупнее, как в мусхафе. Не поворачивается — снимите блокировку поворота',
+      grad_title: '🎓 Ты прошёл подготовительную',
+      grad_title_f: '🎓 Ты прошла подготовительную',
+      grad_ask: '%N% полных дней. Знаешь наизусть страницы 1–22 Корана? Ответ определит твою группу.',
+      grad_yes: 'Знаю 1–22 наизусть',
+      grad_no: 'Не знаю',
+      grad_pending: 'Устаз проверит и сам решит, в какую группу тебя взять. Ждём его ответа.',
+      grad_moved: 'Ты в группе «%G%». Задания уже засчитываются там.',
+      bm_save: '🔖 Сохранить закладку здесь',
+      bm_save_sub: 'эта страница станет закладкой',
+      bm_go: '↩ К закладке',
+      bm_go_sub: 'страница, где остановился',
+      bm_baqara: '⤒ Начало Аль-Бакары',
+      bm_baqara_sub: 'отсюда начинается повторение',
+      hifz_rotate_hint: 'Поверните телефон — строки станут крупнее',
+      hifz_rotate_hint_lock: 'не поворачивается — снимите блокировку поворота',
       hifz_unit_line: 'Строка',
       hifz_unit_half: 'Половина',
       hifz_unit_page: 'Страница',
@@ -5289,8 +5361,47 @@
     return T('dash_words_correct', { C: w.correct, K: w.correct_target });
   }
 
+  /* Выпуск из подготовительной (22.09.2026): карточку рисует факт из базы -
+     prep_grad {ask, days} или {pending}; нет факта - нет карточки. */
+  function dashGrad(g, moved) {
+    var box = document.getElementById('dash-grad');
+    if (moved) {
+      document.getElementById('grad-h').textContent = T(lessonFemale() ? 'grad_title_f' : 'grad_title');
+      document.getElementById('grad-t').textContent = T('grad_moved', { G: moved });
+      // «Ты в группе» - итог, держим его полминуты, пульсы его не стирают.
+      box.classList.add('on', 'wait', 'done');
+      setTimeout(function () { box.classList.remove('on', 'wait', 'done'); }, 30000);
+      return;
+    }
+    if (!g) { box.classList.remove('on', 'wait'); return; }
+    document.getElementById('grad-h').textContent = T(lessonFemale() ? 'grad_title_f' : 'grad_title');
+    document.getElementById('grad-t').textContent = g.pending ? T('grad_pending') : T('grad_ask', { N: g.days });
+    document.getElementById('grad-yes').textContent = T('grad_yes');
+    document.getElementById('grad-no').textContent = T('grad_no');
+    box.classList.toggle('wait', !!g.pending);
+    box.classList.remove('done');
+    box.classList.add('on');
+  }
+  function gradAnswer(knows) {
+    var btns = document.querySelectorAll('#grad-btns button');
+    Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
+    apiCall('/prep/juz', { method: 'POST', body: { knows: knows } }).then(function (res) {
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+      if (res.status === 401) return;
+      var d = res.data || {};
+      if (d.pending) dashGrad({ pending: true });
+      else if (d.group) dashGrad(null, d.group);
+      sendHeartbeat();
+    }).catch(function () {
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+    });
+  }
+  document.getElementById('grad-yes').addEventListener('click', function () { gradAnswer(true); });
+  document.getElementById('grad-no').addEventListener('click', function () { gradAnswer(false); });
+
   function dashFacts(f) {
     dashDay(f.day);
+    if (!document.getElementById('dash-grad').classList.contains('done')) dashGrad(f.prep_grad);
     var mush = document.getElementById('dash-mushaf-sub');
     if (f.hifz && f.hifz.page) {
       var st = f.hifz.stage, page = f.hifz.page;
@@ -5973,7 +6084,6 @@
     document.getElementById('dashboard').style.display = 'flex';
     if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
-  document.getElementById('tab-trainer').addEventListener('click', openTrainer);
   document.getElementById('trainer-tab-mywords').addEventListener('click', function () { openMushaf('mywords', 'trainer'); });
   document.getElementById('trainer-tab-mushaf').addEventListener('click', function () { openMushaf('page'); });
   // role="button" на <div> не даёт Enter/Space нативно, в отличие от <button> -
@@ -6682,8 +6792,6 @@
     document.getElementById('view-words').classList.toggle('active', name === 'words');
     document.getElementById('view-meaning').classList.toggle('active', name === 'meaning');
     document.getElementById('view-mywords').classList.toggle('active', name === 'mywords');
-    document.getElementById('tab-meaning').classList.toggle('active', name === 'meaning');
-    document.getElementById('tab-mywords').classList.toggle('active', name === 'mywords');
 
     // Контекстная нижняя панель (30.08.2026, решение пользователя) -
     // всегда показывает "куда ещё пойти", никогда кнопку на текущее
@@ -6703,14 +6811,6 @@
     document.getElementById('mushaf-back').textContent = onPage
       ? T('back_dashboard')
       : (mywordsFromTrainer ? T('back_trainer') : T('back_mushaf'));
-    /* На "Смысле" идти больше некуда - панель пуста, и от неё осталась бы
-       только полоска border-top. Прячем её целиком (09.09.2026). Инлайн
-       безопасен: режим заучивания гасит #tabbar своим !important. */
-    document.getElementById('tabbar').style.display = onMeaning ? 'none' : 'flex';
-    document.getElementById('tab-meaning').style.display = onPage ? '' : 'none';
-    document.getElementById('tab-mywords').style.display = onPage ? '' : 'none';
-    document.getElementById('tab-trainer').style.display =
-      (onPage || (onMywords && !mywordsFromTrainer)) ? '' : 'none';
 
     // "Мои слова" - список ПО ВСЕЙ книге, не привязан к текущей странице
     // (29.08.2026, поймано пользователем живьём - "стр. 4" в шапке над
@@ -6737,14 +6837,11 @@
        (защита с другой стороны): в режим заучивания попадают не только
        отсюда — есть ещё разбор устаза и пересдача. */
     document.getElementById('btn-hifz').style.display = name === 'page' ? '' : 'none';
+    document.getElementById('btn-meaning').style.display = name === 'page' ? '' : 'none';
     if (name === 'page') mushafFitSchedule();
     if (name === 'mywords') loadMyWords();
   }
-  document.getElementById('tab-meaning').addEventListener('click', function () { switchTab('meaning'); });
-  document.getElementById('tab-mywords').addEventListener('click', function () {
-    mywordsOrigin = 'page';
-    switchTab('mywords');
-  });
+  document.getElementById('btn-meaning').addEventListener('click', function () { switchTab('meaning'); });
   switchTab('page');
 
   // "Мои слова" - список (29.08.2026, см. модульный комментарий у
@@ -6987,6 +7084,7 @@
     app.classList.toggle('pick-line', hifz.picking && hifz.unit !== 'half');
     app.classList.toggle('pick-half', hifz.picking && hifz.unit === 'half');
     app.classList.toggle('hifz-s2', hifz.on && !hifz.picking && hifz.stage === 2);
+    app.classList.remove('hifz-xt');
     var box = document.getElementById('ayah-text');
     Array.prototype.forEach.call(box.children, function (el) { el.classList.remove('hifz-off'); });
     var oldX = box.querySelector('.hifz-xtail');
@@ -7039,6 +7137,7 @@
     // «Крупно» убрано, и переход с чужого листа встаёт отдельной строкой
     // под листом (.hifz-xtail) - на любом этапе, стоя и лёжа.
     var lastShown = tailCount && rows[tailLine] ? rows[tailLine] : rows[lit[lit.length - 1]];
+    var xtail = false;
     if (tailCount && !rows[tailLine]) {
       var src = hifzTailLine(lit[lit.length - 1]);
       if (src && src.foreign) {
@@ -7058,6 +7157,7 @@
         x.innerHTML = xh;
         box.appendChild(x);
         lastShown = x;
+        xtail = true;
       }
     }
     // Всё вне своей единицы и перехода - .hifz-off: лёжа прячется, на
@@ -7069,6 +7169,7 @@
       if (el === lastShown) inside = false;
       else if (!inside && el !== firstLit) el.classList.add('hifz-off');
     });
+    app.classList.toggle('hifz-xt', xtail);
     // Лёжа сменилась единица - показываем её с начала.
     var unitKey = currentPage + ':' + hifz.stage + ':' + lit[0];
     if (app.classList.contains('land') && unitKey !== hifzShownUnit) {
@@ -7333,7 +7434,7 @@
 
   // Короткая плашка внизу листа, сама уходит. Одна на всё приложение.
   var hifzNoteTimer = null;
-  function hifzNote(text, ms) {
+  function hifzNote(text, ms, small) {
     var el = document.getElementById('hifz-note');
     if (!el) {
       el = document.createElement('div');
@@ -7341,6 +7442,11 @@
       document.body.appendChild(el);
     }
     el.textContent = text;
+    if (small) {
+      var sm = document.createElement('small');
+      sm.textContent = small;
+      el.appendChild(sm);
+    }
     el.classList.add('visible');
     if (hifzNoteTimer) clearTimeout(hifzNoteTimer);
     hifzNoteTimer = setTimeout(function () { el.classList.remove('visible'); }, ms || 2500);
@@ -8884,14 +8990,43 @@
   // на сервере (по Telegram ID, core/mushaf_words.py), "«" переносит на
   // сохранённую. Не то же самое, что закладка тренажёра (mufradat_page) -
   // отдельная точка возврата, которую студент выставляет сам.
-  document.getElementById('btn-bookmark-save').addEventListener('click', function (e) {
-    var btn = e.currentTarget;
-    apiCall('/bookmark', { method: 'POST', body: { page: currentPage } }).then(function (res) {
-      if (res.status !== 401) showPopupMessage(btn, T('bookmark_saved', { N: currentPage }));
+  /* С 22.09.2026 все три действия - в меню 🔖 (#bm-menu). Пункты - те же
+     кнопки с теми же id, что стояли в полосе, поэтому и снимки онбординга,
+     и стенды жмут их как раньше. Подсказки «сохранено / закладки нет»
+     встают у 🔖: пункт меню к этому моменту уже скрыт. */
+  var bmBtn = document.getElementById('btn-bookmark');
+  var bmMenu = document.getElementById('bm-menu');
+  function bmClose() { bmMenu.classList.remove('on'); }
+  bmBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (bmMenu.classList.contains('on')) { bmClose(); return; }
+    bmMenu.classList.add('on');
+    // Под кнопкой, а если снизу не хватает места (полоса теперь внизу
+    // экрана, а лёжа - в конце листа) - над ней. Прижато к экрану.
+    var r = bmBtn.getBoundingClientRect(), m = bmMenu.getBoundingClientRect();
+    var top = r.bottom + 6;
+    if (top + m.height > window.innerHeight - 8) top = r.top - m.height - 6;
+    bmMenu.style.top = Math.max(8, top) + 'px';
+    bmMenu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - m.width - 8)) + 'px';
+    // Номер страницы закладки прямо в пункте: видно, куда уведёт.
+    apiCall('/bookmark').then(function (res) {
+      if (res.status !== 401 && res.data && res.data.page) {
+        document.getElementById('bm-go-sub').textContent = T('page_n', { N: res.data.page });
+      }
     });
   });
-  document.getElementById('btn-bookmark-go').addEventListener('click', function (e) {
-    var btn = e.currentTarget;
+  bmMenu.addEventListener('click', function (e) { if (e.target.closest('button')) bmClose(); });
+  document.addEventListener('click', function (e) {
+    if (bmMenu.classList.contains('on') && !bmMenu.contains(e.target)) bmClose();
+  });
+  document.getElementById('page-wrap').addEventListener('scroll', bmClose, { passive: true });
+  document.getElementById('btn-bookmark-save').addEventListener('click', function () {
+    apiCall('/bookmark', { method: 'POST', body: { page: currentPage } }).then(function (res) {
+      if (res.status !== 401) showPopupMessage(bmBtn, T('bookmark_saved', { N: currentPage }));
+    });
+  });
+  document.getElementById('btn-bookmark-go').addEventListener('click', function () {
+    var btn = bmBtn;
     apiCall('/bookmark').then(function (res) {
       if (res.status === 401) return;
       if (res.data && res.data.page) {
@@ -9141,7 +9276,7 @@
     if (st.shown >= ROTATE_HINT_MAX || st.land >= ROTATE_HINT_LEARNED) return;
     st.shown++;
     rotateHintSave(st);
-    hifzNote(T('hifz_rotate_hint'), 5000);
+    hifzNote(T('hifz_rotate_hint'), 5000, T('hifz_rotate_hint_lock'));
   }
 
   /* Полный экран Telegram лёжа (22.09.2026): убирает и шапку самого
@@ -10078,7 +10213,7 @@
         ['dash', 'Открой «Мусхаф»',
          'Заучивание сдаётся отсюда — там же, где ты читаешь.'],
         ['mushaf', 'Нажми 📖 наверху',
-         'Эта кнопка включает режим заучивания. Рядом 🔁 — она для повторения, не путай.'],
+         'Эта кнопка включает режим заучивания. Рядом 🔁 — она для повторения, не путай, и 📜 — смысловой перевод страницы.'],
         ['pick', 'Первый раз — отметь своё место',
          'Приложение спросит, с какой строчки начинаешь. Внизу выбери, что заучиваешь: строку, половину листа или всю страницу. Потом тапни по самой строке.'],
         ['pointer', 'Место отмечено',
@@ -10096,9 +10231,9 @@
       desc: 'Что читать каждый день',
       steps: [
         ['read', 'Читаешь всё, что уже выучил',
-         'Повторение — это не вчерашняя строчка. Каждый день перечитываешь с начала суры Аль-Бакара до места, где остановился. Кнопка » в полосе страниц открывает её начало сразу. Забыл — подглядывай в текст, это не экзамен: цель — освежить, а не проверить себя.'],
+         'Повторение — это не вчерашняя строчка. Каждый день перечитываешь с начала суры Аль-Бакара до места, где остановился. Её начало открывается сразу: 🔖 внизу → «Начало Аль-Бакары». Забыл — подглядывай в текст, это не экзамен: цель — освежить, а не проверить себя.'],
         ['bookmark', 'Закладка помнит, где ты',
-         '🔖 сохраняет страницу, на которой закончил, а « возвращает к ней. Рядом » — начало Аль-Бакары, откуда повторение начинается. Полоса страниц читается справа налево: 🔖 « ‹ стр. N › ».'],
+         '🔖 внизу открывает меню: «Сохранить закладку здесь» — на странице, где закончил, «К закладке» — вернуться к ней, «Начало Аль-Бакары» — откуда начинается повторение. Рядом листание: ‹ стр. N ›.'],
         ['revision', 'Прочитал — нажми 🔁',
          'Кнопка стоит рядом с 📖, на странице чтения. Это то же самое, что написать «повторил» в группу, только без набора текста.'],
         ['revision_ask', 'Подтверди — и готово',

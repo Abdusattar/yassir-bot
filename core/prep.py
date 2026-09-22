@@ -200,19 +200,16 @@ async def check_prep_students():
                 # ссылки ещё нет, слать/алертить нечего (25.08.2026).
                 pass
             else:
-                # Ответил, но всё ещё в подготовительной - значит по ссылке ещё
-                # не перешёл. Шлём ту же ссылку повторно каждую проверку, пока
-                # не вступит (announce_prep_graduate_arrival сам кикнет из prep,
-                # как только это произойдёт - тогда студент пропадёт из выборки).
-                # Свой независимый дневной guard — не слать дважды за день.
-                if not _has_nudge_today(s["id"], group_id, today, "prep_link_nudge"):
-                    _, target_group_id = answer
-                    target = get_group_by_id(target_group_id)
-                    if target and target["invite_link"]:
-                        await _send_dm_or_group(uid, s["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
-                        add_bonus(s["id"], group_id, today, 0, "prep_link_nudge")
-                await _alert_if_stuck(s["id"], group_id, joined, s["name"], "получил ссылку, но не вступил в группу",
-                                       get_event_time(s["id"], group_id, "prep_juz_answer"))
+                # Решение есть, а человек всё ещё в подготовительной. До
+                # 22.09.2026 это значило «не перешёл по ссылке» - ссылка
+                # повторялась каждый день, пока не вступит в Telegram-группу.
+                # Теперь переводим в базе (graduate_to_group). Сюда попадают
+                # решения, принятые до этой правки (живой случай - Шиваза
+                # Арафат), и выпуск, сорвавшийся на полпути.
+                _, target_group_id = answer
+                target = get_group_by_id(target_group_id)
+                if target:
+                    await graduate_to_group(uid, target)
         else:
             # Ещё не выполнил условие перехода. Напоминание "нажми Start" для
             # dm_ok=0 отдельно тут не нужно - им уже занимается общий
@@ -242,11 +239,11 @@ async def check_prep_students():
             log.info("prep check: student=%s days_done=%d < %d after %d days (deadline=%d) → failed, kicked", s["name"], days_done, PREP_MIN_DAYS, elapsed, deadline)
 
     if need_dm_start:
-        link = await get_dm_start_link()
+        # Вопрос про джуз ждёт в YassirApp (карточка на дашборде, 22.09.2026) -
+        # зовём туда, а не «нажмите Start»: личка для перевода больше не нужна.
         for info in need_dm_start.values():
             await send_message(info["chat_id"], T(
-                "prep_need_dm_start", info["glang"],
-                names=", ".join(info["names"]), link=link or "https://t.me/"
+                "prep_answer_in_app", info["glang"], names=", ".join(info["names"])
             ))
 
 
@@ -358,10 +355,6 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
     if not prep_row:
         return
 
-    from_group_id = prep_row["gid"]
-    from_chat_id = prep_row["chat_id"]
-    name = prep_row["name"]
-
     # Защита от преждевременного "выпуска": условие (≥5 дней отчётов) должно
     # быть реально выполнено, а не просто "студент где-то стал активным".
     # Тот же prep_days_done, что и block_return_if_pending_prep в
@@ -370,10 +363,53 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
     if days_done < PREP_MIN_DAYS:
         log.warning(
             "prep graduate arrival skipped: %s active in new group but only %d/%d days in prep",
-            name, days_done, PREP_MIN_DAYS
+            prep_row["name"], days_done, PREP_MIN_DAYS
         )
         return
+    await _complete_graduation(phone, u["id"], prep_row["gid"], prep_row["chat_id"],
+                               prep_row["name"], group_id, chat_id)
 
+
+async def graduate_to_group(phone, target):
+    """Выпуск из подготовительной - в БАЗЕ, в момент решения (22.09.2026,
+    решение пользователя: «теперь истина - база»).
+
+    Раньше решение («не знаю» или ответ Умар устаза) давало только ссылку,
+    а сам перевод случался, когда человек вступал в Telegram-группу
+    (handle_known_user_group_join -> announce_prep_graduate_arrival). Кто
+    живёт в YassirApp и в Telegram по ссылке не шёл, оставался в базе в
+    подготовительной навсегда: ссылка каждый день, тревога устазу «не
+    вступил» (живой случай - Шиваза Арафат, Н-1 подтверждён, 9 дней в prep).
+
+    Теперь записываем в группу сразу - приложение показывает её в ту же
+    минуту, - а Telegram подтягиваем следом: убираем из чата
+    подготовительной, объявляем в обоих чатах, ссылку на чат группы даём как
+    место для общения и уроков. Вступит туда позже - join-обработчик увидит,
+    что человек уже в этой группе, и ничего не сделает.
+    Возвращает True, если выпуск состоялся."""
+    row = _get_prep_row(phone)
+    if not row or not target:
+        return False
+    add_student(row["name"], target["id"], phone)
+    await _complete_graduation(phone, row["uid"], row["gid"], row["chat_id"], row["name"],
+                               target["id"], target["chat_id"])
+    glang = row["lang"] or "ru"
+    text = T("prep_graduated", glang, title=target["title"] or "")
+    if target["invite_link"]:
+        text += "\n\n" + T("prep_graduated_chat", glang, link=target["invite_link"])
+    # Личка - копия для тех, у кого она открыта. Главное человек увидит в
+    # приложении: объявление в новой группе помечено для него важным.
+    if get_dm_ok_by_phone(phone):
+        await send_message(phone, text)
+    log.info("prep graduate (db): %s -> group=%s", row["name"], target["id"])
+    return True
+
+
+async def _complete_graduation(phone, user_id, from_group_id, from_chat_id, name, group_id, chat_id):
+    """Общий хвост выпуска: выписать из подготовительной и Тадаббура, снять
+    штрафную метку, объявить в обоих чатах, убрать из чата подготовительной.
+    Зовут оба пути - решение в базе (graduate_to_group) и приход в группу
+    по Telegram (announce_prep_graduate_arrival: устаз позвал вручную)."""
     _deactivate_from_prep_by_group_id(phone, from_group_id)
 
     # Официальный выпуск подтверждён — снимаем маркер "кикнут за пропуски,
@@ -383,7 +419,7 @@ async def announce_prep_graduate_arrival(chat_id, group_id, phone):
 
     tadabbur = get_tadabbur_group()
     if tadabbur:
-        deactivate_student(u["id"], tadabbur["id"])
+        deactivate_student(user_id, tadabbur["id"])
 
     new_glang = _group_lang(group_id)
     old_glang = _group_lang(from_group_id)
@@ -435,12 +471,13 @@ async def remind_ustaz_about_graduate(phone):
         return None
     glang = row["lang"] or "ru"
     answer = _get_juz_answer(row["uid"], row["gid"])
+    if answer and answer[0] == "pending_confirm":
+        return None   # ждём Умар устаза - торопить некого
     if answer:
         _, target_group_id = answer
-        with db() as c:
-            g = c.execute("SELECT invite_link FROM groups WHERE id=?", (target_group_id,)).fetchone()
-        if g and g["invite_link"]:
-            await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=g["invite_link"]))
+        target = get_group_by_id(target_group_id)
+        if target:
+            await graduate_to_group(phone, target)
     else:
         await send_juz_question(phone, row["name"], glang, days_done, row["chat_id"])
     log.info("prep graduate reminder: %s nudged (answer=%s)", row["name"], bool(answer))
@@ -518,6 +555,28 @@ def _get_prep_row(phone):
         """, (phone,)).fetchone()
 
 
+def graduation_question(phone):
+    """Что показать выпускнику в YassirApp (22.09.2026). Решает БАЗА, а не
+    отправленное сообщение: карточка есть, пока условие выполнено и ответа
+    нет, - дошла ли личка, нажимал ли человек Start, неважно.
+      None                        - не в подготовительной или рано;
+      {"ask": True, "days": N}    - спросить про джуз (1-22 страницы);
+      {"pending": True}           - ответил «знаю», ждём Умар устаза.
+    Тот же счёт полных дней, что у check_prep_students."""
+    row = _get_prep_row(phone)
+    if not row:
+        return None
+    days_done = count_report_days_since(row["uid"], row["gid"], row["joined_date"])
+    if days_done < PREP_MIN_DAYS:
+        return None
+    answer = _get_juz_answer(row["uid"], row["gid"])
+    if not answer:
+        return {"ask": True, "days": days_done}
+    if answer[0] == "pending_confirm":
+        return {"pending": True}
+    return None   # решение есть - выпуск догонит check_prep_students
+
+
 async def handle_juz_answer(phone, knows_juz):
     """Студент нажал кнопку (знает ли наизусть 1-22 страницу Корана).
     "Не знаю" - бот сам переводит, как раньше: наименее заполненная relaxed
@@ -549,18 +608,19 @@ async def handle_juz_answer(phone, knows_juz):
     glang = row["lang"] or "ru"
     target_type = "relaxed"
     target = get_best_group_for_transfer("relaxed", glang)
-    if not target or not target["invite_link"]:
-        # Нет подходящей группы со ссылкой - редкий случай, зовём устаза вручную
+    if not target:
+        # Нет подходящей группы - редкий случай, зовём устаза вручную. Ссылка
+        # больше не обязательна (22.09.2026): перевод идёт в базе, а чат
+        # группы - только место для общения.
         await send_message(_PREP_GRADUATE_ADMIN_ID,
             "⚠️ " + row["name"] + ": не нашлось группы (" + target_type +
-            ") со ссылкой-приглашением - определите вручную." +
-            _group_sizes_text())
+            ") - определите вручную." + _group_sizes_text())
         log.warning("prep juz answer: no eligible '%s' group for %s", target_type, row["name"])
         return
 
     add_bonus(row["uid"], row["gid"], row["joined_date"], 0, "prep_juz_answer",
               subcategory=target_type, note=str(target["id"]))
-    await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+    await graduate_to_group(phone, target)
     log.info("prep juz answer: %s → %s (group=%s)", row["name"], target_type, target["title"])
 
 
@@ -582,16 +642,15 @@ async def handle_juz_confirm(phone, confirmed):
     else:
         target_type = "relaxed"
         target = get_best_group_for_transfer("relaxed", glang)
-    if not target or not target["invite_link"]:
+    if not target:
         await send_message(_PREP_GRADUATE_ADMIN_ID,
             "⚠️ " + row["name"] + ": не нашлось группы (" + target_type +
-            ") со ссылкой-приглашением - определите вручную." +
-            _group_sizes_text())
+            ") - определите вручную." + _group_sizes_text())
         log.warning("prep juz confirm: no eligible '%s' group for %s", target_type, row["name"])
         return
 
     resolve_pending_juz_answer(row["uid"], row["gid"], row["joined_date"], target_type, str(target["id"]))
-    await _send_dm_or_group(phone, row["chat_id"], T("prep_juz_result", glang, link=target["invite_link"]))
+    await graduate_to_group(phone, target)
     log.info("prep juz confirm: %s → %s (group=%s, confirmed=%s)",
              row["name"], target_type, target["title"], confirmed)
 

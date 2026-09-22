@@ -1238,6 +1238,31 @@ async def handle_tajweed_answer(request, user_id):
 
 
 @with_auth
+async def handle_prep_juz(request, user_id):
+    """POST {knows} - ответ выпускника подготовительной из приложения
+    (22.09.2026). Та же развилка, что у кнопок в личке: «знаю» - на
+    подтверждение Умар устазу, «не знаю» - сразу в группу, в базе. Отвечает
+    уже сменившейся группой, чтобы экран не ждал следующего пульса."""
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "bad_json"}, status=400)
+    from core import prep
+    q = prep.graduation_question(user_id)
+    if not q or not q.get("ask"):
+        # Рано, уже ответил или уже переведён - повторный тап не страшен.
+        return web.json_response({"error": "not_asked", "state": q}, status=409)
+    knows = bool(body.get("knows"))
+    await prep.handle_juz_answer(user_id, knows)
+    group = get_learning_group(user_id)
+    return web.json_response({
+        "ok": True,
+        "pending": bool((prep.graduation_question(user_id) or {}).get("pending")),
+        "group": group["title"] if group else None,
+    })
+
+
+@with_auth
 async def handle_tajweed_new(request, user_id):
     """POST - начать ленту заново. Кнопки в приложении больше нет
     (20.09.2026), метод остаётся для страниц из кэша телефона."""
@@ -1502,7 +1527,19 @@ def _dashboard_facts(user_id):
         "learn": _learn_subjects(user_id),
         "subs": subs,
         "day": _my_day(user),
+        # Выпускник подготовительной: вопрос про джуз - карточкой здесь, а не
+        # только личкой (22.09.2026, «теперь истина - база»). None - нечего.
+        "prep_grad": _prep_grad_facts(user_id),
     }
+
+
+def _prep_grad_facts(user_id):
+    from core.prep import graduation_question
+    try:
+        return graduation_question(user_id)
+    except Exception as e:
+        log.error("prep_grad facts error: %s: %s", type(e).__name__, e)
+        return None
 
 
 def _visible_ustaz_groups(user_id, scope="own"):
@@ -2273,6 +2310,7 @@ def build_app():
     app.router.add_get("/api/muf/tajweed", handle_tajweed_state)
     app.router.add_post("/api/muf/tajweed/answer", handle_tajweed_answer)
     app.router.add_post("/api/muf/tajweed/new", handle_tajweed_new)
+    app.router.add_post("/api/muf/prep/juz", handle_prep_juz)
     app.router.add_get("/api/muf/nahw", handle_nahw_state)
     app.router.add_post("/api/muf/nahw/answer", handle_nahw_answer)
     app.router.add_post("/api/muf/nahw/new", handle_nahw_new)

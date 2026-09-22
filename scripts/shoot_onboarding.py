@@ -365,7 +365,9 @@ SCENE_SCRIPT = """
     bookmark: async function () {
       $('dash-mushaf').click(); await wait(1600);
       await goFullPage();
-      spot('#btn-bookmark-save');
+      // С 22.09.2026 закладка - меню у 🔖 внизу: снимаем его открытым.
+      $('btn-bookmark').click(); await wait(500);
+      spot('#bm-menu');
     },
 
     revision: async function () {
