@@ -40,7 +40,7 @@ import config
 from config import SUPER_ADMIN_IDS, IS_FEMALE, REQUIRE_PREP_FOR_NEW_STUDENTS
 from core.i18n import T, get_group_lang
 from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link, pace
-from core.side import known_side, side_buttons, not_here_button, half_word
+from core.side import known_side, side_buttons, half_word
 
 log = logging.getLogger(__name__)
 
@@ -454,14 +454,14 @@ async def kick_active_student_back_from_prep(chat_id, uid, existing_user, existi
 
 async def greet_new_member(chat_id, group_info, uid, tg_name, glang):
     """Первое слово незнакомцу, вошедшему в группу (оба пути входа в bot.py).
-    В подготовительной приветствие сразу называет половину («группа
-    братьев») и даёт кнопку «мне не сюда» (20.09.2026, случай Каната -
-    пришёл по пересланной ссылке в женскую). Ссылку на группу соседа тут
-    не показываем (правило 02.08), кнопка ведёт к его БОТУ."""
+    В подготовительной приветствие называет половину («группа братьев»).
+    Кнопки «мне не сюда» больше нет (23.09.2026): в подготовительную входят
+    только через бота, неизвестного он спрашивает по заявке ещё до входа, а
+    ошибку внутри поправляет устаз (/сестра, /брат, /нетуда)."""
     greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
     if (group_info["group_type"] or "relaxed") == "prep":
         text = greeting + T("prep_door_line", glang, half=half_word()) + "\n" + T("ask_name", glang)
-        await send_message_with_buttons(chat_id, text, [not_here_button(uid)])
+        await send_message(chat_id, text)
     else:
         await send_message(chat_id, greeting + T("ask_name", glang))
 

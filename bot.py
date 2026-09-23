@@ -17,7 +17,7 @@ from core import app_bot
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member, other_bot_known
-from core.side import handle_side_answer, handle_invite_pick, claimed_by_neighbour
+from core.side import handle_side_answer, handle_invite_pick, claimed_by_neighbour, handle_join_request
 from core.bots import register_self
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
@@ -123,7 +123,8 @@ async def main():
         try:
             resp = await tg_call(
                 "getUpdates",
-                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "message_reaction", "callback_query"]},
+                {"offset": offset, "timeout": 30, "allowed_updates": ["message", "chat_member", "message_reaction", "callback_query",
+                                                         "chat_join_request"]},
                 timeout=40
             )
             if not resp or not resp.get("ok"):
@@ -185,15 +186,14 @@ async def main():
                     # сообщений). Только личка - но uid всё равно сверяем, для
                     # единообразия с остальными callback-веткам.
                     # "side:male:<uid>" / "side:female:<uid>" - «ты брат или
-                    # сестра» (20.09.2026, core/side.py). Кнопка бывает и в
-                    # ГРУППЕ (приветствие подготовительной, «мне не сюда») -
-                    # принимаем тап только от адресата.
+                    # сестра» (20.09.2026, core/side.py). Только личка; адресат
+                    # всё равно сверяется - старые кнопки в группах ещё висят.
                     elif cq_data.startswith("side:"):
                         parts = cq_data.split(":", 2)
                         if len(parts) == 3 and parts[2] == cq_uid:
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            asyncio.create_task(handle_side_answer(cq_uid, parts[1], pressed_in=cq_chat_id))
+                            asyncio.create_task(handle_side_answer(cq_uid, parts[1]))
                     # "inv:male" / "inv:female" - «ссылка для брата/сестры»
                     # (20.09.2026). Только личка, адресат = нажавший.
                     elif cq_data.startswith("inv:"):
@@ -210,6 +210,17 @@ async def main():
                     # mufend:/muftop:/muflang*) убраны 15.09.2026 - тренажёр
                     # живёт только в приложении. Тап по старой карточке, если
                     # такая ещё висит у кого-то в личке, просто ничего не делает.
+                    continue
+
+                # Заявка на вступление (23.09.2026): в подготовительную входят
+                # только через бота, решение принимает core/side.py сразу.
+                jr = upd.get("chat_join_request")
+                if jr:
+                    jr_user = jr.get("from", {}) or {}
+                    if not jr_user.get("is_bot"):
+                        asyncio.create_task(handle_join_request(
+                            str(jr.get("chat", {}).get("id", "")), str(jr_user.get("id", "")),
+                            name=jr_user.get("first_name", "")))
                     continue
 
                 # Вступление по ссылке-приглашению (chat_member update)

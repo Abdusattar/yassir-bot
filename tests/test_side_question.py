@@ -87,12 +87,35 @@ def wire(monkeypatch):
     async def fake_unban(chat_id, uid):
         return {"ok": True}
 
+    # Заявки в группы: pending - висящие, approved/declined - что решил бот.
+    # Telegram отвечает ошибкой, если заявки нет - так и здесь.
+    pending, approved, declined = set(), [], []
+
+    async def fake_approve(chat_id, uid):
+        key = (str(chat_id), str(uid))
+        if key not in pending:
+            return {"ok": False, "description": "Bad Request: HIDE_REQUESTER_MISSING"}
+        pending.discard(key)
+        approved.append(key)
+        return {"ok": True}
+
+    async def fake_decline(chat_id, uid):
+        key = (str(chat_id), str(uid))
+        if key not in pending:
+            return {"ok": False}
+        pending.discard(key)
+        declined.append(key)
+        return {"ok": True}
+
     for mod in (h, tr, side, prep):
         monkeypatch.setattr(mod, "send_message", fake, raising=False)
         monkeypatch.setattr(mod, "send_message_with_buttons", fake_btn, raising=False)
         monkeypatch.setattr(mod, "ban_member", fake_ban, raising=False)
         monkeypatch.setattr(mod, "unban_member", fake_unban, raising=False)
-    return {"sent": sent, "kicked": kicked}
+    monkeypatch.setattr(side, "approve_join_request", fake_approve)
+    monkeypatch.setattr(side, "decline_join_request", fake_decline)
+    return {"sent": sent, "kicked": kicked, "pending": pending,
+            "approved": approved, "declined": declined}
 
 
 def _dm(phone, text):
@@ -155,26 +178,13 @@ def test_answer_is_shared_between_bots(test_db, world, wire, monkeypatch):
 def test_misplaced_sister_is_removed_from_our_prep_before_going_to_neighbour(test_db, world, wire):
     prep_id = db.get_group(MALE_PREP_CHAT)["id"]
     assert db.find_by_phone(MISPLACED, prep_id) is not None
-    asyncio.run(side.handle_side_answer(MISPLACED, "female", pressed_in=MALE_PREP_CHAT))
+    asyncio.run(side.handle_side_answer(MISPLACED, "female"))
     assert (MALE_PREP_CHAT, MISPLACED) in wire["kicked"]
     assert db.get_learning_group(MISPLACED, include_prep=True) is None
     # ссылка на бота соседа ушла в личку (личка открыта - fake отвечает ok),
     # в группу ничего
     assert all(c != MALE_PREP_CHAT for c, _, _ in wire["sent"])
     assert "yassir_female_bot?start=go" in wire["sent"][-1][1]
-
-
-def test_group_button_falls_back_to_the_group_when_dm_is_closed(test_db, world, wire, monkeypatch):
-    """Личка закрыта (Start не нажимал): ссылку на БОТА соседа даём в самой
-    группе - она безопасна публично, в отличие от ссылки на группу."""
-    async def dm_fails(cid, text, **kw):
-        wire["sent"].append((str(cid), text, None))
-        return {"ok": False} if str(cid) == MISPLACED else {"ok": True}
-    monkeypatch.setattr(side, "send_message", dm_fails)
-    asyncio.run(side.handle_side_answer(MISPLACED, "female", pressed_in=MALE_PREP_CHAT))
-    in_group = [t for c, t, _ in wire["sent"] if c == MALE_PREP_CHAT]
-    assert len(in_group) == 1 and "yassir_female_bot?start=go" in in_group[0]
-    assert "t.me/+" not in in_group[0]
 
 
 # ── Сайт: отказ больше не тупик ──────────────────────────────────────────────
@@ -253,14 +263,16 @@ def test_active_student_message_in_prep_kicks_back_instead_of_transfer(test_db, 
 
 # ── Приветствие на пороге подготовительной ───────────────────────────────────
 
-def test_prep_greeting_names_the_half_and_offers_the_way_out(test_db, world, wire):
+def test_prep_greeting_names_the_half_without_a_button(test_db, world, wire):
+    """Кнопки «мне не сюда» в группе нет (23.09.2026): вход только через
+    бота, ошибку внутри поправляет устаз."""
     g = db.get_group(MALE_PREP_CHAT)
     asyncio.run(tr.greet_new_member(MALE_PREP_CHAT, g, STRANGER, "Канат", "ru"))
     cid, text, buttons = wire["sent"][-1]
     assert cid == MALE_PREP_CHAT
     assert "подготовительная группа братьев" in text
     assert "Как тебя зовут" in text
-    assert buttons == [("Я сестра, мне не сюда", "side:female:777")]
+    assert buttons is None
     assert "t.me" not in text
 
 
@@ -278,14 +290,12 @@ def test_prep_welcome_after_name_names_the_half_too(test_db, world, wire, monkey
     asyncio.run(prep.send_prep_onboarding_group_message(MALE_PREP_CHAT, "Канат", "ru", dm_ok=False, uid=STRANGER))
     cid, text, buttons = wire["sent"][-1]
     assert "подготовительную группу братьев" in text
-    assert buttons == [("Я сестра, мне не сюда", "side:female:777")]
+    assert buttons is None
 
 
 def test_female_bot_wording_is_mirrored(test_db, world, wire, monkeypatch):
     monkeypatch.setattr(config, "PROFILE", "female")
     assert side.half_word() == "сестёр"
-    assert side.not_here_button("1")[0] == "Я брат, мне не сюда"
-    assert side.not_here_button("1")[1] == "side:male:1"
 
 
 # ── Устаз отмечает половину реплаем: /сестра, /брат, /нетуда ─────────────────
@@ -432,3 +442,79 @@ def test_registration_text_mentions_settings_rename(test_db):
     from core.i18n import T
     assert "настройки" in T("registered_group", "ru", name="Канат")
     assert "настройки" in T("registered_group_dm", "ru", name="Канат", link="x")
+
+
+# ── Заявка в подготовительную: вход только через бота (23.09.2026) ──────────
+
+def _request(wire, uid, chat=MALE_PREP_CHAT, name="Канат"):
+    wire["pending"].add((chat, uid))
+    asyncio.run(side.handle_join_request(chat, uid, name=name))
+
+
+def test_request_of_the_one_who_answered_brother_is_let_in_at_once(test_db, world, wire):
+    side.remember_side(STRANGER, "male")
+    _request(wire, STRANGER)
+    assert wire["approved"] == [(MALE_PREP_CHAT, STRANGER)]
+    assert wire["sent"] == []          # никаких вопросов тому, кто уже ответил
+
+
+def test_request_of_a_former_student_is_let_in_at_once(test_db, world, wire):
+    """Штрафник, отправленный через подготовительную, на вопрос не застревает."""
+    _request(wire, BROTHER)
+    assert wire["approved"] == [(MALE_PREP_CHAT, BROTHER)]
+    assert wire["sent"] == []
+
+
+def test_unknown_gets_the_question_in_dm_and_is_not_let_in_yet(test_db, world, wire):
+    _request(wire, STRANGER)
+    assert wire["approved"] == [] and wire["declined"] == []
+    cid, text, buttons = wire["sent"][-1]
+    assert cid == STRANGER
+    assert "заявку" in text and "брат или сестра" in text
+    assert [b[1] for b in buttons] == ["side:male:777", "side:female:777"]
+
+
+def test_unknown_answers_brother_and_the_request_is_approved(test_db, world, wire):
+    _request(wire, STRANGER)
+    asyncio.run(side.handle_side_answer(STRANGER, "male"))
+    assert wire["approved"] == [(MALE_PREP_CHAT, STRANGER)]
+    assert "Впустил" in wire["sent"][-1][1]
+    assert "t.me/+" not in wire["sent"][-1][1]      # ссылка не нужна - уже впущен
+
+
+def test_unknown_answers_sister_request_declined_and_sent_to_neighbour(test_db, world, wire):
+    _request(wire, STRANGER)
+    asyncio.run(side.handle_side_answer(STRANGER, "female"))
+    assert wire["declined"] == [(MALE_PREP_CHAT, STRANGER)]
+    assert wire["approved"] == []
+    assert "yassir_female_bot?start=go" in wire["sent"][-1][1]
+
+
+def test_request_of_a_known_sister_is_declined_with_the_way_to_her_bot(test_db, world, wire):
+    _request(wire, SISTER_ACTIVE)
+    assert wire["declined"] == [(MALE_PREP_CHAT, SISTER_ACTIVE)]
+    assert wire["sent"][-1][0] == SISTER_ACTIVE
+    assert "yassir_female_bot?start=go" in wire["sent"][-1][1]
+
+
+def test_requests_to_other_groups_are_left_to_people(test_db, world, wire):
+    _request(wire, STRANGER, chat=N1_CHAT)
+    assert wire["approved"] == [] and wire["declined"] == [] and wire["sent"] == []
+
+
+def test_dm_closed_tells_super_admins(test_db, world, wire, monkeypatch):
+    monkeypatch.setattr(side, "SUPER_ADMIN_IDS", ["1"])
+
+    async def dm_fails(cid, text, buttons):
+        wire["sent"].append((str(cid), text, buttons))
+        return {"ok": False}
+    monkeypatch.setattr(side, "send_message_with_buttons", dm_fails)
+    _request(wire, STRANGER)
+    to_admin = [t for c, t, _ in wire["sent"] if c == "1"]
+    assert len(to_admin) == 1 and "777" in to_admin[0] and "вручную" in to_admin[0]
+
+
+def test_answer_without_a_request_still_gives_the_link(test_db, world, wire):
+    """Спросили в личке, заявки нет - ссылка, как раньше."""
+    asyncio.run(side.handle_side_answer(STRANGER, "male"))
+    assert "https://t.me/+MALEPREP" in wire["sent"][-1][1]

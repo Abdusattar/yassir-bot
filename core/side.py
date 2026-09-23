@@ -22,9 +22,14 @@
 подготовительную, снимаем его у себя (иначе сосед увидит его активным у
 нас и отправит назад - пинг-понг, найден 20.09 до выкладки).
 
-Три места, где спрашиваем: холодная личка, отказ после входа с сайта,
-рассылка «вернись» тем, чья половина неизвестна. Четвёртое - кнопка «мне
-не сюда» в приветствии подготовительной (пересланная ссылка, случай Каната).
+Где спрашиваем: холодная личка, отказ после входа с сайта, рассылка
+«вернись» тем, чья половина неизвестна, и заявка в подготовительную.
+
+Вход в подготовительную - только через бота (23.09.2026, решение
+пользователя). Ссылка на неё - с заявкой: неизвестного бот не впускает, а
+спрашивает в личке (пересланная ссылка, случай Каната 20.09). Кнопки «мне
+не сюда» в группе больше нет: ошибся уже внутри - поправляет устаз
+реплаем (/сестра, /брат, /нетуда), это единственная правка в группе.
 """
 import logging
 
@@ -34,11 +39,12 @@ from core.db import (
     get_now, get_prep_group, ever_learning_student, other_bot_known,
     deactivate_student, get_groups_by_type, find_by_phone,
     get_dm_ok_by_phone, remove_unregistered, other_bot_member, other_bot_prep_only,
-    get_prep_students_active,
+    get_prep_students_active, get_group, is_any_group_admin,
 )
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
-from core.tg import send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link
+from core.tg import (send_message, send_message_with_buttons, ban_member, unban_member, get_dm_start_link,
+                     approve_join_request, decline_join_request)
 
 log = logging.getLogger(__name__)
 
@@ -161,15 +167,6 @@ def side_buttons(uid):
     return [("Я брат", "side:male:" + str(uid)), ("Я сестра", "side:female:" + str(uid))]
 
 
-def not_here_button(uid):
-    """Одна кнопка для приветствия в подготовительной: «я сестра, мне не
-    сюда» у братьев и наоборот. uid в data - кнопка публичная, в группе,
-    bot.py принимает тап только от адресата."""
-    other = other_profile()
-    label = "Я сестра, мне не сюда" if other == "female" else "Я брат, мне не сюда"
-    return (label, "side:" + other + ":" + str(uid))
-
-
 def own_prep_link():
     prep = get_prep_group()
     return prep["invite_link"] if prep and prep["invite_link"] else ""
@@ -270,23 +267,80 @@ async def mark_not_here(chat_id, group_info, uid, lang="ru"):
             + ("Написал в личку, куда идти." if told else "Личка у меня с ним закрыта — сказать не смог, подскажите сами."))
 
 
-async def handle_side_answer(uid, side, lang="ru", pressed_in=None):
-    """Тап по кнопке. uid уже сверен с нажавшим в bot.py. Ответ уходит в
-    личку. pressed_in - чат, где нажали (для кнопки в приветствии
-    подготовительной): если личка закрыта (Start не нажимал), ссылку на
-    бота соседа даём прямо там - она безопасна публично; ссылку на СВОЮ
-    группу в группе не показываем никогда (правило 02.08)."""
+async def _answer_join_requests(uid, approve):
+    """Заявки человека в наши подготовительные: принять или отклонить. Нет
+    заявки - Telegram отвечает ошибкой, это не беда. True - хоть одну приняли."""
+    done = False
+    for prep in get_groups_by_type("prep"):
+        call = approve_join_request if approve else decline_join_request
+        resp = await call(prep["chat_id"], uid)
+        if resp and resp.get("ok"):
+            done = True
+            log.info("side: заявка %s в %s %s", uid, prep["chat_id"], "принята" if approve else "отклонена")
+    return done
+
+
+async def handle_side_answer(uid, side, lang="ru"):
+    """Тап по кнопке в личке. uid уже сверен с нажавшим в bot.py. Висит
+    заявка в подготовительную - своя половина входит сразу, чужая получает
+    отказ и дорогу к соседу."""
     if side not in SIDES:
         return
     remember_side(uid, side)
     if side == config.PROFILE:
+        if await _answer_join_requests(uid, approve=True):
+            await send_message(uid, T("join_request_approved", lang))
+            return
         link = own_prep_link()
         if link:
             await send_message(uid, T("side_own_link", lang, link=link))
         else:
             log.error("side: у подготовительной нет invite_link, дорогу дать нечем")
         return
+    await _answer_join_requests(uid, approve=False)
     await _leave_own_prep(uid)
-    resp = await send_to_neighbour(uid, lang)
-    if pressed_in and str(pressed_in) != str(uid) and not (resp and resp.get("ok")):
-        await send_to_neighbour(pressed_in, lang)
+    await send_to_neighbour(uid, lang)
+
+
+async def handle_join_request(chat_id, uid, name="", lang="ru"):
+    """Заявка на вступление (23.09.2026). Решает бот и сразу: ждать
+    человека никто не заставляет. Касается только подготовительной -
+    заявки в другие группы оставляем людям, как было.
+
+    Свой (ответил боту / учился у нас) - впускаем. Чужой - отказ и дорога к
+    соседу. Неизвестный - вопрос в личку: Telegram разрешает написать тому,
+    кто подал заявку, даже если он бота не запускал. Не дошло - говорим
+    суперадминам, заявку можно принять руками."""
+    group = get_group(chat_id)
+    if not group or (group["group_type"] or "") != "prep":
+        return
+    uid = str(uid)
+    if uid in SUPER_ADMIN_IDS or is_any_group_admin(uid):
+        await approve_join_request(chat_id, uid)
+        return
+    side = known_side(uid)
+    if side == config.PROFILE:
+        resp = await approve_join_request(chat_id, uid)
+        if not (resp and resp.get("ok")):
+            await _tell_admins("⚠️ Не смог впустить " + (name or "") + " (id " + uid
+                               + ") в подготовительную по заявке: " + str(resp and resp.get("description"))
+                               + ". Примите заявку вручную.")
+        log.info("side: заявка %s в %s - своя половина, %s", uid, chat_id,
+                 "принята" if resp and resp.get("ok") else "НЕ принята")
+        return
+    if side:
+        await decline_join_request(chat_id, uid)
+        await send_to_neighbour(uid, lang)
+        log.info("side: заявка %s в %s - другая половина, отказ и дорога к соседу", uid, chat_id)
+        return
+    resp = await send_message_with_buttons(uid, T("join_request_question", lang), side_buttons(uid))
+    if not (resp and resp.get("ok")):
+        await _tell_admins("⚠️ " + (name or "Кто-то") + " (id " + uid + ") подал заявку в подготовительную, "
+                           "а написать ему я не смог. Если это свой - примите заявку вручную.")
+    log.info("side: заявка %s в %s - половина неизвестна, вопрос в личку (%s)", uid, chat_id,
+             "ушёл" if resp and resp.get("ok") else "НЕ дошёл")
+
+
+async def _tell_admins(text):
+    for ap in SUPER_ADMIN_IDS:
+        await send_message(ap, text)

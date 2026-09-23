@@ -400,6 +400,14 @@ async def ban_member(chat_id, user_id):
     return await tg_call("banChatMember", {"chat_id": int(str(chat_id)), "user_id": int(str(user_id))})
 
 
+async def approve_join_request(chat_id, user_id):
+    return await tg_call("approveChatJoinRequest", {"chat_id": int(str(chat_id)), "user_id": int(str(user_id))})
+
+
+async def decline_join_request(chat_id, user_id):
+    return await tg_call("declineChatJoinRequest", {"chat_id": int(str(chat_id)), "user_id": int(str(user_id))})
+
+
 async def unban_member(chat_id, user_id):
     return await tg_call("unbanChatMember", {
         "chat_id": int(str(chat_id)), "user_id": int(str(user_id)), "only_if_banned": True
