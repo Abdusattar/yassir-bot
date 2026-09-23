@@ -13,6 +13,11 @@ from core import mushaf_words as mw
 from core.mufradat_bot import _hifz_place
 
 DM = os.path.join(os.path.dirname(__file__), "..", "mushaf_data", "dm")
+# Мединские листы (mushaf_data/page*.json) в git не лежат - в раннере их нет,
+# а dm/ лежит. Тесты, которым нужны оба, в CI пропускаются.
+needs_madani = pytest.mark.skipif(
+    not os.path.exists(os.path.join(os.path.dirname(__file__), "..", "mushaf_data", "page586.json")),
+    reason="нет мединских page*.json (они не в git)")
 
 
 def _dm(page):
@@ -52,6 +57,7 @@ def test_foreign_glyph_carries_its_font_page():
     assert fps and all(fp != data["font_page"] for fp in fps)
 
 
+@needs_madani
 def test_layout_default_and_switch_moves_pointer(test_hadiths_db):
     uid = "5550001"
     assert mw.get_mushaf_layout(uid) == "madani"
@@ -70,6 +76,7 @@ def test_layout_default_and_switch_moves_pointer(test_hadiths_db):
     assert (back["page"], back["line"], back["stage"]) == (600, 0, 1)
 
 
+@needs_madani
 def test_switch_keeps_stage_and_goes_to_half_start(test_hadiths_db):
     uid = "5550002"
     mw.set_hifz_pointer(uid, 300, 10, 2)      # вторая половина, этап 2
@@ -78,6 +85,7 @@ def test_switch_keeps_stage_and_goes_to_half_start(test_hadiths_db):
     assert ptr["stage"] == 2 and ptr["line"] in (0, n // 2)
 
 
+@needs_madani
 def test_next_position_uses_layout_line_count(test_hadiths_db):
     # Стр. 586 в 1405: 12 текстовых строк (заголовки двух сур), у нас - 13.
     assert mw.page_text_line_count(586, layout="dm") == 12
