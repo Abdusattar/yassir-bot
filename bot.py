@@ -14,6 +14,7 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL, MUFRADAT_API_PORT
 from config import APP_BOT_TOKEN
 from core import app_bot
+from core import tadabbur_mirror
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
 from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member, other_bot_known
@@ -117,6 +118,10 @@ async def main():
     # один слушатель на токен, иначе оба теряют половину сообщений.
     if APP_BOT_TOKEN:
         asyncio.create_task(app_bot.run())
+    # Дубль объявлений мужского Тадаббура сёстрам (23.09.2026): мужской
+    # процесс кладёт в общую очередь, женский - отправляет.
+    if PROFILE == "female":
+        asyncio.create_task(tadabbur_mirror.run())
 
     offset = 0
     while True:
@@ -390,6 +395,7 @@ async def main():
                 # поля: ленте нужны ещё id сообщения, file_id вложения и то,
                 # на чьё сообщение отвечают.
                 record_incoming(msg)
+                tadabbur_mirror.capture(msg)
 
                 if frm.get("username") and sender:
                     cache_username(frm["username"], sender)
