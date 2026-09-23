@@ -7233,7 +7233,11 @@
 
   function hifzTextLines() {
     if (!currentPageData) return [];
-    return (currentPageData.lines || []).filter(function (l) { return l.type === 'text'; });
+    // Пустые строки-заглушки в конце стр. 1 и 2 не в счёт (23.09.2026), как
+    // и в page_text_line_count на сервере: иначе половины листа съезжают.
+    return (currentPageData.lines || []).filter(function (l) {
+      return l.type === 'text' && l.tokens && l.tokens.length;
+    });
   }
 
   /* Сколько ПЕРВЫХ ТОКЕНОВ следующей строки составляют переход. Считаем в

@@ -122,3 +122,21 @@ def test_place_names_the_book():
 def test_bad_layout_rejected(test_hadiths_db, bad):
     with pytest.raises(ValueError):
         mw.set_mushaf_layout("5550003", bad)
+
+
+def test_empty_filler_lines_not_counted_dm():
+    """Стр. 1 и 2: после настоящих 7 и 6 строк в данных идут 7 пустых "text".
+    С ними стр. 2 считалась за 13 строк, и после 6 настоящих место уходило на
+    несуществующую строку 7 (случай Таласа, 23.09.2026)."""
+    assert mw.page_text_line_count(1, layout="dm") == 7
+    assert mw.page_text_line_count(2, layout="dm") == 6
+    # стр. 2 - 3+3: после третьей строки этап 2 первой половины
+    assert mw.next_hifz_position(2, 2, 1, layout="dm") == (2, 2, 2)
+    assert mw.next_hifz_position(2, 5, 2, layout="dm") == (2, 5, 3)
+
+
+@needs_madani
+def test_empty_filler_lines_not_counted_madani():
+    assert mw.page_text_line_count(1) == 7
+    assert mw.page_text_line_count(2) == 6
+    assert mw.next_hifz_position(2, 2, 1) == (2, 2, 2)

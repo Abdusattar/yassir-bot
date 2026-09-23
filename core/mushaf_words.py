@@ -822,7 +822,12 @@ def page_text_line_count(page_number, default=15, layout="madani"):
     count = default
     data = _page_json(page_number, layout)
     if data:
-        found = sum(1 for l in data.get("lines", []) if l.get("type") == "text")
+        # Пустые строки-заглушки не в счёт (23.09.2026): на стр. 1 и 2 обеих
+        # раскладок после настоящих 7 и 6 строк идут 7 пустых "text". С ними
+        # стр. 2 считалась за 13 строк, «первой половиной» становился весь
+        # лист, а место уходило на несуществующую строку 7 (случай Таласа).
+        found = sum(1 for l in data.get("lines", [])
+                    if l.get("type") == "text" and l.get("tokens"))
         if found:
             count = found
     _page_line_counts[key] = count
