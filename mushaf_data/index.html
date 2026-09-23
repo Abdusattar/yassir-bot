@@ -3175,15 +3175,16 @@
   /* ─── Заучивание лёжа (22.09.2026, решение пользователя) ───────────────
      Лёжа и есть «Крупно», на всех трёх этапах, и строка при этом как в
      мусхафе - целиком. Остаются только строки своей единицы и переход
-     (.hifz-off прячет остальное, ставит hifzApply). Слева узкая колонка -
+     (.hifz-off прячет остальное, ставит hifzApply). Справа узкая колонка -
      счётчик, 🔊, Сдать: лёжа мало высоты, а не ширины, и колонка в 78px
-     отнимает у букв ~9%. Слева - потому что арабская строка кончается
-     слева: дочитал повтор, палец уже у счётчика. Колонка не прячется
+     отнимает у букв ~9%. Справа - под большой палец правой руки (23.09.2026,
+     решение пользователя; сначала была слева, у конца арабской строки, но
+     телефон держат правой рукой, и счётчик должен быть под ней). Колонка не прячется
      никогда; шапка - как при чтении (.bare). Выбор места - весь лист и
      шапка на месте: это вопрос человеку, прятать его нельзя. */
   /* Вырез камеры лёжа сбоку: колонка шире на его ширину, иначе он съедал
      бы её. */
-  #app.land.hifz { --rail-w: calc(78px + env(safe-area-inset-left, 0px)); }
+  #app.land.hifz { --rail-w: calc(78px + env(safe-area-inset-right, 0px)); }
   #app.land.hifz #hifz-head {
     position: absolute; top: 0; left: 0; right: 0; z-index: 41;
     padding-top: calc(5px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
@@ -3194,11 +3195,11 @@
   }
   #app.land.hifz.bare #hifz-head { transform: translateY(-100%); box-shadow: none; }
   #app.land.hifz #hifz-foot {
-    position: absolute; left: 0; top: 0; bottom: 0; z-index: 40;
+    position: absolute; right: 0; top: 0; bottom: 0; z-index: 40;
     width: var(--rail-w); box-sizing: border-box;
     flex-direction: column; justify-content: center; gap: 10px;
-    padding: 10px 8px max(10px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
-    border-top: none; border-right: 1px solid var(--chrome-border);
+    padding: 10px max(8px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)) 8px;
+    border-top: none; border-left: 1px solid var(--chrome-border);
   }
   #app.land.hifz #hifz-foot button { width: 100%; }
   #app.land.hifz #hifz-foot .hifz-listen-btn { width: 44px; height: 44px; align-self: center; }
@@ -3213,7 +3214,7 @@
      первой строки уходил под неё. Отступ только в начале листа - при
      прокрутке уезжает вместе с текстом. */
   #app.land.hifz #page-wrap {
-    padding-left: calc(var(--rail-w) + 12px);
+    padding-right: calc(var(--rail-w) + 12px);
     padding-top: calc(40px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
     scroll-padding-top: calc(40px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
   }
@@ -3225,7 +3226,7 @@
      приглушённых нет - всё на экране своё, и сплошные полосы только шумят.
      Выделенным остаётся переход. */
   #app.land.hifz:not(.hifz-pick) .mushaf-line.hifz-lit { background: none; box-shadow: none; }
-  #app.land.hifz #hifz-rec { left: var(--rail-w); }
+  #app.land.hifz #hifz-rec { right: var(--rail-w); }
   #app.land.hifz #hifz-rec .card { border-radius: 12px 12px 0 0; }
 </style>
 </head>
