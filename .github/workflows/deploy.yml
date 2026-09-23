@@ -57,6 +57,9 @@ jobs:
                      icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png; do
               cp ~/yassir-bot/mushaf_data/$f /var/www/yassir-app/$f
             done
+            # Листы раскладки Дар аль-Маариф (23.09.2026) - одной ссылкой на
+            # папку, как audio/ и onboarding/.
+            [ -e /var/www/yassir-app/dm ] || ln -s ~/yassir-bot/mushaf_data/dm /var/www/yassir-app/dm
             sudo systemctl restart yassir-bot
             # Женский бот - в том же деплое (23.09.2026). Раньше его
             # перезапускали руками, и однажды он неделю крутил код от 26.07:

@@ -457,7 +457,7 @@ def _pool_limit(user_id):
     try:
         from core.mushaf_words import get_hifz_pointer
         ptr = get_hifz_pointer(str(user_id))
-        page = ptr and ptr["page"]
+        page = ptr and (ptr.get("madani_page") or ptr["page"])
         if not page:
             from core.mufradat import get_current_page
             page = get_current_page(str(user_id))

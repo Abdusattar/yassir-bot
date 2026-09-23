@@ -446,7 +446,124 @@ def get_hifz_pointer(user_id):
         ).fetchone()
     if not row:
         return None
-    return {"page": row[0], "line": row[1], "stage": row[2]}
+    layout = get_mushaf_layout(user_id)
+    return {"page": row[0], "line": row[1], "stage": row[2], "layout": layout,
+            "madani_page": madani_page(layout, row[0], row[1])}
+
+
+# Раскладка мусхафа студента (23.09.2026): "madani" - наш мединский
+# (KFGQPC V4, 1441H), "dm" - Дар аль-Маариф (египетский таджвидный, по
+# раскладке 1405H, mushaf_data/dm/, scripts/build_dm_layout.py). Выбирает
+# сам студент в настройках. Указатель 40+40, счётчики и сдачи хранят
+# страницу и строку В РАСКЛАДКЕ СТУДЕНТА - кто учит по египетской книге,
+# видит и сдаёт по ней (решение пользователя). Там, где студентов сравнивают
+# между собой (готовность группы, пул тренажёра), страница переводится в
+# мединскую по первому слову строки - madani_page().
+LAYOUTS = ("madani", "dm")
+_LAYOUT_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mushaf_layout(
+        user_id TEXT PRIMARY KEY,
+        layout TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        back_to TEXT
+    )
+"""
+# back_to - «откуда пришли» при последней смене: 'раскладка|стр|строка|этап'
+# старого места и 'стр|строка|этап' нового. Строка 1405 и мединская
+# начинаются с разных слов, и перенос по первому слову туда-обратно
+# отползал бы назад. Переключил и сразу вернул, не сдвинувшись, - встаёт
+# ровно туда же, где был.
+
+
+def get_mushaf_layout(user_id):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_LAYOUT_SCHEMA)
+        row = conn.execute("SELECT layout FROM mushaf_layout WHERE user_id=?",
+                           (str(user_id),)).fetchone()
+    return row[0] if row and row[0] in LAYOUTS else "madani"
+
+
+def set_mushaf_layout(user_id, layout):
+    """Сменить раскладку. Указатель 40+40 переезжает на ту строку новой
+    раскладки, где стоит первое слово его строки, этап тот же (правило
+    23.09.2026). Возвращает новый указатель или None, если его не было."""
+    if layout not in LAYOUTS:
+        raise ValueError(layout)
+    pointer = get_hifz_pointer(user_id)
+    old = pointer["layout"] if pointer else get_mushaf_layout(user_id)
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_LAYOUT_SCHEMA)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(mushaf_layout)")]
+        if "back_to" not in cols:
+            conn.execute("ALTER TABLE mushaf_layout ADD COLUMN back_to TEXT")
+        row = conn.execute("SELECT back_to FROM mushaf_layout WHERE user_id=?",
+                           (str(user_id),)).fetchone()
+    back_to = row[0] if row else None
+    moved = None
+    if pointer and old != layout:
+        here = "%d|%d|%d" % (pointer["page"], pointer["line"], pointer["stage"])
+        prev = back_to.split("/") if back_to else None
+        if prev and prev[1] == here and prev[0].split("|")[0] == layout:
+            _, p, l, st = prev[0].split("|")
+            moved = (int(p), int(l), int(st))
+        else:
+            words = _line_word_triples(pointer["page"], pointer["line"], old)
+            where = word_place(layout, words[0]) if words else None
+            if where:
+                page, line = where
+                n = page_text_line_count(page, layout=layout)
+                if pointer["stage"] == 2:
+                    line = 0 if line < n // 2 else n // 2   # начало той же половины
+                elif pointer["stage"] == 3:
+                    line = 0
+                moved = (page, line, pointer["stage"])
+        if moved:
+            set_hifz_pointer(user_id, *moved)
+            back_to = "%s|%s/%d|%d|%d" % (old, here, moved[0], moved[1], moved[2])
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO mushaf_layout (user_id, layout, updated_at, back_to) VALUES (?,?,?,?)",
+            (str(user_id), layout, datetime.now(timezone.utc).isoformat(), back_to))
+    return get_hifz_pointer(user_id)
+
+
+_word_places = {}
+
+
+def _page_json(page_number, layout="madani"):
+    sub = "dm" if layout == "dm" else ""
+    path = os.path.join(_MUSHAF_DATA_DIR, sub, f"page{page_number}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def word_place(layout, triple):
+    """(страница, текстовая строка) слова (сура, аят, позиция) в раскладке."""
+    if layout not in _word_places:
+        idx = {}
+        for p in range(1, _HIFZ_LAST_PAGE + 1):
+            data = _page_json(p, layout) or {}
+            text = [l for l in data.get("lines", []) if l.get("type") == "text"]
+            for i, l in enumerate(text):
+                for t in l.get("tokens") or []:
+                    if t.get("type") == "word":
+                        idx[(t["surah"], t["ayah"], t["position"])] = (p, i)
+        _word_places[layout] = idx
+    return _word_places[layout].get(tuple(triple))
+
+
+def madani_page(layout, page, line=0):
+    """Мединская страница места (page, line) раскладки layout - там, где
+    студентов сравнивают между собой (готовность группы 7/15/22, пул
+    тренажёра). Для madani - та же страница."""
+    if layout != "dm" or not page:
+        return page
+    words = _line_word_triples(page, line, layout) or _line_word_triples(page, 0, layout)
+    where = word_place("madani", words[0]) if words else None
+    return where[0] if where else page
 
 
 def get_reading_bookmark(user_id):
@@ -570,7 +687,7 @@ def _first_occurrence_pages(conn):
     return cache
 
 
-def _line_word_triples(page_number, line_index):
+def _line_word_triples(page_number, line_index, layout="madani"):
     """(surah, ayah, position) слов ТЕКСТОВОЙ строки line_index (0-based) на
     странице - из того же page{N}.json, что рендерит фронтенд.
 
@@ -586,11 +703,8 @@ def _line_word_triples(page_number, line_index):
     название суры и молча возвращала пусто. На листах без названия суры
     (а их подавляющее большинство) обе нумерации совпадают - потому баг и
     прятался с 03.09.2026."""
-    path = os.path.join(_MUSHAF_DATA_DIR, f"page{page_number}.json")
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
+    data = _page_json(page_number, layout)
+    if data is None:
         return []
     text_lines = [l for l in data.get("lines", []) if l.get("type") == "text"]
     if not 0 <= line_index < len(text_lines):
@@ -615,12 +729,20 @@ def check_new_words_for_line(user_id, page_number, line_index):
     см. _normalize_rasm). Источник 'hifz_new' в add_starred_word_by_progress_key
     сам "стареет" через 3 дня (list_starred_words) - без отдельного
     удаления, слово просто остаётся в списке уже как обычное "Забытое"."""
+    # Страницы здесь мединские: первое вхождение слова и старт считаются по
+    # мединскому мусхафу. У египетской раскладки строку переводим пословно
+    # (23.09.2026) - строка 1405 может лежать на двух мединских листах.
+    layout = get_mushaf_layout(user_id)
+    triples = _line_word_triples(page_number, line_index, layout)
+    if not triples:
+        return
+    if layout != "madani":
+        page_number = madani_page(layout, page_number, line_index)
     start_page = get_or_init_hifz_start_page(user_id, page_number)
     if page_number < start_page:
         return
-    triples = _line_word_triples(page_number, line_index)
-    if not triples:
-        return
+    word_page = {w: (word_place("madani", w) or (page_number,))[0] for w in triples} \
+        if layout != "madani" else {}
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
         occ = _first_occurrence_pages(conn)
@@ -649,7 +771,8 @@ def check_new_words_for_line(user_id, page_number, line_index):
             pk, arabic_text, translation = row
             rasm = _normalize_rasm(arabic_text)
             tr = _normalize_translation(translation)
-            if occ.get((rasm, tr)) != page_number or page_number < start_page:
+            here = word_page.get((surah, ayah, position), page_number)
+            if occ.get((rasm, tr)) != here or here < start_page:
                 continue
             if any(rasm == r and _same_word_different_ending(tr, t) for r, t in seen):
                 continue
@@ -677,30 +800,27 @@ _page_line_counts = {}
 _HIFZ_LAST_PAGE = 604
 
 
-def page_text_line_count(page_number, default=15):
+def page_text_line_count(page_number, default=15, layout="madani"):
     """Сколько ТЕКСТОВЫХ строк на листе: строка с названием суры и басмала
     в счёт не идут, иначе половина листа съедет. Читаем из тех же
     page*.json, что отдаёт приложение; результат кэшируем."""
-    if page_number in _page_line_counts:
-        return _page_line_counts[page_number]
-    path = os.path.join(_MUSHAF_DATA_DIR, f"page{page_number}.json")
+    key = (layout, page_number)
+    if key in _page_line_counts:
+        return _page_line_counts[key]
     count = default
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+    data = _page_json(page_number, layout)
+    if data:
         found = sum(1 for l in data.get("lines", []) if l.get("type") == "text")
         if found:
             count = found
-    except (OSError, ValueError):
-        pass
-    _page_line_counts[page_number] = count
+    _page_line_counts[key] = count
     return count
 
 
-def next_hifz_position(page, line, stage, page_lines=None):
+def next_hifz_position(page, line, stage, page_lines=None, layout="madani"):
     """Чистая функция: (страница, строка, этап) -> следующая позиция.
     Возвращает то же самое, если дальше идти некуда (последняя страница)."""
-    n = page_lines or page_text_line_count(page)
+    n = page_lines or page_text_line_count(page, layout=layout)
     mid = n // 2
     if stage == 1:
         half_end = (mid - 1) if line < mid else (n - 1)
@@ -801,7 +921,8 @@ def advance_hifz_pointer(user_id):
     pointer = get_hifz_pointer(user_id)
     if not pointer:
         return None
-    page, line, stage = next_hifz_position(pointer["page"], pointer["line"], pointer["stage"])
+    page, line, stage = next_hifz_position(pointer["page"], pointer["line"], pointer["stage"],
+                                           layout=pointer["layout"])
     if (page, line, stage) == (pointer["page"], pointer["line"], pointer["stage"]):
         return pointer
     set_hifz_pointer(user_id, page, line, stage)

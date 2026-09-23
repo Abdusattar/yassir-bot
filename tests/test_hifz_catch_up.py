@@ -30,8 +30,8 @@ PAGE = 16          # 15 текстовых строк: первая полови
 def student(test_db, monkeypatch):
     # Число строк листа берём фиксированным: в тестах mushaf_data может не
     # быть, а формула границы (n // 2) проверена в test_hifz_pointer.
-    monkeypatch.setattr(mw, "page_text_line_count", lambda page: 15)
-    monkeypatch.setattr(api, "page_text_line_count", lambda page: 15)
+    monkeypatch.setattr(mw, "page_text_line_count", lambda page, *a, **k: 15)
+    monkeypatch.setattr(api, "page_text_line_count", lambda page, *a, **k: 15)
     db.save_group(CHAT, "N-1", tasks="m,r,t")
     db.update_group_type(CHAT, "pro")
     group = db.get_group(CHAT)
@@ -135,7 +135,7 @@ def test_catch_up_on_stage2_needs_the_counter_not_a_submission(student):
 
 
 def test_catch_up_is_noop_without_pointer_or_group(test_db, monkeypatch):
-    monkeypatch.setattr(api, "page_text_line_count", lambda page: 15)
+    monkeypatch.setattr(api, "page_text_line_count", lambda page, *a, **k: 15)
     assert api._hifz_catch_up("no_such_user") is None
 
 

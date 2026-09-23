@@ -64,7 +64,8 @@ def test_advance_pointer_moves_and_persists(test_hadiths_db):
     assert os.path.exists(test_hadiths_db)
 
     assert mw.advance_hifz_pointer("u1") == {"page": 5, "line": 1, "stage": 1}
-    assert mw.get_hifz_pointer("u1") == {"page": 5, "line": 1, "stage": 1}
+    assert mw.get_hifz_pointer("u1") == {"page": 5, "line": 1, "stage": 1,
+                                         "layout": "madani", "madani_page": 5}
 
 
 def test_page_text_line_count_reads_real_page_data():

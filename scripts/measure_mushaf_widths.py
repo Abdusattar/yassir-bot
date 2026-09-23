@@ -19,6 +19,11 @@
     python scripts/measure_mushaf_widths.py            # снять все 604 → JSON
     python scripts/measure_mushaf_widths.py --pages 1-20
     python scripts/measure_mushaf_widths.py --apply    # JSON → index.html
+    python scripts/measure_mushaf_widths.py --layout dm [--apply]   # Дар аль-Маариф
+
+Раскладка Дар аль-Маариф (23.09.2026, mushaf_data/dm/) - своя таблица
+MUSHAF_FIT_W_DM между метками FIT_WIDTHS_DM: строки там другие, и мерить их
+мединской таблицей значило бы снова дёргать кегль на первом кадре.
 
 Перезапускать, когда меняется раскладка page*.json, шрифт листа или CSS,
 влияющий на ширину слов (.marker, .v4-word). Если забыть — не страшно:
@@ -66,10 +71,15 @@ MARK = """() => {
 }"""
 
 
-def measure(pages):
+def measure(pages, layout="madani"):
     from playwright.sync_api import sync_playwright
 
     app = fit.build()
+    if layout != "madani":
+        # Стенд сидит на тестовой базе - раскладку ставим студенту стенда
+        # прямо в ней, приложение само спросит её на старте (/layout).
+        from core.mushaf_words import set_mushaf_layout
+        set_mushaf_layout(fit.stand.STUDENT, layout)
     threading.Thread(
         target=lambda: web.run_app(app, host="127.0.0.1", port=fit.PORT,
                                    print=None, handle_signals=False),
@@ -77,13 +87,14 @@ def measure(pages):
     time.sleep(3)
 
     rows = {}
-    if OUT.exists():
-        rows = {int(k): v for k, v in json.loads(OUT.read_text("utf-8"))["pages"].items()}
+    if out_path(layout).exists():
+        rows = {int(k): v for k, v in json.loads(out_path(layout).read_text("utf-8"))["pages"].items()}
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         page = browser.new_context(viewport={"width": 390, "height": 844}).new_page()
         page.goto("http://127.0.0.1:%d/m?bot=male" % fit.PORT)
         page.wait_for_selector("#dash-mushaf", timeout=15000)
+        page.wait_for_timeout(1500)   # /layout успевает прийти
         page.click("#dash-mushaf")
         page.wait_for_timeout(1500)
         started = time.time()
@@ -107,29 +118,38 @@ def measure(pages):
             rows[n] = {"w": r2["w"], "lines": r2["lines"]}
             if (i + 1) % 50 == 0:
                 print("  %d/%d, %.0f с" % (i + 1, len(pages), time.time() - started), flush=True)
-                save(rows)
+                save(rows, layout)
         browser.close()
-    save(rows)
+    save(rows, layout)
     return rows
 
 
-def save(rows):
-    OUT.write_text(json.dumps({"base": BASE, "pages": {str(k): rows[k] for k in sorted(rows)}},
+def out_path(layout):
+    return OUT if layout == "madani" else OUT.with_name("mushaf_fit_widths_%s.json" % layout)
+
+
+def save(rows, layout="madani"):
+    out_path(layout).write_text(json.dumps({"base": BASE, "pages": {str(k): rows[k] for k in sorted(rows)}},
                               ensure_ascii=False, indent=0), "utf-8")
 
 
-def apply():
-    data = json.loads(OUT.read_text("utf-8"))
+def apply(layout="madani"):
+    data = json.loads(out_path(layout).read_text("utf-8"))
     pages = {int(k): v["w"] for k, v in data["pages"].items()}
     missing = [n for n in range(1, 605) if not pages.get(n)]
     if missing:
         raise SystemExit("в таблице нет листов: %s" % missing[:20])
     arr = "[0," + ",".join(str(pages[n]) for n in range(1, 605)) + "]"
-    block = "%s\n  var MUSHAF_FIT_W = %s;\n  %s" % (BEGIN, arr, END)
+    begin, end, var = BEGIN, END, "MUSHAF_FIT_W"
+    if layout != "madani":
+        begin = BEGIN.replace("FIT_WIDTHS", "FIT_WIDTHS_DM")
+        end = END.replace("FIT_WIDTHS", "FIT_WIDTHS_DM")
+        var = "MUSHAF_FIT_W_DM"
+    block = "%s\n  var %s = %s;\n  %s" % (begin, var, arr, end)
     html = INDEX.read_text("utf-8")
-    if BEGIN not in html:
-        raise SystemExit("в index.html нет метки %s" % BEGIN)
-    html = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END), lambda _: block, html, flags=re.S)
+    if begin not in html:
+        raise SystemExit("в index.html нет метки %s" % begin)
+    html = re.sub(re.escape(begin) + r".*?" + re.escape(end), lambda _: block, html, flags=re.S)
     INDEX.write_text(html, "utf-8")
     ws = sorted(pages.values())
     print("вписано 604 листа; ширина при %dpx: %d–%d, медиана %d"
@@ -140,13 +160,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pages", default="1-604")
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--layout", default="madani", choices=["madani", "dm"])
     args = ap.parse_args()
     if args.apply:
-        apply()
+        apply(args.layout)
         return
-    rows = measure(fit.parse_pages(args.pages))
+    rows = measure(fit.parse_pages(args.pages), args.layout)
     ws = sorted(r["w"] for r in rows.values())
-    print("снято %d листов; ширина %d–%d → %s" % (len(ws), ws[0], ws[-1], OUT))
+    print("снято %d листов; ширина %d–%d → %s" % (len(ws), ws[0], ws[-1], out_path(args.layout)))
 
 
 if __name__ == "__main__":

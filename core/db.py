@@ -407,6 +407,11 @@ def _run_migrations(c):
     for col in ("hifz_page", "hifz_line", "hifz_stage"):
         if col not in vscols:
             c.execute(f"ALTER TABLE voice_submissions ADD COLUMN {col} INTEGER")
+    # Раскладка, в которой записано место (23.09.2026): madani или dm
+    # (Дар аль-Маариф). Пусто у старых сдач - это мединский. Устаз
+    # открывает лист в раскладке студента.
+    if "hifz_layout" not in vscols:
+        c.execute("ALTER TABLE voice_submissions ADD COLUMN hifz_layout TEXT")
     # Картинка со строчкой, которую сдают (04.09.2026). Сдача из приложения -
     # ДВА сообщения: сначала картинка, следом голосовое реплаем на неё. Устаз
     # видит наверху именно картинку (на ней и написано, что проверять) и
@@ -1841,7 +1846,7 @@ def get_today_report(uid, group_id=None):
 
 def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_id=None,
                           hifz_page=None, hifz_line=None, hifz_stage=None,
-                          photo_message_id=None, duration=None):
+                          photo_message_id=None, duration=None, hifz_layout=None):
     """hifz_* (04.09.2026) - место сдачи 40+40: страница, строка (0-based, как
     на фронтенде) и этап. Есть только у сдач из приложения; у голосового,
     присланного прямо в группу, места нет и быть не может.
@@ -1852,10 +1857,11 @@ def save_voice_submission(student_id, group_id, chat_id, message_id, date, file_
         c.execute(
             "INSERT OR IGNORE INTO voice_submissions"
             "(student_id,group_id,chat_id,message_id,date,sent_at,file_id,"
-            "hifz_page,hifz_line,hifz_stage,photo_message_id,duration)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "hifz_page,hifz_line,hifz_stage,photo_message_id,duration,hifz_layout)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (student_id, group_id, chat_id, message_id, date, get_now().isoformat(), file_id,
-             hifz_page, hifz_line, hifz_stage, photo_message_id, _as_seconds(duration))
+             hifz_page, hifz_line, hifz_stage, photo_message_id, _as_seconds(duration),
+             hifz_layout if hifz_layout and hifz_layout != "madani" else None)
         )
 
 
@@ -1966,7 +1972,7 @@ def get_student_submissions(student_id, limit=20):
     with db() as c:
         rows = c.execute(
             "SELECT vs.id, vs.date, vs.sent_at, vs.reviewed_at,"
-            " vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.duration,"
+            " vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.hifz_layout, vs.duration,"
             " vs.file_id IS NOT NULL AS has_audio,"
             " vs.review_type, vs.review_text,"
             " vs.review_file_id IS NOT NULL AS has_review_audio,"
@@ -2281,7 +2287,7 @@ def get_reviewed_submissions(group_ids, limit=50):
     with db() as c:
         rows = c.execute(
             f"SELECT vs.id, vs.date, vs.reviewed_at, vs.verdict, vs.verdict_at,"
-            f" vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.group_id,"
+            f" vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.hifz_layout, vs.group_id,"
             f" vs.error_words, vs.duration,"
             f" vs.file_id IS NOT NULL AS has_audio,"
             f" vs.review_file_id IS NOT NULL AS has_review_audio,"
@@ -2377,7 +2383,7 @@ def get_pending_voice_reviews(group_ids, recent=True, app_only=False):
     where, params = _pending_reviews_sql(group_ids, recent, app_only)
     with db() as c:
         rows = c.execute(
-            "SELECT vs.id, vs.sent_at, vs.date, vs.hifz_page, vs.hifz_line, vs.hifz_stage,"
+            "SELECT vs.id, vs.sent_at, vs.date, vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.hifz_layout,"
             " vs.group_id, vs.duration, u.name AS student_name, g.title AS group_title"
             # По date, а не только по sent_at: sent_at появился ALTER-ом
             # позже самой таблицы, у старых строк он пуст.

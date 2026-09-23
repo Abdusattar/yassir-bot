@@ -318,7 +318,7 @@ def unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=
 
 # ── Обработка страницы ────────────────────────────────────────────────
 
-def process_page(page_number, out_dir, timings_cache, force=False):
+def process_page(page_number, out_dir, timings_cache, force=False, reuse=None, links=None):
     full_marker = os.path.join(out_dir, f"page_{page_number:03d}_full.mp3")
     if os.path.exists(full_marker) and not force:
         print(f"стр. {page_number}: уже готова, пропуск")
@@ -351,6 +351,12 @@ def process_page(page_number, out_dir, timings_cache, force=False):
             return
         segs = unit_word_segments(page_number, line_indices, timings_cache, tail_from_last=True,
                                   tail_apart=tail_apart)
+        same = reuse.get((tail_apart, tuple(segs))) if reuse is not None else None
+        if same:
+            # Та же единица уже нарезана в мединской раскладке - ссылка, не
+            # второй файл (место на сервере, см. --layout).
+            links[os.path.basename(dest)] = same
+            return
         ok = build_unit(sources_of(segs), dest)
         print(f"  {label}: {'OK' if ok else 'ОШИБКА'}")
 
@@ -372,6 +378,28 @@ def process_page(page_number, out_dir, timings_cache, force=False):
     make(list(range(n)), full_marker, "full")
 
 
+def unit_index(pages, timings_cache):
+    """{(tail_apart, отрезки): имя файла} мединских единиц - по ним
+    египетская раскладка берёт готовое вместо повторной нарезки."""
+    out = {}
+    for page_number in pages:
+        lines = text_lines(page_number)
+        if not lines:
+            continue
+        n, mid = len(lines), len(lines) // 2
+        units = [([li], "first_%d" % li if li < mid else "second_%d" % (li - mid), True) for li in range(n)]
+        for half, label in ((0, "first_half"), (1, "second_half")):
+            r0, r1 = half_range(page_number, half)
+            if r0 <= r1:
+                units.append((list(range(r0, r1 + 1)), label, False))
+        units.append((list(range(n)), "full", False))
+        for idxs, slot, apart in units:
+            segs = unit_word_segments(page_number, idxs, timings_cache, tail_from_last=True, tail_apart=apart)
+            if segs:
+                out.setdefault((apart, tuple(segs)), f"page_{page_number:03d}_{slot}.mp3")
+    return out
+
+
 def parse_pages(spec):
     out = []
     for part in spec.split(","):
@@ -386,17 +414,39 @@ def parse_pages(spec):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pages", required=True, help="напр. 2-10 или 5,7,9")
-    ap.add_argument("--out", default=os.path.join(DATA_DIR, "audio", "husary"))
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--layout", default="madani", choices=["madani", "dm"],
+                    help="dm - раскладка Дар аль-Маариф (mushaf_data/dm), выход audio/husary_dm;"
+                         " совпадающие с мединскими единицы не режутся, а пишутся в links.json"
+                         " (на сервере - относительные симлинки на ../husary/)")
     ap.add_argument("--force", action="store_true",
                     help="пересобрать и готовые файлы (перенарезка 21.09.2026)")
     args = ap.parse_args()
 
+    global DATA_DIR
     print(f"ffmpeg: {FFMPEG}")
-    os.makedirs(args.out, exist_ok=True)
-
+    pages = parse_pages(args.pages)
     timings_cache = {}
-    for page in parse_pages(args.pages):
-        process_page(page, args.out, timings_cache, force=args.force)
+    reuse = links = None
+    base = DATA_DIR
+    if args.layout == "dm":
+        madani = set(os.listdir(os.path.join(base, "audio", "husary")))
+        reuse = {k: v for k, v in unit_index(range(min(pages), max(pages) + 2), timings_cache).items()
+                 if v in madani}
+        DATA_DIR = os.path.join(base, "dm")
+        _page_cache.clear()
+        links = {}
+    args.out = args.out or os.path.join(base, "audio", "husary" if args.layout == "madani" else "husary_dm")
+    os.makedirs(args.out, exist_ok=True)
+    links_path = os.path.join(args.out, "links.json")
+    if links is not None and os.path.exists(links_path):
+        links.update(json.load(open(links_path, encoding="utf-8")))
+
+    for page in pages:
+        process_page(page, args.out, timings_cache, force=args.force, reuse=reuse, links=links)
+        if links is not None:
+            with open(links_path, "w", encoding="utf-8") as f:
+                json.dump(links, f, ensure_ascii=False, indent=0, sort_keys=True)
 
     print("\nГотово. Файлы:")
     for f in sorted(os.listdir(args.out)):

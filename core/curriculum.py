@@ -218,7 +218,9 @@ def readiness(group_id):
     for s in students:
         ptr = get_hifz_pointer(s["phone"]) if s["phone"] else None
         if ptr and ptr.get("page"):
-            pages.append(int(ptr["page"]))
+            # Мединская страница: пороги 7/15/22 - по мединскому мусхафу,
+            # у египетской раскладки номера листов свои (23.09.2026).
+            pages.append(int(ptr.get("madani_page") or ptr["page"]))
     out = {"total": len(students), "with_pointer": len(pages)}
     for subject, page in READY_PAGE.items():
         out[subject] = sum(1 for p in pages if p >= page)

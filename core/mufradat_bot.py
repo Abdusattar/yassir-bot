@@ -25,7 +25,7 @@ from core.mufradat import (
     get_leaderboard, DAILY_WORDS_FOR_TASK_CREDIT, DAILY_CORRECT_FOR_TASK_CREDIT,
     compute_overall_score,
 )
-from core.mushaf_words import get_hifz_pointer
+from core.mushaf_words import get_hifz_pointer, get_mushaf_layout
 from core.i18n import T, get_group_lang
 from core.tg import send_message, send_photo_bytes, send_voice_bytes
 
@@ -490,7 +490,7 @@ async def _run_ffmpeg_on(codec_args, audio_bytes, src):
     return out
 
 
-def _hifz_place(page, line, stage, page_lines=15):
+def _hifz_place(page, line, stage, page_lines=15, layout=None):
     """Что именно читал студент - подпись под картинкой строки. Этап решает
     единицу сдачи: 1 - строчка, 2 - половина листа, 3 - вся страница.
 
@@ -498,16 +498,19 @@ def _hifz_place(page, line, stage, page_lines=15):
     с названием суры/басмалой короче), а граница половины должна совпасть
     с той, по которой подсвечивает сам мусхаф (hifzHalf в index.html:
     line < floor(n/2) - верхняя половина)."""
+    # Египетская раскладка (23.09.2026) - номер листа и строки по её книге,
+    # устазу это видно в подписи.
+    book = " (египетский)" if layout == "dm" else ""
     if stage == 1:
-        return f"стр. {page}, строка {line + 1}"
+        return f"стр. {page}{book}, строка {line + 1}"
     if stage == 2:
         half = "верхняя" if line < page_lines // 2 else "нижняя"
-        return f"стр. {page}, {half} половина"
-    return f"стр. {page}, вся страница"
+        return f"стр. {page}{book}, {half} половина"
+    return f"стр. {page}{book}, вся страница"
 
 
 async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, stage, page_lines=15,
-                                client_ms=None):
+                                client_ms=None, layout=None):
     """Сдача 40+40, записанная прямо в YassirApp (02.09.2026).
 
     Идёт тем же путём, что обычная голосовая сдача в группе: аудио уходит
@@ -533,6 +536,11 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     user = find_user_by_phone(user_id)
     if not user:
         return {"ok": False, "error": "no_user"}
+    # Место прислано в раскладке, которой у студента уже нет (сменил на
+    # другом устройстве) - номера строк были бы чужими.
+    my_layout = get_mushaf_layout(user_id)
+    if layout and layout != my_layout:
+        return {"ok": False, "error": "layout_mismatch", "layout": my_layout}
 
     # Гейт пересдачи. 13.09.2026, решение пользователя: стена переехала с
     # ОТПРАВКИ на ПРОДВИЖЕНИЕ. Долг больше не запирает всё подряд - этап, в
@@ -558,7 +566,7 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
             return {
                 "ok": False, "error": "retake_pending",
                 "place": _hifz_place(first["hifz_page"], first["hifz_line"],
-                                     first["hifz_stage"], page_lines),
+                                     first["hifz_stage"], page_lines, first.get("hifz_layout")),
                 "retake": {"page": first["hifz_page"], "line": first["hifz_line"],
                            "stage": first["hifz_stage"]},
             }
@@ -572,7 +580,7 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     if sec is not None and sec < HIFZ_MIN_SEC.get(stage, 0):
         return {"ok": False, "error": "too_short", "min_sec": HIFZ_MIN_SEC[stage]}
 
-    place = _hifz_place(page, line, stage, page_lines)
+    place = _hifz_place(page, line, stage, page_lines, my_layout)
     photo_msg_id = None
     if image_bytes:
         res = await send_photo_bytes(
@@ -611,7 +619,8 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     save_voice_submission(user["id"], group["id"], group["chat_id"],
                           voice_msg_id, get_date(), file_id,
                           hifz_page=page, hifz_line=line, hifz_stage=stage,
-                          photo_message_id=photo_msg_id, duration=duration)
+                          photo_message_id=photo_msg_id, duration=duration,
+                          hifz_layout=my_layout)
     if credited:
         save_report(user["id"], group["id"], get_date(), {"m": True})
     return {"ok": True, "credited": credited, "place": place}
@@ -657,7 +666,8 @@ async def submit_ustaz_verdict(ustaz_id, submission_id, verdict, words=None):
         return {"ok": False, "error": "already_redone"}
 
     set_submission_verdict(submission_id, verdict, ustaz_id, words)
-    place = _hifz_place(sub["hifz_page"], sub["hifz_line"] or 0, sub["hifz_stage"] or 1) \
+    place = _hifz_place(sub["hifz_page"], sub["hifz_line"] or 0, sub["hifz_stage"] or 1,
+                        layout=sub.get("hifz_layout")) \
         if sub["hifz_page"] is not None else ""
     marked = len(words or [])
     if verdict == VERDICT_ACCEPTED:

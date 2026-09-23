@@ -59,6 +59,19 @@
     :root:not([data-theme="light"]) .v4-word { font-palette: --V4Dark; }
   }
   :root[data-theme="dark"] .v4-word { font-palette: --V4Dark; }
+  /* Второй шрифт листа (23.09.2026, раскладка Дар аль-Маариф): строка 1405H
+     бывает собрана из слов двух мединских листов, а глиф V4 живёт только в
+     шрифте своего листа. Слово с чужого листа (t.fp) рисуется семейством
+     'mushaf-v4-b' - у палитры своё имя, @font-palette-values привязан к
+     семейству. Больше двух листов на одной странице 1405 не бывает
+     (проверено по всем 604). */
+  @font-palette-values --V4LightB { font-family: 'mushaf-v4-b'; base-palette: 0; }
+  @font-palette-values --V4DarkB { font-family: 'mushaf-v4-b'; base-palette: 1; }
+  .v4-word.v4-b { font-family: 'mushaf-v4-b', 'Scheherazade New', serif; font-palette: --V4LightB; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .v4-word.v4-b { font-palette: --V4DarkB; }
+  }
+  :root[data-theme="dark"] .v4-word.v4-b { font-palette: --V4DarkB; }
 
   :root {
     --bg: #ffffff;
@@ -3485,6 +3498,17 @@
     </div>
   </div>
 
+  <!-- Раскладка мусхафа (23.09.2026): кто учит по египетской таджвидной
+       книге Дар аль-Маарифа, видит листы и строки один в один с ней. -->
+  <div class="s-card">
+    <label class="s-lab">Мусхаф</label>
+    <div class="s-seg" id="sett-layout">
+      <button data-layout="madani">Мединский</button>
+      <button data-layout="dm">Дар аль-Маариф (египетский)</button>
+    </div>
+    <p class="s-hint" id="sett-layout-hint">Выбери тот, по которому учишь с книги: страницы и строки будут как в ней.</p>
+  </div>
+
   <!-- Выход - только у сессии сайта. Внутри Telegram выходить не из чего:
        там нас узнаёт сам Telegram при каждом открытии. -->
   <button id="dash-logout" hidden>Выйти из приложения</button>
@@ -4317,6 +4341,11 @@
       subs_verdict_redone: 'пересдал — ждёт устаза',
       subs_marked_words: 'Отмечено слов: %N%',
       hifz_retake_pending: 'Сначала пересдай: %P%',
+      layout_hint: 'Выбери тот, по которому учишь с книги: страницы и строки будут как в ней.',
+      layout_on_dm: 'Готово: листы и строки как в египетской книге Дар аль-Маариф. Твоё место в заучивании перенесено на ту же строку.',
+      layout_on_madani: 'Готово: листы и строки как в мединском мусхафе. Твоё место в заучивании перенесено на ту же строку.',
+      layout_retake: 'Сначала пересдай: %P% — долг записан по нынешней книге.',
+      layout_failed: 'Не получилось сменить, попробуй ещё раз.',
       subs_retake_hint: 'Пересдаётся ровно то, что сдавал: та же строчка, половина или страница.',
       dash_ustaz_sub: 'Сдачи на проверке',
       ustaz_title: 'Устаз',
@@ -4706,6 +4735,42 @@
   };
 
   var UI_LANG = 'ru';
+
+  // Раскладка мусхафа (23.09.2026): 'madani' - наш мединский (page{N}.json),
+  // 'dm' - Дар аль-Маариф, египетский таджвидный по раскладке 1405H
+  // (dm/page{N}.json, scripts/build_dm_layout.py). Главный источник -
+  // сервер (/layout, по нему считается указатель 40+40), localStorage -
+  // мгновенный кэш до ответа. reviewLayout - лист чужой сдачи у устаза
+  // открывается в раскладке студента, пока идёт разбор.
+  var LAYOUT_KEY = 'yassir_mushaf_layout';
+  var MUSHAF_LAYOUT = 'madani';
+  try {
+    if (localStorage.getItem(LAYOUT_KEY) === 'dm') MUSHAF_LAYOUT = 'dm';
+  } catch (e) {}
+  var reviewLayout = null;
+  function pageLayout() { return reviewLayout || MUSHAF_LAYOUT; }
+  // Лист чужой (или своей старой) сдачи - в раскладке, в которой она
+  // записана. true - раскладка на экране сменилась, лист надо перечитать.
+  function useViewLayout(lay) {
+    var before = pageLayout();
+    lay = lay || 'madani';
+    reviewLayout = lay === MUSHAF_LAYOUT ? null : lay;
+    return pageLayout() !== before;
+  }
+  function dropViewLayout() {
+    var was = !!reviewLayout;
+    reviewLayout = null;
+    return was;
+  }
+  // ?v у египетских листов: nginx держит no-cache только для /pageN.json в
+  // корне, а dm/ идёт общим правилом, и телефон мог бы днями показывать
+  // старую сборку (ловушка 29.08.2026). Пересобрали dm/ - поднять число.
+  var DM_DATA_VER = 1;
+  function pageJsonUrl(n, lang) {
+    var file = 'page' + n + (lang && lang !== 'ru' ? '_' + lang : '') + '.json';
+    return pageLayout() === 'dm' ? 'dm/' + file + '?v=' + DM_DATA_VER : file;
+  }
+
   function T(key, vars) {
     var dict = I18N[UI_LANG] || I18N.ru;
     var s = (dict[key] != null ? dict[key] : I18N.ru[key]) || '';
@@ -5287,6 +5352,59 @@
   }, 0);
 
   applyLang();
+
+  // ── Раскладка мусхафа (23.09.2026) ──────────────────────────────────
+  // Переключатель в настройках: «Мединский» / «Дар аль-Маариф (египетский)».
+  // Выбор уходит на сервер - по нему считается указатель 40+40, и сервер
+  // сам переносит место на ту же строку новой раскладки. Пока висит
+  // пересдача, сменить нельзя: долг записан номерами старой книги.
+  function markLayout() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#sett-layout button'),
+      function (b) { b.classList.toggle('on', b.getAttribute('data-layout') === MUSHAF_LAYOUT); });
+  }
+  function applyLayout(lay) {
+    if (lay !== 'dm') lay = 'madani';
+    markLayout();
+    if (lay === MUSHAF_LAYOUT) return false;
+    MUSHAF_LAYOUT = lay;
+    try { localStorage.setItem(LAYOUT_KEY, lay); } catch (e) {}
+    markLayout();
+    if (typeof loadPage === 'function' && currentPage) loadPage(currentPage);
+    return true;
+  }
+  document.getElementById('sett-layout').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    var lay = b.getAttribute('data-layout');
+    if (lay === MUSHAF_LAYOUT) return;
+    var hint = document.getElementById('sett-layout-hint');
+    var restore = T('layout_hint');
+    apiCall('/layout', { method: 'POST', body: { layout: lay } }).then(function (res) {
+      var d = res.data || {};
+      if (res.status === 409 && d.error === 'retake_pending') {
+        settSay(hint, T('layout_retake', { P: d.place || '' }), 'bad', restore);
+        return;
+      }
+      if (res.status !== 200) { settSay(hint, T('layout_failed'), 'bad', restore); return; }
+      applyLayout(d.layout);
+      // Место 40+40 сервер перенёс на ту же строку новой книги.
+      if (d.pointer) {
+        hifz.line = d.pointer.line;
+        hifz.stage = d.pointer.stage;
+        hifzPointerPage = d.pointer.page;
+      }
+      trail('layout', { n: d.layout });
+      settSay(hint, T(d.layout === 'dm' ? 'layout_on_dm' : 'layout_on_madani'), 'ok', restore);
+    }).catch(function () { settSay(hint, T('layout_failed'), 'bad', restore); });
+  });
+  markLayout();
+  setTimeout(function () {
+    apiCall('/layout').then(function (res) {
+      var d = res && res.data;
+      if (d && d.layout) applyLayout(d.layout);
+    }).catch(function () {});
+  }, 0);
 
   // "Сейчас онлайн" (30.08.2026) - heartbeat каждые 20 сек, пока YassirApp
   // открыт (независимо от того, какой экран сейчас - дашборд/мусхаф/
@@ -6367,6 +6485,11 @@
   /* FIT_WIDTHS:BEGIN */
   var MUSHAF_FIT_W = [0,570,534,660,663,669,659,672,653,664,647,664,647,645,664,649,645,649,650,664,652,649,658,650,667,649,650,652,645,652,651,643,648,647,673,654,654,677,651,665,650,644,660,648,670,652,665,649,643,645,659,661,649,651,662,647,667,651,651,666,645,647,667,649,663,647,650,652,646,656,644,649,661,644,658,645,644,662,645,646,646,643,647,644,657,650,646,660,642,657,648,644,672,638,662,644,641,648,641,645,651,645,651,649,651,645,650,655,647,664,645,648,659,647,656,643,650,661,647,664,652,665,653,645,670,651,650,659,650,668,652,651,655,650,665,652,648,653,647,648,656,647,650,650,661,642,663,643,668,640,647,651,654,648,657,650,662,647,668,645,644,644,654,643,668,647,640,670,643,647,649,642,652,657,650,669,662,648,649,668,648,648,650,656,668,652,652,647,646,659,647,646,658,650,665,646,664,649,647,670,647,661,642,652,661,650,665,647,652,663,647,648,659,653,664,646,650,652,657,664,647,668,655,650,667,647,668,645,660,647,646,669,650,658,649,651,667,643,662,656,630,647,651,640,665,649,649,666,643,672,647,665,656,649,665,640,654,642,653,662,651,641,655,646,653,650,653,646,640,644,664,647,671,647,649,662,639,660,643,645,649,646,637,647,665,660,646,655,652,662,647,651,659,661,658,663,649,668,655,669,646,646,652,659,670,642,667,653,654,681,649,654,653,663,652,663,657,670,650,665,648,649,642,653,660,648,666,649,768,662,644,645,682,649,681,643,665,648,648,662,652,652,681,650,660,657,652,658,645,680,687,658,652,652,666,653,663,647,650,650,648,648,652,651,670,653,639,656,656,670,658,671,661,655,669,654,658,660,654,683,657,653,649,649,665,646,659,655,657,657,646,650,653,649,664,653,652,650,649,664,646,649,651,649,649,643,646,663,644,650,667,648,649,662,646,686,660,645,650,649,669,651,645,645,650,655,667,649,650,669,647,664,643,667,650,651,663,659,648,666,656,646,650,647,664,681,681,665,650,669,659,708,682,692,660,657,671,663,656,661,661,646,653,650,659,640,643,655,648,667,657,653,650,645,662,642,643,666,646,665,651,650,647,649,664,645,668,654,676,647,647,663,645,664,651,652,667,658,648,681,639,653,650,648,655,651,647,672,654,640,666,646,647,663,649,649,652,675,654,671,667,659,652,653,672,649,676,658,688,672,666,657,649,662,660,668,664,664,657,669,642,654,655,648,664,649,646,659,644,660,673,653,654,651,670,640,658,639,652,656,652,652,662,665,661,668,672,679,678,694,653,657,648,651,661,664,679,677,665,679,666,664,661,665,654,680,667,661,664,668,673,665,669,667,658,666,661,664,660,657,669,650,676,675,631];
   /* FIT_WIDTHS:END */
+  // То же для раскладки Дар аль-Маариф (23.09.2026) - строки у неё свои,
+  // таблица своя: scripts/measure_mushaf_widths.py --layout dm [--apply].
+  /* FIT_WIDTHS_DM:BEGIN */
+  var MUSHAF_FIT_W_DM = [0,530,534,653,696,681,665,731,680,676,708,648,693,653,687,687,678,689,677,659,697,646,675,665,687,668,656,746,693,679,667,675,674,645,689,745,656,672,677,729,699,691,705,679,699,686,702,685,640,755,686,694,746,683,662,658,689,671,739,654,710,648,661,672,683,681,699,664,679,642,641,662,752,644,695,641,766,603,642,696,684,738,643,641,717,647,642,687,640,673,667,708,726,675,645,697,683,664,675,712,648,688,673,672,663,642,701,648,675,707,715,760,662,675,705,703,650,673,645,725,638,700,706,837,664,685,690,653,647,739,678,647,704,647,695,651,694,664,687,662,727,671,674,683,753,650,759,664,705,683,669,689,673,687,649,661,689,659,674,682,675,692,668,682,701,681,694,680,742,683,641,705,727,685,688,698,657,646,656,666,659,641,641,713,669,660,663,678,720,685,762,685,664,774,778,711,679,687,690,710,658,661,672,643,718,669,699,771,626,680,680,703,652,670,689,642,648,675,669,692,670,673,729,728,645,677,698,704,655,680,644,675,717,646,688,656,690,683,641,656,636,643,654,673,643,642,751,648,642,658,716,693,678,651,652,635,732,684,741,651,683,702,642,680,639,671,688,709,689,664,723,645,641,688,642,665,637,637,661,735,673,682,647,673,651,643,642,655,666,661,690,657,640,654,666,644,643,640,736,644,685,642,666,689,653,638,642,686,692,660,646,645,643,647,669,672,684,674,644,696,642,668,664,663,640,645,675,641,645,676,642,757,625,680,675,711,653,678,680,704,708,776,610,710,650,661,656,693,690,732,619,670,655,662,676,661,647,676,702,677,657,652,653,676,744,668,729,623,676,647,705,683,656,647,662,653,762,613,663,676,659,674,659,644,647,655,649,702,647,664,655,647,667,655,724,646,648,648,644,733,702,653,713,642,682,708,680,698,672,665,697,643,643,639,817,610,696,699,648,645,691,676,640,652,647,720,683,640,641,666,653,641,661,648,655,664,638,723,640,658,677,647,642,691,651,732,660,689,648,662,657,666,749,613,642,677,671,652,672,679,660,671,662,647,725,754,655,676,649,644,647,675,672,641,670,670,656,745,676,657,643,698,663,644,704,641,708,655,647,641,641,645,646,662,638,646,694,675,717,612,638,648,692,642,673,649,696,604,666,639,705,700,686,667,649,641,656,657,646,653,645,658,643,740,687,747,616,646,722,701,657,692,695,651,735,683,700,643,641,703,637,670,658,676,712,668,667,695,773,613,649,659,650,662,679,741,620,699,605,672,662,644,649,668,672,682,781,678,732,666,747,668,646,672,650,642,685,703,752,694,660,670,647,661,737,714,652,677,687,660,666,773,646,632,704,708,667,739,653,692,594,711,622,632,577];
+  /* FIT_WIDTHS_DM:END */
   var MUSHAF_FIT_K_KEY = 'yassir_fit_k';
   var MUSHAF_FIT_K_MIN = 0.9, MUSHAF_FIT_K_MAX = 1.1; // вне - замер кривой, не учимся
   var MUSHAF_FIT_AGREE = 0.5;   // px: расхождение меньше - замер согласен, кегль не трогаем
@@ -6382,7 +6505,8 @@
   function mushafFitPredict() {
     var el = document.getElementById('ayah-text');
     var page = parseInt(el.getAttribute('data-page'), 10);
-    var w = MUSHAF_FIT_W && MUSHAF_FIT_W[page];
+    var table = pageLayout() === 'dm' ? MUSHAF_FIT_W_DM : MUSHAF_FIT_W;
+    var w = table && table[page];
     if (!w) return null;
     var lines = el.querySelectorAll('.mushaf-line').length;
     var avail = el.clientWidth;
@@ -6605,6 +6729,36 @@
     });
   }
 
+  // Второй шрифт листа - только у раскладки Дар аль-Маариф (23.09.2026),
+  // см. .v4-b в стилях. fp - номер мединского листа, чьим шрифтом рисуется
+  // слово; у мединской раскладки его нет никогда, и этот путь не работает.
+  var currentV4FaceB = null, currentV4FaceBPage = null;
+  function v4FontUrl(fp) {
+    return 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p' + fp + '.woff2';
+  }
+  function pageExtraFontPage(data) {
+    var fp = null;
+    (data.lines || []).forEach(function (l) {
+      (l.tokens || []).forEach(function (t) { if (t.fp && !fp) fp = t.fp; });
+    });
+    return fp;
+  }
+  function loadV4Fonts(data) {
+    var main = loadV4Font(data.font_url);
+    var fp = pageExtraFontPage(data);
+    if (!fp || fp === currentV4FaceBPage) return main;
+    var face = new FontFace('mushaf-v4-b', "url('" + v4FontUrl(fp) + "')");
+    var extra = face.load().then(function (loaded) {
+      if (currentV4FaceB) { try { document.fonts.delete(currentV4FaceB); } catch (e) {} }
+      document.fonts.add(loaded);
+      currentV4FaceB = loaded;
+      currentV4FaceBPage = fp;
+    });
+    return Promise.all([main, extra]);
+  }
+  // Класс слова V4: у слова с чужого мединского листа - второй шрифт.
+  function v4Cls(t) { return t && t.fp ? 'v4-word v4-b' : 'v4-word'; }
+
   var currentPageData = null;
   var currentSurahNameText = '';
   // Номера сур, представленных на текущей странице (обычно одна, но бывает
@@ -6638,7 +6792,12 @@
       } else if (line.type === 'bismillah') {
         if (line.html) html += '<div class="bismillah">' + line.html + '</div>';
       } else if (line.type === 'text') {
-        html += '<div class="mushaf-line" data-line="' + (textLineNo++) + '">';
+        // fs - своя доля кегля у длинной строки раскладки Дар аль-Маариф
+        // (scripts/build_dm_layout.py: squeeze_lines, не меньше 0.92): иначе
+        // одна длинная строка уменьшала бы шрифт всего листа. У мединской
+        // раскладки fs нет, строка как была.
+        html += '<div class="mushaf-line" data-line="' + (textLineNo++) + '"' +
+          (line.fs ? ' style="font-size:' + line.fs + 'em"' : '') + '>';
         line.tokens.forEach(function (t) {
           if (t.type === 'word') {
             // data-surah/data-ayah/data-pos/data-arabic - только вместе с
@@ -6649,7 +6808,7 @@
               ' data-surah="' + t.surah + '" data-ayah="' + t.ayah + '" data-pos="' + t.position + '"' +
               ' data-arabic="' + escapeAttr(t.html) + '"' : '';
             if (t.code_v4) {
-              html += '<span class="v4-word"' + tr + '>' + t.code_v4 + '</span>';
+              html += '<span class="' + v4Cls(t) + '"' + tr + '>' + t.code_v4 + '</span>';
             } else {
               html += '<span' + tr + '>' + t.html + '</span>';
             }
@@ -6657,7 +6816,7 @@
             html += '<span class="marker">' + t.html + '</span>';
           } else if (t.type === 'ayah_end') {
             if (t.code_v4) {
-              html += '<span class="v4-word">' + t.code_v4 + '</span>';
+              html += '<span class="' + v4Cls(t) + '">' + t.code_v4 + '</span>';
             } else {
               html += '<span class="ayah-end">﴾' + t.html + '﴿</span>';
             }
@@ -6697,7 +6856,7 @@
     // висим бесконечно; PUA-глифы без своего шрифта покажутся "тофу"-
     // прямоугольниками в запасном шрифте - хуже, чем пустая страница, но
     // студент хотя бы поймёт, что что-то не так, а не решит, что бот завис.
-    loadV4Font(data.font_url).then(reveal, reveal);
+    loadV4Fonts(data).then(reveal, reveal);
 
     document.getElementById('btn-prev').disabled = data.page >= LAST_PAGE;
     document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
@@ -7019,7 +7178,7 @@
     // Кэш - по паре "страница + язык" (30.08.2026): при переключении языка
     // та же страница должна перечитаться с другими переводами, а не отдаться
     // из памяти по-старому.
-    var cacheKey = n + ':' + UI_LANG;
+    var cacheKey = n + ':' + UI_LANG + ':' + pageLayout();
     if (cache[cacheKey]) {
       renderPage(cache[cacheKey]);
       try { localStorage.setItem('yassir_mushaf_page', String(n)); } catch (e) {}
@@ -7030,13 +7189,14 @@
     // если файла нет, тихо откатываемся на русский. Интерфейс при этом
     // остаётся на выбранном языке, меняются только переводы слов: занятие
     // не должно прерываться там, где перевод ещё не готов.
-    var url = UI_LANG === 'ru' ? 'page' + n + '.json'
-                               : 'page' + n + '_' + UI_LANG + '.json';
+    // Откат на русский - в ТОЙ ЖЕ раскладке (dm/ сохраняется), иначе
+    // египетский лист молча подменился бы мединским.
+    var url = pageJsonUrl(n, UI_LANG);
     fetch(url)
       .then(function (r) {
         if (r.ok) return r.json();
         if (UI_LANG === 'ru') throw new Error('page ' + n);
-        return fetch('page' + n + '.json').then(function (r2) { return r2.json(); });
+        return fetch(pageJsonUrl(n)).then(function (r2) { return r2.json(); });
       })
       .then(function (data) {
         cache[cacheKey] = data;
@@ -7083,25 +7243,28 @@
      Правило перехода границ страницы не знает: строка всё равно читается до
      начала следующей, а следующая может быть уже на другом листе (поймано
      пользователем 01.09.2026 на 15-й строчке 15-й страницы). */
-  var hifzNextPage = { page: null, lines: null };
+  // layout - раскладка, в которой взят следующий лист (23.09.2026): после
+  // смены раскладки переход должен браться из её листа, а не из старого.
+  var hifzNextPage = { page: null, lines: null, layout: null };
 
   function hifzFetchNextPage() {
     var want = currentPage + 1;
-    if (want > LAST_PAGE || hifzNextPage.page === want) return;
+    var lay = pageLayout();
+    if (want > LAST_PAGE || (hifzNextPage.page === want && hifzNextPage.layout === lay)) return;
     hifzNextPage.page = want;
+    hifzNextPage.layout = lay;
     hifzNextPage.lines = null;
     // Тот же откат на русский, что и в loadPage: нерусская страница есть не
     // везде, а переход нужен всегда.
-    var url = UI_LANG === 'ru' ? 'page' + want + '.json'
-                               : 'page' + want + '_' + UI_LANG + '.json';
+    var url = pageJsonUrl(want, UI_LANG);
     fetch(url)
       .then(function (r) {
         if (r.ok) return r.json();
         if (UI_LANG === 'ru') throw new Error('page ' + want);
-        return fetch('page' + want + '.json').then(function (r2) { return r2.json(); });
+        return fetch(pageJsonUrl(want)).then(function (r2) { return r2.json(); });
       })
       .then(function (data) {
-        if (hifzNextPage.page !== want) return;
+        if (hifzNextPage.page !== want || hifzNextPage.layout !== lay) return;
         hifzNextPage.lines = (data.lines || []).filter(function (l) { return l.type === 'text'; });
         // Данные пришли позже отрисовки — обновляем то, что уже на экране.
         if (hifz.on) hifzApply();
@@ -7123,7 +7286,8 @@
   function hifzTailLine(lineIdx) {
     var lines = hifzTextLines();
     if (lineIdx + 1 < lines.length) return { line: lines[lineIdx + 1], foreign: false };
-    if (hifzNextPage.page === currentPage + 1 && hifzNextPage.lines && hifzNextPage.lines.length) {
+    if (hifzNextPage.page === currentPage + 1 && hifzNextPage.layout === pageLayout() &&
+        hifzNextPage.lines && hifzNextPage.lines.length) {
       return { line: hifzNextPage.lines[0], foreign: true };
     }
     hifzFetchNextPage();
@@ -7137,7 +7301,7 @@
   function hifzBigWord(token, foreign) {
     var tr = token.translation ? ' data-tr="' + escapeAttr(token.translation) + '"' : '';
     var glyph = foreign ? (token.html || '') : (token.code_v4 || token.html);
-    var cls = foreign ? 'tail-plain' : 'v4-word';
+    var cls = foreign ? 'tail-plain' : v4Cls(token);
     return '<span class="' + cls + '"' + tr + '>' + glyph + '</span>';
   }
 
@@ -7380,7 +7544,7 @@
     if (hifz.line === null) return;
     hifzPointerPage = currentPage;
     apiCall('/hifz', { method: 'POST', body: {
-      page: currentPage, line: hifz.line, stage: hifz.stage
+      page: currentPage, line: hifz.line, stage: hifz.stage, layout: MUSHAF_LAYOUT
     } }).then(function (res) {
       trail('save', { p: currentPage, l: hifz.line, s: hifz.stage,
                       n: String(res.status) + (res.data && res.data.error ? ' ' + res.data.error : '') });
@@ -7456,7 +7620,11 @@
     // краях под теми же именами, а сервер не шлёт Cache-Control - без
     // метки телефон ещё дни играл бы старое из кэша. Пересобрали снова -
     // поднять число.
-    return 'audio/husary/page_' + page + '_' + hifzAudioSlot() + '.mp3?v=' + HUSARY_AUDIO_VER;
+    // Египетская раскладка - своя нарезка (audio/husary_dm, 23.09.2026):
+    // строки у неё другие, а совпавшие с мединскими единицы на сервере -
+    // ссылки на те же файлы.
+    return 'audio/' + (pageLayout() === 'dm' ? 'husary_dm' : 'husary') + '/page_' + page + '_' +
+      hifzAudioSlot() + '.mp3?v=' + HUSARY_AUDIO_VER;
   }
 
   function hifzListenButtons() {
@@ -7811,7 +7979,12 @@
       var l = lines[idx];
       return {
         text: (l && l.tokens) ? l.tokens.map(function (t) { return t.code_v4 || ''; }).join(' ') : '',
-        font: 'mushaf-v4'
+        font: 'mushaf-v4',
+        // Слова со вторым шрифтом листа (раскладка Дар аль-Маариф, t.fp):
+        // одной строкой fillText их не нарисовать - строка идёт кусками.
+        parts: (l && l.tokens && l.tokens.some(function (t) { return t.fp; })) ? l.tokens.map(function (t) {
+          return { text: t.code_v4 || '', font: t.fp ? 'mushaf-v4-b' : 'mushaf-v4' };
+        }) : null
       };
     });
     // Переходное слово студент читает следом за единицей — тем же тапом,
@@ -7834,6 +8007,9 @@
             return src.foreign ? hifzPlainText(t.html) : (t.code_v4 || '');
           }).join(' '),
           font: src.foreign ? "'Scheherazade New'" : 'mushaf-v4',
+          parts: (!src.foreign && toks.some(function (t) { return t.fp; })) ? toks.map(function (t) {
+            return { text: t.code_v4 || '', font: t.fp ? 'mushaf-v4-b' : 'mushaf-v4' };
+          }) : null,
           tail: true
         });
       }
@@ -7841,10 +8017,16 @@
     var canvas = document.createElement('canvas');
     var ctx = canvas.getContext('2d');
     var maxW = 0;
-    rows.forEach(function (r) {
-      ctx.font = size + 'px ' + r.font;
-      maxW = Math.max(maxW, ctx.measureText(r.text).width);
-    });
+    function rowWidth(r) {
+      if (!r.parts) { ctx.font = size + 'px ' + r.font; return ctx.measureText(r.text).width; }
+      var w = 0;
+      r.parts.forEach(function (p, i) {
+        ctx.font = size + 'px ' + p.font;
+        w += ctx.measureText(p.text).width + (i ? ctx.measureText(' ').width : 0);
+      });
+      return w;
+    }
+    rows.forEach(function (r) { maxW = Math.max(maxW, rowWidth(r)); });
     canvas.width = Math.ceil((maxW + pad * 2) * scale);
     canvas.height = Math.ceil((rows.length * lh + pad * 2) * scale);
     ctx.scale(scale, scale);
@@ -7860,6 +8042,15 @@
       // приглушения, что и на самой странице, чтобы устазу было видно,
       // где кончается единица и начинается переход.
       ctx.fillStyle = r.tail ? '#8a8370' : '#1c1710';
+      if (r.parts) {
+        var x = maxW + pad;
+        r.parts.forEach(function (p) {
+          ctx.font = size + 'px ' + p.font;
+          ctx.fillText(p.text, x, pad + lh * (i + 0.75));
+          x -= ctx.measureText(p.text).width + ctx.measureText(' ').width;
+        });
+        return;
+      }
       ctx.font = size + 'px ' + r.font;
       ctx.fillText(r.text, (maxW + pad), pad + lh * (i + 0.75));
     });
@@ -8409,6 +8600,8 @@
       // Строк на листе не всегда 15 — сервер по этому же числу считает,
       // какая половина (та же формула, что hifzHalf выше).
       fd.append('lines', String(hifzTextLines().length));
+      // Раскладка, в которой считаны страница и строка (23.09.2026).
+      fd.append('layout', MUSHAF_LAYOUT);
       // Свой замер длины: Telegram для части файлов отдаёт 0 (16.09.2026).
       fd.append('ms', String(rec.ms || 0));
       return fetch(apiBase() + '/hifz/submit', {
@@ -9031,6 +9224,7 @@
         if (res.status === 401 || !res.data) return;
         hifzSetDebt(res.data);
         if (!res.data.pointer) return;
+        if (res.data.pointer.layout) applyLayout(res.data.pointer.layout);
         hifz.line = res.data.pointer.line;
         hifz.stage = res.data.pointer.stage;
         hifzPointerPage = res.data.pointer.page;
@@ -9928,7 +10122,8 @@
     document.getElementById('look-play').disabled = !item.has_review_audio;
     lookRenderActions();
     openMushaf('page');
-    if (currentPage !== item.hifz_page) {
+    var relayout = useViewLayout(item.hifz_layout);
+    if (relayout || currentPage !== item.hifz_page) {
       loadPage(item.hifz_page);   // renderPage сама позовёт hifzApply/hifzHead
     } else {
       hifzApply();
@@ -9951,6 +10146,7 @@
       look.saved = null;
     }
     hifzApply();
+    if (dropViewLayout()) loadPage(currentPage);
     document.getElementById('app').style.display = 'none';
     openSubs();
   }
@@ -11065,7 +11261,8 @@
       document.getElementById('ustaz').style.display = 'none';
       openMushaf('page');
       document.getElementById('app').classList.add('review');
-      if (currentPage !== sub.hifz_page) {
+      var relayout = useViewLayout(sub.hifz_layout);
+      if (relayout || currentPage !== sub.hifz_page) {
         loadPage(sub.hifz_page);      // reveal() сама позовёт reviewAfterRender
       } else {
         hifzApply(); hifzHead(); reviewAfterRender();
@@ -11101,6 +11298,8 @@
       review.saved = null;
     }
     hifzApply();
+    // Лист был в раскладке студента - возвращаем устазу его собственную.
+    if (dropViewLayout()) loadPage(currentPage);
     document.getElementById('app').style.display = 'none';
     document.getElementById('ustaz').style.display = 'flex';
     // Обратно на ту вкладку, откуда сдачу открыли (13.09.2026): из

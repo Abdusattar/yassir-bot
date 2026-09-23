@@ -67,6 +67,7 @@ from core.mushaf_words import (
     get_hifz_pointer, set_hifz_pointer,
     get_hifz_progress, add_hifz_progress, set_hifz_progress, HIFZ_PROGRESS_TARGET,
     check_new_words_for_line, page_text_line_count, next_hifz_position,
+    get_mushaf_layout, set_mushaf_layout, LAYOUTS,
 )
 from core.pulse import get_pulse
 from core.quran_pages import resolve_page, page_for_ayah, FIRST_PAGE, LAST_PAGE
@@ -559,7 +560,8 @@ def _hifz_unit_done(user_id, user, group, pointer):
     # формулой, что и в приложении (hifzHalf): листы с названием суры короче,
     # и зашитая пятнадцатка увела бы счётчик не туда.
     half = 0 if pointer["stage"] == 3 else (
-        0 if pointer["line"] < page_text_line_count(pointer["page"]) // 2 else 1)
+        0 if pointer["line"] < page_text_line_count(
+            pointer["page"], layout=pointer.get("layout", "madani")) // 2 else 1)
     return get_hifz_progress(user_id, pointer["page"], pointer["stage"],
                              half) >= HIFZ_PROGRESS_TARGET
 
@@ -596,13 +598,14 @@ def _hifz_catch_up(user_id):
     for _ in range(40):
         if not _hifz_unit_done(user_id, user, group, pointer):
             break
-        page, line, stage = next_hifz_position(pointer["page"], pointer["line"], pointer["stage"])
+        page, line, stage = next_hifz_position(pointer["page"], pointer["line"], pointer["stage"],
+                                               layout=pointer["layout"])
         if (page, line, stage) == (pointer["page"], pointer["line"], pointer["stage"]):
             break   # дальше идти некуда (последняя страница)
         set_hifz_pointer(user_id, page, line, stage)
         log.info("hifz catch-up: %s %s -> %s", user_id,
                  (pointer["page"], pointer["line"], pointer["stage"]), (page, line, stage))
-        pointer = {"page": page, "line": line, "stage": stage}
+        pointer = get_hifz_pointer(user_id)
     return pointer
 
 
@@ -627,8 +630,9 @@ def _hifz_retakes(user_id):
     return {
         "retakes": [{"page": r["hifz_page"], "line": r["hifz_line"],
                      "stage": r["hifz_stage"],
+                     "layout": r.get("hifz_layout") or "madani",
                      "place": _hifz_place(r["hifz_page"], r["hifz_line"] or 0,
-                                          r["hifz_stage"] or 1)}
+                                          r["hifz_stage"] or 1, layout=r.get("hifz_layout"))}
                     for r in retakes],
         "done": done,
     }
@@ -668,6 +672,12 @@ async def handle_hifz_set(request, user_id):
     #
     # Первая постановка места (указателя ещё нет) не блокируется никогда -
     # иначе новичок с долгом не смог бы вообще начать.
+    # Место прислано в другой раскладке, чем выбрана на сервере (сменил на
+    # другом устройстве) - не пишем чужие номера строк, приложение
+    # перечитает раскладку и указатель.
+    layout = get_mushaf_layout(user_id)
+    if body.get("layout") and body["layout"] != layout:
+        return web.json_response({"error": "layout_mismatch", "layout": layout}, status=409)
     current = get_hifz_pointer(user_id)
     if current and (current["page"], current["stage"]) != (page, stage):
         blocking = _hifz_retakes(user_id)["retakes"]
@@ -683,6 +693,34 @@ async def handle_hifz_set(request, user_id):
         # повторяют уже пройденные строки, повторно проверять незачем.
         check_new_words_for_line(user_id, page, line)
     return web.json_response({"pointer": {"page": page, "line": line, "stage": stage}})
+
+
+@with_auth
+async def handle_layout_get(request, user_id):
+    """GET - раскладка мусхафа студента: madani | dm (23.09.2026)."""
+    return web.json_response({"layout": get_mushaf_layout(user_id)})
+
+
+@with_auth
+async def handle_layout_set(request, user_id):
+    """POST {layout} - сменить раскладку. Указатель 40+40 переезжает на ту же
+    строку в новой раскладке (set_mushaf_layout). Пока висит пересдача,
+    сменить нельзя: долг записан номерами страниц и строк старой раскладки,
+    и сдавать его надо там же (правило 23.09.2026)."""
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    layout = body.get("layout")
+    if layout not in LAYOUTS:
+        return web.json_response({"error": "bad_layout"}, status=400)
+    if layout != get_mushaf_layout(user_id):
+        blocking = _hifz_retakes(user_id)["retakes"]
+        if blocking:
+            return web.json_response({"error": "retake_pending", "retakes": blocking,
+                                      "place": blocking[0]["place"]}, status=409)
+    pointer = set_mushaf_layout(user_id, layout)
+    return web.json_response({"layout": layout, "pointer": pointer})
 
 
 @with_auth
@@ -826,7 +864,7 @@ async def handle_hifz_submit(request, user_id):
         client_ms = None
 
     result = await submit_hifz_recording(user_id, audio, image, page, line, stage, page_lines,
-                                         client_ms=client_ms)
+                                         client_ms=client_ms, layout=fields.get("layout") or None)
     return web.json_response(result, status=200 if result.get("ok") else 400)
 
 
@@ -1985,7 +2023,7 @@ async def handle_ustaz_submission(request, user_id):
         "group_title": sub["group_title"],
         "date": sub["date"], "sent_at": sub["sent_at"],
         "hifz_page": sub["hifz_page"], "hifz_line": sub["hifz_line"],
-        "hifz_stage": sub["hifz_stage"],
+        "hifz_stage": sub["hifz_stage"], "hifz_layout": sub.get("hifz_layout"),
         "has_audio": bool(sub["file_id"]),
         "has_review_audio": bool(sub["review_file_id"]),
         # Длина записи в секундах - на кнопке «Прослушать сдачу» (14.09.2026).
@@ -2394,6 +2432,8 @@ def build_app():
     app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
     app.router.add_get("/api/muf/hifz", handle_hifz_get)
     app.router.add_post("/api/muf/hifz", handle_hifz_set)
+    app.router.add_get("/api/muf/layout", handle_layout_get)
+    app.router.add_post("/api/muf/layout", handle_layout_set)
     app.router.add_get("/api/muf/hifz/progress", handle_hifz_progress_get)
     app.router.add_post("/api/muf/hifz/progress", handle_hifz_progress_add)
     app.router.add_post("/api/muf/hifz/submit", handle_hifz_submit)
