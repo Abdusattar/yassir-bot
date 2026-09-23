@@ -760,7 +760,7 @@ def _group_title(group_id):
 # заводили, чтобы не дублировать то же сообщение в тот же день.
 
 
-async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok, uid=None):
+async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok, uid=None, note=""):
     """Приветствие называет половину («группа братьев»). Кнопки «мне не
     сюда» нет с 23.09.2026 - см. greet_new_member в core/transfers.py.
     uid оставлен в подписи для вызывающих."""
@@ -771,6 +771,8 @@ async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok, uid=No
         link = await get_dm_start_link()
         text = T("prep_onboarding_group_dm_needed", glang, name=name, half=half_word(),
                  link=link or "https://t.me/")
+    if note:
+        text += "\n\n" + note
     await send_message(chat_id, text)
 
 

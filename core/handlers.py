@@ -130,15 +130,58 @@ def _section_student(group_tasks, gtype, lang="ru"):
     return help_student(group_tasks, gtype, lang)
 
 
-async def _send_registered(chat_id, glang, name, phone, prefix=""):
+async def _send_registered(chat_id, glang, name, phone, prefix="", suffix=""):
     """Сообщение по завершении регистрации: если студент ещё не жал Start в личке —
     объясняем, что отчёты остаются в группе, а /help, /rating, /mystats и личные
     напоминания теперь приходят в личку, и даём ссылку."""
+    tail = ("\n\n" + suffix) if suffix else ""
     if get_dm_ok_by_phone(phone):
-        await send_message(chat_id, prefix + T("registered_group", glang, name=name))
+        await send_message(chat_id, prefix + T("registered_group", glang, name=name) + tail)
         return
     link = await get_dm_start_link()
-    await send_message(chat_id, prefix + T("registered_group_dm", glang, name=name, link=link or "https://t.me/"))
+    await send_message(chat_id, prefix + T("registered_group_dm", glang, name=name, link=link or "https://t.me/") + tail)
+
+
+async def complete_registration(chat_id, group, phone, new_name, glang, auto=False):
+    """Записать новичка в группу под именем new_name и сказать об этом
+    (вынесено 23.09.2026 - тот же путь и для имени, написанного в группе, и
+    для имени из Telegram при входе). auto - имя взято из Telegram без
+    вопроса: говорим, где его поменять. Возвращает id студента или None,
+    если записать нельзя (учится в другой группе - ему сказано)."""
+    group_id = group["id"]
+    gtype = group["group_type"] or "relaxed"
+    if gtype != "tadabbur":
+        existing_lg = get_learning_group(phone)
+        if existing_lg and existing_lg["id"] != group_id:
+            clear_pending_name(phone, group_id)
+            await send_message(chat_id, T("already_in_group", glang,
+                name=new_name, title=existing_lg["title"] or ""))
+            return None
+    # Привязать к существующему студенту без ID, иначе создать нового
+    existing_s = find_unlinked_by_name(new_name, group_id)
+    if existing_s:
+        register_student(existing_s["id"], phone)
+        sid = existing_s["id"]
+    else:
+        sid = add_student(new_name, group_id, phone)
+    clear_pending_name(phone, group_id)
+    note = T("name_from_telegram", glang, name=new_name) if auto else ""
+    if gtype == "prep":
+        from core.prep import send_prep_onboarding_group_message, send_prep_onboarding_dm
+        dm_ok_now = get_dm_ok_by_phone(phone)
+        await send_prep_onboarding_group_message(chat_id, new_name, glang, dm_ok_now, uid=phone, note=note)
+        if dm_ok_now:
+            # 6 сообщений + 3 фото, ~5 сек - не блокируем очередь
+            # этого же отправителя (bot.py: lock на chat_id+sender),
+            # иначе подтверждение первого отчёта придёт с
+            # задержкой (найдено на ревью, 12.08.2026).
+            asyncio.create_task(send_prep_onboarding_dm(phone, glang))
+    else:
+        await _send_registered(chat_id, glang, new_name, phone, suffix=note)
+    for ap in SUPER_ADMIN_IDS:
+        await send_message(ap, "👤 " + new_name + (" (имя из Telegram)" if auto else "")
+                           + " зарегистрировался в «" + (group["title"] or str(chat_id)) + "»")
+    return sid
 
 
 async def _resolve_dm_target(phone, group_chat_id, glang):
@@ -1549,39 +1592,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                         if not await ai.is_valid_name(new_name):
                             await send_message(chat_id, T("ask_name_confirm", glang, name=new_name))
                             return
-                # Проверяем: не студент ли уже в другой учебной группе
-                gtype = group["group_type"] or "relaxed"
-                if gtype != "tadabbur":
-                    existing_lg = get_learning_group(phone)
-                    if existing_lg and existing_lg["id"] != group_id:
-                        clear_pending_name(phone, group_id)
-                        await send_message(chat_id, T("already_in_group", glang,
-                            name=new_name, title=existing_lg["title"] or ""))
-                        return
-                # Привязать к существующему студенту без ID, иначе создать нового
-                existing_s = find_unlinked_by_name(new_name, group_id)
-                if existing_s:
-                    register_student(existing_s["id"], phone)
-                    sid = existing_s["id"]
-                else:
-                    sid = add_student(new_name, group_id, phone)
-                # Засчитать сохранённый первый отчёт если был
                 saved = get_pending_text(phone, group_id)
-                clear_pending_name(phone, group_id)
-                if gtype == "prep":
-                    from core.prep import send_prep_onboarding_group_message, send_prep_onboarding_dm
-                    dm_ok_now = get_dm_ok_by_phone(phone)
-                    await send_prep_onboarding_group_message(chat_id, new_name, glang, dm_ok_now, uid=phone)
-                    if dm_ok_now:
-                        # 6 сообщений + 3 фото, ~5 сек - не блокируем очередь
-                        # этого же отправителя (bot.py: lock на chat_id+sender),
-                        # иначе подтверждение первого отчёта ниже придёт с
-                        # задержкой (найдено на ревью, 12.08.2026).
-                        asyncio.create_task(send_prep_onboarding_dm(phone, glang))
-                else:
-                    await _send_registered(chat_id, glang, new_name, phone)
-                for ap in SUPER_ADMIN_IDS:
-                    await send_message(ap, "👤 " + new_name + " зарегистрировался в «" + (group["title"] or str(chat_id)) + "»")
+                sid = await complete_registration(chat_id, group, phone, new_name, glang)
+                if sid is None:
+                    return
                 if saved and saved.strip():
                     td = check_text(saved)
                     sc = sum(1 for k in group_tasks if td.get(k))

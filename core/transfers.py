@@ -19,7 +19,7 @@ from core.feed import important
 from datetime import datetime
 
 from core.db import (
-    get_all_groups, get_students, get_days_since_last_report,
+    get_all_groups, looks_like_plain_name, get_students, get_days_since_last_report,
     get_skip_count_month, get_skip_count_month_detail, get_miss_count_last_30_days,
     get_lesson_skip_count_month,
     deactivate_student, add_student, log_transfer, get_group, get_group_by_id,
@@ -479,7 +479,16 @@ async def greet_new_member(chat_id, group_info, uid, tg_name, glang):
     В подготовительной приветствие называет половину («группа братьев»).
     Кнопки «мне не сюда» больше нет (23.09.2026): в подготовительную входят
     только через бота, неизвестного он спрашивает по заявке ещё до входа, а
-    ошибку внутри поправляет устаз (/сестра, /брат, /нетуда)."""
+    ошибку внутри поправляет устаз (/сестра, /брат, /нетуда).
+
+    Имя в Telegram похоже на имя - не спрашиваем, а сразу записываем и
+    говорим, где его поменять (23.09.2026, решение пользователя: «тогда и
+    имя не придётся спрашивать»). Не похоже (AbuAnisa2205, «A», эмодзи) -
+    спрашиваем, как раньше."""
+    if tg_name and looks_like_plain_name(tg_name, report_check=False):
+        from core.handlers import complete_registration
+        await complete_registration(chat_id, group_info, uid, tg_name.strip(), glang, auto=True)
+        return
     greeting = ("Ассаляму алейкум, " + tg_name + "! 🌙\n") if tg_name else "Ассаляму алейкум! 🌙\n"
     if (group_info["group_type"] or "relaxed") == "prep":
         text = greeting + T("prep_door_line", glang, half=half_word()) + "\n" + T("ask_name", glang)

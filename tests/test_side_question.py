@@ -267,7 +267,7 @@ def test_prep_greeting_names_the_half_without_a_button(test_db, world, wire):
     """Кнопки «мне не сюда» в группе нет (23.09.2026): вход только через
     бота, ошибку внутри поправляет устаз."""
     g = db.get_group(MALE_PREP_CHAT)
-    asyncio.run(tr.greet_new_member(MALE_PREP_CHAT, g, STRANGER, "Канат", "ru"))
+    asyncio.run(tr.greet_new_member(MALE_PREP_CHAT, g, STRANGER, "AbuAnisa2205", "ru"))
     cid, text, buttons = wire["sent"][-1]
     assert cid == MALE_PREP_CHAT
     assert "подготовительная группа братьев" in text
@@ -278,7 +278,7 @@ def test_prep_greeting_names_the_half_without_a_button(test_db, world, wire):
 
 def test_learning_group_greeting_is_unchanged(test_db, world, wire):
     g = db.get_group(N1_CHAT)
-    asyncio.run(tr.greet_new_member(N1_CHAT, g, STRANGER, "Канат", "ru"))
+    asyncio.run(tr.greet_new_member(N1_CHAT, g, STRANGER, "AbuAnisa2205", "ru"))
     cid, text, buttons = wire["sent"][-1]
     assert buttons is None and "братьев" not in text and "Как тебя зовут" in text
 
@@ -533,3 +533,50 @@ def test_second_event_of_the_same_join_is_an_echo(monkeypatch):
     assert tr.first_join_event(N1_CHAT, STRANGER) is True        # другая группа - свой вход
     now[0] += tr.JOIN_ECHO_SEC + 1
     assert tr.first_join_event(MALE_PREP_CHAT, STRANGER) is True  # ушёл и вернулся позже
+
+
+# ── Имя из Telegram похоже на имя - не спрашиваем (23.09.2026) ───────────────
+
+@pytest.fixture
+def no_getme(monkeypatch):
+    async def link():
+        return "https://t.me/yassirquranbot?start=go"
+    for mod in (prep, h):
+        monkeypatch.setattr(mod, "get_dm_start_link", link, raising=False)
+
+
+def test_plain_telegram_name_registers_at_once_and_says_where_to_change(test_db, world, wire, no_getme):
+    g = db.get_group(MALE_PREP_CHAT)
+    asyncio.run(tr.greet_new_member(MALE_PREP_CHAT, g, STRANGER, "Oskar", "ru"))
+    s = db.find_by_phone(STRANGER, g["id"])
+    assert s is not None and s["name"] == "Oskar"
+    in_group = [t for c, t, _ in wire["sent"] if c == MALE_PREP_CHAT]
+    assert len(in_group) == 1
+    assert "Как тебя зовут" not in in_group[0]
+    assert "подготовительную группу братьев" in in_group[0]
+    assert "«Oskar»" in in_group[0] and "Настройки → Имя" in in_group[0]
+    assert not db.is_pending_name(STRANGER, g["id"])
+
+
+def test_ismail_is_a_name_not_a_nahw_report(test_db, world, wire, no_getme):
+    """«исм» в имени - не слово из задания нахва."""
+    g = db.get_group(MALE_PREP_CHAT)
+    asyncio.run(tr.greet_new_member(MALE_PREP_CHAT, g, STRANGER, "Исмаил", "ru"))
+    assert db.find_by_phone(STRANGER, g["id"])["name"] == "Исмаил"
+
+
+@pytest.mark.parametrize("tg_name", ["AbuAnisa2205", "A", "🌙 Aisha", ""])
+def test_not_a_name_still_asks(test_db, world, wire, no_getme, tg_name):
+    g = db.get_group(MALE_PREP_CHAT)
+    asyncio.run(tr.greet_new_member(MALE_PREP_CHAT, g, STRANGER, tg_name, "ru"))
+    assert db.find_by_phone(STRANGER, g["id"]) is None
+    assert "Как тебя зовут" in wire["sent"][-1][1]
+
+
+def test_typed_name_in_group_is_not_told_about_settings(test_db, world, wire, no_getme):
+    """Имя, написанное самим человеком, - как раньше, без приписки."""
+    g = db.get_group(MALE_PREP_CHAT)
+    db.set_pending_name(STRANGER, g["id"], "")
+    asyncio.run(h.process_message(chat_id=MALE_PREP_CHAT, sender=STRANGER, text="Канат", sender_name="AbuAnisa2205"))
+    assert db.find_by_phone(STRANGER, g["id"])["name"] == "Канат"
+    assert all("Настройки → Имя" not in t for _, t, _ in wire["sent"])

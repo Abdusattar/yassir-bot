@@ -3539,7 +3539,7 @@ _PLAIN_NAME_RE = re.compile(
 )
 
 
-def looks_like_plain_name(text):
+def looks_like_plain_name(text, report_check=True):
     """Человек написал просто своё имя («Салия», «Салия. М.»)?
 
     Тогда ИИ спрашивать незачем: имя принимается сразу (08.09.2026). До
@@ -3567,6 +3567,10 @@ def looks_like_plain_name(text):
         return False
     if any(w in _NOT_NAME_PHRASE_WORDS for w in words):
         return False
+    # Имя из профиля Telegram отчётом быть не может - там проверка на слова
+    # заданий только вредит: «Исмаил» ловится как «исм» из нахва (23.09.2026).
+    if not report_check:
+        return True
     return not any(check_text(raw).values())
 
 
