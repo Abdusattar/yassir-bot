@@ -4412,6 +4412,7 @@
       hifz_rec_too_short: 'Слишком коротко — прочитай ещё раз',
       hifz_rec_short_unit: 'Для такого объёма запись слишком короткая — прочитай и запиши заново',
       hifz_rec_lost: 'Запись сохранилась на телефоне не целиком — запиши заново. Лучше без паузы',
+      hifz_rec_empty: 'Микрофон не записал звук — нажми «Записать» ещё раз',
       hifz_rec_incomplete: 'Запись дошла не целиком — запиши заново. Лучше без паузы',
       hifz_rec_hint_sending: 'Отправляю…',
       hifz_rec_no_mic: 'Не получилось включить микрофон. Разреши доступ в настройках Telegram',
@@ -7997,7 +7998,12 @@
     // Микрофон здесь НЕ отпускаем: hifzRecReset зовётся и при "перезаписать",
     // а повторный захват - это повторный вопрос студенту.
     if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
+    // Идущий диктофон останавливаем и бросаем: его onstop увидит, что он уже
+    // не текущий, и ничего не тронет (см. hifzRecStart).
+    var old = rec.mr;
     rec.mr = null; rec.chunks = []; rec.blob = null;
+    rec.gen = (rec.gen || 0) + 1; rec.starting = false;
+    if (old && old.state !== 'inactive') { try { old.stop(); } catch (e) { /* уже стоит */ } }
     rec.accMs = 0; rec.segBaseMs = 0; rec.paused = false; rec.resent = false;
     rec.seg = 0; rec.saved = [];
     var a = document.getElementById('hifz-rec-audio');
@@ -8139,7 +8145,9 @@
      один раз на себя, дальше вопрос внутри WebView; на iOS WKWebView
      переспрашивает при каждом новом запуске приложения. */
   function hifzRecStream() {
-    if (rec.stream && rec.stream.getTracks().some(function (t) { return t.readyState === 'live'; })) {
+    // Заглохший микрофон (muted) формально жив, но звука не даёт: на iPhone
+    // из такого выходил файл в 0 байт (23.09.2026) - берём микрофон заново.
+    if (rec.stream && rec.stream.getTracks().some(function (t) { return t.readyState === 'live' && !t.muted; })) {
       return Promise.resolve(rec.stream);
     }
     return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
@@ -8156,36 +8164,64 @@
     // Запись с нуля (не продолжение обрыва - у того seg > 0) начинается с
     // чистого хранилища: что бы там ни осталось, к этой записи оно не
     // относится. Ждём очистки, иначе она сотрёт и первый новый кусок.
+    // Один диктофон за раз (23.09.2026). Микрофон выдаётся не сразу, и второе
+    // нажатие «Записать» за это время заводило второй MediaRecorder; первый
+    // никто не останавливал, и он дописывал свои куски во все следующие
+    // записи до перезапуска приложения - сдача уходила склейкой двух потоков
+    // или битым файлом (bad_audio), вес вдвое больше обычного.
+    if (rec.starting || (rec.mr && rec.mr.state !== 'inactive')) return;
+    rec.starting = true;
+    var gen = rec.gen;   // панель сбросили, пока ждали микрофон - не стартуем
     var clean = (!rec.seg && recPlace()) ? recPartsWipe() : Promise.resolve();
     hifzRecStream().then(function (stream) {
       return clean.then(function () { return stream; });
     }).then(function (stream) {
-      rec.chunks = [];
+      rec.starting = false;
+      if (rec.gen !== gen) return;
+      // Куски - у каждого диктофона свои: чужой в эту запись не допишет.
+      var chunks = rec.chunks = [];
+      var mr;
       // Формат не навязываем: Chrome/Android даёт webm/opus, Safari/iOS —
       // mp4/aac. Оба приводит к ogg сервер (ffmpeg), Telegram принимает
       // в голосовые только ogg/opus.
       // 32 кбит/с — речь остаётся разборчивой, а минута весит ~240 КБ:
       // студенты сдают с мобильного интернета, и есть предел на загрузку.
       try {
-        rec.mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+        mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
       } catch (e) {
-        rec.mr = new MediaRecorder(stream);
+        mr = new MediaRecorder(stream);
       }
-      rec.mr.ondataavailable = function (e) {
-        if (!e.data || !e.data.size) return;
-        rec.chunks.push(e.data);
+      rec.mr = mr;
+      mr.ondataavailable = function (e) {
+        if (rec.mr !== mr || !e.data || !e.data.size) return;
+        chunks.push(e.data);
         // Держим последнее сохранение: «Стоп» приходит сразу за куском, и
         // отправлять надо уже после того, как он лёг на телефон.
         rec.saving = recPartSave(rec.seg, e.data, hifzRecElapsed());
       };
-      rec.mr.onstop = function () {
+      mr.onstop = function () {
+        if (rec.mr !== mr) return;   // брошенный диктофон (см. hifzRecReset)
         hifzWakeOff();
+        // Звука нет совсем (23.09.2026, только iPhone: 17-22 с на таймере и
+        // файл в 0 байт, одна сестра нажала «Отправить» 13 раз). Отправлять
+        // нечего - просим записать ещё раз, микрофон при этом берём заново.
+        if (!chunks.length) {
+          trail('rec', { n: 'empty ' + Math.round(hifzRecElapsed() / 1000) + 's' });
+          if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
+          rec.mr = null;
+          rec.accMs = rec.segBaseMs || 0;
+          hifzRecRelease();
+          document.getElementById('hifz-rec-timer').classList.remove('rec');
+          document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_empty');
+          hifzRecButtons('idle');
+          return;
+        }
         // Перечитываем то, что лежит на телефоне: там и прежние сегменты, и
         // только что дописанный - из них и собирается отправка.
         (rec.saving || Promise.resolve()).then(recPartsLoad).then(function (rows) {
           rec.saved = rows;
         });
-        rec.blob = new Blob(rec.chunks, { type: rec.chunks[0] ? rec.chunks[0].type : 'audio/webm' });
+        rec.blob = new Blob(chunks, { type: chunks[0].type || 'audio/webm' });
         // Дорожку здесь НЕ глушим (см. hifzRecStream): иначе "перезаписать"
         // снова вызовет вопрос про микрофон. Микрофон отпускается при
         // закрытии панели.
@@ -8207,7 +8243,7 @@
       // Кусками, а не одним куском в памяти (20.09.2026): оборвалась вкладка -
       // начитанное уже лежит на телефоне. Так пишутся обе записи: сдача
       // второго и третьего этапа не короче повторения.
-      rec.mr.start(REC_SLICE_MS);
+      mr.start(REC_SLICE_MS);
       hifzWakeOn();             // читает долго - экран гасить нельзя
       rec.t0 = Date.now();
       // accMs мог прийти из прерванной записи - тогда таймер идёт дальше, а
@@ -8236,17 +8272,28 @@
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_hint_rec');
       hifzRecButtons('rec');
     }).catch(function () {
+      rec.starting = false;
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_no_mic');
     });
   }
 
   function hifzRecStop() {
-    if (rec.mr && rec.mr.state === 'recording') rec.mr.stop();
+    // И с паузы тоже (23.09.2026): раньше «Стоп» на паузе молчал, и запись
+    // оставалась неоконченной - человек уходил, так и не отправив.
+    if (rec.mr && rec.mr.state !== 'inactive') rec.mr.stop();
   }
 
   function hifzRecSend() {
     if (!rec.blob) return;
+    // Почему телефон не пустил запись - в след (23.09.2026): раньше это
+    // восстанавливали по цифрам, а студент видел одну и ту же фразу 60 раз.
+    if (!rec.blob.size) {
+      trail('rec', { n: 'block empty' });
+      document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_empty');
+      return;
+    }
     if (rec.ms && rec.ms < HIFZ_REC_MIN_MS) {
+      trail('rec', { n: 'block short' });
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_too_short');
       return;
     }
@@ -8258,10 +8305,12 @@
                       (isFinite(played) ? Math.round(played) + 's' : '?') + ' ' + rec.blob.size + 'b' +
                       (rec.segBaseMs ? ' from ' + Math.round(rec.segBaseMs / 1000) + 's' : '') });
     if (recLostTail(played, recSegMs(rec.ms, rec.segBaseMs))) {
+      trail('rec', { n: 'block lost' });
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_lost');
       return;
     }
     if (rec.mode !== 'revision' && rec.ms && rec.ms / 1000 < (HIFZ_MIN_SEC[hifz.stage] || 0)) {
+      trail('rec', { n: 'block unit' });
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_short_unit');
       return;
     }
@@ -8345,6 +8394,7 @@
         : (err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed'));
       hifzRecButtons('done');
     }).catch(function () {
+      trail('submit', { n: 'net' });
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');
       hifzRecButtons('done');
     });
@@ -8480,6 +8530,7 @@
           : err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
         hifzRecButtons('done');
       }).catch(function () {
+        trail('rev_submit', { n: 'net' });
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_failed');
         hifzRecButtons('done');
       });
