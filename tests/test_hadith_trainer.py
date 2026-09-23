@@ -1,6 +1,6 @@
 """Тренажёр хадисов (23.09.2026): слово дня внутри фразы, закрепление с
 четырьмя вариантами в обе стороны, норма 5 верных (в начале меньше: одно
-слово - 2, два - 4), ошибка возвращается другой стороной, до трёх новых слов
+слово - 2, два - 4), ошибка возвращается другой стороной, одно новое слово
 в день, старт с любого хадиса и слова."""
 import core.hadith_trainer as ht
 
@@ -80,16 +80,17 @@ def test_wrong_answer_comes_back_other_direction(test_db):
     assert q[-1][:2] == [first["n"], first["i"]] and q[-1][2] != first["dir"]
 
 
-def test_more_words_up_to_three_a_day(test_db):
+def test_only_one_new_word_a_day(test_db):
+    """Правило методики: одно новое слово в день, «ещё слова» нет."""
     ht.set_start("1", 1, 10)
-    ht.learn("1")
-    for _ in range(2):
-        st = ht.more("1")
-        assert "new_word" in st
-        ht.learn("1")
-    assert ht.new_today("1") == 3
-    st = ht.more("1")
-    assert "new_word" not in st
+    st = ht.learn("1")
+    while st.get("card"):
+        st, _ = _answer_right("1")
+    assert st["finished"]["more"] is False
+    assert "new_word" not in ht.more("1")
+    assert ht.new_today("1") == 1
+    st = ht.restart("1")
+    assert st.get("card")                      # повтор выученного - можно
 
 
 def test_finishing_a_hadith_moves_to_the_next(test_db):
