@@ -1373,6 +1373,111 @@ async def handle_nahw_new(request, user_id):
                                   task=_nahw_task_state(user_id)))
 
 
+# ── Тренажёр хадисов (23.09.2026, core/hadith_trainer.py) ─────────────────
+
+def _hadith_open(user_id):
+    """Группам с заданием «Хадис», устазам и супер-админу - как нахв."""
+    keys = _task_subject_keys(user_id)
+    return keys is None or "h" in keys
+
+
+def _hadith_facts(user_id):
+    if not _hadith_open(user_id):
+        return None
+    from core.hadith_trainer import daily_count, daily_target
+    try:
+        return {"done": daily_count(user_id), "target": daily_target(user_id)}
+    except Exception as e:
+        log.error("hadith facts error: %s: %s", type(e).__name__, e)
+        return None
+
+
+async def _credit_hadith_task(user_id):
+    """Норма дня набрана - засчитываем «Хадис» и говорим группе."""
+    group = get_learning_group(user_id, include_prep=True)
+    if not group or "h" not in get_group_tasks(group):
+        return False
+    user = find_user_by_phone(user_id)
+    if not user:
+        return False
+    if (get_today_report(user["id"], group["id"]) or {}).get("h"):
+        return False
+    save_report(user["id"], group["id"], get_date(), {"h": True})
+    if group["chat_id"]:
+        from core.tg import send_message
+        try:
+            await send_message(group["chat_id"], f"{user['name']}, Хадис + (через тренажёр).")
+        except Exception as e:
+            log.error("hadith credit notify error: %s: %s", type(e).__name__, e)
+    return True
+
+
+def _hadith_task_state(user_id):
+    group = get_learning_group(user_id, include_prep=True)
+    if not group or "h" not in get_group_tasks(group):
+        return None
+    user = find_user_by_phone(user_id)
+    done = bool(user and (get_today_report(user["id"], group["id"]) or {}).get("h"))
+    return {"done": done}
+
+
+def _hadith_reply(user_id, data):
+    return web.json_response(dict(data, task=_hadith_task_state(user_id)))
+
+
+@with_auth
+async def handle_hadith_state(request, user_id):
+    if not _hadith_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    from core.hadith_trainer import state
+    return _hadith_reply(user_id, state(user_id))
+
+
+@with_auth
+async def handle_hadith_words(request, user_id):
+    """GET ?n= - слова хадиса по порядку, чтобы человек ткнул, где он."""
+    if not _hadith_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    from core.hadith_trainer import data
+    try:
+        h = data()[int(request.query.get("n", ""))]
+    except (KeyError, ValueError):
+        return web.json_response({"error": "bad_hadith"}, status=400)
+    return web.json_response({"n": h["n"], "words": [w["ar"] for w in h["words"]]})
+
+
+@with_auth
+async def handle_hadith_action(request, user_id):
+    """POST /hadith/<start|learn|more|answer|new>. start - {hadith, pos};
+    answer - {card, choice}."""
+    if not _hadith_open(user_id):
+        return web.json_response({"error": "closed"}, status=403)
+    import core.hadith_trainer as ht
+    action = request.match_info["action"]
+    try:
+        body = await request.json() if request.can_read_body else {}
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "bad_json"}, status=400)
+    if action == "start":
+        try:
+            ht.set_start(user_id, int(body.get("hadith")), int(body.get("pos") or 0))
+        except (TypeError, ValueError):
+            return web.json_response({"error": "bad_start"}, status=400)
+        return _hadith_reply(user_id, ht.state(user_id))
+    if action == "learn":
+        return _hadith_reply(user_id, ht.learn(user_id))
+    if action == "more":
+        return _hadith_reply(user_id, ht.more(user_id))
+    if action == "new":
+        return _hadith_reply(user_id, ht.restart(user_id))
+    if action == "answer":
+        data, reached = ht.answer(user_id, body.get("card"), body.get("choice"))
+        if reached:
+            await _credit_hadith_task(user_id)
+        return _hadith_reply(user_id, data)
+    return web.json_response({"error": "bad_action"}, status=404)
+
+
 @with_auth
 async def handle_lesson(request, user_id):
     """GET ?id= — текст одного урока. Закрытый не отдаётся: программа вперёд
@@ -1526,6 +1631,7 @@ def _dashboard_facts(user_id):
         # тогда и строки о нём на двери и в «Тренажёрах» нет.
         "tajweed": _tajweed_facts(user_id),
         "nahw": _nahw_facts(user_id),
+        "hadith": _hadith_facts(user_id),
         # Какие предметы есть у человека в «Знаниях» (14.09.2026): по ним
         # подпись двери и блок «Уроки» - у группы без таджвида и нахва их нет.
         "learn": _learn_subjects(user_id),
@@ -2320,6 +2426,9 @@ def build_app():
     app.router.add_post("/api/muf/prep/juz", handle_prep_juz)
     app.router.add_get("/api/muf/nahw", handle_nahw_state)
     app.router.add_post("/api/muf/nahw/answer", handle_nahw_answer)
+    app.router.add_get("/api/muf/hadith", handle_hadith_state)
+    app.router.add_get("/api/muf/hadith/words", handle_hadith_words)
+    app.router.add_post("/api/muf/hadith/{action}", handle_hadith_action)
     app.router.add_post("/api/muf/nahw/new", handle_nahw_new)
     app.router.add_get("/api/muf/feed", handle_feed)
     app.router.add_post("/api/muf/feed/read", handle_feed_read)

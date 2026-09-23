@@ -360,6 +360,9 @@ def init():
     # core.web_auth сам берёт db() отсюда, на верхнем уровне вышел бы цикл.
     from core.web_auth import init_web_auth
     init_web_auth()
+    # Тренажёр хадисов (23.09.2026): свои таблицы держит у себя, как web_auth.
+    from core.hadith_trainer import init as init_hadith_trainer
+    init_hadith_trainer()
     # Лекции по группам (17.09.2026) - таблицы и разовый перенос.
     from core import curriculum
     curriculum.init()

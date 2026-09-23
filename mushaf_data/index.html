@@ -1883,14 +1883,14 @@
      Та же приглушённо-изумрудная палитра, что и у дашборда - единый
      фирменный акцент на всё приложение, не отдельный стиль под каждый
      экран. */
-  #trainer, #trainers, #tajweed, #nahw {
+  #trainer, #trainers, #tajweed, #nahw, #hadith {
     display: none;
     flex-direction: column;
     height: 100%;
     width: 100%;
     background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
-  #trainer-topbar, #trainers-topbar, #tajweed-topbar, #nahw-topbar {
+  #trainer-topbar, #trainers-topbar, #tajweed-topbar, #nahw-topbar, #hadith-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1904,7 +1904,7 @@
     direction: ltr;
     flex: 0 0 auto;
   }
-  #trainer-topbar button, #trainers-topbar button, #tajweed-topbar button, #nahw-topbar button {
+  #trainer-topbar button, #trainers-topbar button, #tajweed-topbar button, #nahw-topbar button, #hadith-topbar button {
     background: none; border: none; color: var(--accent);
     font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
     font-family: inherit;
@@ -1916,7 +1916,7 @@
      утренний прогресс потерялся). Зелёная (--accent), когда задел ещё не
      закрыт; --ok, когда 40/40 уже набрано - тот же сигнал "готово", что и
      фидбек-пилюля верного ответа. */
-  #trainer-daily, #tajweed-daily, #nahw-daily {
+  #trainer-daily, #tajweed-daily, #nahw-daily, #hadith-daily {
     font-size: 12px;
     font-weight: 700;
     padding: 4px 10px;
@@ -1925,8 +1925,8 @@
     color: var(--accent);
     white-space: nowrap;
   }
-  #trainer-daily.done, #tajweed-daily.done, #nahw-daily.done { background: var(--ok-soft); color: var(--ok); }
-  #trainer-body, #tajweed-body, #nahw-body {
+  #trainer-daily.done, #tajweed-daily.done, #nahw-daily.done, #hadith-daily.done { background: var(--ok-soft); color: var(--ok); }
+  #trainer-body, #tajweed-body, #nahw-body, #hadith-body {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -2069,6 +2069,39 @@
   .nh-fb .exp { font-size: 15px; line-height: 1.45; color: var(--ink); }
   .nh-fb .ar { font-family: 'Scheherazade New', serif; font-size: 1.3em; }
   .nh-fb .mean { font-size: 13px; color: var(--muted); }
+  /* Тренажёр хадисов (23.09.2026). Слово дня растёт прямо из своей фразы:
+     крупнее и зелёное, как решили на макете, - человек видит его там, где
+     оно живёт в хадисе. Отдельной карточки «слово / перевод / фраза» нет. */
+  .hd-where { font-size: 13px; color: var(--muted); width: 100%; max-width: 420px; }
+  .hd-bar { width: 100%; max-width: 420px; height: 4px; border-radius: 2px; background: var(--card-border); overflow: hidden; }
+  .hd-bar i { display: block; height: 100%; background: var(--accent); }
+  .hd-phrase {
+    font-family: 'Scheherazade New', serif; direction: rtl;
+    font-size: 30px; line-height: 2.1; color: var(--ink);
+  }
+  .hd-phrase .hl { font-size: 1.55em; font-weight: 700; color: var(--accent); line-height: 1; }
+  .hd-gloss { font-size: 22px; font-weight: 600; color: var(--ink); }
+  .hd-mean { font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 420px; }
+  .hd-ask-ru { font-size: 22px; font-weight: 600; color: var(--ink); max-width: 420px; }
+  .hd-opts { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; max-width: 420px; }
+  .trainer-opt.hd-opt { text-align: left; font-size: 16px; padding: 12px 14px; }
+  .trainer-opt.hd-opt.ar { text-align: right; direction: rtl; font-family: 'Scheherazade New', serif; font-size: 27px; padding: 4px 14px; }
+  .trainer-opt.hd-opt:disabled { opacity: .55; }
+  .trainer-opt.hd-opt.ok, .trainer-opt.hd-opt.no { opacity: 1; }
+  .trainer-opt.hd-opt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .trainer-opt.hd-opt.no { background: var(--no-soft); border-color: var(--no); color: var(--no); }
+  .hd-list { width: 100%; max-width: 420px; text-align: left; }
+  .hd-list div { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+                 padding: 8px 0; border-top: 1px solid var(--card-border); font-size: 14.5px; }
+  .hd-list .ar { font-family: 'Scheherazade New', serif; font-size: 24px; direction: rtl; }
+  .hd-list .mk { color: var(--ok); font-size: 13px; white-space: nowrap; }
+  .hd-list .mk.no { color: var(--no); }
+  .hd-pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%; max-width: 420px; }
+  .hd-pick button { padding: 10px 0; }
+  .hd-words { font-family: 'Scheherazade New', serif; direction: rtl; font-size: 26px; line-height: 2.1; max-width: 420px; }
+  .hd-words button { font: inherit; background: none; border: 0; padding: 0 3px; border-radius: 6px; color: var(--ink); cursor: pointer; }
+  .hd-words button:active, .hd-words button:focus-visible { background: var(--accent-soft); outline: none; }
+  .hd-link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 4px; }
   /* Разбор слова по частям - справа налево, как читается слово. */
   .nh-bd { display: flex; flex-wrap: wrap; gap: 6px; direction: rtl; }
   .nh-bd span {
@@ -3786,6 +3819,16 @@
   <div id="nahw-body"></div>
 </div>
 
+<!-- Тренажёр хадисов (23.09.2026, core/hadith_trainer.py). -->
+<div id="hadith">
+  <div id="hadith-topbar">
+    <button id="hadith-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span data-i18n="hadith_title">Хадис</span>
+    <span id="hadith-daily"></span>
+  </div>
+  <div id="hadith-body"></div>
+</div>
+
 <!-- Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py). -->
 <div id="tajweed">
   <div id="tajweed-topbar">
@@ -4121,6 +4164,34 @@
       trainers_words_sub: 'Смыслы слов Корана',
       trainers_tajweed_sub: 'Места выхода букв',
       tajweed_title: 'Таджвид',
+      hadith_title: 'Хадис',
+      trainers_hadith_sub: '40 хадисов ан-Навави, слово за словом',
+      dash_trainers_hadith: 'Хадис %A%/%B%',
+      hadith_where: 'Хадис %N% из 42 · слово %P% из %T%',
+      hadith_learn: 'Закрепить',
+      hadith_new_hint: 'Слово дня. Посмотри, как оно стоит во фразе, и запомни перевод.',
+      hadith_phrase_mean: 'Смысл фразы',
+      hadith_ask_ar: 'Что значит выделенное слово?',
+      hadith_ask_ru: 'Какое это слово в хадисе?',
+      hadith_right: 'Верно',
+      hadith_wrong: 'Правильно: %A%. Вернётся в конце захода.',
+      hadith_next: 'Дальше',
+      hadith_done_title: 'Закрепление окончено 🤲',
+      hadith_task_done: 'Хадис на сегодня засчитан ✅',
+      hadith_task_left: 'До нормы дня ещё %N%',
+      hadith_today: 'Сегодня верно: %N% из %M%',
+      hadith_more_word: 'Ещё одно слово',
+      hadith_more_round: 'Ещё заход',
+      hadith_new_mark: 'новое',
+      hadith_ok_mark: 'верно',
+      hadith_no_mark: 'повторить',
+      hadith_pick_title: 'С какого хадиса продолжаешь?',
+      hadith_pick_hint: 'Выбери хадис, на котором ты сейчас. Если учишь с начала — первый.',
+      hadith_pick_word: 'Хадис %N%. Нажми слово, с которого продолжаешь (первое — если начинаешь хадис).',
+      hadith_change: 'Сменить место',
+      hadith_empty: 'Здесь пока нечего закреплять.',
+      hadith_closed: 'Тренажёр хадисов открыт группам, где сдают хадис.',
+      hadith_all_done: 'Все 42 хадиса пройдены — машаАллах! Закрепление продолжается.',
       nahw_title: 'Нахв',
       trainers_nahw_sub: 'Грамматика на словах аятов',
       dash_trainers_nahw: 'Нахв %A%/%B%',
@@ -5448,6 +5519,7 @@
         : T('dash_words_today', { N: f.words.done, M: f.words.target }) + (wc ? ' · ' + wc : '');
       // Нахв (17.09.2026) дописывается третьим, если он есть у группы.
       if (f.nahw) sub += ' · ' + T('dash_trainers_nahw', { A: f.nahw.done, B: f.nahw.target });
+      if (f.hadith) sub += ' · ' + T('dash_trainers_hadith', { A: f.hadith.done, B: f.hadith.target });
       document.getElementById('dash-trainer-sub').textContent = sub;
     }
     if (document.getElementById('trainers').style.display === 'flex') trainersRender();
@@ -12118,6 +12190,7 @@
     document.getElementById('trainer').style.display = 'none';
     document.getElementById('tajweed').style.display = 'none';
     document.getElementById('nahw').style.display = 'none';
+    document.getElementById('hadith').style.display = 'none';
     document.getElementById('trainers').style.display = 'flex';
     trainersRender();
   }
@@ -12145,6 +12218,9 @@
     if (f.nahw) {
       html += trainersRow('trh-nahw', 'ك', T('nahw_title'), T('trainers_nahw_sub'), f.nahw);
     }
+    if (f.hadith) {
+      html += trainersRow('trh-hadith', 'ح', T('hadith_title'), T('trainers_hadith_sub'), f.hadith);
+    }
     var body = document.getElementById('trainers-body');
     body.innerHTML = html;
     document.getElementById('trh-words').addEventListener('click', openTrainer);
@@ -12152,6 +12228,8 @@
     if (tj) tj.addEventListener('click', openTajweed);
     var nh = document.getElementById('trh-nahw');
     if (nh) nh.addEventListener('click', openNahw);
+    var hd = document.getElementById('trh-hadith');
+    if (hd) hd.addEventListener('click', openHadith);
   }
 
   function openTajweed() {
@@ -12431,6 +12509,203 @@
       });
     });
   }
+
+  /* ── Тренажёр хадисов (23.09.2026, core/hadith_trainer.py) ────────────
+     Один путь, как у остальных тренажёров: слово дня (показ, не проверка) →
+     закрепление вариантами в обе стороны → итог. При первом входе человек
+     сам ставит, с какого хадиса и слова продолжает. */
+  var hadithState = null;
+  var HADITH_AUTO_MS = 3000, hadithAutoTimer = null;   // как у нахва: полоска на «Дальше» - 3 с
+
+  function openHadith() {
+    document.getElementById('trainers').style.display = 'none';
+    document.getElementById('hadith').style.display = 'flex';
+    document.getElementById('hadith-body').innerHTML = '<div class="trainer-msg">' + T('loading') + '</div>';
+    withAuthCheck(apiCall('/hadith'), renderHadith);
+  }
+
+  function hadithPost(action, body) {
+    clearTimeout(hadithAutoTimer);
+    withAuthCheck(apiCall('/hadith/' + action, { method: 'POST', body: body || {} }), renderHadith);
+  }
+
+  function hadithPhrase(ctx) {
+    return '<div class="hd-phrase">' + ctx.tokens.map(function (t) {
+      return t.hl ? '<span class="hl">' + nahwEsc(t.t) + '</span>' : nahwEsc(t.t);
+    }).join(' ') + '</div>';
+  }
+
+  function hadithPill(d) {
+    var pill = document.getElementById('hadith-daily');
+    pill.textContent = T('daily_n', { N: d.daily_count || 0, M: d.daily_target || 0 });
+    pill.classList.toggle('done', !!(d.task ? d.task.done : d.daily_count >= d.daily_target));
+  }
+
+  function hadithPickRender(d) {
+    var body = document.getElementById('hadith-body');
+    var html;
+    {
+      html = '<div class="trainer-msg"><b>' + T('hadith_pick_title') + '</b></div>' +
+        '<div class="nh-hint">' + T('hadith_pick_hint') + '</div><div class="hd-pick">';
+      d.pick.forEach(function (h) {
+        html += '<button class="trainer-opt" data-n="' + h.n + '">' + h.n + '</button>';
+      });
+      html += '</div>';
+      body.innerHTML = html;
+      Array.prototype.forEach.call(body.querySelectorAll('.hd-pick button'), function (b) {
+        b.addEventListener('click', function () {
+          // Место записывается только после выбора слова: закрыл приложение
+          // посреди выбора - старое место не потеряно.
+          hadithWordsPick(+b.getAttribute('data-n'));
+        });
+      });
+      return;
+    }
+  }
+
+  function hadithWordsPick(n) {
+    var body = document.getElementById('hadith-body');
+    withAuthCheck(apiCall('/hadith/words?n=' + n), function (w) {
+      if (!w || !w.words) { openHadith(); return; }
+      var html = '<div class="nh-hint">' + T('hadith_pick_word', { N: n }) + '</div><div class="hd-words">';
+      w.words.forEach(function (ar, i) {
+        html += '<button data-i="' + i + '">' + nahwEsc(ar) + '</button> ';
+      });
+      html += '</div>';
+      body.innerHTML = html;
+      body.scrollTop = 0;
+      Array.prototype.forEach.call(body.querySelectorAll('.hd-words button'), function (b) {
+        b.addEventListener('click', function () {
+          hadithPost('start', { hadith: n, pos: +b.getAttribute('data-i') });
+        });
+      });
+    });
+  }
+
+  function renderHadith(d) {
+    clearTimeout(hadithAutoTimer);
+    hadithState = d;
+    var body = document.getElementById('hadith-body');
+    if (!d || d.error === 'closed') {
+      body.innerHTML = '<div class="trainer-msg">' + T('hadith_closed') + '</div>';
+      return;
+    }
+    hadithPill(d);
+    if (d.pick) { hadithPickRender(d); return; }
+    var html = '';
+    var where = d.where;
+    if (d.new_word) {
+      var w = d.new_word;
+      html += '<div class="hd-where">' + T('hadith_where', { N: w.hadith, P: w.pos, T: w.total }) + '</div>' +
+        '<div class="hd-bar"><i style="width:' + Math.round(100 * (w.pos - 1) / w.total) + '%"></i></div>';
+      html += '<div class="trainer-word-card">' + hadithPhrase(w.context) +
+        '<div class="hd-gloss">' + nahwEsc(w.ru) + '</div></div>';
+      html += '<div class="nh-hint">' + T('hadith_new_hint') + '</div>';
+      if (w.context.ru) html += '<div class="hd-mean"><b>' + T('hadith_phrase_mean') + ':</b> ' + nahwEsc(w.context.ru) + '</div>';
+      html += '<button class="tj-go" id="hd-learn">' + T('hadith_learn') + '</button>';
+      html += '<button class="hd-link" id="hd-change">' + T('hadith_change') + '</button>';
+      body.innerHTML = html;
+      body.scrollTop = 0;
+      document.getElementById('hd-learn').addEventListener('click', function () { hadithPost('learn'); });
+      document.getElementById('hd-change').addEventListener('click', function () {
+        hadithPickRender({ pick: hadithPickList() });
+      });
+      return;
+    }
+    if (d.empty) {
+      body.innerHTML = '<div class="trainer-msg">' + T('hadith_empty') + '</div>';
+      return;
+    }
+    if (d.finished) {
+      var f = d.finished;
+      html = '<div class="trainer-msg">' + T('hadith_done_title') + '</div><div class="hd-list">';
+      f.results.forEach(function (r) {
+        html += '<div><span class="ar">' + nahwEsc(r.ar) + '</span><span>' + nahwEsc(r.ru) + '</span>' +
+          '<span class="mk' + (r.ok ? '' : ' no') + '">' +
+          (r.new ? T('hadith_new_mark') : r.ok ? T('hadith_ok_mark') : T('hadith_no_mark')) + '</span></div>';
+      });
+      html += '</div>';
+      var left = Math.max(0, d.daily_target - d.daily_count);
+      html += '<div class="trainer-info">' + (!d.task ? T('hadith_today', { N: d.daily_count, M: d.daily_target })
+        : d.task.done ? T('hadith_task_done') : T('hadith_task_left', { N: left })) + '</div>';
+      if (where) html += '<div class="hd-where">' + T('hadith_where', { N: where.hadith, P: Math.min(where.pos + 1, where.total), T: where.total }) + '</div>';
+      if (f.more) html += '<button class="tj-go" id="hd-more">' + T('hadith_more_word') + '</button>';
+      html += '<button class="tj-go" id="hd-round" style="background:var(--card-bg);color:var(--ink);border:1px solid var(--card-border)">' +
+        T('hadith_more_round') + '</button>';
+      body.innerHTML = html;
+      body.scrollTop = 0;
+      var mb = document.getElementById('hd-more');
+      if (mb) mb.addEventListener('click', function () { hadithPost('more'); });
+      document.getElementById('hd-round').addEventListener('click', function () { hadithPost('new'); });
+      return;
+    }
+    var c = d.card;
+    if (!c) { body.innerHTML = '<div class="trainer-msg">' + T('hadith_empty') + '</div>'; return; }
+    var dots = '<span>' + c.pos + ' / ' + c.size + '</span>';
+    if (c.retry) dots += '<span>' + T('nahw_retry') + '</span>';
+    html += '<div class="hd-where">' + dots + '</div>';
+    if (c.dir === 'ar2ru') {
+      html += '<div class="trainer-word-card">' + hadithPhrase(c.context) + '</div>';
+      html += '<div class="nh-q">' + T('hadith_ask_ar') + '</div>';
+    } else {
+      html += '<div class="trainer-word-card"><div class="hd-ask-ru">' + nahwEsc(c.ru) + '</div></div>';
+      html += '<div class="nh-q">' + T('hadith_ask_ru') + '</div>';
+    }
+    html += '<div class="hd-opts">';
+    c.options.forEach(function (o) {
+      html += '<button class="trainer-opt hd-opt' + (c.dir === 'ru2ar' ? ' ar' : '') + '" data-key="' +
+        nahwEsc(o.key) + '">' + nahwEsc(o.text) + '</button>';
+    });
+    html += '</div><div id="hd-after" style="display:contents"></div>';
+    body.innerHTML = html;
+    body.scrollTop = 0;
+    var buttons = body.querySelectorAll('.hd-opt');
+    Array.prototype.forEach.call(buttons, function (btn) {
+      btn.addEventListener('click', function () {
+        Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
+        withAuthCheck(apiCall('/hadith/answer', { method: 'POST',
+          body: { card: c.id, choice: btn.getAttribute('data-key') } }), function (next) {
+          var fb = next && next.feedback;
+          if (!fb) { renderHadith(next); return; }
+          Array.prototype.forEach.call(buttons, function (b) {
+            if (b.getAttribute('data-key') === fb.answer) b.classList.add('ok');
+          });
+          if (!fb.correct) btn.classList.add('no');
+          var head = fb.correct ? T('hadith_right') : T('hadith_wrong', { A: fb.ar + ' — ' + fb.ru });
+          document.getElementById('hd-after').innerHTML = '<div class="nh-fb"><div class="exp"><b>' +
+            nahwArabic(head) + '</b></div></div>' +
+            '<button class="tj-go' + (fb.correct ? ' nh-auto' : '') + '" id="hd-next">' + T('hadith_next') + '</button>';
+          var gone = false;
+          var go = function () {
+            if (gone) return;
+            gone = true;
+            clearTimeout(hadithAutoTimer);
+            renderHadith(next);
+          };
+          document.getElementById('hd-next').addEventListener('click', go);
+          if (fb.correct) {
+            hadithAutoTimer = setTimeout(function () {
+              if (document.getElementById('hadith').style.display === 'none' || hadithState !== d) return;
+              go();
+            }, HADITH_AUTO_MS);
+          }
+        });
+      });
+    });
+  }
+
+  // Список хадисов для «Сменить место» - номера 1..42, слова подтянет выбор.
+  function hadithPickList() {
+    var out = [];
+    for (var n = 1; n <= 42; n++) out.push({ n: n });
+    return out;
+  }
+
+  document.getElementById('hadith-back').addEventListener('click', function () {
+    clearTimeout(hadithAutoTimer);
+    document.getElementById('hadith').style.display = 'none';
+    openTrainers();
+  });
 
   document.getElementById('nahw-back').addEventListener('click', function () {
     document.getElementById('nahw').style.display = 'none';
