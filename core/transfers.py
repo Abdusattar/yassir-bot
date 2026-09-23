@@ -14,6 +14,7 @@
 """
 import logging
 import asyncio
+import time
 from core.feed import important
 from datetime import datetime
 
@@ -450,6 +451,27 @@ async def kick_active_student_back_from_prep(chat_id, uid, existing_user, existi
     await send_message(target, text)
     log.info("Blocked prep entry for already-active student %s (group=%s)",
               existing_user["name"], existing_group["id"])
+
+
+# Один вход - два события (chat_member и сервисное new_chat_members, с
+# разницей в доли секунды). Известного человека второе не задевает (он уже
+# записан), а незнакомцу приветствие уходило дважды - у каждого новичка
+# подготовительной (найдено пользователем 23.09.2026). Второе событие того
+# же входа пропускаем целиком, на обоих путях bot.py.
+JOIN_ECHO_SEC = 30
+_join_seen = {}
+
+
+def first_join_event(chat_id, uid):
+    """True - это первое событие входа; False - эхо того же входа."""
+    now = time.monotonic()
+    for k in [k for k, t in _join_seen.items() if now - t > JOIN_ECHO_SEC]:
+        del _join_seen[k]
+    key = (str(chat_id), str(uid))
+    if key in _join_seen:
+        return False
+    _join_seen[key] = now
+    return True
 
 
 async def greet_new_member(chat_id, group_info, uid, tg_name, glang):

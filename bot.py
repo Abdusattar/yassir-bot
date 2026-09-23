@@ -26,7 +26,7 @@ from core.handlers import process_message, handle_reaction
 from core.scheduler import scheduler
 from core.prep import handle_juz_answer, handle_juz_confirm, handle_prep_onboarding_next
 from core.transfers import (
-    handle_other_bot_member_in_group, greet_new_member,
+    handle_other_bot_member_in_group, greet_new_member, first_join_event,
     handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
     send_new_student_prep_redirect,
 )
@@ -250,6 +250,8 @@ async def main():
                     if joined:
                         uid = str(user.get("id", ""))
                         chat_id = str(cm.get("chat", {}).get("id", ""))
+                        if not first_join_event(chat_id, uid):
+                            continue   # эхо того же входа (см. first_join_event)
                         group_info = get_group(chat_id)
                         is_super = uid in SUPER_ADMIN_IDS
                         is_grp_admin = group_info and uid in get_group_admins(group_info["id"])
@@ -402,6 +404,8 @@ async def main():
                     if not nm.get("is_bot"):
                         uid = str(nm.get("id", ""))
                         log.info("new_chat_members: uid=%s name=%s in chat=%s", uid, nm.get("first_name"), chat_id)
+                        if not first_join_event(chat_id, uid):
+                            continue   # эхо входа, уже разобранного по chat_member
                         group_info = get_group(chat_id)
                         # Суперадмины, устазы группы (этой ИЛИ любой другой - 03.09.2026,
                         # см. комментарий у is_ustaz_elsewhere выше по chat_member-ветке)

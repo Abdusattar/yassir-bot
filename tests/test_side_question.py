@@ -518,3 +518,18 @@ def test_answer_without_a_request_still_gives_the_link(test_db, world, wire):
     """Спросили в личке, заявки нет - ссылка, как раньше."""
     asyncio.run(side.handle_side_answer(STRANGER, "male"))
     assert "https://t.me/+MALEPREP" in wire["sent"][-1][1]
+
+
+# ── Один вход - одно приветствие (23.09.2026, Oskar) ─────────────────────────
+
+def test_second_event_of_the_same_join_is_an_echo(monkeypatch):
+    """chat_member и new_chat_members на один вход: второе - эхо."""
+    now = [1000.0]
+    monkeypatch.setattr(tr.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(tr, "_join_seen", {})
+    assert tr.first_join_event(MALE_PREP_CHAT, STRANGER) is True
+    now[0] += 0.3
+    assert tr.first_join_event(MALE_PREP_CHAT, STRANGER) is False
+    assert tr.first_join_event(N1_CHAT, STRANGER) is True        # другая группа - свой вход
+    now[0] += tr.JOIN_ECHO_SEC + 1
+    assert tr.first_join_event(MALE_PREP_CHAT, STRANGER) is True  # ушёл и вернулся позже
