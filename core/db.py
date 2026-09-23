@@ -739,6 +739,15 @@ def set_setting(key, value):
         c.execute("INSERT OR REPLACE INTO bot_settings(key,value) VALUES(?,?)", (key, value))
 
 
+def written_closed(group_id, key, today):
+    """Письменная сдача задания key в этой группе закрыта с даты (23.09.2026,
+    решение пользователя: нахв в N-1 - только через тренажёр). Ставит
+    scripts/written_off.py; без отметки - как для всех, см.
+    handlers.APP_ONLY_WRITTEN_KEYS."""
+    since = get_setting("written_off:%s:%s" % (group_id, key))
+    return bool(since) and today >= since
+
+
 def delete_setting(key):
     with db() as c:
         c.execute("DELETE FROM bot_settings WHERE key=?", (key,))

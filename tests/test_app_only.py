@@ -163,3 +163,14 @@ def test_countdown_tells_nahw_groups_about_written_exception(test_db, monkeypatc
     monkeypatch.setattr(sch, "send_message", fake_send)
     asyncio.run(sch.app_only_countdown())
     assert sent and "Нахв пока сдавайте в группе письменно" in sent[0], sent
+
+
+# ── Письменная сдача закрыта по группе с даты (23.09.2026, нахв в N-1) ──────
+
+def test_written_closed_by_group_and_date(test_db):
+    import core.db as db
+    assert db.written_closed(5, "n", "2026-09-24") is False
+    db.set_setting("written_off:5:n", "2026-09-24")
+    assert db.written_closed(5, "n", "2026-09-23") is False
+    assert db.written_closed(5, "n", "2026-09-24") is True
+    assert db.written_closed(5, "h", "2026-09-24") is False

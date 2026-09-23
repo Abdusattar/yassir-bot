@@ -14,7 +14,7 @@ from core.i18n import T, get_group_lang, LANG_NAMES, task_name, help_student, he
 from core.tg import send_message, get_dm_start_link
 import core.ai as ai
 from core.db import (
-    get_group, save_group, get_group_tasks, update_group_tasks, update_group_lang,
+    get_group, save_group, written_closed, get_group_tasks, update_group_tasks, update_group_lang,
     update_group_type, update_group_fallback, update_group_summary, set_group_invite_link,
     get_all_groups, get_students, find_by_phone, find_by_name, add_student,
     register_student, deactivate_student, rename_student, remove_all_students, get_learning_group,
@@ -2080,7 +2080,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # Нахв и хадис в приложении сдать пока негде (17.09.2026, решение
         # пользователя): до выхода их тренажёров принимаем письменно, как
         # раньше. Остальное из того же сообщения не засчитываем.
-        written = {k for k in APP_ONLY_WRITTEN_KEYS if k in group_tasks and tasks_done.get(k)}
+        # По группе письменную сдачу можно закрыть и раньше - когда её
+        # тренажёр прижился (db.written_closed, 23.09.2026: нахв в N-1).
+        written = {k for k in APP_ONLY_WRITTEN_KEYS if k in group_tasks and tasks_done.get(k)
+                   and not written_closed(group_id, k, get_date())}
         if not written:
             await send_message(chat_id, T("app_only_refuse", glang, name=s["name"]))
             return
