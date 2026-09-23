@@ -150,3 +150,34 @@ def test_share_below_threshold_does_not_open(test_db, monkeypatch):
 def test_first_lesson_is_thursday_at_least_a_week_away():
     assert cur.first_lesson_date("2026-10-01") == "2026-10-08"      # чт -> следующий чт
     assert cur.first_lesson_date("2026-10-02") == "2026-10-15"      # пт -> через чт
+
+
+def test_hadith_announced_three_days_ahead_then_task_turns_on(test_db, monkeypatch):
+    """Хадис (23.09.2026): 70% на стр. 15 - объявление, через 3 дня задание
+    «h» включается само (лекций у хадиса нет)."""
+    old, new = _groups()
+    for i in range(10):
+        db.add_student("С%d" % i, new["id"], phone="58%04d" % i)
+    _pointers(monkeypatch, {"58%04d" % i: 15 for i in range(7)})
+    stats = cur.readiness(new["id"])
+    assert cur.is_ready(stats, "h") and not cur.is_ready(stats, "n")
+
+    sent = _capture(monkeypatch)
+    monkeypatch.setattr(sched, "get_date", lambda: "2026-10-01")
+    asyncio.run(sched.subject_readiness_check())
+    soon = [t for c, t in sent if c == NEW and "хадис" in t]
+    assert len(soon) == 1 and "04.10" in soon[0]
+    assert cur.subject_start(new["id"], "h")["start_date"] == "2026-10-04"
+    assert "h" not in db.get_group_tasks(db.get_group(NEW))
+
+    monkeypatch.setattr(sched, "get_date", lambda: "2026-10-03")    # ещё рано
+    asyncio.run(sched.subject_readiness_check())
+    assert "h" not in db.get_group_tasks(db.get_group(NEW))
+
+    monkeypatch.setattr(sched, "get_date", lambda: "2026-10-04")
+    asyncio.run(sched.subject_readiness_check())
+    assert "h" in db.get_group_tasks(db.get_group(NEW))
+    on = [t for c, t in sent if c == NEW and "в заданиях группы — хадис" in t]
+    assert len(on) == 1
+    asyncio.run(sched.subject_readiness_check())                    # второй раз не пишем
+    assert len([t for c, t in sent if c == NEW and "в заданиях группы — хадис" in t]) == 1

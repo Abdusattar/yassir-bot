@@ -28,20 +28,20 @@ def main():
             "SELECT id, title, tasks, group_type FROM groups WHERE active=1"
             " AND COALESCE(group_type,'relaxed') IN ('pro','relaxed') ORDER BY title")]
     print("правило включается с", cur.AUTO_OPEN_FROM)
-    print("%-30s %-12s %5s %8s %8s %8s %6s %6s  %s" % (
-        "группа", "задания", "всего", "с указ.", ">=пол", ">=джуз", "лекц j", "лекц n", "вывод"))
+    print("%-30s %-12s %5s %8s %8s %8s %8s %6s %6s  %s" % (
+        "группа", "задания", "всего", "с указ.", ">=стр7", ">=стр15", ">=джуз", "лекц j", "лекц n", "вывод"))
     for g in groups:
         st = cur.readiness(g["id"])
         tasks = (g["tasks"] or "").split(",")
         out = []
-        for subject in ("j", "n"):
+        for subject in ("j", "n", "h"):
             row = cur.subject_start(g["id"], subject)
             if row:
                 out.append("%s с %s" % (cur.SUBJECT_LABEL[subject], row["start_date"]))
             elif subject not in tasks and cur.is_ready(st, subject):
                 out.append("пора " + cur.SUBJECT_LABEL[subject])
-        print("%-30s %-12s %5d %8d %8d %8d %6d %6d  %s" % (
-            (g["title"] or "")[:30], g["tasks"] or "", st["total"], st["with_pointer"], st["j"], st["n"],
+        print("%-30s %-12s %5d %8d %8d %8d %8d %6d %6d  %s" % (
+            (g["title"] or "")[:30], g["tasks"] or "", st["total"], st["with_pointer"], st["j"], st["h"], st["n"],
             len(cur.opened_parts(g["id"], "j")), len(cur.opened_parts(g["id"], "n")), ", ".join(out)))
 
 

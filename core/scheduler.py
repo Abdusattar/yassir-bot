@@ -1055,7 +1055,12 @@ async def subject_readiness_check():
             continue
         try:
             stats = None
-            for subject in ("j", "n"):
+            # Хадис: объявленный день настал - включаем задание (лекций нет).
+            if curriculum.hadith_due(group, today) and curriculum.enable_task(group, "h"):
+                with important("task", title="В заданиях группы теперь хадис"):
+                    await send_message(group["chat_id"], T("subject_task_on_h", get_group_lang(group)))
+                await pace(0.3)
+            for subject in ("j", "n", "h"):
                 if subject in get_group_tasks(group) or curriculum.subject_start(group["id"], subject):
                     continue
                 stats = stats or curriculum.readiness(group["id"])

@@ -38,8 +38,12 @@ READY_SHARE = 0.7
 NOTICE_DAYS = 7
 LESSON_WEEKDAY = 3                      # четверг, как publish_curriculum_parts
 # Предмет -> с какой страницы указателя заучивания студент «прошёл» порог.
-READY_PAGE = {"j": 7, "n": 22}
-SUBJECT_LABEL = {"j": "Таджвид", "n": "Нахв"}
+READY_PAGE = {"j": 7, "n": 22, "h": 15}
+SUBJECT_LABEL = {"j": "Таджвид", "n": "Нахв", "h": "Хадис"}
+# Хадис (23.09.2026, решение пользователя): лекций у него нет - только
+# тренажёр, - поэтому не «через неделю в четверг», а объявление за
+# несколько дней и в день начала задание включается само.
+HADITH_NOTICE_DAYS = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS group_lessons(
@@ -176,6 +180,23 @@ def trainer_has_content(subject, group_id):
     return False
 
 
+def hadith_due(group, today=None):
+    """Хадис объявлен и день начала пришёл, а задания ещё нет."""
+    if "h" in get_group_tasks(group):
+        return False
+    row = subject_start(group["id"], "h")
+    return bool(row) and row["start_date"] <= (today or get_date())
+
+
+def enable_task(group, subject):
+    tasks = get_group_tasks(group)
+    if subject in tasks:
+        return False
+    update_group_tasks(group["chat_id"], ",".join(tasks + [subject]))
+    log.info("curriculum: группе %s включено задание %s", group["title"], subject)
+    return True
+
+
 def enable_task_if_ready(group, subject):
     """True - задание включено сейчас."""
     tasks = get_group_tasks(group)
@@ -219,7 +240,10 @@ def first_lesson_date(today):
 def announce_start(group_id, subject, today=None):
     """Записать, что группа предупреждена. Возвращает дату первой лекции."""
     today = today or get_date()
-    start = first_lesson_date(today)
+    if subject == "h":
+        start = (date.fromisoformat(today) + timedelta(days=HADITH_NOTICE_DAYS)).isoformat()
+    else:
+        start = first_lesson_date(today)
     with db() as c:
         c.execute("INSERT OR IGNORE INTO group_subject_start(group_id, subject, announced_at, start_date)"
                   " VALUES(?,?,?,?)", (group_id, subject, today, start))
