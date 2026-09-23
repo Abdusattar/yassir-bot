@@ -7695,6 +7695,13 @@
     var exp = ms / 1000;
     return exp - sec >= 5 && sec < 0.8 * exp;
   }
+  // В плеере лежит только текущий поток, а таймер после продолжения
+  // прерванного чтения идёт с начитанного раньше (23.09.2026, Азиля из
+  // группы Мохидиль: 548 с на таймере, 267 с в плеере - полная запись ни разу
+  // не ушла). Сравниваем плеер только с тем, что записано в этом потоке.
+  function recSegMs(ms, baseMs) {
+    return Math.max(0, (ms || 0) - (baseMs || 0));
+  }
   var rec = { mr: null, chunks: [], blob: null, url: null, t0: 0, tick: null, stream: null,
               mode: null,     // mode: null - сдача 40+40, 'revision' - запись повторения
               // Сегмент - один поток MediaRecorder. Продолжение после обрыва
@@ -7991,7 +7998,7 @@
     // а повторный захват - это повторный вопрос студенту.
     if (rec.url) { URL.revokeObjectURL(rec.url); rec.url = null; }
     rec.mr = null; rec.chunks = []; rec.blob = null;
-    rec.accMs = 0; rec.paused = false; rec.resent = false;
+    rec.accMs = 0; rec.segBaseMs = 0; rec.paused = false; rec.resent = false;
     rec.seg = 0; rec.saved = [];
     var a = document.getElementById('hifz-rec-audio');
     a.pause(); a.removeAttribute('src');
@@ -8206,6 +8213,7 @@
       // accMs мог прийти из прерванной записи - тогда таймер идёт дальше, а
       // не с нуля (см. revisionRecResume).
       rec.accMs = rec.accMs || 0;
+      rec.segBaseMs = rec.accMs;   // с этого места пишет новый поток (см. recSegMs)
       rec.paused = false;
       rec.hitLimit = false;
       rec.tick = setInterval(function () {
@@ -8247,8 +8255,9 @@
     // бывает не видно (Infinity) - тогда проверит сервер.
     var played = document.getElementById('hifz-rec-audio').duration;
     trail('rec', { n: 'send ' + Math.round((rec.ms || 0) / 1000) + 's file ' +
-                      (isFinite(played) ? Math.round(played) + 's' : '?') + ' ' + rec.blob.size + 'b' });
-    if (recLostTail(played, rec.ms)) {
+                      (isFinite(played) ? Math.round(played) + 's' : '?') + ' ' + rec.blob.size + 'b' +
+                      (rec.segBaseMs ? ' from ' + Math.round(rec.segBaseMs / 1000) + 's' : '') });
+    if (recLostTail(played, recSegMs(rec.ms, rec.segBaseMs))) {
       document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_lost');
       return;
     }
