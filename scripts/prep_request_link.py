@@ -9,6 +9,7 @@
     python scripts/prep_request_link.py --profile male              # проверка: права, ссылка
     python scripts/prep_request_link.py --profile male --make       # выпустить и записать
     python scripts/prep_request_link.py --profile male --revoke URL # отозвать старую
+    python scripts/prep_request_link.py --profile male --close-invites  # участникам нельзя приглашать
 
 Старую ссылку не трогает, пока не попросят --revoke: сначала убеждаемся, что
 первый новичок прошёл по новой. Запускать на сервере из корня репозитория
@@ -50,6 +51,9 @@ def main():
     ap.add_argument("--profile", default="male", choices=["male", "female"])
     ap.add_argument("--make", action="store_true", help="выпустить ссылку с заявкой и записать в базу")
     ap.add_argument("--revoke", metavar="URL", help="отозвать старую ссылку")
+    ap.add_argument("--close-invites", action="store_true",
+                    help="запретить обычным участникам приглашать (23.09.2026: основная ссылка"
+                         " группы и «добавить друга» вели мимо бота)")
     a = ap.parse_args()
 
     os.environ["BOT_PROFILE"] = a.profile
@@ -68,6 +72,15 @@ def main():
         print("   бот @%s: %s, впускать/ссылки: %s" % (me["username"], r.get("status") or m.get("description"),
                                                     r.get("can_invite_users")))
         print("   ссылка в базе: %s" % (g["invite_link"] or "—"))
+        perms = (tg(token, "getChat", chat_id=chat).get("result") or {}).get("permissions") or {}
+        print("   участники могут приглашать: %s" % perms.get("can_invite_users"))
+        if a.close_invites and perms.get("can_invite_users"):
+            # Отправляем все права как были, меняем одно - иначе Telegram
+            # сбросит неуказанные в «запрещено».
+            perms["can_invite_users"] = False
+            resp = tg(token, "setChatPermissions", chat_id=chat, permissions=json.dumps(perms),
+                      use_independent_chat_permissions="true")
+            print("   закрыто:", "готово" if resp.get("ok") else resp.get("description"))
         if a.revoke:
             resp = tg(token, "revokeChatInviteLink", chat_id=chat, invite_link=a.revoke)
             print("   отзыв:", "готово" if resp.get("ok") else resp.get("description"))
