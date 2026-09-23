@@ -555,7 +555,7 @@ def _hifz_unit_done(user_id, user, group, pointer):
     сдача; на этапах 2/3 единицу закрывает не сдача, а счётчик 40+40."""
     if pointer["stage"] == 1:
         return has_submission_for_unit(user["id"], group["id"], pointer["page"],
-                                       pointer["line"], pointer["stage"])
+                                       pointer["line"], pointer["stage"], pointer.get("layout"))
     # Половина листа считается по ЧИСЛУ ТЕКСТОВЫХ строк этой страницы, той же
     # формулой, что и в приложении (hifzHalf): листы с названием суры короче,
     # и зашитая пятнадцатка увела бы счётчик не туда.

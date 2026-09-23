@@ -1952,7 +1952,7 @@ _REDONE_EXISTS = (
     "SELECT 1 FROM voice_submissions n"
     " WHERE n.student_id = vs.student_id AND n.group_id = vs.group_id"
     "   AND n.hifz_page IS vs.hifz_page AND n.hifz_line IS vs.hifz_line"
-    "   AND n.hifz_stage IS vs.hifz_stage"
+    "   AND n.hifz_stage IS vs.hifz_stage AND n.hifz_layout IS vs.hifz_layout"
     "   AND n.id > COALESCE(vs.verdict_after_id, vs.id) LIMIT 1"
 )
 
@@ -2134,9 +2134,10 @@ def set_submission_verdict(submission_id, verdict, verdict_by, error_words=None)
             newest = c.execute(
                 "SELECT MAX(id) AS m FROM voice_submissions"
                 " WHERE student_id=? AND group_id=?"
-                " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?",
+                " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
+                " AND hifz_layout IS ?",
                 (row["student_id"], row["group_id"],
-                 row["hifz_page"], row["hifz_line"], row["hifz_stage"])
+                 row["hifz_page"], row["hifz_line"], row["hifz_stage"], row["hifz_layout"])
             ).fetchone()
             after_id = newest["m"] or submission_id
         c.execute(
@@ -2194,7 +2195,7 @@ def has_app_submissions(student_id):
     return row is not None
 
 
-def has_submission_for_unit(student_id, group_id, page, line, stage):
+def has_submission_for_unit(student_id, group_id, page, line, stage, layout=None):
     """Сдавал ли студент ровно эту единицу. Нужно, чтобы понять, что он стоит
     на МЁСТЕ, где работать уже нечего (13.09.2026).
 
@@ -2207,8 +2208,12 @@ def has_submission_for_unit(student_id, group_id, page, line, stage):
         row = c.execute(
             "SELECT 1 FROM voice_submissions"
             " WHERE student_id=? AND group_id=?"
-            " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ? LIMIT 1",
-            (student_id, group_id, page, line, stage)
+            " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
+            # Раскладка (23.09.2026): мединская сдача «стр. 300, строка 6» -
+            # другой текст, чем египетская с теми же номерами. NULL - мединский.
+            " AND hifz_layout IS ? LIMIT 1",
+            (student_id, group_id, page, line, stage,
+             layout if layout and layout != "madani" else None)
         ).fetchone()
     return row is not None
 
@@ -2257,10 +2262,10 @@ def is_retake_answered(submission):
             "SELECT 1 FROM voice_submissions"
             " WHERE student_id=? AND group_id=?"
             " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
-            " AND id > ? LIMIT 1",
+            " AND hifz_layout IS ? AND id > ? LIMIT 1",
             (submission["student_id"], submission["group_id"],
              submission["hifz_page"], submission["hifz_line"], submission["hifz_stage"],
-             submission["verdict_after_id"] or submission["id"])
+             submission["hifz_layout"], submission["verdict_after_id"] or submission["id"])
         ).fetchone()
     return row is not None
 

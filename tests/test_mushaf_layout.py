@@ -86,6 +86,25 @@ def test_switch_keeps_stage_and_goes_to_half_start(test_hadiths_db):
 
 
 @needs_madani
+def test_switch_carries_the_4040_counter(test_hadiths_db):
+    uid = "5550004"
+    mw.set_hifz_pointer(uid, 300, 0, 3)
+    mw.set_hifz_progress(uid, 300, 3, 0, 60)
+    ptr = mw.set_mushaf_layout(uid, "dm")
+    assert mw.get_hifz_progress(uid, ptr["page"], 3, 0) == 60
+
+
+def test_old_madani_submission_does_not_close_dm_line(test_db):
+    from core.db import save_voice_submission, has_submission_for_unit
+    save_voice_submission(1, 1, -100, 55, "2026-09-23", hifz_page=300, hifz_line=5, hifz_stage=1)
+    assert has_submission_for_unit(1, 1, 300, 5, 1)
+    assert not has_submission_for_unit(1, 1, 300, 5, 1, "dm")
+    save_voice_submission(1, 1, -100, 56, "2026-09-23", hifz_page=300, hifz_line=5, hifz_stage=1,
+                          hifz_layout="dm")
+    assert has_submission_for_unit(1, 1, 300, 5, 1, "dm")
+
+
+@needs_madani
 def test_next_position_uses_layout_line_count(test_hadiths_db):
     # Стр. 586 в 1405: 12 текстовых строк (заголовки двух сур), у нас - 13.
     assert mw.page_text_line_count(586, layout="dm") == 12

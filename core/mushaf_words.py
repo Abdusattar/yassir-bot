@@ -519,6 +519,18 @@ def set_mushaf_layout(user_id, layout):
                 moved = (page, line, pointer["stage"])
         if moved:
             set_hifz_pointer(user_id, *moved)
+            # Счётчик 40+40 этапов 2/3 переезжает вместе с местом (решение
+            # пользователя 23.09.2026): половина или лист другой книги - почти
+            # тот же текст, начинать с нуля незачем.
+            stage = pointer["stage"]
+            if stage in (2, 3):
+                def half_of(page, line, lay):
+                    return 0 if stage == 3 else (
+                        0 if line < page_text_line_count(page, layout=lay) // 2 else 1)
+                count = get_hifz_progress(user_id, pointer["page"], stage,
+                                          half_of(pointer["page"], pointer["line"], old))
+                set_hifz_progress(user_id, moved[0], stage,
+                                  half_of(moved[0], moved[1], layout), count)
             back_to = "%s|%s/%d|%d|%d" % (old, here, moved[0], moved[1], moved[2])
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.execute(
