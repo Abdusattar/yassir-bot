@@ -2921,6 +2921,14 @@
     font-size: 30px; line-height: 1.95; color: var(--ink);
     display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .28em;
   }
+  /* Слово строки глифом мусхафа (23.09.2026) - см. trainerLineFont. */
+  @font-palette-values --TrV4Light { font-family: 'trainer-v4'; base-palette: 0; }
+  @font-palette-values --TrV4Dark { font-family: 'trainer-v4'; base-palette: 1; }
+  .trainer-line .tl-v4 { font-family: 'trainer-v4', 'Scheherazade New', serif; font-palette: --TrV4Light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
+  }
+  :root[data-theme="dark"] .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
   .trainer-line .tl-w.on {
     background: var(--ok-soft); box-shadow: 0 0 0 2px var(--ok);
     border-radius: 8px; padding: 0 .18em;
@@ -13096,7 +13104,11 @@
     if (trainerPages[page]) return trainerPages[page];
     trainerPages[page] = fetch('page' + page + '.json')
       .then(function (r) { if (!r.ok) throw new Error('page ' + page); return r.json(); })
-      .then(function (data) { return (data.lines || []).filter(function (l) { return l.type === 'text'; }); })
+      .then(function (data) {
+        var lines = (data.lines || []).filter(function (l) { return l.type === 'text'; });
+        lines.fontUrl = data.font_url;   // шрифт V4 листа - для строки глифами
+        return lines;
+      })
       .catch(function () { delete trainerPages[page]; return []; });
     return trainerPages[page];
   }
@@ -13106,7 +13118,7 @@
       for (var j = 0; j < toks.length; j++) {
         var t = toks[j];
         if (t.type === 'word' && t.surah === d.word_surah && t.ayah === d.word_ayah && t.position === d.word_pos) {
-          return { tokens: toks, at: j };
+          return { tokens: toks, at: j, fontUrl: lines.fontUrl };
         }
       }
     }
@@ -13121,20 +13133,48 @@
       if (!box || !trainerState || trainerState.word_id !== wordId) return;
       var hit = trainerFindLine(res[0], d) || trainerFindLine(res[1], d);
       if (!hit) return;
-      var glued = String(d.arabic).trim().split(/\s+/).length;
-      var html = '', lit = 0;
-      hit.tokens.forEach(function (t, k) {
-        if (t.type === 'word') {
-          var on = k >= hit.at && lit < glued;
-          if (on) lit++;
-          html += '<span class="tl-w' + (on ? ' on' : '') + '">' + t.html + '</span>';
-        } else if (t.type === 'ayah_end') {
-          html += '<span class="tl-ae">' + t.html + '</span>';
-        }
+      trainerLineFont(hit.fontUrl).then(function (v4) {
+        if (!trainerState || trainerState.word_id !== wordId) return;
+        box.innerHTML = '<div class="trainer-line">' + trainerLineHtml(hit, d, v4) + '</div>';
+        box.classList.add('has-line');
       });
-      box.innerHTML = '<div class="trainer-line">' + html + '</div>';
-      box.classList.add('has-line');
     });
+  }
+
+  /* Строка глифами мусхафа (23.09.2026, Нур с айфона). Раньше строка шла
+     обычным текстом с метками таджвида <tajweed>, а Safari на iOS не
+     склеивает буквы через границу метки - слово рвалось на куски
+     («ٱ|ل|دَّرْكِ», «ت|َجِدَ»). Глиф V4 - цельное слово, цвета внутри
+     шрифта, рваться нечему. Шрифт свой у листа, семейство отдельное
+     ('trainer-v4'), чтобы не сбить лист, открытый в мусхафе. Не загрузился
+     шрифт - строка простым текстом БЕЗ меток: пусть без цвета, но цельная. */
+  var trainerV4Face = null, trainerV4Url = null;
+  function trainerLineFont(url) {
+    if (!url || typeof FontFace === 'undefined') return Promise.resolve(false);
+    if (url === trainerV4Url) return Promise.resolve(true);
+    var face = new FontFace('trainer-v4', "url('" + url + "')");
+    return face.load().then(function (loaded) {
+      if (trainerV4Face) { try { document.fonts.delete(trainerV4Face); } catch (e) {} }
+      document.fonts.add(loaded);
+      trainerV4Face = loaded; trainerV4Url = url;
+      return true;
+    }).catch(function () { return false; });
+  }
+  function trainerLineHtml(hit, d, v4) {
+    var glued = String(d.arabic).trim().split(/\s+/).length;
+    var html = '', lit = 0;
+    hit.tokens.forEach(function (t, k) {
+      if (t.type === 'word') {
+        var on = k >= hit.at && lit < glued;
+        if (on) lit++;
+        var glyph = v4 && t.code_v4 && !t.fp;
+        html += '<span class="tl-w' + (glyph ? ' tl-v4' : '') + (on ? ' on' : '') + '">' +
+          (glyph ? t.code_v4 : String(t.html || '').replace(/<[^>]*>/g, '')) + '</span>';
+      } else if (t.type === 'ayah_end') {
+        html += '<span class="tl-ae">' + t.html + '</span>';
+      }
+    });
+    return html;
   }
 
   function pickAnswer(wordId, slot) {
