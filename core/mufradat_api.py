@@ -914,8 +914,10 @@ async def handle_revision_credit(request, user_id):
 
 @with_auth
 async def handle_revision_submit(request, user_id):
-    """POST multipart: audio, ms (замер длины на клиенте), page_to - запись
-    повторения (16.09.2026). Тот же приём файла, что у сдачи 40+40."""
+    """POST multipart: audio, ms (замер длины на клиенте), page_from/page_to
+    (охват: где нажали «Записать» и самая дальняя страница, 24.09.2026), layout
+    (madani/dm - в чьей нумерации страницы) - запись повторения (16.09.2026).
+    Тот же приём файла, что у сдачи 40+40."""
     try:
         reader = await request.multipart()
     except Exception:
@@ -946,11 +948,16 @@ async def handle_revision_submit(request, user_id):
         client_ms = 0
     if not (0 < client_ms <= 4 * 3600 * 1000):
         client_ms = None
-    try:
-        page_to = int(fields.get("page_to", 0)) or None
-    except (ValueError, TypeError):
-        page_to = None
-    result = await submit_revision_recording(user_id, parts, client_ms=client_ms, page_to=page_to)
+    pages = {}
+    for key in ("page_from", "page_to"):
+        try:
+            pages[key] = int(fields.get(key, 0)) or None
+        except (ValueError, TypeError):
+            pages[key] = None
+    layout = "dm" if fields.get("layout") == "dm" else "madani"
+    result = await submit_revision_recording(user_id, parts, client_ms=client_ms,
+                                             page_to=pages["page_to"], page_from=pages["page_from"],
+                                             layout=layout)
     return web.json_response(result, status=200 if result.get("ok") else 400)
 
 

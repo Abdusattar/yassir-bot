@@ -466,6 +466,10 @@ def _run_migrations(c):
         for col in ("verdict", "verdict_at", "verdict_by"):
             if col not in rrcols:
                 c.execute(f"ALTER TABLE revision_recordings ADD COLUMN {col} TEXT")
+        # Откуда началась запись (24.09.2026): раньше повторение всегда
+        # считалось от начала Аль-Бакары.
+        if "page_from" not in rrcols:
+            c.execute("ALTER TABLE revision_recordings ADD COLUMN page_from INTEGER")
 
     ucols = [r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if "dm_ok" not in ucols:
@@ -4097,7 +4101,10 @@ REVISION_RECORD_MAX_AGE = 18
 # Одна страница мусхафа читается за 1,5–3 минуты; запись короче этого на
 # страницу помечается устазу как «коротко» - тапнул, не читая.
 REVISION_MIN_SEC_PER_PAGE = 40
-REVISION_FIRST_PAGE = 2   # повторение всегда с начала Аль-Бакары
+# Начало Аль-Бакары - охват записи по умолчанию, когда приложение не сказало,
+# откуда читали (старая версия из кэша). С 24.09.2026 приложение само
+# присылает страницу начала и самую дальнюю страницу за время записи.
+REVISION_FIRST_PAGE = 2
 
 
 def revision_record_required(phone, today=None):
@@ -4137,17 +4144,22 @@ def set_student_birth_year(phone, year, locked=True):
 
 
 def save_revision_recording(student_id, group_id, chat_id, message_id, date, file_id,
-                            duration, page_to):
-    pages = max(1, int(page_to or REVISION_FIRST_PAGE) - REVISION_FIRST_PAGE + 1)
+                            duration, page_to, page_from=None):
+    """page_from/page_to - охват записи (24.09.2026: с какой страницы ребёнок
+    начал запись и до какой самой дальней долистал). «Коротко» считается по
+    этому охвату: на одну страницу - никогда, читал по памяти без листания."""
+    start = int(page_from or REVISION_FIRST_PAGE)
+    pages = max(1, int(page_to or start) - start + 1)
     sec = _as_seconds(duration)
     short = 1 if sec is not None and sec < pages * REVISION_MIN_SEC_PER_PAGE else 0
     with db() as c:
         c.execute(
             "INSERT INTO revision_recordings"
-            " (student_id, group_id, chat_id, message_id, date, sent_at, file_id, duration, page_to, short)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            " (student_id, group_id, chat_id, message_id, date, sent_at, file_id, duration,"
+            "  page_to, page_from, short)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (student_id, group_id, chat_id, message_id, date, get_now().isoformat(timespec="seconds"),
-             file_id, sec, page_to, short)
+             file_id, sec, page_to, page_from, short)
         )
         return c.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -4162,7 +4174,7 @@ def get_revision_recordings(group_ids, days=7):
     with db() as c:
         rows = c.execute(
             f"SELECT rr.id, rr.student_id, rr.group_id, rr.date, rr.sent_at, rr.duration,"
-            f" rr.page_to, rr.short, rr.file_id, u.name AS student_name, g.title AS group_title"
+            f" rr.page_to, rr.page_from, rr.short, rr.file_id, u.name AS student_name, g.title AS group_title"
             f" FROM revision_recordings rr"
             f" JOIN users u ON u.id = rr.student_id"
             f" JOIN groups g ON g.id = rr.group_id"
@@ -4206,7 +4218,7 @@ def get_rejected_revisions(student_id, days=3):
     since = (get_now().date() - timedelta(days=days - 1)).isoformat()
     with db() as c:
         rows = c.execute(
-            "SELECT id, date, duration, page_to, verdict_at FROM revision_recordings"
+            "SELECT id, date, duration, page_to, page_from, verdict_at FROM revision_recordings"
             " WHERE student_id=? AND verdict=? AND date>=? ORDER BY id DESC",
             (student_id, REVISION_REJECTED, since)
         ).fetchall()

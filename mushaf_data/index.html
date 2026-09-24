@@ -4425,6 +4425,7 @@
       ustaz_rev_title: 'Повторения',
       ustaz_rev_short: '⚠ коротко',
       ustaz_rev_span: 'стр. %A%–%B%',
+      ustaz_rev_from: 'со стр. %A%',
       ustaz_rev_play: '▶ слушать',
       ustaz_rev_stop: '■ стоп',
       ustaz_rev_back: '↺ 30 сек',
@@ -4436,7 +4437,7 @@
       ustaz_rev_rejected: 'Отвергнуто · балл за день снят, ребёнок читает заново',
       ustaz_rev_accepted: 'Принято',
       subs_rev_title: 'ПОВТОРЕНИЕ НЕ ПРИНЯТО',
-      subs_rev_meta: '%D% · стр. 2–%P% · запись %T%',
+      subs_rev_meta: '%D% · %S% · запись %T%',
       subs_rev_hint: 'Прочитай повторение заново и запиши целиком — успеешь сегодня, зачёт за день вернётся.',
       subs_rev_go: '🔁 Прочитать заново',
       ustaz_waits: 'ждёт %N%',
@@ -4581,9 +4582,9 @@
       revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
       revision_done: '✅ Повторение засчитано',
       revision_already: 'Уже засчитано сегодня',
-      revision_rec_place: 'Повторение с начала Аль-Бакары',
+      revision_rec_place: 'Повторение записью',
       revision_rec_start: 'Записать всё повторение',
-      revision_rec_hint: 'Одной записью до своего места, листать можно',
+      revision_rec_hint: 'Начни с нужной страницы, одной записью до своего места, листать можно',
       revision_rec_sent: 'Отправлено устазу, повторение засчитано 🤲',
       // Обрыв записи (20.09.2026). Ни слова про технику: ребёнку важно,
       // сколько он прочитал и что делать дальше.
@@ -7188,6 +7189,7 @@
     if (n < FIRST_PAGE || n > LAST_PAGE) return;
     if (n !== currentPage) trail('page', { p: n });
     currentPage = n;
+    recTrackPage(n);
     // Кэш - по паре "страница + язык" (30.08.2026): при переключении языка
     // та же страница должна перечитаться с другими переводами, а не отдаться
     // из памяти по-старому.
@@ -7965,7 +7967,10 @@
               mode: null,     // mode: null - сдача 40+40, 'revision' - запись повторения
               // Сегмент - один поток MediaRecorder. Продолжение после обрыва
               // начинает новый, поэтому куски нумеруются (20.09.2026).
-              seg: 0, saved: [] };
+              seg: 0, saved: [],
+              // Охват записи повторения (24.09.2026): страница, где нажали
+              // «Записать», самая дальняя за время записи и раскладка книги.
+              pageFrom: null, pageMax: null, pageLayout: null };
 
   function hifzSubmitLines() {
     var lines = hifzTextLines();
@@ -8138,9 +8143,20 @@
     var place = recPlace();
     if (!place) return Promise.resolve();
     return recStoreDo('readwrite', function (st) {
-      st.add({ seg: seg, at: Date.now(), ms: ms, blob: blob, place: place });
+      st.add({ seg: seg, at: Date.now(), ms: ms, blob: blob, place: place,
+               pf: rec.pageFrom, pm: rec.pageMax, lay: rec.pageLayout });
     }).catch(function () { /* нет места или приватный режим - живём как раньше */ });
   }
+
+  /* Самая дальняя страница за время записи повторения (24.09.2026) - конец
+     охвата в подписи устазу. Считаем только пока диктофон идёт: листание до
+     «Записать» и после «Стоп» к чтению не относится. */
+  function recTrackPage(n) {
+    if (rec.mode !== 'revision' || !rec.pageFrom) return;
+    if (!rec.mr || rec.mr.state === 'inactive') return;
+    if (n > rec.pageMax) rec.pageMax = n;
+  }
+  window.__recSpan = function () { return [rec.pageFrom, rec.pageMax]; };   // для стенда проверок
 
   function recPartsLoad() {
     var place = recPlace();
@@ -8287,6 +8303,7 @@
     if (old && old.state !== 'inactive') { try { old.stop(); } catch (e) { /* уже стоит */ } }
     rec.accMs = 0; rec.segBaseMs = 0; rec.paused = false; rec.resent = false;
     rec.seg = 0; rec.saved = [];
+    rec.pageFrom = null; rec.pageMax = null; rec.pageLayout = null;
     var a = document.getElementById('hifz-rec-audio');
     a.pause(); a.removeAttribute('src');
     hifzRecPlayerShow(false);
@@ -8452,6 +8469,11 @@
     // или битым файлом (bad_audio), вес вдвое больше обычного.
     if (rec.starting || (rec.mr && rec.mr.state !== 'inactive')) return;
     rec.starting = true;
+    // Запись повторения с нуля: откуда читают - та страница, что на экране
+    // сейчас (24.09.2026). Продолжение обрыва (seg > 0) начало уже знает.
+    if (rec.mode === 'revision' && !rec.seg) {
+      rec.pageFrom = currentPage; rec.pageMax = currentPage; rec.pageLayout = MUSHAF_LAYOUT;
+    }
     var gen = rec.gen;   // панель сбросили, пока ждали микрофон - не стартуем
     var clean = (!rec.seg && recPlace()) ? recPartsWipe() : Promise.resolve();
     hifzRecStream().then(function (stream) {
@@ -8688,17 +8710,17 @@
      (задача пользователя: дети жали 🔁, не читая). Та же шторка записи, что у
      сдачи 40+40, но: открывается на обычной странице чтения, листать можно
      (pageTurnBlocked не держит - режим заучивания выключен), отправка идёт
-     в /revision/submit, охват страниц сервер берёт из указателя. */
+     в /revision/submit. Охват (24.09.2026): страница, где нажали «Записать»,
+     и самая дальняя за время записи - recTrackPage. */
   function revisionRecOpen() {
     hifzListenStop();
     hifzRecReset();
     rec.mode = 'revision';
     document.getElementById('hifz-rec').classList.add('rev');
-    // Повторение всегда начинается с начала Аль-Бакары (16.09.2026, решение
-    // пользователя): открыли запись - лист сразу первый, искать его руками не
-    // надо. Закладка чтения от этого не двигается (её ставит только 🔖),
-    // вернуться к своему месту можно кнопкой «.
-    if (currentPage !== BAQARA_START_PAGE) loadPage(BAQARA_START_PAGE);
+    // Лист не трогаем (24.09.2026, решение пользователя): раньше панель сама
+    // листала на начало Аль-Бакары, но дети, ушедшие далеко вперёд, повторяют
+    // своё место. Кому нужна Бакара - «⤒ Бакара» в строке страниц. Откуда
+    // читали, приложение запомнит само по нажатию «Записать».
     document.getElementById('hifz-rec-place').textContent = T('revision_rec_place');
     document.getElementById('hifz-rec-hint').textContent = T('revision_rec_hint');
     hifzRecButtons('idle');
@@ -8721,6 +8743,10 @@
       rec.saved = rows;
       rec.accMs = ms;
       rec.seg = rows[rows.length - 1].seg + 1;            // продолжение - новый поток
+      // Откуда читали в прошлый раз - из кусков; докуда - самое дальнее из них.
+      rec.pageFrom = rows[0].pf || null;
+      rec.pageLayout = rows[0].lay || null;
+      rec.pageMax = rows.reduce(function (m, r) { return Math.max(m, r.pm || 0); }, rec.pageFrom || 0) || null;
       document.getElementById('hifz-rec-hint').textContent =
         T('rec_broken', { T: hifzRecMmss(ms) });
       document.getElementById('hifz-rec-timer').style.display = '';
@@ -8789,7 +8815,11 @@
       fd.append('audio', rec.blob, 'rec');
     }
     fd.append('ms', String(rec.ms || 0));
-    fd.append('page_to', String(currentPage));
+    // Охват: откуда начал и докуда долистал, в нумерации своей книги -
+    // сервер переведёт в мединскую (24.09.2026).
+    fd.append('page_from', String(rec.pageFrom || currentPage));
+    fd.append('page_to', String(Math.max(rec.pageMax || 0, rec.pageFrom || currentPage)));
+    fd.append('layout', rec.pageLayout || MUSHAF_LAYOUT);
     fetch(apiBase() + '/revision/submit', { method: 'POST', headers: authHeaders(), body: fd })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
@@ -11117,7 +11147,7 @@
         html += '<div class="subs-todo"><div class="hd">' + T('subs_rev_title') + '</div>' +
           '<div class="body"><div class="sub-row"><div class="top">' +
           '<span class="place">' + T('subs_rev_meta', {
-            D: ustazDayLabel(rv.date, today), P: rv.page_to || 2,
+            D: ustazDayLabel(rv.date, today), S: revSpanText(rv),
             T: revFmt(rv.duration) }) + '</span></div></div>' +
           '<div class="subs-todo-hint">' + T('subs_rev_hint') + '</div>' +
           '<div class="subs-rev-go"><button id="subs-rev-go">' + T('subs_rev_go') + '</button></div>' +
@@ -11633,11 +11663,19 @@
       '<div class="meta">' + meta.join(' · ') + '</div></div>';
   }
 
+  /* Охват записи повторения словами (24.09.2026): «стр. 241–250», а если
+     ребёнок не листал (читал по памяти) - «со стр. 241». Старые записи без
+     page_from - от начала Аль-Бакары, как считалось тогда. */
+  function revSpanText(it) {
+    var a = it.page_from || 2, b = it.page_to || a;
+    return b > a ? T('ustaz_rev_span', { A: a, B: b }) : T('ustaz_rev_from', { A: a });
+  }
+
   function ustazRevRow(it) {
     var dur = ustazDur(it.duration);
     var right = (dur ? '<span class="sub-pill dur">' + dur + '</span>' : '') +
       (it.short ? '<span class="sub-pill short">' + T('ustaz_rev_short') + '</span>' : '');
-    var meta = [T('ustaz_rev_span', { A: 2, B: it.page_to || 2 })];
+    var meta = [revSpanText(it)];
     var when = ustazTimeOnly(it.sent_at);
     if (when) meta.push(when);
     if (!it.verdict) meta.push('<b class="rev-play">' + T('ustaz_rev_play') + '</b>');

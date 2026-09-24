@@ -254,3 +254,56 @@ def test_bad_verdict_refused(test_db, monkeypatch):
     rec = db.get_revision_recordings([group["id"]])[0]
     assert asyncio.run(mb.submit_revision_verdict("u", rec["id"], "maybe")) == {
         "ok": False, "error": "bad_verdict"}
+
+
+# ── Охват записи с приложения (24.09.2026) ────────────────────────────────────
+
+def test_span_from_app_pages_not_from_baqara(test_db, monkeypatch):
+    """Ребёнок далеко за Аль-Бакарой: начал на 241-й, долистал до 250-й -
+    подпись по его страницам, указатель заучивания не при чём."""
+    uid, group = _student()
+    sent = _capture(monkeypatch)
+    monkeypatch.setattr(mb, "get_hifz_pointer", lambda u: {"page": 17, "line": 3, "stage": 1})
+
+    res = asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=900_000,
+                                                   page_from=241, page_to=250))
+
+    assert res["page_from"] == 241 and res["page_to"] == 250
+    assert sent[0][1] == "Юный, повторение + (запись 15:00, стр. 241–250)."
+    rec = db.get_revision_recordings([group["id"]])[0]
+    assert rec["page_from"] == 241 and rec["page_to"] == 250
+    assert rec["short"] == 0          # 10 страниц за 15 минут - норма
+
+
+def test_single_page_means_from_page_and_never_short(test_db, monkeypatch):
+    """Не листал (читал по памяти) - «со стр. 241», без заявки о конце, и
+    «коротко» по одной странице не срабатывает."""
+    uid, group = _student()
+    sent = _capture(monkeypatch)
+
+    asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=600_000,
+                                             page_from=241, page_to=241))
+
+    assert "со стр. 241)" in sent[0][1]
+    assert db.get_revision_recordings([group["id"]])[0]["short"] == 0
+
+
+def test_short_by_own_span(test_db, monkeypatch):
+    uid, group = _student()
+    _capture(monkeypatch)
+    # 10 страниц за 3 минуты - меньше 40 сек на страницу
+    asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=180_000,
+                                             page_from=241, page_to=250))
+    assert db.get_revision_recordings([group["id"]])[0]["short"] == 1
+
+
+def test_dm_pages_translated_to_madani(test_db, monkeypatch):
+    uid, group = _student()
+    sent = _capture(monkeypatch)
+    monkeypatch.setattr(mb, "madani_page", lambda layout, page, line=0: page + 100 if layout == "dm" else page)
+    monkeypatch.setattr(mb, "page_text_line_count", lambda page, default=15, layout="madani": 15)
+
+    asyncio.run(mb.submit_revision_recording(PHONE, b"A", client_ms=900_000,
+                                             page_from=5, page_to=9, layout="dm"))
+
+    assert "стр. 105–109)" in sent[0][1]

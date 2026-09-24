@@ -25,7 +25,7 @@ from core.mufradat import (
     get_leaderboard, DAILY_WORDS_FOR_TASK_CREDIT, DAILY_CORRECT_FOR_TASK_CREDIT,
     compute_overall_score,
 )
-from core.mushaf_words import get_hifz_pointer, get_mushaf_layout
+from core.mushaf_words import get_hifz_pointer, get_mushaf_layout, madani_page, page_text_line_count
 from core.i18n import T, get_group_lang
 from core.tg import send_message, send_photo_bytes, send_voice_bytes
 
@@ -127,14 +127,21 @@ def _no_group_error(user_id):
     return "wrong_bot" if other_bot_member(user_id) else "no_group"
 
 
-async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_to=None):
-    """Повторение записью (16.09.2026, несовершеннолетние): студент читает с
-    начала Аль-Бакары до своего места, приложение пишет звук, запись уходит
-    в группу голосовым с подписью «Имя, повторение + (запись 12:40,
-    стр. 2–17)», ложится в revision_recordings для строки «Повторения» в
-    кабинете устаза и засчитывает дневное задание «r». Охват страниц берётся
-    из указателя заучивания (до какой страницы дошёл), page_to с фронта -
-    только подстраховка, если указателя нет.
+async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_to=None,
+                                    page_from=None, layout="madani"):
+    """Повторение записью (16.09.2026, несовершеннолетние): студент читает
+    повторение вслух, приложение пишет звук, запись уходит в группу голосовым
+    с подписью «Имя, повторение + (запись 12:40, стр. 241–250)», ложится в
+    revision_recordings для строки «Повторения» в кабинете устаза и
+    засчитывает дневное задание «r».
+
+    Охват страниц (24.09.2026, решение пользователя): page_from - страница, на
+    которой нажали «Записать», page_to - самая дальняя страница за время
+    записи. Дети давно за Аль-Бакарой повторяют своё место, а не с начала.
+    Не листал (читал по памяти) - подпись честная: «со стр. 241», без заявки о
+    конце. Страницы египетской раскладки (layout="dm") переводятся в мединские,
+    устазу видна одна нумерация. Без page_from (старое приложение из кэша) -
+    как раньше: от начала Аль-Бакары до указателя заучивания.
 
     Тон подписи в группе - как у обычной сдачи, без «коротко»: пометка
     короткой записи (REVISION_MIN_SEC_PER_PAGE) видна только устазу."""
@@ -144,10 +151,18 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
     user = find_user_by_phone(user_id)
     if not user:
         return {"ok": False, "error": _no_group_error(user_id)}
-    pointer = get_hifz_pointer(user_id)
-    if pointer and pointer.get("page"):
-        page_to = int(pointer["page"])
-    page_to = max(REVISION_FIRST_PAGE, int(page_to or REVISION_FIRST_PAGE))
+    if page_from:
+        page_from = madani_page(layout, int(page_from))
+        # Конец охвата - последняя строка листа: египетский лист может
+        # закончиться уже на следующей мединской странице.
+        last = int(page_to or page_from)
+        page_to = max(page_from, madani_page(layout, last,
+                                             page_text_line_count(last, layout=layout) - 1))
+    else:
+        pointer = get_hifz_pointer(user_id)
+        if pointer and pointer.get("page"):
+            page_to = int(pointer["page"])
+        page_to = max(REVISION_FIRST_PAGE, int(page_to or REVISION_FIRST_PAGE))
 
     # audio_bytes может быть списком кусков: чтение прервалось, человек
     # продолжил, и каждое продолжение - отдельный поток MediaRecorder
@@ -160,8 +175,11 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
     already = get_today_report(user["id"], group["id"]) or {}
     credited = not already.get("r")
     sec = client_ms and round(client_ms / 1000)
-    span = (f"стр. {REVISION_FIRST_PAGE}" if page_to <= REVISION_FIRST_PAGE
-            else f"стр. {REVISION_FIRST_PAGE}–{page_to}")
+    if page_from:
+        span = f"стр. {page_from}–{page_to}" if page_to > page_from else f"со стр. {page_from}"
+    else:
+        span = (f"стр. {REVISION_FIRST_PAGE}" if page_to <= REVISION_FIRST_PAGE
+                else f"стр. {REVISION_FIRST_PAGE}–{page_to}")
     caption = (f"{user['name']}, {SHORT_TASKS['r'].lower()}"
                + (" +" if credited else "")
                + f" (запись{' ' + _mmss(sec) if sec else ''}, {span}).")
@@ -172,10 +190,11 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
     duration = voice_obj.get("duration") or sec or None
     rec_id = save_revision_recording(
         user["id"], group["id"], group["chat_id"], res["result"]["message_id"], get_date(),
-        voice_obj.get("file_id"), duration, page_to)
+        voice_obj.get("file_id"), duration, page_to, page_from=page_from or None)
     if credited:
         save_report(user["id"], group["id"], get_date(), {"r": True})
-    return {"ok": True, "credited": credited, "id": rec_id, "page_to": page_to}
+    return {"ok": True, "credited": credited, "id": rec_id, "page_to": page_to,
+            "page_from": page_from or None}
 
 
 async def submit_revision_verdict(ustaz_id, rec_id, verdict):
