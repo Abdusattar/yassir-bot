@@ -275,11 +275,15 @@ def _record(user_id, card_id, correct, first_try):
                 " ON CONFLICT(user_id, card) DO UPDATE SET shown=shown+1,"
                 " correct=correct+excluded.correct, last_at=excluded.last_at",
                 (str(user_id), card_id, 1 if correct else 0))
-            row = c.execute("SELECT streak, ok_date FROM tajweed_card_stats WHERE user_id=? AND card=?",
+            row = c.execute("SELECT streak, ok_date, due FROM tajweed_card_stats WHERE user_id=? AND card=?",
                             (str(user_id), card_id)).fetchone()
             if not correct:
                 c.execute("UPDATE tajweed_card_stats SET streak=0, due=? WHERE user_id=? AND card=?",
                           (today, str(user_id), card_id))
+            elif row["due"] and row["due"] > today:
+                # Раньше срока (лента сверх нормы, всё отдыхает): верный ответ
+                # паузу не удлиняет - проверки «через время» не было (24.09.2026).
+                pass
             elif row["ok_date"] != today:
                 # Шаг серии - раз в день: десять верных за вечер - это один день.
                 streak = row["streak"] + 1

@@ -144,6 +144,23 @@ def test_spacing_grows_with_correct_days_and_resets_on_mistake(test_db, monkeypa
     assert _row(card)["streak"] == 0
 
 
+def test_early_review_does_not_stretch_the_pause(test_db, monkeypatch):
+    # Буква отдыхает до 04.10, а её показали 02.10 (всё выучено, занимается
+    # сверх нормы): верный ответ паузу не удлиняет, ошибка - сбрасывает.
+    _female_like_base()
+    card = tt.open_cards("777")[0]["id"]
+    _day(monkeypatch, "2026-10-01")
+    tt._record("777", card, True, True)
+    _day(monkeypatch, "2026-10-02")
+    tt._record("777", card, True, True)
+    assert (_row(card)["streak"], _row(card)["due"]) == (2, "2026-10-05")
+    _day(monkeypatch, "2026-10-03")
+    tt._record("777", card, True, True)
+    assert (_row(card)["streak"], _row(card)["due"]) == (2, "2026-10-05")
+    tt._record("777", card, False, True)
+    assert (_row(card)["streak"], _row(card)["due"]) == (0, "2026-10-03")
+
+
 def test_mistaken_letter_goes_first_learned_rests(test_db, monkeypatch):
     _female_like_base()
     _day(monkeypatch, "2026-10-01")
