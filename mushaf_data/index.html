@@ -2045,6 +2045,13 @@
     animation: nh-auto-run 3s linear forwards;
   }
   @keyframes nh-auto-run { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  /* Хадис: верный ответ листается сам, черта бежит по низу разбора. */
+  .nh-fb.hd-fb-auto { position: relative; overflow: hidden; cursor: pointer; flex: 0 0 auto; }
+  .nh-fb.hd-fb-auto::after {
+    content: ''; position: absolute; left: 0; bottom: 0; height: 4px; width: 100%;
+    background: var(--accent); transform-origin: left center;
+    animation: nh-auto-run 3s linear forwards;
+  }
   /* Тренажёр нахва (17.09.2026). Слово показывается в аяте - вид слова
      узнаётся по соседям (харф джарр перед исмом, قَدْ перед фиалем), -
      но только окном вокруг него: длинный аят не должен вытеснять вопрос.
@@ -12812,7 +12819,10 @@
      закрепление вариантами в обе стороны → итог. При первом входе человек
      сам ставит, с какого хадиса и слова продолжает. */
   var hadithState = null;
-  var HADITH_AUTO_MS = 3000, hadithAutoTimer = null;   // как у нахва: полоска на «Дальше» - 3 с
+  var HADITH_AUTO_MS = 3000, hadithAutoTimer = null;   // черта под «Правильно» бежит 3 с
+  // Черта должна дойти до конца на глазах, а не оборваться на последних
+  // пикселях: листаем чуть позже её конца (24.09.2026, замечание пользователя).
+  var HADITH_AUTO_TAIL_MS = 250;
 
   function openHadith() {
     document.getElementById('trainers').style.display = 'none';
@@ -12998,9 +13008,14 @@
           var fullBox = body.querySelector('.hd-full.hide-cur');
           if (fullBox) fullBox.classList.remove('hide-cur');
           var head = fb.correct ? T('hadith_right') : T('hadith_wrong', { A: fb.ar + ' — ' + fb.ru });
-          document.getElementById('hd-after').innerHTML = '<div class="nh-fb"><div class="exp"><b>' +
-            nahwArabic(head) + '</b></div></div>' +
-            '<button class="tj-go' + (fb.correct ? ' nh-auto' : '') + '" id="hd-next">' + T('hadith_next') + '</button>';
+          /* Верно - без кнопки «Дальше» (24.09.2026, предложение пользователя):
+             под «Правильно» пробегает черта, и карточка листается сама; тап по
+             разбору - сразу дальше. Неверно - кнопка остаётся: верный ответ
+             надо спокойно рассмотреть, торопить нельзя. */
+          document.getElementById('hd-after').innerHTML = fb.correct
+            ? '<div class="nh-fb hd-fb-auto" id="hd-next"><div class="exp"><b>' + nahwArabic(head) + '</b></div></div>'
+            : '<div class="nh-fb"><div class="exp"><b>' + nahwArabic(head) + '</b></div></div>' +
+              '<button class="tj-go" id="hd-next">' + T('hadith_next') + '</button>';
           var gone = false;
           var go = function () {
             if (gone) return;
@@ -13013,7 +13028,7 @@
             hadithAutoTimer = setTimeout(function () {
               if (document.getElementById('hadith').style.display === 'none' || hadithState !== d) return;
               go();
-            }, HADITH_AUTO_MS);
+            }, HADITH_AUTO_MS + HADITH_AUTO_TAIL_MS);
           }
         });
       });

@@ -93,6 +93,7 @@ def main():
         pg.evaluate("() => { var b = document.getElementById('hadith-body'); b.scrollTop = b.scrollHeight; }")
         shot("7c_scrolled")
         pg.evaluate("() => { document.getElementById('hadith-body').scrollTop = 0; }")
+        first_right = True
         for _ in range(12):
             if not pg.query_selector(".hd-opt:not([disabled])"):
                 break
@@ -101,6 +102,11 @@ def main():
                 break
             pg.click(".hd-opt[data-key=\"%s\"]" % cur["right"].replace('"', '\\"'))
             pg.wait_for_selector("#hd-next")
+            if first_right:
+                first_right = False
+                pg.wait_for_timeout(1500)
+                pg.screenshot(path=str(OUT / "7d_right_running.png"))
+                print("   7d_right_running")
             pg.click("#hd-next")
             pg.wait_for_timeout(500)
         pg.wait_for_selector("#hd-round")
