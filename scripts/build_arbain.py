@@ -211,6 +211,20 @@ RU_BY_WORD = {
 }
 
 
+# Правки перевода ФРАЗ ar-ru (24.09.2026, пользователь подтвердил): только
+# орфография, сверено с тем же хадисом на ummah.su и с формулой в остальных
+# хадисах базы («приветствует» - 10 раз). (хадис, фраза как есть) -> верно.
+RU_PHRASE_TYPOS = {
+    (7, "что Пророк, да благословит его Аллах и приветсвует, сказал:"):
+        "что Пророк, да благословит его Аллах и приветствует, сказал:",
+    (7, "и к его Книге,"): "и к Его Книге,",
+}
+
+
+def fix_phrase(n, ru):
+    return RU_PHRASE_TYPOS.get((n, ru), ru)
+
+
 def fix_ru(n, w):
     ru = re.sub(r"[ؐ-ًؚ-ٰٟ]", "", w["ru"]).strip()   # огласовки, прилипшие к русскому
     fixed = RU_BY_WORD.get((n, letters(w["ar"] or "")))
@@ -312,7 +326,7 @@ def main():
             if w["ar"] is None or w["sure"] < 1.0:
                 report.append("   #%d %s <- %s  (%s)" % (i + 1, w["ar"] or "?" + w.get("pdf_letters", ""), w["ru"], w["sure"]))
         out.append({"n": n, "words": words,
-                    "phrases": [{"ar": p["ar"], "ru": p["ru"]} for p in h["phrases"]],
+                    "phrases": [{"ar": p["ar"], "ru": fix_phrase(n, p["ru"])} for p in h["phrases"]],
                     "matn_from": first_ph})
     OUT.write_bytes(gzip.compress(json.dumps(out, ensure_ascii=False).encode("utf-8")))
     REPORT.write_text("\n".join(report), encoding="utf-8")
