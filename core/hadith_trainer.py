@@ -15,6 +15,11 @@
   повтор выученного.
 * **Старт** — студент сам ставит, с какого хадиса и слова продолжает: в N-1
   все на разных местах.
+* **Весь хадис на экране** (24.09.2026, решение пользователя) — под
+  вариантами (они квадратиками 2×2) карточка: арабский текст целиком и
+  смысловой перевод целиком, фраза текущего слова подсвечена. Цель —
+  запоминать текст, пока сдаёшь тренажёр. В вопросе «перевод → слово»
+  подсветка появляется только после ответа, иначе она выдаёт ответ.
 
 Ответы не генерируются: слова и переводы — core/arbain.json.gz
 (scripts/build_arbain.py: пословная таблица из PDF пользователя + текст с
@@ -262,14 +267,32 @@ def _options(n, i, direction, rnd):
     return [{"key": key(w), "text": w["ru"] if direction == "ar2ru" else w["ar"]} for w in opts], key(right)
 
 
-def context(n, i):
-    """Фраза, в которой стоит слово, и где в ней слово - для показа."""
+def _phrase_of(n, i):
+    """№ фразы, в которой стоит слово; слово из другого издания - фраза
+    ближайшего слова перед ним."""
     h = data()[n]
     ph = _word(n, i).get("ph")
     j = i
-    while ph is None and j > 0:                        # слово из другого издания
+    while ph is None and j > 0:
         j -= 1
         ph = h["words"][j].get("ph")
+    return ph
+
+
+def full_text(n, i):
+    """Весь хадис по фразам - арабский и смысловой перевод (24.09.2026,
+    решение пользователя: пока сдаёт тренажёр, человек видит текст целиком и
+    запоминает его). Фразы и перевод - из архива ar-ru.ru, как у «Смысла
+    фразы»; cur - фраза текущего слова, её подсвечивают."""
+    h = data()[n]
+    return {"n": n, "phrases": [{"ar": p["ar"], "ru": p["ru"]} for p in h["phrases"]],
+            "cur": _phrase_of(n, i)}
+
+
+def context(n, i):
+    """Фраза, в которой стоит слово, и где в ней слово - для показа."""
+    h = data()[n]
+    ph = _phrase_of(n, i)
     if ph is None:
         return {"tokens": [{"t": _word(n, i)["ar"], "hl": True}], "ru": ""}
     phrase = h["phrases"][ph]
@@ -356,7 +379,7 @@ def _word_view(n, i):
     w = _word(n, i)
     h = data()[n]
     return {"hadith": n, "pos": i + 1, "total": len(h["words"]), "ar": w["ar"], "ru": w["ru"],
-            "context": context(n, i)}
+            "context": context(n, i), "full": full_text(n, i)}
 
 
 def state(user_id, feedback=None):
@@ -395,6 +418,7 @@ def state(user_id, feedback=None):
         card["ar"] = w["ar"]
     else:
         card["ru"] = w["ru"]
+    card["full"] = full_text(cur["n"], cur["i"])
     out["card"] = card
     return out
 

@@ -89,6 +89,10 @@ def main():
         pg.click("#hd-next")
         pg.wait_for_selector(".hd-opt")
         shot("7_card_next")
+        # Что под вариантами: прокрутили до конца - хадис и смысловой перевод.
+        pg.evaluate("() => { var b = document.getElementById('hadith-body'); b.scrollTop = b.scrollHeight; }")
+        shot("7c_scrolled")
+        pg.evaluate("() => { document.getElementById('hadith-body').scrollTop = 0; }")
         for _ in range(12):
             if not pg.query_selector(".hd-opt:not([disabled])"):
                 break

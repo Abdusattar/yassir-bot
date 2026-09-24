@@ -2098,9 +2098,32 @@
   .hd-gloss { font-size: 22px; font-weight: 600; color: var(--ink); }
   .hd-mean { font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 420px; }
   .hd-ask-ru { font-size: 22px; font-weight: 600; color: var(--ink); max-width: 420px; }
-  .hd-opts { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; max-width: 420px; }
-  .trainer-opt.hd-opt { text-align: left; font-size: 16px; padding: 12px 14px; }
-  .trainer-opt.hd-opt.ar { text-align: right; direction: rtl; font-family: 'Scheherazade New', serif; font-size: 27px; padding: 4px 14px; }
+  /* Варианты квадратиками 2×2 (24.09.2026, решение пользователя): в столбик
+     они занимали пол-экрана, и под ними не оставалось места тексту хадиса.
+     Шрифт не мельчим; не влез в половину ширины - кнопка на всю ширину
+     (.wide, ставится после отрисовки), как в таджвиде. */
+  .hd-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; }
+  .trainer-opt.hd-opt { text-align: center; font-size: 16px; line-height: 1.3; padding: 10px 8px;
+                        min-height: 60px; overflow-wrap: anywhere; }
+  .trainer-opt.hd-opt.ar { direction: rtl; font-family: 'Scheherazade New', serif; font-size: 27px; padding: 4px 8px; }
+  .trainer-opt.hd-opt.wide, .trainer-opt.hd-opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* Весь хадис под вопросом (24.09.2026): арабский и смысловой перевод
+     целиком, фраза текущего слова подсвечена в обоих. Прокручивается весь
+     экран, не вложенное окошко - на айфоне вложенная прокрутка неудобна. */
+  .hd-full { width: 100%; max-width: 420px; margin-top: 10px; padding: 14px 16px 16px;
+             background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+             text-align: left; }
+  .hd-full-title { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+                   color: var(--muted); margin-bottom: 6px; }
+  .hd-full-ar { font-family: 'Scheherazade New', serif; direction: rtl; text-align: right;
+                font-size: 24px; line-height: 2; color: var(--ink); }
+  .hd-full-ru { font-size: 16px; line-height: 1.55; color: var(--ink); margin-top: 10px;
+                padding-top: 10px; border-top: 1px solid var(--card-border); }
+  .hd-full .cur { background: var(--accent-soft); border-radius: 6px; box-decoration-break: clone;
+                  -webkit-box-decoration-break: clone; padding: 0 2px; transition: background .3s; }
+  /* Вопрос «перевод → слово»: подсвеченная фраза выдала бы ответ, поэтому
+     подсветка появляется только после ответа. */
+  .hd-full.hide-cur .cur { background: transparent; }
   .trainer-opt.hd-opt:disabled { opacity: .55; }
   .trainer-opt.hd-opt.ok, .trainer-opt.hd-opt.no { opacity: 1; }
   .trainer-opt.hd-opt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
@@ -4209,6 +4232,7 @@
       hadith_learn: 'Закрепить',
       hadith_new_hint: 'Слово дня. Посмотри, как оно стоит во фразе, и запомни перевод.',
       hadith_phrase_mean: 'Смысл фразы',
+      hadith_full_title: 'Хадис %N% целиком',
       hadith_ask_ar: 'Что значит выделенное слово?',
       hadith_ask_ru: 'Какое это слово в хадисе?',
       hadith_right: 'Верно',
@@ -12808,6 +12832,31 @@
     }).join(' ') + '</div>';
   }
 
+  /* Весь хадис: арабский, под ним смысловой перевод; фраза текущего слова
+     подсвечена в обоих (24.09.2026). */
+  function hadithFull(full, hideCur) {
+    if (!full || !full.phrases || !full.phrases.length) return '';
+    var n = full.n;
+    var part = function (key) {
+      return full.phrases.map(function (p, k) {
+        var t = nahwEsc(p[key] || '');
+        return k === full.cur ? '<span class="cur">' + t + '</span>' : t;
+      }).join(' ');
+    };
+    return '<div class="hd-full' + (hideCur ? ' hide-cur' : '') + '">' +
+      (n ? '<div class="hd-full-title">' + T('hadith_full_title', { N: n }) + '</div>' : '') +
+      '<div class="hd-full-ar">' + part('ar') + '</div>' +
+      '<div class="hd-full-ru">' + part('ru') + '</div></div>';
+  }
+
+  /* Вариант, которому тесно в половине ширины, - на всю ширину. Меряем
+     после отрисовки: длину арабского слова в пикселях заранее не знаем. */
+  function hadithWideOpts(buttons) {
+    Array.prototype.forEach.call(buttons, function (b) {
+      if (b.scrollWidth > b.clientWidth + 1) b.classList.add('wide');
+    });
+  }
+
   function hadithPill(d) {
     var pill = document.getElementById('hadith-daily');
     pill.textContent = T('daily_n', { N: d.daily_count || 0, M: d.daily_target || 0 });
@@ -12874,9 +12923,9 @@
       html += '<div class="trainer-word-card">' + hadithPhrase(w.context) +
         '<div class="hd-gloss">' + nahwEsc(w.ru) + '</div></div>';
       html += '<div class="nh-hint">' + T('hadith_new_hint') + '</div>';
-      if (w.context.ru) html += '<div class="hd-mean"><b>' + T('hadith_phrase_mean') + ':</b> ' + nahwEsc(w.context.ru) + '</div>';
       html += '<button class="tj-go" id="hd-learn">' + T('hadith_learn') + '</button>';
       html += '<button class="hd-link" id="hd-change">' + T('hadith_change') + '</button>';
+      html += hadithFull(w.full);
       body.innerHTML = html;
       body.scrollTop = 0;
       document.getElementById('hd-learn').addEventListener('click', function () { hadithPost('learn'); });
@@ -12930,9 +12979,11 @@
         nahwEsc(o.key) + '">' + nahwEsc(o.text) + '</button>';
     });
     html += '</div><div id="hd-after" style="display:contents"></div>';
+    html += hadithFull(c.full, c.dir === 'ru2ar');
     body.innerHTML = html;
     body.scrollTop = 0;
     var buttons = body.querySelectorAll('.hd-opt');
+    hadithWideOpts(buttons);
     Array.prototype.forEach.call(buttons, function (btn) {
       btn.addEventListener('click', function () {
         Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
@@ -12944,6 +12995,8 @@
             if (b.getAttribute('data-key') === fb.answer) b.classList.add('ok');
           });
           if (!fb.correct) btn.classList.add('no');
+          var fullBox = body.querySelector('.hd-full.hide-cur');
+          if (fullBox) fullBox.classList.remove('hide-cur');
           var head = fb.correct ? T('hadith_right') : T('hadith_wrong', { A: fb.ar + ' — ' + fb.ru });
           document.getElementById('hd-after').innerHTML = '<div class="nh-fb"><div class="exp"><b>' +
             nahwArabic(head) + '</b></div></div>' +
