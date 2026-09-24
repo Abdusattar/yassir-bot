@@ -2113,9 +2113,9 @@
      они занимали пол-экрана, и под ними не оставалось места тексту хадиса.
      Шрифт не мельчим; не влез в половину ширины - кнопка на всю ширину
      (.wide, ставится после отрисовки), как в таджвиде. */
-  .hd-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; }
+  .hd-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 420px; }
   .trainer-opt.hd-opt { text-align: center; font-size: 16px; line-height: 1.3; padding: 10px 8px;
-                        min-height: 60px; overflow-wrap: anywhere; }
+                        min-height: 60px; }
   .trainer-opt.hd-opt.ar { direction: rtl; font-family: 'Scheherazade New', serif; font-size: 27px; padding: 4px 8px; }
   .trainer-opt.hd-opt.wide, .trainer-opt.hd-opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
   /* Весь хадис под вопросом (24.09.2026): арабский и смысловой перевод
@@ -2124,14 +2124,15 @@
   .hd-full { width: 100%; max-width: 420px; margin-top: 10px; padding: 14px 16px 16px;
              background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
              text-align: left; }
-  .hd-full-title { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-                   color: var(--muted); margin-bottom: 6px; }
+  .hd-full-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
   .hd-full-ar { font-family: 'Scheherazade New', serif; direction: rtl; text-align: right;
                 font-size: 24px; line-height: 2; color: var(--ink); }
   .hd-full-ru { font-size: 16px; line-height: 1.55; color: var(--ink); margin-top: 10px;
                 padding-top: 10px; border-top: 1px solid var(--card-border); }
+  .hd-full-isnad { font-size: 14px; line-height: 1.45; color: var(--muted); margin-bottom: 4px; }
+  .hd-full-src { font-size: 14px; color: var(--muted); margin-top: 8px; }
   .hd-full .cur { background: var(--accent-soft); border-radius: 6px; box-decoration-break: clone;
-                  -webkit-box-decoration-break: clone; padding: 0 2px; transition: background .3s; }
+                  -webkit-box-decoration-break: clone; transition: background .3s; }
   /* Вопрос «перевод → слово»: подсвеченная фраза выдала бы ответ, поэтому
      подсветка появляется только после ответа. */
   .hd-full.hide-cur .cur { background: transparent; }
@@ -4243,7 +4244,7 @@
       hadith_learn: 'Закрепить',
       hadith_new_hint: 'Слово дня. Посмотри, как оно стоит во фразе, и запомни перевод.',
       hadith_phrase_mean: 'Смысл фразы',
-      hadith_full_title: 'Хадис %N% целиком',
+      hadith_full_title: 'Хадис %N%',
       hadith_ask_ar: 'Что значит выделенное слово?',
       hadith_ask_ru: 'Какое это слово в хадисе?',
       hadith_right: 'Верно',
@@ -12857,19 +12858,34 @@
         return k === full.cur ? '<span class="cur">' + t + '</span>' : t;
       }).join(' ');
     };
+    // Крупно - только сам текст хадиса; кто передал и где записан - тихими
+    // строками по-русски (24.09.2026, решение пользователя).
     return '<div class="hd-full' + (hideCur ? ' hide-cur' : '') + '">' +
       (n ? '<div class="hd-full-title">' + T('hadith_full_title', { N: n }) + '</div>' : '') +
+      (full.isnad ? '<div class="hd-full-isnad">' + nahwEsc(full.isnad) + '</div>' : '') +
       '<div class="hd-full-ar">' + part('ar') + '</div>' +
-      '<div class="hd-full-ru">' + part('ru') + '</div></div>';
+      '<div class="hd-full-ru">' + part('ru') +
+      (full.source ? '<div class="hd-full-src">' + nahwEsc(full.source) + '</div>' : '') +
+      '</div></div>';
   }
 
   /* Вариант, которому тесно в половине ширины, - на всю ширину. Меряем
      после отрисовки: длину арабского слова в пикселях заранее не знаем. */
   function hadithWideOpts(buttons) {
-    Array.prototype.forEach.call(buttons, function (b) {
+    // Слово не рвём посреди («засвидетельствую/т» на 360px, 24.09.2026):
+    // не влезло целым - кнопка на всю ширину. Пару тоже, чтобы сетка
+    // не оставила дыру рядом.
+    var list = Array.prototype.slice.call(buttons);
+    list.forEach(function (b) {
       if (b.scrollWidth > b.clientWidth + 1) b.classList.add('wide');
     });
+    list.forEach(function (b, k) {
+      var mate = list[k % 2 ? k - 1 : k + 1];
+      if (b.classList.contains('wide') && mate) mate.classList.add('wide');
+    });
   }
+
+  window.__hadithWideOpts = function () { hadithWideOpts(document.querySelectorAll('.hd-opt')); };   // для стенда снимков
 
   function hadithPill(d) {
     var pill = document.getElementById('hadith-daily');

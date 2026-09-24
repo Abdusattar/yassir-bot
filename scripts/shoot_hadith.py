@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--h", type=int, default=844)
     ap.add_argument("--hadith", type=int, default=8)
     ap.add_argument("--pos", type=int, default=9)
+    ap.add_argument("--dark", action="store_true")
     a = ap.parse_args()
 
     app = stand.build_app()
@@ -49,7 +50,8 @@ def main():
     problems = []
     with sync_playwright() as pw:
         b = pw.chromium.launch()
-        pg = b.new_page(viewport={"width": a.w, "height": a.h})
+        pg = b.new_page(viewport={"width": a.w, "height": a.h},
+                        color_scheme="dark" if a.dark else "light")
         errors = []
         pg.on("pageerror", lambda e: errors.append(str(e)))
 
@@ -78,6 +80,17 @@ def main():
         pg.click("#hd-learn")
         pg.wait_for_selector(".hd-opt")
         shot("5_card_ar2ru")
+        # Самые длинные слова словаря - не рвутся и не вылезают вбок.
+        pg.evaluate("""() => { var o = document.querySelectorAll('.hd-opt');
+            o[1].textContent = 'они не засвидетельствуют'; o[2].textContent = '(досл.освободился)';
+            o.forEach(function (b) { b.classList.remove('wide'); }); window.__hadithWideOpts(); }""")
+        shot("5b_long_options")
+        pg.reload()
+        pg.wait_for_timeout(2500)
+        pg.click("#dash-trainer")
+        pg.wait_for_timeout(1000)
+        pg.click("#trh-hadith")
+        pg.wait_for_selector(".hd-opt")
         # Неверный ответ - чтобы увидеть разбор и «вернётся в конце захода».
         right = pg.evaluate("() => null")
         import core.hadith_trainer as ht
