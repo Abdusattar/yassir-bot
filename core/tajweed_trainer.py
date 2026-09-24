@@ -8,8 +8,13 @@
   опубликован урок, где она разобрана. Базы у братьев и сестёр идут
   вразнобой (на 14.09 у сестёр открыто 4 части, у братьев 9), поэтому колода
   считается по `curriculum_parts.published_at`, а не одна на всех.
-* **Равномерно.** Следующей идёт буква, которую этому человеку показывали
-  реже всех; при равенстве — случайная. Счётчик хранится по каждой букве.
+* **Выученное реже, новое и слабое чаще** (24.09.2026, вместо «равномерно»:
+  пользователь — «грамотно ответил, зачем их прогонять»). Интервальное
+  повторение: верно с первой попытки — следующий показ через 1, 3, 7, 14,
+  30 дней (шаг не чаще раза в день), ошибка — буква снова каждый день.
+  Порядок: ошибочные → новые → подошёл срок → ближайшие по сроку.
+* **Сифаты** (24.09.2026) — вторая колода: буква → свойство из пары
+  (هَمْس или جَهْر и т.д.), пара открывается своим уроком.
 * **Варианты — все 17 мест выхода**, а не только пройденные: студент
   выбирает из всей карты, и неверный вариант — тоже настоящее место из урока,
   выдуманного ответа нет. Два варианта по возможности из той же зоны (горло,
@@ -22,6 +27,7 @@
 Банк ниже собран ТОЛЬКО из текстов опубликованных уроков (Аль-Мукаддима
 аль-Джазарийя). Сверка с Умар устазом — до выкладки.
 """
+import datetime
 import logging
 import random
 
@@ -120,7 +126,54 @@ CARDS = (
     {"id": "waw_madd",  "glyph": "و", "note": "мадд, как в يَقُولُ", "makhraj": "jawf", "lesson": "Полость"},
     {"id": "ya_madd",   "glyph": "ي", "note": "мадд, как в قِيلَ",   "makhraj": "jawf", "lesson": "Полость"},
 )
+for _c in CARDS:
+    _c["kind"], _c["answer"] = "makhraj", _c["makhraj"]
+
+# ── Сифаты (24.09.2026): пять пар «Джазарийи», по уроку на пару ────────────
+# Списки букв - из байтов (sources/matn/jazariyya.txt): فَحَثَّهُ شَخْصٌ سَكَتْ,
+# أَجِدْ قَطٍ بَكَتْ, لِنْ عُمَرْ, خُصَّ ضَغْطٍ قِظْ, ص ض ط ظ, فِرَّ مِنْ لُبِّ.
+# Буквы, не названные в байте, получают противоположное свойство («وَالضِّدَّ قُلْ»).
+# Варианты - только свойства самой пары, в порядке урока.
+SIFAT = (
+    {"id": "hams", "lesson": "Первая пара", "question": "Шёпот или звонкость?",
+     "options": (("hams", "Шёпот — الهمس"), ("jahr", "Звонкость — الجهر")),
+     "letters": {"hams": "فحثهشخصسكت"}, "rest": "jahr"},
+    {"id": "shidda", "lesson": "Вторая пара", "question": "Звук обрывается или течёт?",
+     "options": (("shidda", "Взрыв — الشدة"), ("tawassut", "Середина — التوسط"),
+                 ("rakhawa", "Мягкость — الرخاوة")),
+     "letters": {"shidda": "ءجدقطبكت", "tawassut": "لنعمر"}, "rest": "rakhawa"},
+    {"id": "istila", "lesson": "Третья пара", "question": "Корень языка поднят или опущен?",
+     "options": (("istila", "Подъём — الاستعلاء"), ("istifal", "Опускание — الاستفال")),
+     "letters": {"istila": "خصضغطقظ"}, "rest": "istifal"},
+    {"id": "itbaq", "lesson": "Четвёртая пара", "question": "Язык прижат к нёбу или нет?",
+     "options": (("itbaq", "Прижатие — الإطباق"), ("infitah", "Открытие — الانفتاح")),
+     "letters": {"itbaq": "صضطظ"}, "rest": "infitah"},
+    {"id": "idhlaq", "lesson": "Пятая пара", "question": "Лёгкая или удержанная?",
+     "options": (("idhlaq", "Лёгкость — الإذلاق"), ("ismat", "Удержание — الإصمات")),
+     "letters": {"idhlaq": "فرمنلب"}, "rest": "ismat"},
+)
+_SIFA = {p["id"]: p for p in SIFAT}
+_SIFA_LABEL = {oid: label for p in SIFAT for oid, label in p["options"]}
+# 28 согласных букв; و и ي - согласные, как в карточках мест выхода.
+SIFA_LETTERS = "ءبتثجحخدذرزسشصضطظعغفقكلمنهوي"
+_NOTE = {"و": "согласная, как в وَلَد", "ي": "согласная, как в يَد"}
+
+
+def _sifa_answer(pair, letter):
+    for ans, letters in pair["letters"].items():
+        if letter in letters:
+            return ans
+    return pair["rest"]
+
+
+CARDS = CARDS + tuple(
+    {"id": "sf_%s_%d" % (p["id"], i), "glyph": ch, "note": _NOTE.get(ch, ""),
+     "kind": p["id"], "answer": _sifa_answer(p, ch), "lesson": p["lesson"]}
+    for p in SIFAT for i, ch in enumerate(SIFA_LETTERS))
 _CARD = {c["id"]: c for c in CARDS}
+
+# Пауза до следующего показа после n-го верного дня подряд (1-й, 2-й, ...).
+INTERVALS = (1, 3, 7, 14, 30)
 
 # Заход живёт в памяти процесса, как активный вопрос у тренажёра слов: после
 # рестарта бота человек просто начнёт новый заход, счёт дня лежит в базе.
@@ -140,25 +193,54 @@ def open_cards(user_id=None):
             if any(t.startswith(card["lesson"]) for t in topics)]
 
 
-def _shown_counts(user_id):
+def _stats(user_id):
     with db() as c:
-        rows = c.execute("SELECT card, shown FROM tajweed_card_stats WHERE user_id=?",
+        rows = c.execute("SELECT card, shown, streak, due FROM tajweed_card_stats WHERE user_id=?",
                          (str(user_id),)).fetchall()
-    return {r["card"]: r["shown"] for r in rows}
+    return {r["card"]: r for r in rows}
+
+
+def _tier(row, today):
+    """0 - ошибся в прошлый раз, 1 - новая, 2 - подошёл срок, 3 - рано.
+    Ошибка ставит due, а у строк до 24.09 его нет: они не «ошибочные», а
+    просто пора повторить."""
+    if row is None or not row["shown"]:
+        return 1
+    if row["due"] and row["due"] > today:
+        return 3
+    if row["streak"] == 0 and row["due"]:
+        return 0
+    return 2
 
 
 def _pick_batch(user_id, cards, skip=()):
-    """Самые редко показанные, при равенстве — случайные.
+    """Сначала ошибочные, потом новые, потом те, кому подошёл срок; при
+    равенстве - случайно. Если всё выученное отдыхает, лента не встаёт:
+    берутся ближайшие по сроку.
 
     skip - буквы, которые прямо сейчас в работе: без этого следующая порция
     могла бы начаться с той же буквы, на которой человек только что стоял."""
-    shown = _shown_counts(user_id)
+    stats, today = _stats(user_id), get_date()
     pool = [c for c in cards if c["id"] not in skip] or list(cards)
-    order = sorted(pool, key=lambda c: (shown.get(c["id"], 0), random.random()))
-    return [c["id"] for c in order[:BATCH_SIZE]]
+
+    def key(c):
+        row = stats.get(c["id"])
+        tier = _tier(row, today)
+        return (tier, row["due"] if tier == 3 else "", random.random())
+    return [c["id"] for c in sorted(pool, key=key)[:BATCH_SIZE]]
 
 
 def _options(card):
+    if card["kind"] != "makhraj":
+        return [oid for oid, _ in _SIFA[card["kind"]]["options"]]
+    return _makhraj_options(card)
+
+
+def _label(card, oid):
+    return _MAKHRAJ[oid]["ru"] if card["kind"] == "makhraj" else _SIFA_LABEL[oid]
+
+
+def _makhraj_options(card):
     """OPTIONS мест выхода: верное, два из той же зоны, остальные из всей карты.
     На экране - в анатомическом порядке, не вразброс."""
     right = _MAKHRAJ[card["makhraj"]]
@@ -179,7 +261,12 @@ def daily_count(user_id):
     return row["n"]
 
 
+def _after(today, days):
+    return (datetime.date.fromisoformat(today) + datetime.timedelta(days=days)).isoformat()
+
+
 def _record(user_id, card_id, correct, first_try):
+    today = get_date()
     with db() as c:
         if first_try:
             c.execute(
@@ -188,6 +275,18 @@ def _record(user_id, card_id, correct, first_try):
                 " ON CONFLICT(user_id, card) DO UPDATE SET shown=shown+1,"
                 " correct=correct+excluded.correct, last_at=excluded.last_at",
                 (str(user_id), card_id, 1 if correct else 0))
+            row = c.execute("SELECT streak, ok_date FROM tajweed_card_stats WHERE user_id=? AND card=?",
+                            (str(user_id), card_id)).fetchone()
+            if not correct:
+                c.execute("UPDATE tajweed_card_stats SET streak=0, due=? WHERE user_id=? AND card=?",
+                          (today, str(user_id), card_id))
+            elif row["ok_date"] != today:
+                # Шаг серии - раз в день: десять верных за вечер - это один день.
+                streak = row["streak"] + 1
+                c.execute("UPDATE tajweed_card_stats SET streak=?, ok_date=?, due=?"
+                          " WHERE user_id=? AND card=?",
+                          (streak, today, _after(today, INTERVALS[min(streak, len(INTERVALS)) - 1]),
+                           str(user_id), card_id))
         if correct:
             c.execute("INSERT OR IGNORE INTO tajweed_daily(user_id, date, card) VALUES(?,?,?)",
                       (str(user_id), get_date(), card_id))
@@ -258,7 +357,9 @@ def state(user_id, feedback=None):
         "pos": min(done + 1, DAILY_TARGET), "size": DAILY_TARGET,
         "day_done": done >= DAILY_TARGET,
     }
-    out["options"] = [_MAKHRAJ[m]["ru"] for m in cur["options"]]
+    out["card"]["question"] = (_SIFA[card["kind"]]["question"]
+                               if card["kind"] != "makhraj" else None)
+    out["options"] = [_label(card, m) for m in cur["options"]]
     return out
 
 
@@ -271,7 +372,7 @@ def answer(user_id, card_id, slot):
     if not isinstance(slot, int) or not 0 <= slot < len(cur["options"]):
         raise ValueError("bad_slot")
     card = _CARD[card_id]
-    correct = cur["options"][slot] == card["makhraj"]
+    correct = cur["options"][slot] == card["answer"]
     first_try = not session["retry_now"]
     before = daily_count(user_id)
     _record(user_id, card_id, correct, first_try)
@@ -293,7 +394,7 @@ def answer(user_id, card_id, slot):
         session["missed"].discard(card_id)
     reached = before < DAILY_TARGET <= daily_count(user_id)
     feedback = {"correct": correct, "glyph": card["glyph"], "note": card["note"],
-                "answer": _MAKHRAJ[card["makhraj"]]["ru"]}
+                "answer": _label(card, card["answer"])}
     _next(session, user_id)
     return state(user_id, feedback), reached
 

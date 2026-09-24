@@ -76,10 +76,11 @@ def _auth(monkeypatch, supers=()):
 def test_bank_is_consistent():
     ids = {m["id"] for m in tt.MAKHARIJ}
     assert len(ids) == 17
-    assert all(c["makhraj"] in ids for c in tt.CARDS)
+    mk = [c for c in tt.CARDS if c["kind"] == "makhraj"]
+    assert all(c["makhraj"] in ids for c in mk)
     assert len({c["id"] for c in tt.CARDS}) == len(tt.CARDS)
     # Нос - место гунны, а не буквы: карточки на него нет, вариантом он есть.
-    assert {c["makhraj"] for c in tt.CARDS} == ids - {"khayshum"}
+    assert {c["makhraj"] for c in mk} == ids - {"khayshum"}
 
 
 def test_deck_only_from_published_lessons(test_db):
@@ -90,24 +91,135 @@ def test_deck_only_from_published_lessons(test_db):
 
 def test_options_are_four_real_places_with_the_right_one():
     ids = {m["id"] for m in tt.MAKHARIJ}
-    for card in tt.CARDS:
+    for card in (c for c in tt.CARDS if c["kind"] == "makhraj"):
         opts = tt._options(card)
         assert len(opts) == tt.OPTIONS == 4 and len(set(opts)) == 4
         assert card["makhraj"] in opts and set(opts) <= ids
         assert opts == sorted(opts, key=tt._ORDER.get)      # от горла к губам
 
 
-def test_letters_come_evenly(test_db):
-    # Равномерность держится и без границ захода: подбор доливает те буквы,
-    # что показывались реже всех.
+def test_new_letters_before_repeats(test_db):
+    # Пока есть невиданные буквы, выученная сегодня не возвращается: первые
+    # 12 карточек - 12 разных букв.
     _female_like_base()
     tt._sessions.clear()
     tt.new_session("777")
-    for _ in range(36):                      # 36 показов на 12 букв
-        tt.answer("777", tt._sessions["777"]["current"]["card"], _right_slot("777"))
-    shown = Counter({c["id"]: 0 for c in tt.open_cards()})
-    shown.update(tt._shown_counts("777"))
-    assert max(shown.values()) - min(shown.values()) <= 1
+    seen = []
+    for _ in range(12):
+        cur = tt._sessions["777"]["current"]["card"]
+        seen.append(cur)
+        tt.answer("777", cur, _right_slot("777"))
+    assert len(set(seen)) == 12
+
+
+def _day(monkeypatch, date):
+    monkeypatch.setattr(tt, "get_date", lambda: date)
+
+
+def _row(card):
+    return tt._stats("777")[card]
+
+
+def test_spacing_grows_with_correct_days_and_resets_on_mistake(test_db, monkeypatch):
+    # 24.09.2026: «грамотно ответил - зачем их прогонять». Верно с первой
+    # попытки - пауза 1, 3, 7... дней; ошибка - снова каждый день.
+    _female_like_base()
+    _day(monkeypatch, "2026-10-01")
+    tt._sessions.clear()
+    tt.new_session("777")
+    card = tt._sessions["777"]["current"]["card"]
+    tt.answer("777", card, _right_slot("777"))
+    assert (_row(card)["streak"], _row(card)["due"]) == (1, "2026-10-02")
+    # Второй верный в тот же день серию не двигает.
+    tt._record("777", card, True, True)
+    assert (_row(card)["streak"], _row(card)["due"]) == (1, "2026-10-02")
+    _day(monkeypatch, "2026-10-02")
+    tt._record("777", card, True, True)
+    assert (_row(card)["streak"], _row(card)["due"]) == (2, "2026-10-05")
+    _day(monkeypatch, "2026-10-05")
+    tt._record("777", card, False, True)
+    assert (_row(card)["streak"], _row(card)["due"]) == (0, "2026-10-05")
+    # Ответ с повтора после ошибки расписание не трогает.
+    tt._record("777", card, True, False)
+    assert _row(card)["streak"] == 0
+
+
+def test_mistaken_letter_goes_first_learned_rests(test_db, monkeypatch):
+    _female_like_base()
+    _day(monkeypatch, "2026-10-01")
+    cards = tt.open_cards("777")
+    ids = [c["id"] for c in cards]
+    for cid in ids:
+        tt._record("777", cid, True, True)          # все выучены сегодня
+    _day(monkeypatch, "2026-10-02")
+    tt._record("777", ids[5], False, True)          # одну спутал завтра
+    batch = tt._pick_batch("777", cards)
+    assert batch[0] == ids[5]
+    # Остальные с паузой до 02.10 - подошёл срок, идут следом.
+    assert set(batch[1:]) <= set(ids)
+
+
+def test_learned_letters_rest_while_new_ones_wait(test_db, monkeypatch):
+    _female_like_base()
+    _day(monkeypatch, "2026-10-01")
+    cards = tt.open_cards("777")
+    learned = [c["id"] for c in cards[:8]]
+    for cid in learned:
+        tt._record("777", cid, True, True)
+    batch = tt._pick_batch("777", cards)
+    assert not set(batch) & set(learned)           # новые впереди отдыхающих
+
+
+def test_old_rows_without_due_are_reviews_not_mistakes(test_db, monkeypatch):
+    # Строки до 24.09 без due: не «ошибочные», а пора повторить - новые идут раньше.
+    _female_like_base()
+    _day(monkeypatch, "2026-10-01")
+    cards = tt.open_cards("777")
+    with db.db() as c:
+        c.execute("INSERT INTO tajweed_card_stats(user_id, card, shown, correct) VALUES('777',?,5,5)",
+                  (cards[0]["id"],))
+    assert tt._tier(tt._stats("777")[cards[0]["id"]], "2026-10-01") == 2
+    assert cards[0]["id"] not in tt._pick_batch("777", cards)
+
+
+# ── Сифаты (24.09.2026) ────────────────────────────────────────────────────
+
+def test_sifat_bank_matches_the_bayts():
+    by = {}
+    for c in tt.CARDS:
+        if c["kind"] != "makhraj":
+            by.setdefault((c["kind"], c["answer"]), set()).add(c["glyph"])
+    assert by[("hams", "hams")] == set("فحثهشخصسكت")
+    assert len(by[("hams", "jahr")]) == 18
+    assert by[("shidda", "shidda")] == set("ءجدقطبكت")
+    assert by[("shidda", "tawassut")] == set("لنعمر")
+    assert len(by[("shidda", "rakhawa")]) == 15            # 28 - 8 - 5, алифа среди согласных нет
+    assert by[("istila", "istila")] == set("خصضغطقظ")
+    assert by[("itbaq", "itbaq")] == set("صضطظ")
+    assert by[("idhlaq", "idhlaq")] == set("فرمنلب")
+    for p in tt.SIFAT:
+        assert sum(1 for c in tt.CARDS if c["kind"] == p["id"]) == 28
+
+
+def test_sifat_pair_opens_with_its_lesson(test_db):
+    _female_like_base()
+    assert not [c for c in tt.open_cards() if c["kind"] != "makhraj"]
+    _lesson("Первая пара: الهمس и الجهر", 6)
+    kinds = Counter(c["kind"] for c in tt.open_cards())
+    assert kinds["hams"] == 28 and "shidda" not in kinds
+
+
+def test_sifat_card_asks_its_own_question(test_db):
+    _lesson("Первая пара: الهمس и الجهر", 1)
+    tt._sessions.clear()
+    data = tt.new_session("777")
+    assert data["card"]["question"] == "Шёпот или звонкость?"
+    assert data["options"] == ["Шёпот — الهمس", "Звонкость — الجهر"]
+    card = tt._CARD[data["card"]["id"]]
+    slot = tt._sessions["777"]["current"]["options"].index(card["answer"])
+    res, _ = tt.answer("777", card["id"], slot)
+    assert res["feedback"]["correct"] is True
+    assert res["feedback"]["answer"] in data["options"]
 
 
 def test_the_stream_never_stops(test_db):
@@ -149,7 +261,7 @@ def test_mistake_comes_back_three_cards_later(test_db):
     assert data["card"]["retry"] is False            # ответил верно — метка снята
     # Показ считается один раз: повтор ошибки не раздувает счётчик, иначе
     # равномерность подбора перекосило бы в сторону ошибочных букв.
-    assert tt._shown_counts("777")[missed] == 1
+    assert tt._stats("777")[missed]["shown"] == 1
 
 
 def test_four_letters_credit_tajweed_once_and_tell_the_group(test_db, monkeypatch):

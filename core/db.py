@@ -521,6 +521,17 @@ def _run_migrations(c):
     if "channel" not in uocols:
         c.execute("ALTER TABLE upgrade_offers ADD COLUMN channel TEXT NOT NULL DEFAULT 'dm'")
 
+    # Интервальное повторение в тренажёре таджвида (24.09.2026): серия верных
+    # с первой попытки в разные дни, дата следующего показа и день последнего
+    # шага серии (чтобы десять верных за один вечер не считались десятью днями).
+    tjcols = [r["name"] for r in c.execute("PRAGMA table_info(tajweed_card_stats)").fetchall()]
+    if tjcols and "streak" not in tjcols:
+        c.execute("ALTER TABLE tajweed_card_stats ADD COLUMN streak INTEGER NOT NULL DEFAULT 0")
+    if tjcols and "due" not in tjcols:
+        c.execute("ALTER TABLE tajweed_card_stats ADD COLUMN due TEXT")
+    if tjcols and "ok_date" not in tjcols:
+        c.execute("ALTER TABLE tajweed_card_stats ADD COLUMN ok_date TEXT")
+
     migrated = c.execute(
         "SELECT value FROM bot_settings WHERE key='migrated_to_users'"
     ).fetchone()

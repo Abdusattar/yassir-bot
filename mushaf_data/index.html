@@ -2011,6 +2011,8 @@
      надписи мест до трёх строк, палец попадает без прицеливания. */
   .trainer-opt.tj-opt { font-size: 16px; line-height: 1.3; min-height: 88px; padding: 10px 10px; }
   .trainer-opt.tj-opt:disabled { opacity: .55; }
+  /* Нечётный последний вариант (сифаты на три: شدة/توسط/رخاوة) - во всю ширину. */
+  .trainer-opt.tj-opt:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 64px; }
   /* Итог ответа - на самих кнопках (14.09.2026): нажатая краснеет при
      ошибке, верная зеленеет всегда. Плашка сверху сдвигала карточку, а
      взгляд в момент ответа - на кнопках. */
@@ -12542,7 +12544,8 @@
     var html = '<div class="tj-dots">' + dots + '</div>';
     html += '<div class="trainer-word-card"><div class="tj-glyph">' + c.glyph + '</div>' +
       (c.note ? '<div class="tj-note">' + tajweedArabic(c.note) + '</div>' : '') + '</div>';
-    html += '<div class="tj-q">' + T('tajweed_question') + '</div>';
+    // Сифаты (24.09.2026) спрашивают своё - вопрос приходит с карточкой.
+    html += '<div class="tj-q">' + (c.question ? tajweedArabic(c.question) : T('tajweed_question')) + '</div>';
     html += '<div class="trainer-options">';
     d.options.forEach(function (opt, i) {
       html += '<button class="trainer-opt tj-opt" data-slot="' + i + '">' + opt + '</button>';
