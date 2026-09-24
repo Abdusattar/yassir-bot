@@ -41,6 +41,8 @@ SCENES = {
     "pick":  None,        # выбор места
     "rec":   (0, 2),      # открыта запись сдачи
     "bare":  (0, 2),      # лёжа шапка уехала сама
+    "tap":   (0, 3),      # долистал вниз, тап по счётчику - назад к первой строке (24.09)
+    "nav":   (0, 3),      # чтение, не заучивание: строка страниц с «⤒ Бакара» (24.09)
 }
 
 MEASURE = """() => {
@@ -115,8 +117,35 @@ def main():
                 pg.wait_for_function("document.querySelectorAll('#ayah-text .mushaf-line').length > 0",
                                      timeout=15000)
                 pg.wait_for_timeout(1500)
+                if scene == "nav":
+                    pg.evaluate("var w=document.getElementById('page-wrap'); w.scrollTop=w.scrollHeight")
+                    pg.wait_for_timeout(800)
+                    path = OUT / f"{scene}_{name}.png"
+                    pg.screenshot(path=str(path))
+                    nb = pg.evaluate("""() => { var n=document.getElementById('page-nav'), b=document.getElementById('btn-go-baqara');
+                      var r=b.getBoundingClientRect(); return { vis: r.width>0, over: n.scrollWidth-n.clientWidth, h: Math.round(r.height),
+                      doc_x: document.documentElement.scrollWidth-document.documentElement.clientWidth }; }""")
+                    print(f"  {scene:<6} {name:<6} {nb}")
+                    if not nb["vis"] or nb["over"] > 0 or nb["doc_x"] > 0:
+                        problems.append(f"{scene} {name}: строка страниц {nb}")
+                    ctx.close()
+                    continue
                 pg.evaluate("document.getElementById('btn-hifz').click()")
                 pg.wait_for_timeout(2500)
+                if scene == "tap":
+                    pg.evaluate("var w=document.getElementById('page-wrap'); w.scrollTop=w.scrollHeight")
+                    pg.wait_for_timeout(900)
+                    pg.screenshot(path=str(OUT / f"tap_before_{name}.png"))
+                    was = pg.evaluate("document.getElementById('page-wrap').scrollTop")
+                    pg.evaluate("""(() => { var a=document.getElementById('hifz-count'), b=document.getElementById('big-count');
+                      var el = (a && a.offsetParent) ? a : b; el.click(); })()""")
+                    pg.wait_for_timeout(1200)
+                    now = pg.evaluate("document.getElementById('page-wrap').scrollTop")
+                    first = pg.evaluate("""(() => { var f=document.querySelector('#ayah-text .mushaf-line.hifz-lit'),
+                      w=document.getElementById('page-wrap'); return Math.round(f.getBoundingClientRect().top - w.getBoundingClientRect().top); })()""")
+                    print(f"  tap    {name:<6} scroll {was} -> {now}, первая строка от верха {first}px")
+                    if was > 0 and (first < -2):
+                        problems.append(f"tap {name}: после тапа первая строка не видна ({first}px)")
                 if scene == "rec":
                     pg.evaluate("document.getElementById('hifz-submit').click()")
                     pg.wait_for_timeout(900)
