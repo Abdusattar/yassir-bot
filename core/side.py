@@ -151,6 +151,13 @@ async def handle_invite_pick(uid, side, lang="ru"):
     незнакомца там спросят половину, чужого развернут."""
     if side not in SIDES:
         return
+    # Кнопки в уже разосланных сообщениях (24.09.2026) тоже ведут в одну
+    # дверь @YassirAppBot, как и настройки.
+    from core.bots import app_invite_link
+    one = app_invite_link()
+    if one:
+        await send_message(uid, T("invite_forward_one", lang, link=one))
+        return
     if side == config.PROFILE:
         link = await get_dm_start_link()
     else:

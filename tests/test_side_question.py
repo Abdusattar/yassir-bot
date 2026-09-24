@@ -433,6 +433,16 @@ def test_invite_pick_gives_forwardable_text_with_bot_link(test_db, world, wire, 
     assert all("t.me/+" not in t for _, t, _ in wire["sent"])
 
 
+def test_invite_pick_with_app_bot_gives_one_door(test_db, world, wire, monkeypatch):
+    # Старые кнопки из разосланных сообщений (24.09): при общем боте - одна ссылка.
+    import core.bots as bots
+    monkeypatch.setattr(bots, "app_invite_link", lambda: "https://t.me/YassirAppBot?start=go")
+    for s in ("male", "female"):
+        asyncio.run(side.handle_invite_pick(BROTHER, s))
+        assert "YassirAppBot?start=go" in wire["sent"][-1][1]
+        assert "yassir_female_bot" not in wire["sent"][-1][1]
+
+
 def test_invite_command_in_dm_shows_the_menu(test_db, world, wire):
     _dm(BROTHER, "/позвать")
     assert wire["sent"][-1][2] is not None and [b[1] for b in wire["sent"][-1][2]] == ["inv:male", "inv:female"]

@@ -2008,8 +2008,8 @@ async def scheduler():
                 await maybe_run("invite_missing_ustaz_to_scaling", invite_missing_ustaz_to_scaling)
             elif wd == 6 and h == 20 and m == 30:
                 await maybe_run("yassir_asks_admin", yassir_asks_admin)
-            elif wd == 3 and h == 10 and m == 0 and now.isocalendar()[1] % 2 == 1:
-                await maybe_run("invite_friend_broadcast", invite_friend_broadcast)
+            # invite_friend_broadcast выключена (24.09.2026, решение
+            # пользователя): «Позвать друга» живёт только в настройках.
             elif d == 1 and h == 19 and m == 0:
                 await maybe_run("monthly_report", monthly_report)
                 if now.month in (1, 4, 7, 10):
