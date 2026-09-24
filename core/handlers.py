@@ -2076,6 +2076,11 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # Рубильник группы (16.09.2026, решение пользователя): задания принимаются
     # только через YassirApp. Отвечаем один раз на сообщение, ничего не
     # засчитываем. Узр сюда не попадает - он разбирается выше, при score == 0.
+    # app_dropped - что человек написал, но что засчитывается только в
+    # приложении: говорим об этом прямо (24.09.2026, апелляция Муслима из
+    # N-1 - в день рубильника он написал таджвид и повторение, увидел
+    # «зачёт!» и решил, что засчитано всё).
+    app_dropped = []
     if group_app_only_active(group):
         # Нахв и хадис в приложении сдать пока негде (17.09.2026, решение
         # пользователя): до выхода их тренажёров принимаем письменно, как
@@ -2087,6 +2092,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not written:
             await send_message(chat_id, T("app_only_refuse", glang, name=s["name"]))
             return
+        app_dropped = [k for k in group_tasks if tasks_done.get(k) and k not in written]
         tasks_done = {k: (k in written) for k in TASK_KEYS}
 
     # Повторение только записью (16.09.2026, несовершеннолетние): текстовое
@@ -2176,17 +2182,22 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, T("already_all", glang, name=s["name"]))
         return
 
-    if not new_tasks:
-        await send_message(chat_id, T("already_counted", glang, name=s["name"]))
-        return
-
     # Короткий формат вместо "✅ Имя, принято! Слова\nосталось: ..." -
     # "Имя, слова +. Осталось: ..." (решение пользователя 26.07.2026:
-    # минимум сообщений, короче).
-    new_names = [SHORT_TASKS.get(k, DEFAULT_TASKS[k]).lower() for k in group_tasks if k in new_tasks]
-    reply = s["name"] + ", " + ", ".join(new_names) + " +."
+    # минимум сообщений, короче). Повторное сообщение (правка, дубль) ничего
+    # нового не приносит - называем, что уже засчитано, а не голое «зачёт!»:
+    # оно читалось как «принято всё, что в сообщении» (24.09.2026).
+    def _names(keys):
+        return [SHORT_TASKS.get(k, DEFAULT_TASKS[k]).lower() for k in group_tasks if k in keys]
+    if new_tasks:
+        reply = s["name"] + ", " + ", ".join(_names(new_tasks)) + " +."
+    else:
+        reply = T("already_counted", glang, name=s["name"], done=", ".join(_names(now_done)))
     if wait_list:
         reply += " " + T("remaining", glang) + " " + ", ".join(wait_list)
+    dropped = _names([k for k in app_dropped if not tasks_done.get(k)])
+    if dropped:
+        reply += "\n" + T("app_only_dropped", glang, names=", ".join(dropped).capitalize())
     if now_complete:
         reply += "\n" + T("all_done", glang)
     # Сдача после полуночи идёт за вчерашний день (20.09.2026, учебный день

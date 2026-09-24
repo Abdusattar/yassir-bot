@@ -118,15 +118,15 @@ TR = {
         "en": "🌟 {name}, you've already submitted ALL tasks today, MashaAllah! Rest, see you tomorrow 🤲",
         "zh": "🌟 {name}，你今天已完成所有任务，MashaAllah！好好休息，明天见 🤲",
     },
+    # Повторное сообщение без нового задания (24.09.2026): называем, что уже
+    # засчитано, - голое «зачёт!» читалось как «принято всё из сообщения».
     "already_counted": {
-        "ru": "✅ {name}, зачёт!",
-        "ky": "✅ {name}, зачёт!",
-        "uz": "✅ {name}, zacht!",
-        "kk": "✅ {name}, зачёт!",
-        "tr": "✅ {name}, sayıldı!",
-        "ar": "✅ {name}، أحسنت!",
-        "en": "✅ {name}, noted!",
-        "zh": "✅ {name}，已记录！",
+        "ru": "✅ {name}, это уже засчитано: {done}.",
+    },
+    # Группа «только через YassirApp»: что из сообщения не засчитано и где
+    # это сдать (24.09.2026).
+    "app_only_dropped": {
+        "ru": "📱 {names} — сдаются в приложении YassirApp, из сообщения в группе я их не засчитал.",
     },
     "all_done_praise": {
         "ru": [

@@ -174,3 +174,25 @@ def test_written_closed_by_group_and_date(test_db):
     assert db.written_closed(5, "n", "2026-09-23") is False
     assert db.written_closed(5, "n", "2026-09-24") is True
     assert db.written_closed(5, "h", "2026-09-24") is False
+
+
+def test_dropped_tasks_named_and_resend_not_bare_zachet(test_db, monkeypatch):
+    """24.09.2026, апелляция Муслима (N-1): в день рубильника он написал в
+    группе таджвид и повторение вместе с нахвом и хадисом, исправил опечатку -
+    и на правку получил голое «зачёт!». Теперь бот называет, что не засчитано
+    и где это сдать, а на повтор - что именно уже засчитано."""
+    g = _group(tasks="m,r,t,j,n,h")
+    db.add_student("Муслим", g["id"], phone=PHONE)
+    db.set_group_app_only(g["id"], db.get_date())
+    sent = _silence(monkeypatch)
+    text = "Нахв ... Хадис номер 8 ... Таджвид ... Повторение заученного"
+
+    asyncio.run(h.process_message(chat_id=CHAT, sender=PHONE, text=text, sender_name="Муслим"))
+    asyncio.run(h.process_message(chat_id=CHAT, sender=PHONE, text=text, sender_name="Муслим"))
+
+    first, second = [t for t in sent if "Муслим" in t][-2:]
+    assert "нахв, хадис +." in first, sent
+    assert "повторение, таджвид — сдаются в приложении YassirApp" in first, sent
+    assert "зачёт!" not in second, sent
+    assert "это уже засчитано: нахв, хадис." in second, sent
+    assert "сдаются в приложении YassirApp" in second, sent
