@@ -854,11 +854,17 @@
      Цена - слово из мусхафа не скопировать, в чтении это не нужно.
      24.09.2026: панель всё ещё «иногда» вылезала - касание попадало в
      окошко перевода слова, список слов или смысловой перевод аятов, где
-     выделение оставалось. Закрыты и они. */
-  #ayah-text, #hifz-big-words, .trainer-line, .trainer-word,
+     выделение оставалось. Закрыты и они.
+     25.09.2026: и снова «иногда», лёжа - закрывали по одному месту, панель
+     находила следующее (строка страниц в конце листа, шапка, подписи).
+     Теперь весь экран мусхафа (#app) без выделения, кроме полей ввода. */
+  #app, #ayah-text, #hifz-big-words, .trainer-line, .trainer-word,
   #word-popup, .word-row, #meaning-list {
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
+  }
+  #app input, #app textarea {
+    -webkit-user-select: text; user-select: text;
   }
   #ayah-text {
     direction: rtl;
