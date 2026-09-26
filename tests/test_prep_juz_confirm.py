@@ -330,3 +330,43 @@ def test_unresolved_old_answer_asks_again(test_db, monkeypatch):
     _capture(monkeypatch)
 
     assert prep.graduation_question("p8") == {"ask": True, "days": prep.PREP_MIN_DAYS}
+
+
+def test_female_graduates_without_juz_question(test_db, monkeypatch):
+    """26.09.2026: у сестёр группы N-1 нет - вопрос про джуз не задаётся,
+    проверка сразу переводит в relaxed по общему правилу (случай Бурулсун)."""
+    g = _setup_prep_group()
+    relaxed = _setup_relaxed_group()
+    db.add_student("Бурулсун", g["id"], phone="f1")
+    monkeypatch.setattr(prep, "IS_FEMALE", True)
+    monkeypatch.setattr(prep, "count_report_days_since", lambda *a: prep.PREP_MIN_DAYS)
+    sent = _capture(monkeypatch)
+
+    assert prep.graduation_question("f1") is None
+    asyncio.run(prep.check_prep_students())
+
+    assert _group_of("f1") == relaxed["id"]
+    assert not [x for x in sent if x[0] == "btn"]
+
+
+def test_female_pending_confirm_and_old_yes_go_to_relaxed(test_db, monkeypatch):
+    """Ожидание устаза, оставшееся до правки, и старая кнопка «знаю» у сестёр
+    тоже ведут в relaxed, а не в несуществующую N-1."""
+    g = _setup_prep_group()
+    relaxed = _setup_relaxed_group()
+    db.add_student("Сестра1", g["id"], phone="f2")
+    db.add_student("Сестра2", g["id"], phone="f3")
+    st = db.find_by_phone("f2", g["id"])
+    db.add_bonus(st["id"], g["id"], db.get_joined_date(st["id"], g["id"]),
+                 0, "prep_juz_answer", subcategory="pending_confirm", note="0")
+    assert prep._get_juz_answer(st["id"], g["id"], db.get_joined_date(st["id"], g["id"]))[0] == "pending_confirm"
+    monkeypatch.setattr(prep, "IS_FEMALE", True)
+    monkeypatch.setattr(prep, "count_report_days_since", lambda *a: prep.PREP_MIN_DAYS)
+    sent = _capture(monkeypatch)
+
+    asyncio.run(prep.handle_juz_answer("f3", True))
+    asyncio.run(prep.check_prep_students())
+
+    assert _group_of("f2") == relaxed["id"]
+    assert _group_of("f3") == relaxed["id"]
+    assert not [x for x in sent if x[0] == "btn"]

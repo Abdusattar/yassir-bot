@@ -6,6 +6,8 @@
                         объявление в саму prep-группу (мотивация остальным) +
                         студенту в личку вопрос с кнопками "знаешь ли хотя бы
                         1 джуз наизусть?" (решение Умар устаза 24.07.2026).
+                        У сестёр вопроса нет (26.09.2026): группы N-1 там
+                        нет, выпускница сразу идёт по ветке «не знает».
                         По ответу бот САМ подбирает группу: знает ≥1 джуз →
                         конкретная группа N-1, не знает → наименее заполненная
                         relaxed нужного языка - и шлёт студенту в личку
@@ -158,7 +160,15 @@ async def check_prep_students():
 
             answer = _get_juz_answer(s["id"], group_id, joined)
             today = get_date()
-            if not answer:
+            if IS_FEMALE and (not answer or answer[0] == "pending_confirm"):
+                # У сестёр группы N-1 нет - про джуз не спрашиваем, выпуск по
+                # общему правилу (см. handle_juz_answer). Ожидание устаза,
+                # оставшееся с прошлых дней, закрываем той же веткой.
+                if answer:
+                    await handle_juz_confirm(uid, False)
+                else:
+                    await handle_juz_answer(uid, False)
+            elif not answer:
                 # Вопрос студенту в личку про джуз — повторяем КАЖДУЮ проверку,
                 # пока не ответит (не одноразовый флаг!). Иначе если бот ещё
                 # не может писать в личку (студент сам не открывал диалог с
@@ -471,6 +481,9 @@ async def remind_ustaz_about_graduate(phone):
         return None
     glang = row["lang"] or "ru"
     answer = _get_juz_answer(row["uid"], row["gid"], row["joined_date"])
+    if IS_FEMALE and not answer:
+        await handle_juz_answer(phone, False)   # у сестёр без вопроса про джуз
+        return (row["name"], glang)
     if answer and answer[0] == "pending_confirm":
         return None   # ждём Умар устаза - торопить некого
     if answer:
@@ -569,6 +582,8 @@ def graduation_question(phone):
     days_done = count_report_days_since(row["uid"], row["gid"], row["joined_date"])
     if days_done < PREP_MIN_DAYS:
         return None
+    if IS_FEMALE:
+        return None   # у сестёр вопроса нет - выпуск догонит check_prep_students
     answer = _get_juz_answer(row["uid"], row["gid"], row["joined_date"])
     if not answer:
         return {"ask": True, "days": days_done}
@@ -592,6 +607,12 @@ async def handle_juz_answer(phone, knows_juz):
         # уже отвечал (или действует решение прошлого захода) - не
         # обрабатываем повторно: двойной тап, старая кнопка в личке
         return
+
+    # У сестёр группы N-1 нет (26.09.2026, живой случай - Бурулсун: Зейнеб
+    # подтвердила джуз, а переводить было некуда, выпуск встал) - вопрос не
+    # задаётся, и даже старая кнопка «знаю» ведёт по общему правилу.
+    if IS_FEMALE:
+        knows_juz = False
 
     if knows_juz:
         # pending_confirm одновременно и маркер "уже ответил" (не спросит
@@ -638,6 +659,8 @@ async def handle_juz_confirm(phone, confirmed):
         return  # уже решено (повторный тап Умара) или маркера нет вовсе
 
     glang = row["lang"] or "ru"
+    if IS_FEMALE:
+        confirmed = False   # у сестёр N-1 нет - общее правило (см. handle_juz_answer)
     if confirmed:
         target_type = "N-1"
         target = get_group_by_title(_PREP_JUZ_KNOWN_TARGET_TITLE)
