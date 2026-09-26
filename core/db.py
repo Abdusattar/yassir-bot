@@ -515,6 +515,11 @@ def _run_migrations(c):
         # (/bonus, отметка голосовой, "у" и т.д.) - те по-прежнему только
         # через /admin реплаем в конкретной группе.
         c.execute("ALTER TABLE users ADD COLUMN is_observer INTEGER DEFAULT 0")
+    if "is_hafiz" not in ucols:
+        # Хафиз (26.09.2026, решение пользователя): заучивание не обязательно,
+        # повторение не «с начала Аль-Бакары». Свойство человека, не группы -
+        # переезжает с ним. Ставит пользователь: scripts/hafiz.py.
+        c.execute("ALTER TABLE users ADD COLUMN is_hafiz INTEGER DEFAULT 0")
 
     fcols = [r["name"] for r in c.execute("PRAGMA table_info(feed_messages)").fetchall()]
     for col in ("notice", "notice_link", "notice_title", "notice_until"):
@@ -2928,13 +2933,63 @@ def get_miss_count_last_30_days(uid, group_id=None):
     return misses
 
 
+# Что хафизу не обязательно (26.09.2026): заучивание. Сдаст - балл засчитан,
+# не сдаст - день всё равно полный.
+HAFIZ_FREE_TASKS = ("m",)
+
+
+def hafiz_ids(group_id=None):
+    """id хафизов - всех или только активных студентов группы."""
+    with db() as c:
+        if group_id is None:
+            rows = c.execute("SELECT id FROM users WHERE is_hafiz=1").fetchall()
+        else:
+            rows = c.execute(
+                "SELECT u.id FROM users u JOIN user_groups ug ON ug.user_id=u.id"
+                " WHERE u.is_hafiz=1 AND ug.group_id=? AND ug.role='student' AND ug.active=1",
+                (group_id,)).fetchall()
+    return {r["id"] for r in rows}
+
+
+def is_hafiz(uid):
+    with db() as c:
+        row = c.execute("SELECT is_hafiz FROM users WHERE id=?", (uid,)).fetchone()
+    return bool(row and row["is_hafiz"])
+
+
+def is_hafiz_phone(phone):
+    """То же по Telegram id (users.phone) - для API приложения."""
+    with db() as c:
+        row = c.execute("SELECT MAX(is_hafiz) AS h FROM users WHERE phone=?", (str(phone),)).fetchone()
+    return bool(row and row["h"])
+
+
+def set_hafiz(uid, on=True):
+    with db() as c:
+        c.execute("UPDATE users SET is_hafiz=? WHERE id=?", (1 if on else 0, uid))
+
+
+def student_tasks(uid, group_tasks, hafiz=None):
+    """Обязательные задания этого студента: задания группы, у хафиза - без
+    HAFIZ_FREE_TASKS. hafiz - готовый ответ (множество id или bool), чтобы
+    не ходить в базу на каждого студента в цикле."""
+    if hafiz is None:
+        hafiz = is_hafiz(uid)
+    elif isinstance(hafiz, (set, frozenset)):
+        hafiz = uid in hafiz
+    if not hafiz:
+        return list(group_tasks)
+    return [k for k in group_tasks if k not in HAFIZ_FREE_TASKS]
+
+
 def _full_task_dates(uid, group_id, group_tasks, limit=400, since_date=None):
     """Даты, когда студент сдал ВСЕ обязательные задания группы (узр не
     защищает) - для строгого стрика (07.08.2026, решение пользователя:
     "страйк есть страйк, обнуляется если не сдал все 3, даже если узр").
     Отдельно от _active_dates - та по-прежнему "хоть одно событие" для
     других метрик (пропуски, get_days_since_last_report и т.д.), их
-    трогать не нужно."""
+    трогать не нужно. У хафиза - без заучивания (student_tasks)."""
+    group_tasks = student_tasks(uid, group_tasks)
     if not group_tasks:
         return set()
     placeholders = ",".join("?" * len(group_tasks))
@@ -3025,6 +3080,14 @@ def get_group_streaks(group_id, group_tasks, for_date=None):
             result[sid] = ends[anchor.isoformat()]
         elif for_date is None and yesterday.isoformat() in ends:
             result[sid] = ends[yesterday.isoformat()]
+    # У хафиза полный день - без заучивания; запрос выше меряет всех по всем
+    # заданиям группы, поэтому хафизов (их единицы) пересчитываем по одному.
+    for sid in hafiz_ids(group_id):
+        streak = get_streak_days(sid, group_id, group_tasks, for_date)
+        if streak:
+            result[sid] = streak
+        else:
+            result.pop(sid, None)
     return result
 
 
@@ -3088,6 +3151,7 @@ def resolve_pending_juz_answer(uid, group_id, date, subcategory, note):
 def get_missing_students(group_id, group_tasks, date=None):
     students = get_students(group_id)
     check_date = date or get_date()
+    hafiz = hafiz_ids(group_id)
     result = []
     with db() as c:
         for s in students:
@@ -3104,7 +3168,7 @@ def get_missing_students(group_id, group_tasks, date=None):
                 (s["id"], group_id, check_date)
             ).fetchall()
             done = {r["subcategory"] for r in task_rows}
-            missing = [k for k in group_tasks if k not in done]
+            missing = [k for k in student_tasks(s["id"], group_tasks, hafiz) if k not in done]
             if missing:
                 result.append((s, missing))
     return result
@@ -3209,7 +3273,10 @@ def get_today_avg(group_id, for_date=None):
 
 
 def get_daily_task_counts(group_id, group_tasks, for_date):
-    """Возвращает [{id, name, done, excused}] — сколько заданий каждый студент сдал в указанную дату."""
+    """Возвращает [{id, name, done, excused, full}] — сколько заданий каждый
+    студент сдал в указанную дату; full - сданы все ЕГО обязательные (у
+    хафиза без заучивания, см. student_tasks)."""
+    hafiz = hafiz_ids(group_id)
     with db() as c:
         students = c.execute("""
             SELECT u.id, u.name FROM users u
@@ -3232,7 +3299,9 @@ def get_daily_task_counts(group_id, group_tasks, for_date):
     return [
         {"id": s["id"], "name": s["name"],
          "done": sum(1 for k in group_tasks if k in task_map.get(s["id"], set())),
-         "excused": s["id"] in excuse_ids}
+         "excused": s["id"] in excuse_ids,
+         "full": bool(group_tasks) and all(
+             k in task_map.get(s["id"], set()) for k in student_tasks(s["id"], group_tasks, hafiz))}
         for s in students
     ]
 
@@ -3957,11 +4026,29 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None, submi
         key=lambda s: (-sum(1 for k in group_tasks if k in task_map.get(s["id"], set())), s["name"])
     )
 
+    hafiz = hafiz_ids(group_id)
     done_count = 0
     for s in students_sorted:
         sid = s["id"]
         done = task_map.get(sid, set())
         cnt = sum(1 for k in group_tasks if k in done)
+        if sid in hafiz:
+            # Хафиз: заучивание не обязательно - «➖» вместо «❌», счёт по
+            # его заданиям.
+            need = student_tasks(sid, group_tasks, True)
+            got = sum(1 for k in need if k in done)
+            if sid in excuse_ids and cnt == 0:
+                if not submitted_only:
+                    lines.append(s["name"] + ": ⛔ узр")
+                continue
+            if cnt > 0:
+                done_count += 1
+            elif submitted_only:
+                continue
+            marks = "".join("✅" if k in done else ("➖" if k not in need else "❌") for k in group_tasks)
+            celebrate = " 🎉" if got == len(need) else ""
+            lines.append(s["name"] + ": " + marks + " " + str(got) + "/" + str(len(need)) + celebrate)
+            continue
         if cnt > 0:
             done_count += 1
         if sid in excuse_ids and cnt == 0:

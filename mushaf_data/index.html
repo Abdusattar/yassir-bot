@@ -4622,6 +4622,7 @@
       mywords_old: 'Забытые',
       rank_among: 'Место среди всех тренирующихся: %X%',
       revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
+      revision_ask_hafiz: 'Вы сделали сегодняшнее повторение?',
       revision_done: '✅ Повторение засчитано',
       revision_already: 'Уже засчитано сегодня',
       revision_rec_place: 'Повторение записью',
@@ -5533,6 +5534,8 @@
   // Повторение только записью (16.09.2026, несовершеннолетние) - едет тем
   // же heartbeat, что и роль устаза.
   var meRevisionRecord = false;
+  // Хафиз (26.09.2026): повторяет свою норму, а не от начала Аль-Бакары.
+  var meHafiz = false;
   var ONLINE_BADGE_MIN = 3; // меньше - не показываем совсем (решение
   // пользователя 30.08.2026 - 1-2 "онлайн" выглядит бедно, не украшает)
   function phoneTz() {
@@ -5567,6 +5570,7 @@
       var count = document.getElementById('dash-ustaz-count');
       var isUstaz = !!(res.data && res.data.is_ustaz);
       meRevisionRecord = !!(res.data && res.data.revision_record);
+      meHafiz = !!(res.data && res.data.hafiz);
       // Раздел «Проверка сдач» рисуется по этому же признаку. Если человек
       // стоял в оглавлении, когда ответ пришёл, - перерисуем, иначе раздел
       // появился бы только со второго захода.
@@ -9504,7 +9508,7 @@
     // Несовершеннолетним (16.09.2026) - не вопрос, а панель записи: читает
     // повторение под запись, запись уходит устазу, зачёт ставит сервер.
     if (meRevisionRecord) { revisionRecOpen(); return; }
-    showConfirm(T('revision_ask'), function () {
+    showConfirm(T(meHafiz ? 'revision_ask_hafiz' : 'revision_ask'), function () {
       apiCall('/revision', { method: 'POST' }).then(function (res) {
         if (res.status === 401) return;
         if (res.data && res.data.error === 'record_required') { meRevisionRecord = true; revisionRecOpen(); return; }

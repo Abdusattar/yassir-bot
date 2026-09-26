@@ -6,7 +6,7 @@ import pytz
 
 from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK, IS_FEMALE, PROFILE
 from core.db import (
-    get_all_groups, get_group_tasks, get_group_lang,
+    get_all_groups, get_group_tasks, get_group_lang, hafiz_ids, student_tasks,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner, get_period_winner_range,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
@@ -160,7 +160,7 @@ async def morning_tadabbur_report():
             submitted = [c for c in counts if c["done"] > 0]
             uzr_names.extend(c["name"] + " (" + title + ")" for c in counts if c["excused"])
 
-            full = [c for c in submitted if c["done"] == total_tasks]
+            full = [c for c in submitted if c["full"]]   # у хафиза - без заучивания
 
             if not submitted:
                 if any(not c["excused"] for c in counts):
@@ -739,19 +739,20 @@ def _full_period_students(period_start, period_end):
             continue
         with db() as c:
             rows = c.execute(
-                "SELECT student_id, date, COUNT(DISTINCT subcategory) as cnt"
-                " FROM score_events WHERE group_id=? AND category='task' AND date>=? AND date<=?"
-                " GROUP BY student_id, date",
+                "SELECT student_id, date, subcategory"
+                " FROM score_events WHERE group_id=? AND category='task' AND date>=? AND date<=?",
                 (group["id"], days[0], days[-1])
             ).fetchall()
         per_student = {}
         for r in rows:
-            per_student.setdefault(r["student_id"], {})[r["date"]] = r["cnt"]
+            per_student.setdefault(r["student_id"], {}).setdefault(r["date"], set()).add(r["subcategory"])
+        hafiz = hafiz_ids(group["id"])
         for s in get_students(group["id"]):
             if my_id and s["phone"] == my_id:
                 continue
-            day_counts = per_student.get(s["id"], {})
-            if all(day_counts.get(d, 0) >= total_tasks for d in days):
+            day_sets = per_student.get(s["id"], {})
+            need = student_tasks(s["id"], group_tasks, hafiz)   # у хафиза - без заучивания
+            if all(set(need) <= day_sets.get(d, set()) for d in days):
                 names.append((s["name"], group["title"] or str(group["chat_id"])))
     return names
 
@@ -1735,7 +1736,7 @@ async def weekly_report():
                 placeholders = ",".join("?" * len(group_tasks))
                 with db() as c:
                     rows = c.execute(
-                        "SELECT student_id, date, COUNT(DISTINCT subcategory) as n"
+                        "SELECT student_id, date, GROUP_CONCAT(DISTINCT subcategory) as subs"
                         " FROM score_events"
                         " WHERE group_id=? AND category='task' AND subcategory IN (%s)"
                         " AND date>=? AND date<=?"
@@ -1743,13 +1744,17 @@ async def weekly_report():
                         (group_id, *group_tasks, start, end)
                     ).fetchall()
                 roster = {s["id"]: s for s in get_students(group_id)}
+                hafiz = hafiz_ids(group_id)
                 full_dates_by_student = {}
                 partial_counts = {}
                 for r in rows:
                     s = roster.get(r["student_id"])
                     if not s:
                         continue
-                    if r["n"] == n_tasks:
+                    subs = set((r["subs"] or "").split(","))
+                    need = set(student_tasks(r["student_id"], group_tasks, hafiz))
+                    r = {"n": len(subs), "student_id": r["student_id"], "date": r["date"]}
+                    if need <= subs:   # у хафиза - без заучивания
                         full_dates_by_student.setdefault(r["student_id"], set()).add(r["date"])
                     elif 0 < r["n"] < n_tasks:
                         partial_counts[r["student_id"]] = partial_counts.get(r["student_id"], 0) + 1

@@ -42,7 +42,7 @@ from core.db import (
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
     is_retake_answered, get_group_tasks, get_today_report, is_app_member, save_report,
     other_bot_member,
-    get_profile, update_profile, revision_record_required, get_revision_recordings,
+    get_profile, update_profile, revision_record_required, get_revision_recordings, is_hafiz_phone, student_tasks,
     get_revision_recording, get_rejected_revisions,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
     remove_lesson_attendance, set_user_tz,
@@ -1091,6 +1091,8 @@ async def handle_heartbeat(request, user_id):
         # Повторение только записью (16.09.2026, несовершеннолетние): по нему
         # кнопка 🔁 открывает панель записи вместо вопроса «Да/Нет».
         "revision_record": revision_record_required(user_id),
+        # Хафиз (26.09.2026): вопрос на 🔁 без «с начала Аль-Бакары».
+        "hafiz": is_hafiz_phone(user_id),
         # Факты для дверей дашборда (07.09.2026): раздел должен сам говорить,
         # что там внутри — на какой странице стоишь, сколько слов сделал,
         # сколько сдач ждёт устаза. Едут этим же ответом, а не тремя новыми
@@ -1644,7 +1646,9 @@ def _my_day(user):
     if not group:
         return None
     done = get_today_report(user["id"], group["id"]) or {}
-    tasks = [{"k": k, "done": bool(done.get(k))} for k in get_group_tasks(group)]
+    # У хафиза заучивание не обязательно (26.09.2026) - в списке дня его нет.
+    tasks = [{"k": k, "done": bool(done.get(k))}
+             for k in student_tasks(user["id"], get_group_tasks(group))]
     return {
         "tasks": tasks,
         "done": sum(1 for t in tasks if t["done"]),
