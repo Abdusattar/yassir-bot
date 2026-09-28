@@ -82,3 +82,16 @@ def _no_pacing(monkeypatch):
     десять секунд на каждого."""
     import core.tg as tg_module
     monkeypatch.setattr(tg_module, "PACING", False)
+
+
+@pytest.fixture(autouse=True)
+def _audio_cache_in_tmp(monkeypatch, tmp_path):
+    """Недельные копии записей (core/audio_compat.py) в тестах - во временной
+    папке: сдачи из тестов не должны ложиться в настоящий ~/.cache."""
+    import core.audio_compat as ac
+    import core.mufradat_bot as mb
+    monkeypatch.setattr(ac, "CACHE_DIR", str(tmp_path / "audio-cache"))
+    # Фоновая копия в тестах сдачи не нужна (её проверяет test_audio_compat
+    # напрямую), а на Windows отмена ffmpeg в конце asyncio.run() вешает
+    # прогон навсегда - на сервере, где цикл живёт постоянно, этого нет.
+    monkeypatch.setattr(mb, "keep_copy", lambda *a, **k: None)

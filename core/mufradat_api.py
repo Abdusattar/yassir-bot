@@ -31,7 +31,7 @@ from aiohttp import web
 
 from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
 from core.app_trail import add_trail, ua_short
-from core.audio_compat import needs_mp3, cached_mp3, to_mp3
+from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, in_night_tail, get_all_groups,
@@ -2007,7 +2007,13 @@ async def _telegram_audio_response(file_id, request=None):
     почему через нас, а не ссылкой.
 
     С request - iPhone ниже iOS 18.4 (или ?fmt=mp3) получает mp3 вместо
-    ogg: см. core/audio_compat.py (28.09.2026, устаз Зейнеб)."""
+    ogg: см. core/audio_compat.py (28.09.2026, устаз Зейнеб).
+
+    Сначала - недельная копия m4a: её играет любой телефон, и в Telegram
+    идти не нужно."""
+    copy = local_copy(file_id)
+    if copy:
+        return web.Response(body=copy, content_type="audio/mp4")
     want_mp3 = request is not None and needs_mp3(
         request.headers.get("User-Agent"), request.query.get("fmt"))
     if want_mp3:

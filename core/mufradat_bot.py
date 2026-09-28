@@ -12,6 +12,7 @@ core/mufradat.py, HTTP-обвязка - core/mufradat_api.py).
 import asyncio
 import logging
 
+from core.audio_compat import keep_copy
 from core.content import SHORT_TASKS
 from core.db import (
     find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
@@ -187,6 +188,8 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
     if not (res and res.get("ok")):
         return {"ok": False, "error": "send_failed"}
     voice_obj = res["result"].get("voice") or {}
+    # Недельная копия, которую играют все телефоны (core/audio_compat.py).
+    keep_copy(voice_obj.get("file_id"), parts, ogg)
     duration = voice_obj.get("duration") or sec or None
     rec_id = save_revision_recording(
         user["id"], group["id"], group["chat_id"], res["result"]["message_id"], get_date(),
@@ -626,6 +629,7 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     voice_msg_id = res["result"]["message_id"]
     voice_obj = res["result"].get("voice") or {}
     file_id = voice_obj.get("file_id")
+    keep_copy(file_id, parts, ogg)
     # Длину записи Telegram считает сам при приёме файла (14.09.2026), но для
     # части браузерных файлов отдаёт 0 (16.09.2026: 36 нулей из 475 сдач за
     # три дня, все - из приложения). Приложение свою длину знает точно
@@ -731,6 +735,7 @@ async def send_ustaz_comment(ustaz_id, submission_id, audio_bytes):
     if not (res and res.get("ok")):
         return {"ok": False, "error": "send_failed"}
     file_id = (res["result"].get("voice") or {}).get("file_id")
+    keep_copy(file_id, [audio_bytes], ogg)
     # Пишем разбор в САМУ сдачу (по её message_id), а не в новое сообщение -
     # студент открывает сдачу и слышит замечание рядом с ней.
     save_submission_review(sub["chat_id"], sub["message_id"], "voice",
