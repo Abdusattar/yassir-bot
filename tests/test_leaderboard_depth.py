@@ -132,7 +132,7 @@ def _api_board(monkeypatch, me_id, full, public):
     return asyncio.run(run())
 
 
-def test_api_me_row_below_top_seven(monkeypatch):
+def test_api_me_row_below_top_seven(test_db, monkeypatch):
     """9-е место: в списке приложение рисует семёрку, себя - отдельной строкой."""
     full = [(str(i), _score(20)) for i in range(1, 11)]
     d = _api_board(monkeypatch, "9", full, full)
@@ -142,7 +142,7 @@ def test_api_me_row_below_top_seven(monkeypatch):
     assert "last_date" not in d["divisions"][0]["entries"][0]   # служебное не уходит
 
 
-def test_api_me_hidden_when_idle(monkeypatch):
+def test_api_me_hidden_when_idle(test_db, monkeypatch):
     full = [("1", _score(20)), ("2", _score(20, last="2026-09-09"))]
     d = _api_board(monkeypatch, "2", full, full[:1])
     assert d["me"]["hidden"] is True and d["me"]["idle_days"] == 19
