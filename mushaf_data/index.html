@@ -1178,6 +1178,9 @@
     white-space: nowrap;
   }
   #word-popup.visible { opacity: 1; }
+  /* Слово (или пара слов с одним переводом), на которое нажали, - пока
+     виден перевод (28.09.2026). */
+  #ayah-text .w-hl { background: var(--accent-soft); border-radius: 6px; box-shadow: 0 0 0 2px var(--accent-soft); }
 
   /* Подтверждение (30.08.2026) - общая модалка "да/отмена", сейчас только
      для 🔁 "повторение", но написана обобщённо на случай будущих
@@ -2047,13 +2050,15 @@
     width: 100%; max-width: 320px;
   }
   /* «Дальше» в нахве после верного ответа: полоска показывает, сколько
-     осталось до автоперелистывания (3 с, как NAHW_AUTO_MS). */
+     осталось до автоперелистывания. Длительность - от длины объяснения
+     (--auto-ms, 28.09.2026: за 3 с не успевали дочитать). */
   .tj-go.nh-auto { position: relative; overflow: hidden; }
   .tj-go.nh-auto::after {
     content: ''; position: absolute; left: 0; bottom: 0; height: 4px; width: 100%;
     background: rgba(255,255,255,.65); transform-origin: left center;
-    animation: nh-auto-run 3s linear forwards;
+    animation: nh-auto-run var(--auto-ms, 3s) linear forwards;
   }
+  #nh-after .nh-fb { cursor: pointer; }
   @keyframes nh-auto-run { from { transform: scaleX(0); } to { transform: scaleX(1); } }
   /* Хадис: верный ответ листается сам, черта бежит по низу разбора. */
   .nh-fb.hd-fb-auto { position: relative; overflow: hidden; cursor: pointer; flex: 0 0 auto; }
@@ -6861,6 +6866,7 @@
     // (quran_transcript), не наша русская транслитерация из SURAH_NAMES.
     var html = '';
     var textLineNo = 0;
+    var pairs = mushafPairs(data.lines || []);
     (data.lines || []).forEach(function (line) {
       if (line.type === 'header') {
         html += '<div class="surah-banner">سُورَةُ ' + line.surah_name_ar + '</div>';
@@ -6879,9 +6885,14 @@
             // data-tr (29.08.2026, для "Мои слова" - двойной тап нужно
             // от чего-то отличать от одиночного, а слово без перевода и
             // так не кликабельно, см. showWordPopup/addToMyWords ниже).
-            var tr = t.translation ? ' data-tr="' + escapeAttr(t.translation) + '"' +
+            // Второе слово пары (28.09.2026) получает перевод головы и
+            // data-head - см. mushafPairs.
+            var wkey = t.surah + ':' + t.ayah + ':' + t.position;
+            var head = !t.translation && pairs[wkey];
+            var tr = (t.translation || head) ? ' data-tr="' + escapeAttr(t.translation || head.translation) + '"' +
               ' data-surah="' + t.surah + '" data-ayah="' + t.ayah + '" data-pos="' + t.position + '"' +
-              ' data-arabic="' + escapeAttr(t.html) + '"' : '';
+              ' data-arabic="' + escapeAttr(t.html) + '" data-w="' + wkey + '"' +
+              (head ? ' data-head="' + head.surah + ':' + head.ayah + ':' + head.position + '"' : '') : '';
             if (t.code_v4) {
               html += '<span class="' + v4Cls(t) + '"' + tr + '>' + t.code_v4 + '</span>';
             } else {
@@ -6992,6 +7003,47 @@
       wordPopup.classList.remove('visible');
     }, 1800);
   }
+  /* Пары слов с одним переводом (28.09.2026, Имран устаз: «أَنصَحَ - тап,
+     перевод не выходит»). Источник переводит устойчивое сочетание целиком и
+     кладёт перевод на первое слово («أَنْ» - «посоветовать»), следующее
+     остаётся пустым (раньше там была «*»). Пустое слово сразу за головой в
+     том же аяте - её хвост: тап по любому из них подсвечивает всю пару и
+     показывает общий перевод, двойной тап кладёт в «Мои слова» голову
+     (сервер сам приклеит арабский хвоста - _merge_tail_arabic). Хвост на
+     следующем листе остаётся без перевода, как раньше. */
+  function mushafPairs(lines) {
+    var tails = {}, head = null, lastPos = null;
+    lines.forEach(function (line) {
+      (line.tokens || []).forEach(function (t) {
+        if (t.type !== 'word') return;
+        if (t.translation) {
+          head = t;
+        } else if (head && head.surah === t.surah && head.ayah === t.ayah && lastPos !== null &&
+                   t.position === lastPos + 1) {
+          tails[t.surah + ':' + t.ayah + ':' + t.position] = head;
+        } else {
+          head = null;
+        }
+        lastPos = t.position;
+      });
+    });
+    return tails;
+  }
+
+  var wordHlTimer = null;
+  function highlightWordGroup(el) {
+    var box = document.getElementById('ayah-text');
+    Array.prototype.forEach.call(box.querySelectorAll('.w-hl'), function (x) { x.classList.remove('w-hl'); });
+    var key = el.getAttribute('data-head') || el.getAttribute('data-w');
+    if (!key) return;
+    var group = box.querySelectorAll('[data-w="' + key + '"], [data-head="' + key + '"]');
+    Array.prototype.forEach.call(group, function (x) { x.classList.add('w-hl'); });
+    clearTimeout(wordHlTimer);
+    wordHlTimer = setTimeout(function () {
+      Array.prototype.forEach.call(group, function (x) { x.classList.remove('w-hl'); });
+    }, 1800);
+  }
+
   function showWordPopup(el) {
     // В режиме проверки тап по слову - это ПОМЕТКА ОШИБКИ, а не перевод:
     // устаз здесь не читает, а отмечает (04.09.2026).
@@ -7007,7 +7059,10 @@
       return;
     }
     var text = el.getAttribute('data-tr');
-    if (text) showPopupMessage(el, text);
+    if (text) {
+      showPopupMessage(el, text);
+      if (el.closest('#ayah-text')) highlightWordGroup(el);
+    }
   }
 
   // Общая модалка "да/отмена" (30.08.2026, сейчас только для 🔁
@@ -7044,6 +7099,26 @@
   var DOUBLE_TAP_WINDOW_MS = 300;
   var wordTapTimer = null, wordTapTarget = null;
   function addToMyWords(el) {
+    // Хвост пары - в «Мои слова» идёт её голова (своего перевода у хвоста
+    // нет, запись по нему тренажёр не показал бы никогда).
+    var headKey = el.getAttribute('data-head');
+    if (headKey) {
+      var headEl = document.querySelector('#ayah-text [data-w="' + headKey + '"]');
+      if (!headEl) return;
+      var shownOn = el;
+      el = headEl;
+      var surahH = el.getAttribute('data-surah');
+      apiCall('/words/add', { method: 'POST', body: {
+        surah: parseInt(surahH, 10),
+        ayah: parseInt(el.getAttribute('data-ayah'), 10),
+        position: parseInt(el.getAttribute('data-pos'), 10),
+        arabic: el.getAttribute('data-arabic') || '',
+        translation: el.getAttribute('data-tr') || '',
+      } }).then(function (res) {
+        if (res.status !== 401) showPopupMessage(shownOn, T('added_mywords'));
+      });
+      return;
+    }
     var surah = el.getAttribute('data-surah');
     if (!surah) return;
     apiCall('/words/add', { method: 'POST', body: {
@@ -12771,6 +12846,15 @@
   }
 
   var NAHW_AUTO_MS = 3000, nahwAutoTimer = null;
+  // Сколько держать верный ответ (28.09.2026): 3 с хватало на «Верно», но не
+  // на разбор слова и перевод - время от длины текста, от 3 до 8 с.
+  var NAHW_AUTO_MAX_MS = 8000, NAHW_AUTO_TAIL_MS = 250;
+  function nahwAutoMs(fb) {
+    var text = [fb.explain, fb.meaning, fb.word].concat((fb.breakdown || []).map(function (b) {
+      return (b.t || '') + ' ' + (b.label || '');
+    })).join(' ');
+    return Math.min(NAHW_AUTO_MAX_MS, Math.max(NAHW_AUTO_MS, 2000 + 45 * text.length));
+  }
 
   function renderNahw(d) {
     clearTimeout(nahwAutoTimer);
@@ -12854,8 +12938,10 @@
           // нажатий. Ждём «Дальше» после ошибки и при первой встрече с типом
           // случая: там объяснение и есть урок.
           var auto = fb.correct && !fb.first_meet;
+          var autoMs = auto ? nahwAutoMs(fb) : 0;
           document.getElementById('nh-after').innerHTML = nahwFeedback(fb) +
-            '<button class="tj-go' + (auto ? ' nh-auto' : '') + '" id="nh-next">' + T('nahw_next') + '</button>';
+            '<button class="tj-go' + (auto ? ' nh-auto' : '') + '" id="nh-next"' +
+            (auto ? ' style="--auto-ms:' + autoMs + 'ms"' : '') + '>' + T('nahw_next') + '</button>';
           var gone = false;
           var go = function () {
             if (gone) return;
@@ -12870,7 +12956,14 @@
               // Ушёл с экрана или уже другая карточка - не трогаем.
               if (document.getElementById('nahw').style.display === 'none' || nahwState !== d) return;
               go();
-            }, NAHW_AUTO_MS);
+            }, autoMs + NAHW_AUTO_TAIL_MS);
+            // Тап по объяснению - «дай дочитать»: полоска гаснет, карточка
+            // ждёт «Дальше» (28.09.2026).
+            document.querySelector('#nh-after .nh-fb').addEventListener('click', function () {
+              clearTimeout(nahwAutoTimer);
+              var nb = document.getElementById('nh-next');
+              if (nb) { nb.classList.remove('nh-auto'); nb.style.removeProperty('--auto-ms'); }
+            });
           }
         });
       });
