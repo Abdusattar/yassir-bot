@@ -5180,16 +5180,14 @@
     }
     feedAudio.pause();
     btn.disabled = true;
-    fetch(apiBase() + '/feed/media?id=' + id, { headers: authHeaders() })
-      .then(function (r) {
-        if (!r.ok) throw new Error('media');
-        return r.blob();
-      }).then(function (blob) {
+    var path = '/feed/media?id=' + id;
+    audioFetch(path)
+      .then(function (blob) {
         feedAudio.src = URL.createObjectURL(blob);
         feedPlayingId = id;
         btn.disabled = false;
         btn.textContent = '⏸ голосовое';
-        return feedAudio.play();
+        return audioPlay(feedAudio, audioReload(feedAudio, path));
       }).catch(function () {
         btn.disabled = false;
         btn.textContent = 'не открылось';
@@ -9881,6 +9879,45 @@
     return '/api/muf/' + profile;
   }
 
+  /* Звук старым iPhone (28.09.2026). Голосовые у нас ogg/opus, Safari играет
+     их только с iOS 18.4. Сервер сам отдаёт mp3 по версии iOS
+     (core/audio_compat.py) - это страховка на случай, когда версия не
+     угадалась: телефон ответил на play() NotSupportedError - один раз
+     берём тот же звук в mp3 и запоминаем, что этому телефону нужен mp3.
+     Другие отказы (NotAllowedError - запрет автозапуска) флаг не трогают. */
+  var AUDIO_MP3_KEY = 'yassir_audio_mp3';
+  var audioMp3 = false;
+  try { audioMp3 = localStorage.getItem(AUDIO_MP3_KEY) === '1'; } catch (e) {}
+
+  function audioFetch(path) {
+    return fetch(apiBase() + path + (audioMp3 ? '&fmt=mp3' : ''), {
+      headers: authHeaders()
+    }).then(function (r) {
+      if (!r.ok) throw new Error('audio');
+      return r.blob();
+    });
+  }
+
+  // play() с одной попыткой в mp3; reload заново кладёт звук в el
+  // (там, где blob держится на карточке, - сбросив его).
+  function audioPlay(el, reload) {
+    return el.play().catch(function (e) {
+      if (!e || e.name !== 'NotSupportedError' || audioMp3) throw e;
+      audioMp3 = true;
+      try { localStorage.setItem(AUDIO_MP3_KEY, '1'); } catch (e2) {}
+      return reload().then(function () { return el.play(); });
+    });
+  }
+
+  function audioReload(el, path) {
+    return function () {
+      return audioFetch(path).then(function (blob) {
+        if (el.src && el.src.indexOf('blob:') === 0) URL.revokeObjectURL(el.src);
+        el.src = URL.createObjectURL(blob);
+      });
+    };
+  }
+
   function apiCall(path, opts) {
     opts = opts || {};
     var headers = authHeaders();
@@ -10034,17 +10071,13 @@
     subsStopAudio();
     var label = btn.textContent;
     btn.disabled = true;
-    fetch(apiBase() + '/submissions/audio?id=' + id + '&kind=' + kind, {
-      headers: authHeaders()
-    }).then(function (r) {
-      if (!r.ok) throw new Error('audio');
-      return r.blob();
-    }).then(function (blob) {
+    var path = '/submissions/audio?id=' + id + '&kind=' + kind;
+    audioFetch(path).then(function (blob) {
       subsAudio.src = URL.createObjectURL(blob);
       subsPlayingKey = key;
       btn.disabled = false;
       subsRenderButtons();
-      return subsAudio.play();
+      return audioPlay(subsAudio, audioReload(subsAudio, path));
     }).catch(function () {
       btn.disabled = false;
       btn.textContent = T('subs_audio_failed');
@@ -10284,12 +10317,7 @@
   function lookLoadAudio() {
     if (look.url) return Promise.resolve();
     if (!look.item || !look.item.has_review_audio) return Promise.reject();
-    return fetch(apiBase() + '/submissions/audio?id=' + look.item.id + '&kind=review', {
-      headers: authHeaders()
-    }).then(function (r) {
-      if (!r.ok) throw new Error('audio');
-      return r.blob();
-    }).then(function (blob) {
+    return audioFetch('/submissions/audio?id=' + look.item.id + '&kind=review').then(function (blob) {
       look.url = URL.createObjectURL(blob);
       lookAudio.src = look.url;
     });
@@ -10300,7 +10328,10 @@
     btn.disabled = true;
     lookLoadAudio().then(function () {
       btn.disabled = false;
-      return lookAudio.play();
+      return audioPlay(lookAudio, function () {
+        if (look.url) { URL.revokeObjectURL(look.url); look.url = null; }
+        return lookLoadAudio();
+      });
     }).catch(function () {
       btn.disabled = false;
       document.getElementById('look-dur').textContent = T('look_failed');
@@ -11320,12 +11351,8 @@
     if (was === kind) return;             // повторный тап по той же кнопке - стоп
     var btn = document.getElementById(kind === 'own' ? 'review-play' : 'review-mine');
     btn.disabled = true;
-    fetch(apiBase() + '/ustaz/audio?id=' + review.sub.id + '&kind=' + kind, {
-      headers: authHeaders()
-    }).then(function (r) {
-      if (!r.ok) throw new Error('audio');
-      return r.blob();
-    }).then(function (blob) {
+    var path = '/ustaz/audio?id=' + review.sub.id + '&kind=' + kind;
+    audioFetch(path).then(function (blob) {
       reviewAudio.src = URL.createObjectURL(blob);
       reviewPlaying = kind;
       btn.disabled = false;
@@ -11333,7 +11360,7 @@
       var back = document.getElementById('review-back10');
       back.textContent = T('review_back10');
       back.style.display = '';
-      return reviewAudio.play();
+      return audioPlay(reviewAudio, audioReload(reviewAudio, path));
     }).catch(function () {
       btn.disabled = false;
       btn.textContent = T('review_failed');
@@ -11793,8 +11820,7 @@
     revCardEl = card;
     var pp = card.querySelector('.pp');
     if (pp) pp.textContent = '…';
-    return fetch(apiBase() + '/ustaz/revision_audio?id=' + id, { headers: authHeaders() })
-      .then(function (r) { if (!r.ok) throw new Error('audio'); return r.blob(); })
+    return audioFetch('/ustaz/revision_audio?id=' + id)
       .then(function (blob) {
         revAudio.src = URL.createObjectURL(blob);
         revLoadedId = id;
@@ -11808,7 +11834,12 @@
       revCardEl = card;
       var pp = card.querySelector('.pp');
       if (pp) pp.textContent = '❚❚';
-      return revAudio.play();
+      return audioPlay(revAudio, function () {
+        revLoadedId = null;
+        return ustazRevLoad(card, id).then(function () {
+          if (pp) pp.textContent = '❚❚';
+        });
+      });
     }).catch(function () { ustazRevStop(); });
   }
 

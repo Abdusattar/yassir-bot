@@ -31,6 +31,7 @@ from aiohttp import web
 
 from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
 from core.app_trail import add_trail, ua_short
+from core.audio_compat import needs_mp3, cached_mp3, to_mp3
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, in_night_tail, get_all_groups,
@@ -1623,9 +1624,15 @@ async def handle_feed_media(request, user_id):
         feed_id = int(request.query.get("id", ""))
     except ValueError:
         return web.json_response({"error": "bad_id"}, status=400)
-    file_id, _kind = get_media(user_id, feed_id)
+    file_id, kind = get_media(user_id, feed_id)
     if not file_id:
         return web.json_response({"error": "not_found"}, status=404)
+    # Голосовое старому iPhone - через mp3 (core/audio_compat.py). Решаем по
+    # виду записи, не по расширению: у части голосовых Telegram отдаёт путь
+    # без расширения (voice/file_3161), картинки не трогаем.
+    if kind == "voice" and needs_mp3(request.headers.get("User-Agent"),
+                                     request.query.get("fmt")):
+        return await _telegram_audio_response(file_id, request)
     return await _telegram_file_response(file_id)
 
 
@@ -1995,9 +2002,18 @@ async def _telegram_file_response(file_id, content_type=None):
     return web.Response(body=body, content_type=content_type)
 
 
-async def _telegram_audio_response(file_id):
+async def _telegram_audio_response(file_id, request=None):
     """Общая часть отдачи звука из Telegram - см. handle_submission_audio,
-    почему через нас, а не ссылкой."""
+    почему через нас, а не ссылкой.
+
+    С request - iPhone ниже iOS 18.4 (или ?fmt=mp3) получает mp3 вместо
+    ogg: см. core/audio_compat.py (28.09.2026, устаз Зейнеб)."""
+    want_mp3 = request is not None and needs_mp3(
+        request.headers.get("User-Agent"), request.query.get("fmt"))
+    if want_mp3:
+        done = cached_mp3(file_id)
+        if done:
+            return web.Response(body=done, content_type="audio/mpeg")
     async with aiohttp.ClientSession() as session:
         api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
         async with session.get(f"{api}/getFile", params={"file_id": file_id}) as r:
@@ -2015,6 +2031,10 @@ async def _telegram_audio_response(file_id):
             body = await r.read()
     if len(body) > TELEGRAM_FILE_MAX_BYTES:
         return web.json_response({"error": "too_big"}, status=413)
+    if want_mp3:
+        mp3 = await to_mp3(body, file_id)
+        if mp3:
+            return web.Response(body=mp3, content_type="audio/mpeg")
     return web.Response(body=body, content_type="audio/ogg")
 
 
@@ -2062,7 +2082,7 @@ async def handle_ustaz_audio(request, user_id):
     file_id = sub["file_id"] if kind == "own" else sub["review_file_id"]
     if not file_id:
         return web.json_response({"error": "not_found"}, status=404)
-    return await _telegram_audio_response(file_id)
+    return await _telegram_audio_response(file_id, request)
 
 
 @with_auth
@@ -2094,7 +2114,7 @@ async def handle_ustaz_revision_audio(request, user_id):
         return web.json_response({"error": "forbidden"}, status=403)
     if not rec.get("file_id"):
         return web.json_response({"error": "not_found"}, status=404)
-    return await _telegram_audio_response(rec["file_id"])
+    return await _telegram_audio_response(rec["file_id"], request)
 
 
 @with_auth
@@ -2232,7 +2252,7 @@ async def handle_submission_audio(request, user_id):
         return web.json_response({"error": "not_found"}, status=404)
     # Голосовые Telegram - ogg/opus; own-запись студента мы сами перекодируем
     # в тот же формат при сдаче (core/mufradat_bot.py, transcode_to_ogg).
-    return await _telegram_audio_response(file_id)
+    return await _telegram_audio_response(file_id, request)
 
 
 # ── Вход с сайта (10.09.2026) ─────────────────────────────────────────────────
