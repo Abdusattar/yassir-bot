@@ -15,6 +15,7 @@ import logging
 from core.audio_compat import keep_copy
 from core.content import SHORT_TASKS
 from core.db import (
+    hafiz_phones,
     find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
     get_today_report, save_voice_submission, get_open_retakes, get_submission,
     set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
@@ -772,7 +773,8 @@ def _leaderboard_for_this_bot():
     рейтинг не включать, но ему лично рейтинг отправлять... и показывать
     его место" - место среди ВСЕХ тренирующихся этого бота, не только
     группы."""
-    return [(uid, score) for uid, score in get_leaderboard() if find_user_by_phone(uid)]
+    return [(uid, score) for uid, score in get_leaderboard(hafiz=hafiz_phones())
+            if find_user_by_phone(uid)]
 
 
 def _group_leaderboard_for_this_bot():
@@ -781,7 +783,25 @@ def _group_leaderboard_for_this_bot():
     группе (get_learning_group). Студент без группы тренируется наравне
     со всеми (см. _leaderboard_for_this_bot), но сравнивать его с группой
     в общем топе не имеет смысла - решение пользователя 18.08.2026."""
-    return [(uid, score) for uid, score in _leaderboard_for_this_bot() if get_learning_group(uid)]
+    return [(uid, score) for uid, score in _leaderboard_for_this_bot()
+            if get_learning_group(uid) and idle_days(score) <= LEADERBOARD_IDLE_DAYS]
+
+
+# Кто не тренировался дольше - не в общем списке (28.09.2026, решение
+# пользователя): рейтинг про тех, кто занимается сейчас, а не когда-то.
+# Прогресс не трогаем - одна тренировка, и человек снова в списке; себя он
+# видит всегда (handle_leaderboard, поле me).
+LEADERBOARD_IDLE_DAYS = 14
+
+
+def idle_days(score):
+    """Дней без тренировки по last_date (учебный день, Бишкек); нет даты -
+    ни одного зачтённого слова за всё время ведения таблицы - считаем давно."""
+    last = score.get("last_date")
+    if not last:
+        return 10 ** 6
+    from datetime import date
+    return (date.fromisoformat(get_date()) - date.fromisoformat(last)).days
 
 
 # Порог дивизиона - решение пользователя 18.08.2026, четвёртый заход про

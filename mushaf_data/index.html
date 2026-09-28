@@ -3091,6 +3091,17 @@
     border-radius: 10px;
   }
   .trainer-lb-row.you { font-weight: 700; border-color: var(--accent); background: var(--accent-soft); }
+  /* Своя строка под первой семёркой (28.09.2026): между ними «…». */
+  .trainer-lb-gap { align-self: center; color: var(--muted); line-height: 1; }
+  /* Закладка тренажёра разошлась с местом заучивания (28.09.2026). */
+  .trainer-hint {
+    font-size: 12.5px; color: var(--muted); text-align: center; align-self: center;
+    display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; align-items: center;
+  }
+  .trainer-hint button {
+    font-size: 12.5px; padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--accent); background: transparent; color: var(--accent);
+  }
 
   /* ── Экран входа (10.09.2026) ───────────────────────────────────────────
      Виден только когда приложение открыто как САЙТ: внутри Telegram нас
@@ -4621,6 +4632,12 @@
       mywords_new: 'Новые',
       mywords_old: 'Забытые',
       rank_among: 'Место среди всех тренирующихся: %X%',
+      my_result: 'Твой результат: %R%',
+      lb_hidden: 'Тебя пока нет в общем списке: %D% дн. без тренировки. Пройди карточки — и ты снова в рейтинге 🤲',
+      lb_hidden_long: 'Тебя пока нет в общем списке: давно не было тренировки. Пройди карточки — и ты снова в рейтинге 🤲',
+      hint_behind: 'Ты учишь стр. %H%, а слова тренируешь до стр. %B%',
+      hint_ahead: 'В рейтинг идут слова до стр. %H% — там, где ты учишь',
+      btn_to_my_place: 'На моё место',
       revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
       revision_ask_hafiz: 'Вы сделали сегодняшнее повторение?',
       revision_done: '✅ Повторение засчитано',
@@ -13268,6 +13285,7 @@
     html += '<div class="trainer-pagebar"><button id="tr-dec">➖</button>' +
       '<span class="trainer-range">' + T('trainer_range_to', { N: d.bookmark_page }) + '</span>' +
       '<button id="tr-inc">➕</button></div>';
+    html += trainerPlaceHint(d);
     html += '<div class="trainer-actions"><button id="tr-end">' + T('btn_finish') +
       '</button><button id="tr-top">' + T('btn_rating') + '</button></div>';
     body.innerHTML = html;
@@ -13281,7 +13299,38 @@
     document.getElementById('tr-inc').addEventListener('click', function () { stepPage(1); });
     document.getElementById('tr-end').addEventListener('click', endSession);
     document.getElementById('tr-top').addEventListener('click', showLeaderboard);
+    var myPlace = document.getElementById('tr-myplace');
+    if (myPlace) myPlace.addEventListener('click', function () {
+      myPlace.disabled = true;
+      withAuthCheck(apiCall('/page', { method: 'POST', body: { page: d.hifz_page } }), function (data) {
+        trainerState = data; renderTrainer();
+      });
+    });
     trainerLineShow(d);
+  }
+
+  /* Закладка тренажёра и место заучивания (28.09.2026). ➖/➕ остались -
+     тренировать слова наперёд можно, - но в рейтинг идёт меньшее из двух
+     (core/mufradat.py: rating_depth). Отстала закладка - подсказка и кнопка
+     «На моё место»; ушла вперёд - одна строка, без кнопки. */
+  function trainerPlaceHint(d) {
+    var h = d.hifz_page, b = d.bookmark_page;
+    if (!h || !b || h === b) return '';
+    if (b < h) {
+      return '<div class="trainer-hint"><span>' + T('hint_behind', { H: h, B: b }) +
+        '</span><button id="tr-myplace">' + T('btn_to_my_place') + '</button></div>';
+    }
+    return '<div class="trainer-hint"><span>' + T('hint_ahead', { H: h }) + '</span></div>';
+  }
+
+  // Строка рейтинга - одна и та же у лидеров и у себя (28.09.2026).
+  function lbRowText(place, e) {
+    return place + '. ' + e.name + ' (' + e.group + ') — ' +
+      e.accuracy.toFixed(0) + '% (' + e.correct + '/' + e.n + '), ' + T('page_n', { N: e.page });
+  }
+
+  function lbResultText(e) {
+    return e.accuracy.toFixed(0) + '% (' + e.correct + '/' + e.n + '), ' + T('page_n', { N: e.page });
   }
 
   /* Строка мусхафа со словом вопроса. Лист берём тем же page*.json, что
@@ -13393,6 +13442,9 @@
         else if (d.delta < 0) html += '<div class="trainer-info">' + T('delta_down', { N: Math.abs(d.delta).toFixed(2) }) + '</div>';
         else html += '<div class="trainer-info">' + T('delta_same') + '</div>';
       }
+      if (d.me) {
+        html += '<div class="trainer-info">' + T('my_result', { R: lbResultText(d.me) }) + '</div>';
+      }
       if (d.rank) {
         html += '<div class="trainer-info">' + T('rank_line', {
           D: divisionLabel(d.rank),
@@ -13413,19 +13465,29 @@
         html += d.personal
           ? '<div class="trainer-info">' + T('rank_among', {
               X: T('x_of_y', { P: d.personal.rank, T: d.total }),
-            }) + '</div>'
+            }) + '</div>' +
+            '<div class="trainer-lb-row you">' + T('my_result', { R: lbResultText(d.personal.score) }) + '</div>'
           : '<div class="trainer-info">' + T('no_rank_yet') + '</div>';
       } else {
+        var me = d.me;
         d.divisions.forEach(function (div) {
           if (!div.entries.length) return;
           html += '<div class="trainer-division">' + divisionLabel(div) + '</div>';
           div.entries.slice(0, 7).forEach(function (e, i) {
-            html += '<div class="trainer-lb-row' + (e.you ? ' you' : '') + '">' +
-              (i + 1) + '. ' + e.name + ' (' + e.group + ') — ' +
-              e.accuracy.toFixed(0) + '% (' + e.correct + '/' + e.n + '), ' +
-              T('page_n', { N: e.page }) + '</div>';
+            html += '<div class="trainer-lb-row' + (e.you ? ' you' : '') + '">' + lbRowText(i + 1, e) + '</div>';
           });
+          // Себя под семёркой - та же строка, что у лидеров (28.09.2026).
+          if (me && me.division_no === div.division_no && me.place > 7) {
+            html += '<div class="trainer-lb-gap">…</div>' +
+              '<div class="trainer-lb-row you">' + lbRowText(me.place, me) +
+              ' · ' + T('x_of_y', { P: me.place, T: me.total }) + '</div>';
+          }
         });
+        if (me && me.hidden) {
+          html += '<div class="trainer-info">' + (me.idle_days
+              ? T('lb_hidden', { D: me.idle_days }) : T('lb_hidden_long')) + '</div>' +
+            '<div class="trainer-lb-row you">' + T('my_result', { R: lbResultText(me) }) + '</div>';
+        }
       }
       document.getElementById('trainer-body').innerHTML = html;
     });

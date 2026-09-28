@@ -59,6 +59,7 @@ from core.mufradat_bot import (
     submit_ustaz_verdict, send_ustaz_comment,
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
     _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
+    idle_days, LEADERBOARD_IDLE_DAYS,
     submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES, _hifz_place, submit_revision_recording,
     submit_revision_verdict,
 )
@@ -192,11 +193,47 @@ def _daily_fields(user_id, status=None):
     }
 
 
+def _trainer_hifz_page(user_id):
+    """Мединская страница места заучивания или None (нет места, хафиз).
+    Подсказка второстепенна - вопрос тренажёра из-за неё не падает."""
+    try:
+        if is_hafiz_phone(user_id):
+            return None
+        pointer = get_hifz_pointer(user_id)
+        return pointer["madani_page"] if pointer else None
+    except Exception:
+        log.exception("тренажёр: место заучивания для подсказки не прочитано")
+        return None
+
+
+def _my_row(user_id, score):
+    """Своя строка - то же, что у лидеров в списке (28.09.2026): кто не
+    попал в первую семёрку, скрыт за неактивность или вне группы, видит о
+    себе всё то же самое."""
+    return {**_public_score(score), "name": _display_name(user_id),
+            "group": _group_name(user_id), "idle_days": _idle_or_none(score)}
+
+
+def _idle_or_none(score):
+    """Дней без тренировки; None - даты нет вовсе («давно»)."""
+    days = idle_days(score)
+    return days if days < 10 ** 5 else None
+
+
+def _public_score(score):
+    """Что уходит в приложение: без служебных полей сортировки и без чужих
+    закладок/мест заучивания."""
+    return {k: score[k] for k in ("accuracy", "correct", "wrong", "n", "attempted", "page")}
+
+
 def _question_payload(user_id, state, overall_score, feedback=None, status=None):
     payload = {
         "arabic": state["arabic"], "options": state["options"], "word_id": state["word_id"],
         "overall_score": overall_score,
         "bookmark_page": get_current_page(user_id),
+        # Где человек учит наизусть (мединская страница) - подсказка «На моё
+        # место», когда закладка тренажёра разошлась с заучиванием (28.09.2026).
+        "hifz_page": _trainer_hifz_page(user_id),
         "word_page": page_for_ayah(state["surah"], state["ayah"]),
         # Точное место слова (22.09.2026): тренажёр показывает его строку
         # мусхафа, слово в ней выделено. Вопрос, созданный до выкладки, -
@@ -418,6 +455,9 @@ async def handle_end(request, user_id):
     result = {"overall_score": end_score}
     if end_score and state and state.get("start_score10") is not None:
         result["delta"] = round(end_score["score10"] - state["start_score10"], 2)
+    mine = next((s for uid, s in _leaderboard_for_this_bot() if uid == user_id), None)
+    if mine:
+        result["me"] = _my_row(user_id, mine)
     if end_score:
         divisions = _split_by_division(_group_leaderboard_for_this_bot())
         rank_info = _find_rank(divisions, user_id)
@@ -440,25 +480,30 @@ async def handle_end(request, user_id):
 async def handle_leaderboard(request, user_id):
     """GET - рейтинг: гендер-фильтр и дивизионы из mufradat_bot.py,
     Wilson-формула из core/mufradat.py."""
+    full = _leaderboard_for_this_bot()
+    own = next(((i, s) for i, (uid, s) in enumerate(full, start=1) if uid == user_id), None)
     if not get_learning_group(user_id):
-        full = _leaderboard_for_this_bot()
-        own = next(((i, s) for i, (uid, s) in enumerate(full, start=1) if uid == user_id), None)
         return web.json_response({
             "in_group": False, "total": len(full),
-            "personal": {"rank": own[0], "score": own[1]} if own else None,
+            "personal": {"rank": own[0], "score": _my_row(user_id, own[1])} if own else None,
         })
 
     divisions = []
+    me = _my_row(user_id, own[1]) if own else None
     for i, (label, entries) in enumerate(_split_by_division(_group_leaderboard_for_this_bot()), start=1):
-        divisions.append({
-            "label": label,
-            "division_no": i,
-            "entries": [
-                {**score, "name": _display_name(uid), "group": _group_name(uid), "you": uid == user_id}
-                for uid, score in entries
-            ],
-        })
-    return web.json_response({"in_group": True, "divisions": divisions})
+        rows = []
+        for place, (uid, score) in enumerate(entries, start=1):
+            rows.append({**_public_score(score), "name": _display_name(uid),
+                         "group": _group_name(uid), "you": uid == user_id})
+            if uid == user_id and me is not None:
+                me.update({"place": place, "total": len(entries), "division_no": i})
+        divisions.append({"label": label, "division_no": i, "entries": rows})
+    if me is not None:
+        # Нет в общем списке при хорошем результате - значит, давно не
+        # тренировался: приложение объясняет, как вернуться.
+        me["hidden"] = "place" not in me
+        me["idle_limit"] = LEADERBOARD_IDLE_DAYS
+    return web.json_response({"in_group": True, "divisions": divisions, "me": me})
 
 
 @with_auth

@@ -2951,6 +2951,13 @@ def hafiz_ids(group_id=None):
     return {r["id"] for r in rows}
 
 
+def hafiz_phones():
+    """Telegram ID хафизов - ключ, по которому живёт тренажёр (hadiths.db)."""
+    with db() as c:
+        rows = c.execute("SELECT phone FROM users WHERE is_hafiz=1").fetchall()
+    return {str(r["phone"]) for r in rows}
+
+
 def is_hafiz(uid):
     with db() as c:
         row = c.execute("SELECT is_hafiz FROM users WHERE id=?", (uid,)).fetchone()

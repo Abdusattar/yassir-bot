@@ -35,7 +35,7 @@ from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss, ensure
 from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
 from core.mushaf_words import (
     get_starred_progress_keys, remove_starred_by_progress_key, add_starred_word_by_progress_key,
-    _merge_tail_arabic, _normalize_rasm,
+    _merge_tail_arabic, _normalize_rasm, madani_page, _HIFZ_SCHEMA, _LAYOUT_SCHEMA,
 )
 
 # Языки перевода, доступные в тренажёре (26.08.2026) - код -> подпись кнопки.
@@ -1044,17 +1044,48 @@ def _accuracy_totals():
         ).fetchall()
         conn.execute(_PAGE_SCHEMA)
         pages = dict(conn.execute("SELECT user_id, page_number FROM mufradat_page").fetchall())
+        # Место заучивания и раскладка (28.09.2026) - глубина в рейтинге.
+        conn.execute(_HIFZ_SCHEMA)
+        conn.execute(_LAYOUT_SCHEMA)
+        pointers = {uid: (p, line) for uid, p, line in conn.execute(
+            "SELECT user_id, page_number, line_index FROM mushaf_hifz_pointer")}
+        layouts = dict(conn.execute("SELECT user_id, layout FROM mushaf_layout").fetchall())
+        conn.execute(_DAILY_ANSWERED_SCHEMA)
+        last = dict(conn.execute(
+            "SELECT user_id, MAX(date) FROM mufradat_daily_answered_words GROUP BY user_id"
+        ).fetchall())
 
     totals = {}
     for uid, lang, c, w, n in rows:
+        hifz = None
+        if uid in pointers:
+            p, line = pointers[uid]
+            hifz = madani_page(layouts.get(uid, "madani"), p, line)
         totals.setdefault(uid, {})[lang] = {
             "correct": c or 0, "wrong": w or 0, "n": (c or 0) + (w or 0), "attempted": n,
-            "page": pages.get(uid, 0),
+            "bookmark": pages.get(uid, 0), "hifz_page": hifz, "last_date": last.get(uid),
         }
     return totals
 
 
-def get_leaderboard():
+def rating_depth(bookmark, hifz_page, hafiz=False):
+    """Страница, которая идёт в рейтинг (28.09.2026, решение пользователя).
+
+    Закладку тренажёра студент ставит сам (➖/➕), и в рейтинге она давала
+    целый множитель и выбирала дивизион: закладка на стр. 90 при заучивании
+    на 18 поднимала точность 74% на второе место. Кнопки оставлены - кто
+    хочет, тренирует слова наперёд, - а в рейтинг идёт меньшее из закладки и
+    места заучивания: только то, что человек и учит, и тренирует. Закладка
+    отстала от заучивания - маленький пул и лёгкие слова, в зачёт тоже
+    меньшее (приложение подсказывает «На моё место»).
+
+    Хафизу и тому, у кого места заучивания нет, - закладка, как раньше."""
+    if hafiz or not hifz_page:
+        return bookmark or 0
+    return min(bookmark or 0, hifz_page)
+
+
+def get_leaderboard(hafiz=frozenset()):
     """Единый общий список (user_id, score_dict), НЕ полки по глубине
     страниц (было так до 18.08.2026) - Wilson-точность сравнима на любой
     глубине пула напрямую (в отличие от score10/mastered, которые зависели
@@ -1106,7 +1137,12 @@ def get_leaderboard():
     который по конкретному языку"): переключение языка само по себе не может
     поднять место (объём/точность одного языка никогда не приплюсовывается к
     другому), а слабая проба на новом языке никогда не может ПОНИЗИТЬ
-    результат (просто не выигрывает max())."""
+    результат (просто не выигрывает max()).
+
+    С 28.09.2026 page - не закладка, а rating_depth (меньшее из закладки и
+    места заучивания; hafiz - множество user_id хафизов, им закладка).
+    Рядом bookmark, hifz_page и last_date - для подсказки и отбора
+    неактивных (core/mufradat_bot.py)."""
     totals = _accuracy_totals()
     entries = []
     for uid, by_lang in totals.items():
@@ -1114,12 +1150,14 @@ def get_leaderboard():
         for lang, t in by_lang.items():
             wilson = _wilson_lower_bound(t["correct"], t["n"])
             accuracy = round(100 * t["correct"] / t["n"], 1) if t["n"] else 0.0
-            sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + t["page"])
+            page = rating_depth(t["bookmark"], t["hifz_page"], uid in hafiz)
+            sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + page)
             candidate = {
                 "wilson": wilson, "accuracy": accuracy,
                 "correct": t["correct"], "wrong": t["wrong"], "n": t["n"],
-                "attempted": t["attempted"], "page": t["page"], "_sort_key": sort_key,
-                "language": lang,
+                "attempted": t["attempted"], "page": page, "_sort_key": sort_key,
+                "language": lang, "bookmark": t["bookmark"], "hifz_page": t["hifz_page"],
+                "last_date": t["last_date"],
             }
             if best is None or candidate["_sort_key"] > best["_sort_key"]:
                 best = candidate
