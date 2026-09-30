@@ -10,6 +10,10 @@
   pause   - пауза, потом «Стоп». Раньше «Стоп» на паузе молчал.
   resume  - запись оборвалась (панель закрыли посреди чтения), открыли
             снова, «Продолжить», дочитали. Раньше «не целиком» (Азиля).
+            ms в отправке - таймер; до 30.09 после продолжения удваивался.
+  silent  - микрофон заглох посреди записи (iPhone, Азиля 28.09): куски
+            перестают приходить. Ждём: сторож сам останавливает, «Продолжить»,
+            дочитали - ушло два потока, таймер честный.
 
     python scripts/check_rec_audit.py            # рабочая копия
     python scripts/check_rec_audit.py --old      # HEAD - для сравнения
@@ -45,6 +49,7 @@ JS = """
   window.fetch = function (url, opts) {
     if (String(url).indexOf('/revision/submit') >= 0) {
       var out = [], jobs = [];
+      window.__log.push('ms=' + opts.body.get('ms'));
       opts.body.forEach(function (v, k) {
         if (k.indexOf('audio') !== 0) return;
         jobs.push(v.arrayBuffer().then(function (buf) {
@@ -66,6 +71,18 @@ JS = """
     window.__log.push(label + ': ' + (window.__sent.length > n ? 'ушло' : 'НЕ ушло') + ' | ' + hint());
   };
   var sc = new URLSearchParams(location.search).get('sc');
+  // «Заглохший микрофон»: пока __mute, куски от диктофона не доходят -
+  // ровно то, что видно у айфона в следе (таймер идёт, звука нет).
+  window.__mute = false;
+  var RealMR = window.MediaRecorder;
+  window.MediaRecorder = function (stream, o) {
+    var mr = new RealMR(stream, o), h = null;
+    Object.defineProperty(mr, 'ondataavailable', {
+      set: function (f) { h = f; }, get: function () { return h; } });
+    mr.addEventListener('dataavailable', function (e) { if (!window.__mute && h) h(e); });
+    return mr;
+  };
+  window.MediaRecorder.isTypeSupported = RealMR.isTypeSupported;
   window.addEventListener('load', function () {
     (async function () {
       await wait(1200);
@@ -93,6 +110,14 @@ JS = """
         $('hifz-rec-continue').click(); await wait(6000);
         $('hifz-rec-stop').click(); await wait(1500);
         await send('продолжение (~10 + 6 с)');
+      } else if (sc === 'silent') {
+        $('hifz-rec-go').click(); await wait(11000);
+        window.__mute = true; await wait(26000);          // сторож - 20 с
+        window.__log.push('заглох: ' + hint() + ' | продолжить: ' + !!$('hifz-rec-continue'));
+        window.__mute = false;
+        $('hifz-rec-continue').click(); await wait(6000);
+        $('hifz-rec-stop').click(); await wait(1500);
+        await send('продолжение (~10 + 6 с)');
       }
       window.__done = true;
     })();
@@ -112,7 +137,7 @@ def run(sc, old):
         return web.Response(text=html, content_type="text/html")
 
     app.router.add_get("/v", page)
-    port = PORT + ["double", "pause", "resume"].index(sc)
+    port = PORT + ["double", "pause", "resume", "silent"].index(sc)
     threading.Thread(target=lambda: web.run_app(app, host="127.0.0.1", port=port, print=None,
                                                 handle_signals=False), daemon=True).start()
     time.sleep(3)
@@ -146,10 +171,10 @@ def run(sc, old):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--old", action="store_true")
-    ap.add_argument("--sc", choices=["double", "pause", "resume"])
+    ap.add_argument("--sc", choices=["double", "pause", "resume", "silent"])
     a = ap.parse_args()
     print("версия:", "HEAD (до правки)" if a.old else "рабочая копия")
-    for sc in ([a.sc] if a.sc else ["double", "pause", "resume"]):
+    for sc in ([a.sc] if a.sc else ["double", "pause", "resume", "silent"]):
         run(sc, a.old)
 
 

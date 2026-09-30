@@ -4656,6 +4656,8 @@
       rec_broken: 'Запись прервалась. Ты прочитал %T%',
       rec_listen_tail: 'Послушать конец',
       rec_continue: 'Продолжить чтение',
+      rec_mic_lost: 'Микрофон отключился. Записано %T% — нажми «Продолжить чтение» и читай дальше',
+      rec_mic_lost_again: 'Микрофон отключился — нажми «Записать» ещё раз',
       rec_fresh: 'Начать заново',
       rec_continue_hint: 'Читай дальше с того места, где остановился',
       added_mywords: '✅ В «Мои слова»',
@@ -9126,10 +9128,12 @@
 
   function recSavedMs(rows) {
     // В каждом куске лежит время на момент записи - после обрыва это
-    // единственный след того, сколько человек начитал.
-    var by = {};
-    rows.forEach(function (r) { by[r.seg] = Math.max(by[r.seg] || 0, r.ms || 0); });
-    return Object.keys(by).reduce(function (a, k) { return a + by[k]; }, 0);
+    // единственный след того, сколько человек начитал. Время НАКОПЛЕННОЕ
+    // (hifzRecElapsed идёт через все сегменты), поэтому берём наибольшее, а
+    // не сумму по сегментам (30.09.2026, Азиля из группы Мохидил: сумма
+    // удваивала таймер после продолжения - 1227 с стали 2291, и сервер
+    // отверг 18 минут настоящего чтения как «короче таймера»).
+    return rows.reduce(function (m, r) { return Math.max(m, r.ms || 0); }, 0);
   }
 
   function hifzRecRelease() {
@@ -9230,7 +9234,7 @@
     rec.gen = (rec.gen || 0) + 1; rec.starting = false;
     if (old && old.state !== 'inactive') { try { old.stop(); } catch (e) { /* уже стоит */ } }
     rec.accMs = 0; rec.segBaseMs = 0; rec.paused = false; rec.resent = false;
-    rec.seg = 0; rec.saved = [];
+    rec.seg = 0; rec.saved = []; rec.micLost = false;
     rec.pageFrom = null; rec.pageMax = null; rec.pageLayout = null;
     var a = document.getElementById('hifz-rec-audio');
     a.pause(); a.removeAttribute('src');
@@ -9332,10 +9336,58 @@
     el.textContent = Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
 
+  /* Микрофон заглох посреди записи (30.09.2026). Живой случай - Азиля из
+     группы Мохидил, iPhone: 28.09 после 20-минутной паузы и после перезапуска
+     вкладки звук больше не шёл, а таймер шёл дальше. Узнавала она об этом
+     только по «Стоп» - после 10-20 минут чтения в пустоту, три раза за день.
+     Теперь следим сами: с телефона куски идут каждые REC_SLICE_MS, и если
+     их нет дольше REC_SILENT_MS (или дорожка мертва на снятии паузы) -
+     останавливаем, начитанное остаётся на телефоне, человек сразу видит
+     «Продолжить чтение», и продолжение возьмёт микрофон заново. */
+  var REC_SILENT_MS = 20000;
+
+  function recMicAlive() {
+    return !!(rec.stream && rec.stream.getAudioTracks().some(function (t) {
+      return t.readyState === 'live' && !t.muted;
+    }));
+  }
+
+  function hifzRecMicLost(why) {
+    if (!rec.mr || rec.mr.state === 'inactive' || rec.micLost) return;
+    rec.micLost = true;
+    trail('rec', { n: 'mic lost ' + why + ' ' + Math.round(hifzRecElapsed() / 1000) + 's' });
+    if (rec.tick) { clearInterval(rec.tick); rec.tick = null; }
+    try { rec.mr.stop(); } catch (e) { rec.micLost = false; }
+  }
+
+  function recAfterMicLost() {
+    rec.micLost = false;
+    rec.mr = null; rec.paused = false;
+    hifzRecRelease();            // «Продолжить» возьмёт микрофон заново
+    document.getElementById('hifz-rec-timer').classList.remove('rec');
+    (rec.saving || Promise.resolve()).then(recOfferResume).then(function (had) {
+      if (had) {
+        document.getElementById('hifz-rec-hint').textContent =
+          T('rec_mic_lost', { T: hifzRecMmss(rec.accMs) });
+        hifzRecPad();
+        return;
+      }
+      // Первый этап (куски не хранятся) или совсем мало - просто заново.
+      rec.accMs = 0; rec.seg = 0; rec.saved = [];
+      document.getElementById('hifz-rec-timer').style.display = 'none';
+      document.getElementById('hifz-rec-hint').textContent = T('rec_mic_lost_again');
+      hifzRecButtons('idle');
+    });
+  }
+
   function hifzRecPause() {
     if (!rec.mr || typeof rec.mr.pause !== 'function') return;
     if (rec.paused) {
+      // После долгой паузы айфон мог забрать микрофон - «продолжать» мёртвую
+      // запись нельзя, берём микрофон заново новым куском (30.09.2026).
+      if (!recMicAlive()) { hifzRecMicLost('resume'); return; }
       rec.t0 = Date.now();
+      rec.heardAt = Date.now();
       rec.paused = false;
       rec.mr.resume();
       trail('rec', { n: 'resume' });
@@ -9425,6 +9477,7 @@
       rec.mr = mr;
       mr.ondataavailable = function (e) {
         if (rec.mr !== mr || !e.data || !e.data.size) return;
+        rec.heardAt = Date.now();
         chunks.push(e.data);
         // Держим последнее сохранение: «Стоп» приходит сразу за куском, и
         // отправлять надо уже после того, как он лёг на телефон.
@@ -9433,6 +9486,7 @@
       mr.onstop = function () {
         if (rec.mr !== mr) return;   // брошенный диктофон (см. hifzRecReset)
         hifzWakeOff();
+        if (rec.micLost) { recAfterMicLost(); return; }
         // Звука нет совсем (23.09.2026, только iPhone: 17-22 с на таймере и
         // файл в 0 байт, одна сестра нажала «Отправить» 13 раз). Отправлять
         // нечего - просим записать ещё раз, микрофон при этом берём заново.
@@ -9475,6 +9529,7 @@
       // начитанное уже лежит на телефоне. Так пишутся обе записи: сдача
       // второго и третьего этапа не короче повторения.
       mr.start(REC_SLICE_MS);
+      rec.heardAt = Date.now();
       hifzWakeOn();             // читает долго - экран гасить нельзя
       rec.t0 = Date.now();
       // accMs мог прийти из прерванной записи - тогда таймер идёт дальше, а
@@ -9485,6 +9540,8 @@
       rec.hitLimit = false;
       rec.tick = setInterval(function () {
         hifzRecTimer();
+        // Звук перестал приходить - микрофон заглох (см. hifzRecMicLost).
+        if (!rec.paused && Date.now() - rec.heardAt > REC_SILENT_MS) { hifzRecMicLost('silent'); return; }
         // Лимит - по реально записанному, без учёта пауз.
         var left = HIFZ_REC_MAX_MS - hifzRecElapsed();
         if (left <= 0) {

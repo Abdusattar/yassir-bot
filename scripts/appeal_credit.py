@@ -10,6 +10,10 @@
     python scripts/appeal_credit.py --profile male --user-id 1 --group N-1 --date 2026-09-22 --undo
     python scripts/appeal_credit.py --profile male --user-id 1 --group N-1 --date 2026-09-22   # что есть
 
+--points 1 - когда работа была сделана, а потерял её бот (30.09.2026, Азиля из
+группы Мохидил: 28.09 18 минут повторения отверг сервер из-за удвоенного
+таймера продолжения). По умолчанию ноль - только серия.
+
 Запускать на сервере из корня репозитория от владельца базы (stursunkul).
 """
 import argparse
@@ -28,6 +32,7 @@ def main():
     ap.add_argument("--group", required=True, help="название группы, как в базе")
     ap.add_argument("--date", required=True, help="учебный день YYYY-MM-DD")
     ap.add_argument("--why", help="причина - пишется в note; без неё только показать")
+    ap.add_argument("--points", type=int, default=0, choices=[0, 1])
     ap.add_argument("--undo", action="store_true")
     a = ap.parse_args()
 
@@ -58,9 +63,9 @@ def main():
             for k in missing:
                 c.execute("INSERT OR IGNORE INTO score_events"
                           "(student_id,group_id,date,category,subcategory,points,note)"
-                          " VALUES(?,?,?,'task',?,0,?)",
-                          (u["id"], g["id"], a.date, k, NOTE_PREFIX + a.why))
-            print("дописано с нулём баллов: %s" % (", ".join(missing) or "ничего, день уже полный"))
+                          " VALUES(?,?,?,'task',?,?,?)",
+                          (u["id"], g["id"], a.date, k, a.points, NOTE_PREFIX + a.why))
+            print("дописано (%d балл): %s" % (a.points, ", ".join(missing) or "ничего, день уже полный"))
         rows = c.execute("SELECT subcategory, points, note FROM score_events WHERE student_id=?"
                          " AND group_id=? AND date=? AND category='task'",
                          (u["id"], g["id"], a.date)).fetchall()
