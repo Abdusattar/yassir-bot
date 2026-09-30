@@ -46,7 +46,7 @@ from core.db import (
     get_profile, update_profile, revision_record_required, get_revision_recordings, is_hafiz_phone, student_tasks,
     get_revision_recording, get_rejected_revisions,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
-    remove_lesson_attendance, set_user_tz,
+    remove_lesson_attendance, set_user_tz, get_dm_ok_by_phone,
 )
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
@@ -1999,7 +1999,19 @@ async def handle_ustaz_lesson_remove(request, user_id):
         return web.json_response({"error": "forbidden"}, status=403)
     if not any(s["id"] == student_id for s in get_students(group_id)):
         return web.json_response({"error": "not_found"}, status=404)
-    removed = remove_lesson_attendance(student_id, group_id, date)
+    removed = remove_lesson_attendance(student_id, group_id, date, by=user_id)
+    if removed:
+        # Раньше −5 уходили молча (аудит 30.09.2026) - студент видел только,
+        # что баллов стало меньше.
+        try:
+            from core.tg import send_message
+            st = next((x for x in get_students(group_id) if x["id"] == student_id), None)
+            if st and st["phone"] and get_dm_ok_by_phone(st["phone"]):
+                await send_message(st["phone"],
+                                   "ℹ️ Устаз снял отметку урока за " + date[8:10] + "." + date[5:7]
+                                   + " — 5 баллов за этот урок убраны. Если это ошибка, напиши устазу.")
+        except Exception:
+            log.exception("lesson_remove notify")
     return web.json_response({"ok": removed, "lessons": get_lesson_dates(student_id, group_id, date[:7])})
 
 

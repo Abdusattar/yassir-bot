@@ -93,6 +93,23 @@ def init():
                 UNIQUE(student_id, group_id, date, category, subcategory)
             );
             CREATE INDEX IF NOT EXISTS idx_se_student_date ON score_events(student_id, date);
+            -- След снятых баллов (30.09.2026, аудит): раньше снятие было
+            -- DELETE без следа, и на «куда делся балл» нечем было ответить.
+            CREATE TABLE IF NOT EXISTS score_removals(
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id  INTEGER NOT NULL,
+                group_id    INTEGER NOT NULL,
+                date        TEXT NOT NULL,
+                category    TEXT NOT NULL,
+                subcategory TEXT NOT NULL DEFAULT '',
+                points      INTEGER NOT NULL,
+                note        TEXT,
+                created_at  TEXT,
+                removed_at  TEXT DEFAULT (datetime('now')),
+                removed_by  TEXT,
+                why         TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_sr_student ON score_removals(student_id, date);
             CREATE INDEX IF NOT EXISTS idx_se_group_date   ON score_events(group_id, date);
             CREATE TABLE IF NOT EXISTS online_lessons(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1764,14 +1781,29 @@ def is_checkmarks_only(text):
     return count_checkmarks(text) > 0 and len(cleaned.strip()) == 0
 
 
-def cancel_task(student_id, group_id, task_code):
+def remove_scores(c, where, params, by=None, why=None):
+    """Удалить строки score_events по условию, переложив их в score_removals
+    (кто, когда, почему). Все снятия баллов идут через эту функцию. Возвращает
+    число снятых строк."""
+    rows = c.execute("SELECT * FROM score_events WHERE " + where, params).fetchall()
+    for r in rows:
+        c.execute(
+            "INSERT INTO score_removals(student_id,group_id,date,category,subcategory,"
+            "points,note,created_at,removed_by,why) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (r["student_id"], r["group_id"], r["date"], r["category"], r["subcategory"],
+             r["points"], r["note"], r["created_at"],
+             None if by is None else str(by), why)
+        )
+    if rows:
+        c.execute("DELETE FROM score_events WHERE " + where, params)
+    return len(rows)
+
+
+def cancel_task(student_id, group_id, task_code, by=None, why=None):
     today = get_date()
     with db() as c:
-        c.execute(
-            "DELETE FROM score_events"
-            " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
-            (student_id, group_id, today, task_code)
-        )
+        remove_scores(c, "student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
+                      (student_id, group_id, today, task_code), by, why)
 
 
 def set_group_app_only(group_id, date_str):
@@ -1802,17 +1834,14 @@ def groups_with_app_only_date():
     return [dict(r) for r in rows]
 
 
-def cancel_task_on(student_id, group_id, date, task_code):
+def cancel_task_on(student_id, group_id, date, task_code, by=None, why=None):
     """Снять зачёт задания за КОНКРЕТНЫЙ день (16.09.2026, «Отвергнуто» у
     записи повторения). cancel_task снимает только сегодняшний - устаз же
     слушает и назавтра."""
     with db() as c:
-        cur = c.execute(
-            "DELETE FROM score_events"
-            " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
-            (student_id, group_id, date, task_code)
-        )
-        return cur.rowcount > 0
+        return remove_scores(
+            c, "student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
+            (student_id, group_id, date, task_code), by, why) > 0
 
 
 def save_report(uid, group_id, date, tasks_done):
@@ -3476,15 +3505,12 @@ def get_group_lesson_dates(group_id, month=None):
     return out
 
 
-def remove_lesson_attendance(uid, group_id, date):
+def remove_lesson_attendance(uid, group_id, date, by=None):
     """Устаз снимает ошибочную отметку. True - было что снимать."""
     with db() as c:
-        cur = c.execute(
-            "DELETE FROM score_events WHERE student_id=? AND group_id=?"
-            " AND category='attendance' AND subcategory='online' AND date=?",
-            (uid, group_id, date)
-        )
-        return cur.rowcount > 0
+        return remove_scores(
+            c, "student_id=? AND group_id=? AND category='attendance' AND subcategory='online' AND date=?",
+            (uid, group_id, date), by, "устаз снял отметку урока") > 0
 
 
 def move_lesson_attendance(uid, group_id, from_date, to_date):
@@ -4299,7 +4325,8 @@ def set_revision_verdict(rec_id, verdict, by_phone):
             (verdict, get_now().isoformat(timespec="seconds"), by_phone, rec_id)
         )
     if verdict == REVISION_REJECTED:
-        cancel_task_on(rec["student_id"], rec["group_id"], rec["date"], "r")
+        cancel_task_on(rec["student_id"], rec["group_id"], rec["date"], "r",
+                       by=by_phone, why="запись повторения отвергнута")
     elif verdict == REVISION_ACCEPTED:
         save_report(rec["student_id"], rec["group_id"], rec["date"], {"r": True})
     rec["verdict"] = verdict

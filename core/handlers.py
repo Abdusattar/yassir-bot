@@ -40,7 +40,8 @@ from core.db import (
     mark_curriculum_approved, get_next_part_to_publish, mark_curriculum_published,
     get_pending_curriculum_review_by_chat, mark_curriculum_approved_by_chat,
     get_published_curriculum_content, get_curriculum_content_for_reference,
-    log_verify_check, revision_record_required, group_app_only_active
+    log_verify_check, revision_record_required, group_app_only_active,
+    remove_scores
 )
 from core.transfers import (
     block_return_if_pending_prep, handle_dm_unlocked, transfer_active_student,
@@ -126,8 +127,9 @@ _SECTION_SUPER = (
 )
 
 
-def _section_student(group_tasks, gtype, lang="ru"):
-    return help_student(group_tasks, gtype, lang)
+def _section_student(group_tasks, gtype, lang="ru", group=None):
+    return help_student(group_tasks, gtype, lang,
+                        app_only=bool(group) and group_app_only_active(group))
 
 
 async def _send_registered(chat_id, glang, name, phone, prefix="", suffix=""):
@@ -1315,9 +1317,16 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             s_dm = find_by_phone(phone, student_group["id"])
             glang_dm = get_group_lang(student_group)
             if text == "/help":
-                await send_message(chat_id, _section_student(get_group_tasks(student_group), student_group["group_type"] or "relaxed", glang_dm))
+                await send_message(chat_id, _section_student(get_group_tasks(student_group), student_group["group_type"] or "relaxed", glang_dm, student_group))
             elif text == "/rating":
                 await _send_rating_to(chat_id, student_group, student_group["id"], glang_dm)
+            elif text in ("/week", "/month", "/year"):
+                # Подвал /rating зовёт сюда - в личке отвечало приветствие
+                # (30.09.2026, Сальмина написала /week 29.09).
+                days = {"/week": 7, "/month": 30, "/year": 365}[text]
+                await send_message(chat_id, format_period_report(
+                    student_group["id"], student_group["title"] or student_group["chat_id"],
+                    get_group_tasks(student_group), days))
             elif text == "/mystats":
                 await _send_mystats_to(chat_id, s_dm, student_group, student_group["id"], get_group_tasks(student_group), glang_dm)
             else:
@@ -1792,11 +1801,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     (st["id"], group_id, today, code)
                 ).fetchone()
                 if exists:
-                    c.execute(
-                        "DELETE FROM score_events"
-                        " WHERE student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
-                        (st["id"], group_id, today, code)
-                    )
+                    remove_scores(c, "student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
+                                  (st["id"], group_id, today, code), phone, "аннулировал устаз")
                     cancelled.append(DEFAULT_TASKS.get(code, code))
                 else:
                     not_found.append(DEFAULT_TASKS.get(code, code))
@@ -1921,7 +1927,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         s_h = find_by_phone(phone, group_id)
         sections = []
         if s_h:
-            sections.append(_section_student(group_tasks, group["group_type"] or "relaxed", glang))
+            sections.append(_section_student(group_tasks, group["group_type"] or "relaxed", glang, group))
         if is_group_admin(phone, group_id):
             sections.append(help_admin(glang))
         if phone in SUPER_ADMIN_IDS:
