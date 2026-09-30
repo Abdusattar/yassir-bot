@@ -6,7 +6,7 @@ import pytz
 
 from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK, IS_FEMALE, PROFILE
 from core.db import (
-    get_all_groups, get_group_tasks, get_group_lang, hafiz_ids, student_tasks,
+    get_all_groups, get_group_tasks, get_group_lang, hafiz_ids, student_tasks, prior_full_dates,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner, get_period_winner_range,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
@@ -1758,6 +1758,14 @@ async def weekly_report():
                         full_dates_by_student.setdefault(r["student_id"], set()).add(r["date"])
                     elif 0 < r["n"] < n_tasks:
                         partial_counts[r["student_id"]] = partial_counts.get(r["student_id"], 0) + 1
+                # Пришёл переводом посреди недели - начало недели лежит в
+                # прошлой группе (30.09.2026, Эрлан: 21-25.09 в G-6, 26-27.09
+                # в N-2a - +5 не получил ни там, ни там).
+                for sid, st in roster.items():
+                    if (st["joined_date"] or "") > start and not week_dates <= full_dates_by_student.get(sid, set()):
+                        before = {d for d in prior_full_dates(sid, group_id) if start <= d <= end}
+                        if before:
+                            full_dates_by_student.setdefault(sid, set()).update(before)
                 subcat = "cal_" + week_key
                 for sid, dates in full_dates_by_student.items():
                     if week_dates <= dates:

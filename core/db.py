@@ -3045,6 +3045,32 @@ def _full_task_dates(uid, group_id, group_tasks, limit=400, since_date=None):
     return {r["date"] for r in rows}
 
 
+def prior_full_dates(uid, group_id):
+    """Полные дни студента в ПРОШЛЫХ учебных группах - серия идёт через
+    перевод (30.09.2026, Эрлан: 38 дней без пропуска - подготовительная, G-6,
+    N-2a - после перехода в «про» бот показал 4, дни прошлой группы лежат под
+    её group_id). Каждая прошлая группа меряется своими заданиями. Тадаббур
+    идёт параллельно и в историю не входит ни с какой стороны."""
+    with db() as c:
+        cur = c.execute(
+            "SELECT g.group_type, ug.joined_date FROM user_groups ug JOIN groups g ON g.id=ug.group_id"
+            " WHERE ug.user_id=? AND ug.group_id=? AND ug.role='student'",
+            (uid, group_id)
+        ).fetchone()
+        if not cur or (cur["group_type"] or "") == "tadabbur" or not cur["joined_date"]:
+            return set()
+        prev = c.execute(
+            "SELECT g.* FROM user_groups ug JOIN groups g ON g.id=ug.group_id"
+            " WHERE ug.user_id=? AND ug.group_id!=? AND ug.role='student' AND ug.active=0"
+            " AND COALESCE(g.group_type,'relaxed')!='tadabbur' AND ug.joined_date<=?",
+            (uid, group_id, cur["joined_date"])
+        ).fetchall()
+    out = set()
+    for g in prev:
+        out |= _full_task_dates(uid, g["id"], get_group_tasks(g))
+    return out
+
+
 def get_full_task_days_count(uid, group_id, group_tasks):
     """Сколько дней студент сдал ВСЕ задания группы целиком (12.08.2026,
     решение пользователя для /mystats: "Дней выполнено" = полная сдача,
@@ -3061,7 +3087,7 @@ def get_streak_days(uid, group_id, group_tasks, for_date=None):
     дней - утренний Тадаббур-отчёт, лидеры стрика) грейс не получает,
     там день уже закончился по определению."""
     tz = pytz.timezone(TZ)
-    dates = _full_task_dates(uid, group_id, group_tasks)
+    dates = _full_task_dates(uid, group_id, group_tasks) | prior_full_dates(uid, group_id)
     anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now().date()
     if for_date is None and anchor.isoformat() not in dates:
         anchor -= timedelta(days=1)
@@ -3124,6 +3150,26 @@ def get_group_streaks(group_id, group_tasks, for_date=None):
             result[sid] = streak
         else:
             result.pop(sid, None)
+    # Пришедшие переводом: серия, дошедшая до дня входа, продолжается в
+    # прошлой группе (prior_full_dates) - их тоже по одному.
+    with db() as c:
+        moved = c.execute(
+            "SELECT ug.user_id, ug.joined_date FROM user_groups ug"
+            " WHERE ug.group_id=? AND ug.role='student' AND ug.active=1 AND EXISTS("
+            "  SELECT 1 FROM user_groups o JOIN groups og ON og.id=o.group_id"
+            "  WHERE o.user_id=ug.user_id AND o.group_id!=ug.group_id AND o.role='student'"
+            "  AND o.active=0 AND COALESCE(og.group_type,'relaxed')!='tadabbur')",
+            (group_id,)
+        ).fetchall()
+    for r in moved:
+        try:
+            since = (anchor - datetime.strptime(r["joined_date"], "%Y-%m-%d").date()).days
+        except (TypeError, ValueError):
+            continue
+        if result.get(r["user_id"], 0) >= since - 1:
+            streak = get_streak_days(r["user_id"], group_id, group_tasks, for_date)
+            if streak:
+                result[r["user_id"]] = streak
     return result
 
 
