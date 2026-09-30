@@ -9737,7 +9737,7 @@
       document.getElementById('hifz-rec-timer').style.display = '';
       document.getElementById('hifz-rec-timer').textContent = hifzRecMmss(ms);
       hifzRecButtons('broken');
-      trail('rev_broken', { ms: ms });
+      trail('rev_broken', { n: Math.round(ms / 1000) + 's' });   // след хранит только n
       return true;
     }).catch(function () { return false; });
   }
@@ -9808,7 +9808,7 @@
     fetch(apiBase() + '/revision/submit', { method: 'POST', headers: authHeaders(), body: fd })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
-        trail('rev_submit', { ms: rec.ms || 0, n: (res.ok && res.data.ok) ? 'ok' : String(res.data && res.data.error) });
+        trail('rev_submit', { n: ((res.ok && res.data.ok) ? 'ok' : String(res.data && res.data.error)) + ' ' + Math.round((rec.ms || 0) / 1000) + 's' });
         if (res.ok && res.data.ok) {
           document.getElementById('hifz-rec-hint').textContent = T('revision_rec_sent');
           recPartsWipe();       // дошло до устаза - на телефоне держать незачем

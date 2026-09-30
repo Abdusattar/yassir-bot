@@ -28,7 +28,8 @@ LOCAL_TZ = timezone(timedelta(hours=6))   # Asia/Bishkek
 WHAT = {"open": "открыл приложение", "page": "лист", "enter": "📖 заучивание",
         "exit": "✕ выход", "fix": "«поправить»", "unit": "единица",
         "pick": "тап выбора", "save": "сохранить место", "retake": "пересдача",
-        "submit": "отправил сдачу"}
+        "submit": "отправил сдачу", "rev_open": "открыл запись повторения",
+        "rev_broken": "повторение прервалось", "rev_submit": "отправил повторение"}
 
 
 def local(ts):
