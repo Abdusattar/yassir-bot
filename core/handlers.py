@@ -2039,9 +2039,12 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 "⚠️ " + s["name"] + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
                 ") уже исчерпан. Этот день будет считаться пропуском.")
         else:
-            add_bonus(s["id"], group_id, get_date(), 1, "excuse", note=reason or None)
+            # Узр без балла (30.09.2026, решение пользователя: «не хочу давать
+            # балл за узр, но штрафовать не будем»). Событие остаётся - по нему
+            # день не пропуск и считается месячный лимит узров.
+            add_bonus(s["id"], group_id, get_date(), 0, "excuse", note=reason or None)
             await send_message(chat_id,
-                "✅ " + s["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
+                "✅ " + s["name"] + ", уважительная причина принята, день не считается пропуском. Берегите себя! 🤲")
         return
 
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
@@ -2130,9 +2133,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     "⚠️ " + s["name"] + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
                     ") уже исчерпан. Этот день будет считаться пропуском.")
             else:
-                add_bonus(s["id"], group_id, get_date(), 1, "excuse")
+                add_bonus(s["id"], group_id, get_date(), 0, "excuse")   # без балла, см. выше
                 await send_message(chat_id,
-                    "✅ " + s["name"] + ", уважительная причина принята.\nЗасчитан 1 балл. Берегите себя! 🤲")
+                    "✅ " + s["name"] + ", уважительная причина принята, день не считается пропуском. Берегите себя! 🤲")
             return
         # Незваный ответ бота (см. AI_ANSWER_IF_RELEVANT в config.py): по
         # умолчанию выключен с 09.09.2026 - слишком много непрошеных реплик
