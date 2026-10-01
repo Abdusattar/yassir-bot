@@ -686,7 +686,9 @@ async def ask_nameless_students():
             r = c.execute("SELECT julianday('now') - julianday(joined_date) AS d FROM unregistered_members"
                           " WHERE user_id=? AND chat_id=?", (phone, chat_id)).fetchone()
         day = int(r["d"] or 0) if r else 0
-        if not (started or day == NAMELESS_REASK_DAY) or not row["dm_ok"]:
+        # Личка - и своя, и через YassirApp (01.10.2026): имя всё равно пишут
+        # в группе, ответ никуда пересылать не нужно.
+        if not (started or day == NAMELESS_REASK_DAY) or not (row["dm_ok"] or get_dm_ok_by_phone(phone)):
             continue
         try:
             with important("kick"):

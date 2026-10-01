@@ -3619,6 +3619,25 @@ def other_bot_dm_ok(phone):
         return False
 
 
+def other_bot_prep_link():
+    """Ссылка на подготовительную второго бота (только чтение его базы) -
+    YassirApp даёт её новичку другой половины напрямую (01.10.2026). Та же
+    выборка, что get_prep_group у себя: первая активная prep."""
+    path = _other_bot_db_path()
+    if not path:
+        return ""
+    try:
+        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            row = c.execute("SELECT invite_link FROM groups WHERE active=1 AND group_type='prep'"
+                            " LIMIT 1").fetchone()
+        finally:
+            c.close()
+        return (row[0] or "") if row else ""
+    except sqlite3.Error:
+        return ""
+
+
 def get_dm_ok(uid):
     """Писал ли пользователь боту в личку хотя бы раз (значит, бот может ему туда писать)."""
     with db() as c:

@@ -305,3 +305,86 @@ def test_member_on_app_channel_not_sent_to_half_bot(mode, monkeypatch):
     assert "на связи здесь" in sent[-1] and "t.me/yassirquranbot/app" in sent[-1]
     asyncio.run(app_bot.way_in(OLD))
     assert "Твой бот" in sent[-1], "старому - как раньше"
+
+
+# ── Шаг 3: куда звать «нажми Старт» ─────────────────────────────────────────
+
+def test_start_link_for(mode):
+    import core.bots as bots
+    bots.register_app("YassirAppBot")
+    mode("off")
+    assert ar.start_link_for("5040") is None
+    mode("new")
+    assert ar.start_link_for("5040") == "https://t.me/YassirAppBot?start=go"
+    gid = db.get_group("-100500")["id"]
+    db.add_student("Старый", gid, phone="5041")
+    assert ar.start_link_for("5041") is None, "старого зовём к его боту, как раньше"
+    assert ar.start_link_for(USTAZ) is None
+    mode("test")
+    assert ar.start_link_for("5040") is None
+    assert ar.start_link_for(TESTER) == "https://t.me/YassirAppBot?start=go"
+
+
+def test_prep_greeting_points_newcomer_to_app(mode, monkeypatch):
+    import core.bots as bots
+    import core.prep as prep
+    bots.register_app("YassirAppBot")
+    sent = []
+
+    async def fake_send(chat_id, text, *a, **k):
+        sent.append(text)
+
+    async def bot_link():
+        return "https://t.me/yassirquranbot?start=go"
+    monkeypatch.setattr(prep, "send_message", fake_send)
+    monkeypatch.setattr(prep, "get_dm_start_link", bot_link)
+    mode("new")
+    asyncio.run(prep.send_prep_onboarding_group_message("-100600", "Али", "ru", False, uid="5050"))
+    assert "YassirAppBot" in sent[-1]
+    mode("off")
+    asyncio.run(prep.send_prep_onboarding_group_message("-100600", "Али", "ru", False, uid="5050"))
+    assert "yassirquranbot" in sent[-1], "выключено - как было"
+
+
+# ── Шаг 4: две двери ────────────────────────────────────────────────────────
+
+def test_side_answer_gives_prep_link_directly(mode, monkeypatch):
+    sent = []
+
+    async def fake_send(chat_id, text, buttons=None):
+        sent.append(text)
+    monkeypatch.setattr(app_bot, "send", fake_send)
+    monkeypatch.setattr(app_bot, "own_prep_link", lambda: "https://t.me/+MALEPREP")
+    monkeypatch.setattr(app_bot, "other_bot_prep_link", lambda: "https://t.me/+FEMPREP")
+    mode("new")
+    asyncio.run(app_bot.send_to_side(NEWBIE, "male"))
+    assert "t.me/+MALEPREP" in sent[-1] and "заявку" in sent[-1]
+    asyncio.run(app_bot.send_to_side(NEWBIE, "female"))
+    assert "t.me/+FEMPREP" in sent[-1]
+
+
+def test_side_answer_old_way_when_not_routed(mode, monkeypatch):
+    sent = []
+
+    async def fake_send(chat_id, text, buttons=None):
+        sent.append(text)
+    monkeypatch.setattr(app_bot, "send", fake_send)
+    monkeypatch.setattr(app_bot, "_bot_links", lambda side: ("https://t.me/yassirquranbot",
+                                                             "https://t.me/yassirquranbot?start=go"))
+    monkeypatch.setattr(app_bot, "own_prep_link", lambda: "https://t.me/+MALEPREP")
+    mode("off")
+    asyncio.run(app_bot.send_to_side(NEWBIE, "male"))
+    assert "yassirquranbot?start=go" in sent[-1] and "+MALEPREP" not in sent[-1]
+
+
+def test_side_answer_no_prep_link_falls_back(mode, monkeypatch):
+    sent = []
+
+    async def fake_send(chat_id, text, buttons=None):
+        sent.append(text)
+    monkeypatch.setattr(app_bot, "send", fake_send)
+    monkeypatch.setattr(app_bot, "_bot_links", lambda side: ("x", "https://t.me/yassirquranbot?start=go"))
+    monkeypatch.setattr(app_bot, "own_prep_link", lambda: "")
+    mode("new")
+    asyncio.run(app_bot.send_to_side(NEWBIE, "male"))
+    assert "yassirquranbot?start=go" in sent[-1]

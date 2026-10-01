@@ -32,10 +32,10 @@ import aiohttp
 import config
 from core import app_inbox, app_route
 from core.bots import other_bot, other_profile, JAMAAT_IN, register_app
-from core.db import (is_app_member, other_bot_member, other_bot_known, ever_learning_student,
-                     is_any_group_admin, own_bot_dm_ok, other_bot_dm_ok)
+from core.db import is_app_member, other_bot_member
 from core.i18n import T
-from core.side import known_side, remember_side, _leave_own_prep, side_buttons, SIDES
+from core.db import other_bot_prep_link
+from core.side import known_side, remember_side, _leave_own_prep, side_buttons, SIDES, own_prep_link
 from core.tg import get_bot_username
 from core.web_auth import claim_login_code, refuse_login_code, LOGIN_START_PREFIX
 
@@ -165,7 +165,20 @@ async def way_in(uid):
     await send(uid, T("side_question"), side_buttons(uid))
 
 
+def _prep_link(side):
+    return own_prep_link() if side == config.PROFILE else other_bot_prep_link()
+
+
 async def send_to_side(uid, side):
+    # Две двери вместо трёх (01.10.2026): тому, чей канал YassirApp, сразу
+    # ссылка на подготовительную его половины. Заявку решит её бот - половина
+    # уже записана в user_side, он впустит за секунду (core/side.py).
+    if app_route.via_app(uid):
+        link = _prep_link(side)
+        if link:
+            await send(uid, T("app_side_prep_link", jamaat=JAMAAT_IN[side], link=link))
+            return
+        log.error("app_bot: у подготовительной %s нет ссылки - веду по-старому, через бота", side)
     _, start_link = _bot_links(side)
     if start_link:
         await send(uid, T("app_side_link", jamaat=JAMAAT_IN[side], link=start_link))
@@ -185,13 +198,7 @@ async def handle_side_answer(uid, side):
 
 
 def is_newcomer(uid):
-    """Новичок для YassirApp: устаз ни одной половины его не пропускал (ни
-    pro/relaxed, ни роли устаза) и личку со своим ботом он не открывал.
-    Подготовительная не в счёт - её проходят именно новички. Кто привык к
-    своему боту, на нём и остаётся (решение пользователя 01.10: старые
-    ничего не должны заметить)."""
-    return not (ever_learning_student(uid) or is_any_group_admin(uid) or other_bot_known(uid)
-                or own_bot_dm_ok(uid) or other_bot_dm_ok(uid))
+    return app_route.is_newcomer(uid)
 
 
 def half_of(uid):

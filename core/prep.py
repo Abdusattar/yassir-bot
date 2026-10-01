@@ -791,7 +791,10 @@ async def send_prep_onboarding_group_message(chat_id, name, glang, dm_ok, uid=No
     if dm_ok:
         text = T("prep_onboarding_group_dm_ready", glang, name=name, half=half_word())
     else:
-        link = await get_dm_start_link()
+        # Новичка, у которого нет лички ни с кем, зовём сразу в YassirApp
+        # (01.10.2026, core/app_route.py) - если его круг включён.
+        from core.app_route import start_link_for
+        link = start_link_for(uid) or await get_dm_start_link()
         text = T("prep_onboarding_group_dm_needed", glang, name=name, half=half_word(),
                  link=link or "https://t.me/")
     if note:

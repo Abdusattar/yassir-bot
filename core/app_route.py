@@ -134,6 +134,40 @@ def via_app(chat_id):
     return bool(st["newcomer"])
 
 
+def is_newcomer(uid):
+    """Новичок для YassirApp: устаз ни одной половины его не пропускал (ни
+    pro/relaxed, ни роли устаза) и личку со своим ботом он не открывал.
+    Подготовительная не в счёт - её проходят именно новички. Кто привык к
+    своему боту, на нём и остаётся (решение пользователя 01.10: старые
+    ничего не должны заметить)."""
+    from core.db import (ever_learning_student, is_any_group_admin, other_bot_known,
+                         own_bot_dm_ok, other_bot_dm_ok)
+    uid = str(uid)
+    return not (ever_learning_student(uid) or is_any_group_admin(uid) or other_bot_known(uid)
+                or own_bot_dm_ok(uid) or other_bot_dm_ok(uid))
+
+
+def start_link_for(uid):
+    """Куда звать «нажми Старт» человека, с которым лички нет ни у кого:
+    ссылка YassirApp, если его круг включён, иначе None (старый путь -
+    свой бот). Тот же отбор, что в via_app, только до первой встречи."""
+    if not config.APP_SEND_TOKEN or config.DM_VIA_APP not in MODES[1:] or not uid:
+        return None
+    uid = str(uid)
+    if uid in config.DM_VIA_APP_TEST_IDS:
+        pass
+    elif config.DM_VIA_APP == "test":
+        return None
+    elif config.DM_VIA_APP == "new" and not is_newcomer(uid):
+        return None
+    else:
+        from core.db import is_any_group_admin
+        if uid in config.SUPER_ADMIN_IDS or is_any_group_admin(uid):
+            return None
+    from core.bots import app_invite_link
+    return app_invite_link()
+
+
 def unreachable(result):
     """Ответ Telegram говорит, что YassirApp этому человеку писать не может."""
     if not result or result.get("ok"):
