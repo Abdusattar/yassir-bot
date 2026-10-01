@@ -14,6 +14,7 @@ import logging
 from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHAF_URL, MUFRADAT_API_PORT
 from config import APP_BOT_TOKEN
 from core import app_bot
+from core import app_route
 from core import tadabbur_mirror
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
@@ -46,6 +47,10 @@ async def queued_process_message(chat_id, sender, text, sender_name, is_media=Fa
     if lock is None:
         lock = asyncio.Lock()
         _sender_locks[key] = lock
+    # Человек пишет нам в личку - отвечаем сюда же, даже если его канал
+    # YassirApp (core/app_route.py). Живёт только в этой задаче.
+    if not str(chat_id).startswith("-"):
+        app_route.answering_in(chat_id)
     async with lock:
         try:
             await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id, voice_file_id, voice_duration)
@@ -154,6 +159,13 @@ async def main():
                     cq_chat_id = str(cq_msg.get("chat", {}).get("id", ""))
                     cq_message_id = cq_msg.get("message_id")
                     await answer_callback_query(cq.get("id"))
+
+                    def cq_task(coro, chat=cq_chat_id):
+                        # Нажатие в нашей личке - ответ туда же, а не в
+                        # YassirApp (01.10.2026, core/app_route.py).
+                        if chat and not chat.startswith("-"):
+                            coro = app_route.in_chat(chat, coro)
+                        return asyncio.create_task(coro)
                     # "pjz:yes:<uid>" / "pjz:no:<uid>" - вопрос про джуз при выпуске
                     # из подготовительной. uid закодирован в callback_data, потому
                     # что кнопка может быть показана в ГРУППЕ (если личка студенту
@@ -164,7 +176,7 @@ async def main():
                         if len(parts) == 3 and parts[2] == cq_uid:
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            asyncio.create_task(handle_juz_answer(cq_uid, parts[1] == "yes"))
+                            cq_task(handle_juz_answer(cq_uid, parts[1] == "yes"))
                     # "pjzc:yes:<phone>" / "pjzc:no:<phone>" - подтверждение
                     # Умар устаза по самооценке "знаю 1-22 страницы"
                     # (25.08.2026). Кнопки шлются только в личку самого
@@ -175,7 +187,7 @@ async def main():
                         if len(parts) == 3:
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            asyncio.create_task(handle_juz_confirm(parts[2], parts[1] == "yes"))
+                            cq_task(handle_juz_confirm(parts[2], parts[1] == "yes"))
                     # "upg:stay:<uid>:<offer_id>" / "upg:pro:<uid>:<offer_id>" -
                     # предложение перейти из relaxed в pro-группу (25.07.2026).
                     # offer_id в data - чтобы тап по устаревшему сообщению не
@@ -185,7 +197,7 @@ async def main():
                         if len(parts) == 4 and parts[2] == cq_uid:
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            asyncio.create_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
+                            cq_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
                     # "ponb:<next_screen_idx>:<uid>" - кнопка "Далее" в онбординге
                     # подготовительной (13.08.2026, 6 экранов вместо потока из 9
                     # сообщений). Только личка - но uid всё равно сверяем, для
@@ -198,19 +210,19 @@ async def main():
                         if len(parts) == 3 and parts[2] == cq_uid:
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            asyncio.create_task(handle_side_answer(cq_uid, parts[1]))
+                            cq_task(handle_side_answer(cq_uid, parts[1]))
                     # "inv:male" / "inv:female" - «ссылка для брата/сестры»
                     # (20.09.2026). Только личка, адресат = нажавший.
                     elif cq_data.startswith("inv:"):
                         parts = cq_data.split(":", 1)
                         if len(parts) == 2:
-                            asyncio.create_task(handle_invite_pick(cq_uid, parts[1]))
+                            cq_task(handle_invite_pick(cq_uid, parts[1]))
                     elif cq_data.startswith("ponb:"):
                         parts = cq_data.split(":", 2)
                         if len(parts) == 3 and parts[2] == cq_uid:
                             if cq_chat_id and cq_message_id:
                                 await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            asyncio.create_task(handle_prep_onboarding_next(cq_uid, int(parts[1])))
+                            cq_task(handle_prep_onboarding_next(cq_uid, int(parts[1])))
                     # Кнопки чатового тренажёра муфрадата (muf:/mufinc:/mufdec:/
                     # mufend:/muftop:/muflang*) убраны 15.09.2026 - тренажёр
                     # живёт только в приложении. Тап по старой карточке, если

@@ -4,6 +4,7 @@ import logging
 import os
 import aiohttp
 from config import TG_API, SHADOW_CHAT_IDS
+from core import app_route
 from core.feed import record_outgoing
 
 log = logging.getLogger(__name__)
@@ -24,29 +25,80 @@ def get_bot_username():
     return _bot_username
 
 
+# Личка через @YassirAppBot (01.10.2026, core/app_route.py): эти методы в
+# личный чат студента, чей канал - YassirApp, уходят его токеном. Решение и
+# запасной путь - здесь, в нижней точке, как и лента: выше десятки send_*.
+_ROUTED = {"sendMessage", "sendPhoto", "sendVoice", "sendDocument", "sendAudio", "sendVideo",
+           "sendChatAction", "editMessageText", "editMessageReplyMarkup", "editMessageCaption",
+           "editMessageMedia", "deleteMessage"}
+
+
+async def _routed(method, chat_id, attempt):
+    """attempt(base) -> ответ Telegram. Канал YassirApp - сначала им; явный
+    отказ - старым путём (свой бот). Отказ «заблокировал / не начинал» ещё и
+    снимает человека с YassirApp. Сеть молчит (None) - не повторяем: сообщение
+    могло уйти, дубль человек заметит."""
+    if method in _ROUTED and app_route.via_app(chat_id):
+        data = await attempt(app_route.api_base(), "app ")
+        if data is None or data.get("ok"):
+            return data
+        if app_route.unreachable(data):
+            app_route.mark_blocked(chat_id)
+        log.info("%s %s через YassirApp не прошёл - старым путём", method, chat_id)
+    return await attempt(TG_API, "")
+
+
 async def tg_call(method, payload=None, timeout=35):
-    url = TG_API + "/" + method
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
-                url, json=(payload or {}),
-                timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as r:
-                data = await r.json()
-                if data and not data.get("ok"):
-                    log.error("tg_call %s failed: %s", method, data.get("description", data))
-                # Лента (11.09.2026): свои сообщения бот через getUpdates не
-                # получает - пишем их здесь, в общей точке. Выше tg_call
-                # десяток send_*, и перехватывать каждую значило бы забыть
-                # следующую. Метод фильтруем: через tg_call ходят и
-                # getUpdates, и getMe, и баны.
-                if method == "sendMessage" and data and data.get("ok"):
-                    p = payload or {}
-                    record_outgoing(p.get("chat_id"), result=data, text=p.get("text"))
-                return data
-    except Exception as e:
-        log.error("tg_call %s error: %s: %s", method, type(e).__name__, e)
-        return None
+    payload = payload or {}
+
+    async def attempt(base, label):
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    base + "/" + method, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=timeout)
+                ) as r:
+                    data = await r.json()
+                    if data and not data.get("ok"):
+                        log.error("tg_call %s%s failed: %s", label, method, data.get("description", data))
+                    return data
+        except Exception as e:
+            log.error("tg_call %s%s error: %s: %s", label, method, type(e).__name__, e)
+            return None
+
+    data = await _routed(method, payload.get("chat_id"), attempt)
+    # Лента (11.09.2026): свои сообщения бот через getUpdates не получает -
+    # пишем их здесь, в общей точке. Выше tg_call десяток send_*, и
+    # перехватывать каждую значило бы забыть следующую. Метод фильтруем:
+    # через tg_call ходят и getUpdates, и getMe, и баны.
+    if method == "sendMessage" and data and data.get("ok"):
+        record_outgoing(payload.get("chat_id"), result=data, text=payload.get("text"))
+    return data
+
+
+async def _post_form(method, cid, build, timeout=35):
+    """Multipart-отправка (фото, голос) с тем же выбором канала. build() -
+    свежий FormData на каждую попытку: использованный второй раз не уходит."""
+    async def attempt(base, label):
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    base + "/" + method, data=build(),
+                    timeout=aiohttp.ClientTimeout(total=timeout)
+                ) as r:
+                    result = await r.json()
+                    if result and not result.get("ok"):
+                        log.error("%s%s failed: %s", label, method, result.get("description", result))
+                    return result
+        except Exception as e:
+            log.error("%s%s error: %s: %s", label, method, type(e).__name__, e)
+            return None
+    return await _routed(method, cid, attempt)
+
+
+def _as_bytes(body):
+    """BytesIO читается один раз - запасной попытке нужны сами байты."""
+    return body.getvalue() if hasattr(body, "getvalue") else body
 
 
 async def _raw_send(cid, text, reply_to_message_id=None):
@@ -106,29 +158,27 @@ async def send_message(chat_id, text, reply_to_message_id=None):
 
 
 async def _raw_send_photo(cid, photo_path, caption=None, reply_markup=None):
-    data = aiohttp.FormData()
-    data.add_field("chat_id", str(cid))
-    if caption:
-        data.add_field("caption", caption)
-    if reply_markup:
-        data.add_field("reply_markup", json.dumps(reply_markup))
     try:
         with open(photo_path, "rb") as f:
-            data.add_field("photo", f, filename=os.path.basename(photo_path), content_type="image/png")
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    TG_API + "/sendPhoto", data=data,
-                    timeout=aiohttp.ClientTimeout(total=35)
-                ) as r:
-                    result = await r.json()
-                    if result and not result.get("ok"):
-                        log.error("sendPhoto failed: %s", result.get("description", result))
-                    if result and result.get("ok"):
-                        record_outgoing(cid, result=result, text=caption, kind="photo")
-                    return result
-    except Exception as e:
+            body = f.read()
+    except OSError as e:
         log.error("sendPhoto error: %s: %s", type(e).__name__, e)
         return None
+
+    def build():
+        data = aiohttp.FormData()
+        data.add_field("chat_id", str(cid))
+        if caption:
+            data.add_field("caption", caption)
+        if reply_markup:
+            data.add_field("reply_markup", json.dumps(reply_markup))
+        data.add_field("photo", body, filename=os.path.basename(photo_path), content_type="image/png")
+        return data
+
+    result = await _post_form("sendPhoto", cid, build)
+    if result and result.get("ok"):
+        record_outgoing(cid, result=result, text=caption, kind="photo")
+    return result
 
 
 async def send_photo(chat_id, photo_path, caption=None):
@@ -170,31 +220,25 @@ async def _raw_send_photo_bytes(cid, photo_bytes, filename, caption=None, reply_
     """Как _raw_send_photo, но принимает BytesIO вместо пути на диске -
     для сгенерированных на лету картинок (снимок строки при сдаче хифза),
     не плодит временные файлы на сервере."""
-    data = aiohttp.FormData()
-    data.add_field("chat_id", str(cid))
-    if caption:
-        data.add_field("caption", caption)
-        data.add_field("parse_mode", "HTML")
-    if reply_markup:
-        data.add_field("reply_markup", json.dumps(reply_markup))
-    if reply_to_message_id:
-        data.add_field("reply_to_message_id", str(reply_to_message_id))
-    data.add_field("photo", photo_bytes, filename=filename, content_type="image/png")
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
-                TG_API + "/sendPhoto", data=data,
-                timeout=aiohttp.ClientTimeout(total=35)
-            ) as r:
-                result = await r.json()
-                if result and not result.get("ok"):
-                    log.error("sendPhoto(bytes) failed: %s", result.get("description", result))
-                if result and result.get("ok"):
-                    record_outgoing(cid, result=result, text=caption, kind="photo")
-                return result
-    except Exception as e:
-        log.error("sendPhoto(bytes) error: %s: %s", type(e).__name__, e)
-        return None
+    body = _as_bytes(photo_bytes)
+
+    def build():
+        data = aiohttp.FormData()
+        data.add_field("chat_id", str(cid))
+        if caption:
+            data.add_field("caption", caption)
+            data.add_field("parse_mode", "HTML")
+        if reply_markup:
+            data.add_field("reply_markup", json.dumps(reply_markup))
+        if reply_to_message_id:
+            data.add_field("reply_to_message_id", str(reply_to_message_id))
+        data.add_field("photo", body, filename=filename, content_type="image/png")
+        return data
+
+    result = await _post_form("sendPhoto", cid, build)
+    if result and result.get("ok"):
+        record_outgoing(cid, result=result, text=caption, kind="photo")
+    return result
 
 
 async def send_photo_bytes(chat_id, photo_bytes, filename, caption=None, reply_to_message_id=None):
@@ -227,28 +271,22 @@ async def send_voice_bytes(chat_id, voice_bytes, caption=None, reply_to_message_
         cid = int(str(chat_id))
     except (ValueError, TypeError):
         cid = chat_id
-    data = aiohttp.FormData()
-    data.add_field("chat_id", str(cid))
-    if caption:
-        data.add_field("caption", caption)
-    if reply_to_message_id:
-        data.add_field("reply_to_message_id", str(reply_to_message_id))
-    data.add_field("voice", voice_bytes, filename="hifz.ogg", content_type="audio/ogg")
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
-                TG_API + "/sendVoice", data=data,
-                timeout=aiohttp.ClientTimeout(total=120)
-            ) as r:
-                result = await r.json()
-                if result and not result.get("ok"):
-                    log.error("sendVoice failed: %s", result.get("description", result))
-                if result and result.get("ok"):
-                    record_outgoing(cid, result=result, text=caption, kind="voice")
-                return result
-    except Exception as e:
-        log.error("sendVoice error: %s: %s", type(e).__name__, e)
-        return None
+    body = _as_bytes(voice_bytes)
+
+    def build():
+        data = aiohttp.FormData()
+        data.add_field("chat_id", str(cid))
+        if caption:
+            data.add_field("caption", caption)
+        if reply_to_message_id:
+            data.add_field("reply_to_message_id", str(reply_to_message_id))
+        data.add_field("voice", body, filename="hifz.ogg", content_type="audio/ogg")
+        return data
+
+    result = await _post_form("sendVoice", cid, build, timeout=120)
+    if result and result.get("ok"):
+        record_outgoing(cid, result=result, text=caption, kind="voice")
+    return result
 
 
 async def send_photo_bytes_with_button_rows(chat_id, photo_bytes, filename, caption, rows):
@@ -270,27 +308,20 @@ async def edit_message_media_with_button_rows(chat_id, message_id, photo_bytes, 
         cid = int(str(chat_id))
     except (ValueError, TypeError):
         cid = chat_id
-    data = aiohttp.FormData()
-    data.add_field("chat_id", str(cid))
-    data.add_field("message_id", str(message_id))
-    data.add_field("media", json.dumps({
-        "type": "photo", "media": "attach://photo", "caption": caption, "parse_mode": "HTML"
-    }))
-    data.add_field("reply_markup", json.dumps(_build_keyboard(rows)))
-    data.add_field("photo", photo_bytes, filename=filename, content_type="image/png")
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
-                TG_API + "/editMessageMedia", data=data,
-                timeout=aiohttp.ClientTimeout(total=35)
-            ) as r:
-                result = await r.json()
-                if result and not result.get("ok"):
-                    log.error("editMessageMedia failed: %s", result.get("description", result))
-                return result
-    except Exception as e:
-        log.error("editMessageMedia error: %s: %s", type(e).__name__, e)
-        return None
+    body = _as_bytes(photo_bytes)
+
+    def build():
+        data = aiohttp.FormData()
+        data.add_field("chat_id", str(cid))
+        data.add_field("message_id", str(message_id))
+        data.add_field("media", json.dumps({
+            "type": "photo", "media": "attach://photo", "caption": caption, "parse_mode": "HTML"
+        }))
+        data.add_field("reply_markup", json.dumps(_build_keyboard(rows)))
+        data.add_field("photo", body, filename=filename, content_type="image/png")
+        return data
+
+    return await _post_form("editMessageMedia", cid, build)
 
 
 async def edit_message_caption_with_button_rows(chat_id, message_id, caption, rows):

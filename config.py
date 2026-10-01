@@ -50,6 +50,18 @@ MUSHAF_APP_LINK = os.getenv("MUSHAF_APP_LINK", "")
 # бота нет, вход и приглашения идут через свои боты, как раньше.
 APP_BOT_TOKEN = os.getenv("TELEGRAM_TOKEN_APP", "") if PROFILE == "male" else ""
 
+# Личка через @YassirAppBot (01.10.2026, core/app_route.py). Тот же токен,
+# но только для ОТПРАВКИ - её Telegram разрешает из любого процесса, второй
+# слушатель запрещён лишь для getUpdates. Нет токена в .env процесса - его
+# студенты получают личку, как раньше, от своего бота.
+APP_SEND_TOKEN = os.getenv("TELEGRAM_TOKEN_APP", "")
+# Кому личка идёт через YassirApp: off - никому (по умолчанию); test - только
+# DM_VIA_APP_TEST_IDS; new - ещё и новичкам (впервые пришли к YassirApp, нигде
+# не учась); all - всем, кто нажал у него «Старт». Устазы и суперадмины -
+# всегда через своего бота, кроме тестовых id.
+DM_VIA_APP = os.getenv("DM_VIA_APP", "off").strip().lower()
+DM_VIA_APP_TEST_IDS = [s.strip() for s in os.getenv("DM_VIA_APP_TEST_IDS", "").split(",") if s.strip()]
+
 # Тренажёр муфрадата в вебе (29.08.2026) - HTTP API живёт в ТОМ ЖЕ процессе,
 # что и getUpdates-цикл (asyncio-задача, см. bot.py). Мужской и женский бот -
 # два процесса на одном сервере (см. память "Два бота"), поэтому у каждого

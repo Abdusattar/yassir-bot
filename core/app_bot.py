@@ -30,6 +30,7 @@ import logging
 import aiohttp
 
 import config
+from core import app_route
 from core.bots import other_bot, other_profile, JAMAAT_IN, register_app
 from core.db import is_app_member, other_bot_member
 from core.i18n import T
@@ -168,11 +169,21 @@ async def handle_side_answer(uid, side):
     await send_to_side(uid, side)
 
 
+def note_contact(uid):
+    """Человек написал или нажал кнопку - личка с YassirApp открыта
+    (core/app_route.py). Новичок - кто в этот момент нигде не учится; это
+    запоминается один раз, при первой встрече."""
+    if uid:
+        app_route.mark_started(uid, newcomer=studies_in(uid) is None)
+
+
 async def handle_update(upd):
     cq = upd.get("callback_query")
     if cq:
         await call("answerCallbackQuery", {"callback_query_id": cq.get("id")})
         uid = str((cq.get("from") or {}).get("id", ""))
+        if (cq.get("message") or {}).get("chat", {}).get("type") == "private":
+            note_contact(uid)
         parts = (cq.get("data") or "").split(":", 2)
         msg = cq.get("message") or {}
         # «side:<половина>:<uid>» - те же кнопки, что у ботов половин;
@@ -193,6 +204,7 @@ async def handle_update(upd):
     uid = str((msg.get("from") or {}).get("id", ""))
     if not uid or (msg.get("from") or {}).get("is_bot"):
         return
+    note_contact(uid)
     await handle_text(uid, msg.get("text") or "")
 
 

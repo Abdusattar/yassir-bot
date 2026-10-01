@@ -3585,11 +3585,23 @@ def get_user_by_id(uid):
     return dict(row) if row else None
 
 
+def _app_dm_ok(phone):
+    """Личка открыта через @YassirAppBot (01.10.2026, core/app_route.py) -
+    тогда ему можно писать, даже если своему боту он «Старт» не нажимал:
+    core/tg.py сам отправит токеном YassirApp."""
+    if not phone:
+        return False
+    from core.app_route import via_app
+    return via_app(phone)
+
+
 def get_dm_ok(uid):
     """Писал ли пользователь боту в личку хотя бы раз (значит, бот может ему туда писать)."""
     with db() as c:
-        row = c.execute("SELECT dm_ok FROM users WHERE id=?", (uid,)).fetchone()
-    return bool(row and row["dm_ok"])
+        row = c.execute("SELECT dm_ok, phone FROM users WHERE id=?", (uid,)).fetchone()
+    if row and row["dm_ok"]:
+        return True
+    return bool(row and _app_dm_ok(row["phone"]))
 
 
 def get_dm_ok_by_phone(phone):
@@ -3597,7 +3609,9 @@ def get_dm_ok_by_phone(phone):
     в отличие от get_dm_ok не требует, чтобы вызывающий уже был студентом с известным users.id."""
     with db() as c:
         row = c.execute("SELECT dm_ok FROM users WHERE phone=?", (phone,)).fetchone()
-    return bool(row and row["dm_ok"])
+    if row and row["dm_ok"]:
+        return True
+    return _app_dm_ok(phone)
 
 
 def mark_dm_ok(uid):
