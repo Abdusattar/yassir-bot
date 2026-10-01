@@ -75,16 +75,19 @@ def _now():
 def mark_started(uid, newcomer):
     """Человек написал YassirApp (или нажал его кнопку) - личка с ним
     открыта. Новичок ли он, решается ОДИН раз, при первой встрече; блокировка
-    снимается: раз написал - значит разблокировал."""
+    снимается: раз написал - значит разблокировал. True - встреча первая."""
     uid = str(uid)
     try:
         with _connect() as c:
+            first = c.execute("SELECT 1 FROM app_dm WHERE user_id=?", (uid,)).fetchone() is None
             c.execute(
                 "INSERT INTO app_dm(user_id, started_at, newcomer) VALUES(?,?,?)"
                 " ON CONFLICT(user_id) DO UPDATE SET blocked_at=NULL",
                 (uid, _now(), 1 if newcomer else 0))
+        return first
     except sqlite3.Error as e:
         log.error("app_dm: не отметил %s (%s)", uid, e)
+        return False
 
 
 def mark_blocked(uid):

@@ -11,6 +11,7 @@ import pytest
 
 import config
 import core.app_bot as app_bot
+import core.app_inbox as ai
 import core.app_route as ar
 import core.db as db
 import core.tg as tg
@@ -174,11 +175,133 @@ def test_route_off_own(mode):
 
 def test_note_contact_newcomer_decided_once(mode, monkeypatch):
     mode("new")
+    monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: True)
     monkeypatch.setattr(app_bot, "studies_in", lambda uid: None)
     app_bot.note_contact("5010")
     assert ar.via_app("5010")
-    monkeypatch.setattr(app_bot, "studies_in", lambda uid: "male")
+    monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: False)
     app_bot.note_contact("5011")
     assert not ar.via_app("5011")
-    app_bot.note_contact("5010")          # уже учится - новичком остаётся
+    app_bot.note_contact("5010")          # уже не новичок - решение не меняется
     assert ar.via_app("5010")
+
+
+def test_is_newcomer_rules(mode):
+    assert app_bot.is_newcomer("5020"), "нигде и никогда - новичок"
+    gid = db.get_group("-100500")["id"]
+    db.add_student("Старый", gid, phone="5021")
+    assert not app_bot.is_newcomer("5021"), "учился в постоянной - не новичок"
+    assert not app_bot.is_newcomer(USTAZ)
+    db.mark_dm_ok_by_phone("5022")
+    assert not app_bot.is_newcomer("5022"), "привык к своему боту - остаётся на нём"
+    db.save_group("-100600", "prep", tasks="m,r,t")
+    with db.db() as c:
+        c.execute("UPDATE groups SET group_type='prep' WHERE chat_id='-100600'")
+    db.add_student("Новый", db.get_group("-100600")["id"], phone="5023")
+    assert app_bot.is_newcomer("5023"), "подготовительная не в счёт"
+
+
+def test_first_contact_of_prep_student_sends_started(mode, monkeypatch):
+    monkeypatch.setattr(app_bot, "studies_in", lambda uid: "female")
+    app_bot.note_contact("5030")
+    app_bot.note_contact("5030")          # вторая встреча - без события
+    monkeypatch.setattr(config, "PROFILE", "female")
+    rows = ai.take()
+    assert [(r["kind"], r["user_id"]) for r in rows] == [("started", "5030")]
+
+
+# ── Очередь входящих ────────────────────────────────────────────────────────
+
+@pytest.fixture
+def app_wire(monkeypatch):
+    calls = []
+
+    async def fake_call(method, payload=None, timeout=35):
+        calls.append((method, payload))
+        return {"ok": True}
+    monkeypatch.setattr(app_bot, "call", fake_call)
+    return calls
+
+
+def _cq(uid, data, message_id=77):
+    return {"callback_query": {"id": "q1", "from": {"id": int(uid)}, "data": data,
+                               "message": {"message_id": message_id,
+                                           "chat": {"id": int(uid), "type": "private"}}}}
+
+
+def test_callback_goes_to_owner_half(mode, app_wire, monkeypatch):
+    monkeypatch.setattr(app_bot, "half_of", lambda uid: "female")
+    asyncio.run(app_bot.handle_update(_cq(NEWBIE, "pjz:yes:" + NEWBIE)))
+    assert ("editMessageReplyMarkup" in [m for m, _ in app_wire]), "кнопки снимает сам YassirApp"
+    monkeypatch.setattr(config, "PROFILE", "male")
+    assert ai.take() == [], "мужской процесс чужое не берёт"
+    monkeypatch.setattr(config, "PROFILE", "female")
+    rows = ai.take()
+    assert [(r["kind"], r["data"]) for r in rows] == [("callback", "pjz:yes:" + NEWBIE)]
+    assert ai.take() == [], "взятое второй раз не отдаётся"
+
+
+def test_callback_unknown_half_dropped(mode, app_wire, monkeypatch):
+    monkeypatch.setattr(app_bot, "half_of", lambda uid: None)
+    asyncio.run(app_bot.handle_update(_cq(NEWBIE, "ponb:2:" + NEWBIE)))
+    for p in ("male", "female"):
+        monkeypatch.setattr(config, "PROFILE", p)
+        assert ai.take() == []
+
+
+def test_deliver_calls_same_handler(mode, monkeypatch):
+    monkeypatch.setattr(config, "PROFILE", "male")
+    ai.enqueue("male", "callback", NEWBIE, "upg:pro:%s:3" % NEWBIE)
+    got = []
+
+    async def handle(uid, data, chat_id, message_id):
+        got.append((uid, data, chat_id, message_id))
+    assert asyncio.run(ai.deliver_once(handle)) == 1
+    assert got == [(NEWBIE, "upg:pro:%s:3" % NEWBIE, NEWBIE, None)]
+
+
+def test_deliver_skips_stale(mode, monkeypatch):
+    monkeypatch.setattr(config, "PROFILE", "male")
+    ai.enqueue("male", "callback", NEWBIE, "pjz:no:" + NEWBIE)
+    with ai._connect() as c:
+        c.execute("UPDATE app_inbox SET created_at='2020-01-01 00:00:00'")
+    got = []
+
+    async def handle(*a):
+        got.append(a)
+    asyncio.run(ai.deliver_once(handle))
+    assert got == []
+
+
+def test_started_only_for_app_channel(mode, monkeypatch):
+    import core.prep as prep
+    import core.transfers as transfers
+    hits = []
+
+    async def unlocked(uid):
+        hits.append(("unlocked", uid))
+
+    async def onb(uid):
+        hits.append(("onboarding", uid))
+    monkeypatch.setattr(transfers, "handle_dm_unlocked", unlocked)
+    monkeypatch.setattr(prep, "send_prep_onboarding_if_pending", onb)
+    mode("new")
+    asyncio.run(ai.on_started(OLD))
+    assert hits == [], "старый - не наш канал, писать ему через YassirApp нельзя"
+    asyncio.run(ai.on_started(NEWBIE))
+    assert hits == [("unlocked", NEWBIE), ("onboarding", NEWBIE)]
+
+
+def test_member_on_app_channel_not_sent_to_half_bot(mode, monkeypatch):
+    mode("new")
+    sent = []
+
+    async def fake_send(chat_id, text, buttons=None):
+        sent.append(text)
+    monkeypatch.setattr(app_bot, "send", fake_send)
+    monkeypatch.setattr(app_bot, "studies_in", lambda uid: "male")
+    monkeypatch.setattr(config, "MUSHAF_APP_LINK", "https://t.me/yassirquranbot/app")
+    asyncio.run(app_bot.way_in(NEWBIE))
+    assert "на связи здесь" in sent[-1] and "t.me/yassirquranbot/app" in sent[-1]
+    asyncio.run(app_bot.way_in(OLD))
+    assert "Твой бот" in sent[-1], "старому - как раньше"

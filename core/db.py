@@ -3595,6 +3595,30 @@ def _app_dm_ok(phone):
     return via_app(phone)
 
 
+def own_bot_dm_ok(phone):
+    """Открывал ли человек личку именно с ЭТИМ ботом - без учёта YassirApp
+    (в отличие от get_dm_ok_by_phone)."""
+    with db() as c:
+        row = c.execute("SELECT dm_ok FROM users WHERE phone=?", (str(phone),)).fetchone()
+    return bool(row and row["dm_ok"])
+
+
+def other_bot_dm_ok(phone):
+    """То же для второго бота, только чтение его базы."""
+    path = _other_bot_db_path()
+    if not path:
+        return False
+    try:
+        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            row = c.execute("SELECT dm_ok FROM users WHERE phone=?", (str(phone),)).fetchone()
+        finally:
+            c.close()
+        return bool(row and row[0])
+    except sqlite3.Error:
+        return False
+
+
 def get_dm_ok(uid):
     """Писал ли пользователь боту в личку хотя бы раз (значит, бот может ему туда писать)."""
     with db() as c:

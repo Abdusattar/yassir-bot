@@ -30,9 +30,10 @@ import logging
 import aiohttp
 
 import config
-from core import app_route
+from core import app_inbox, app_route
 from core.bots import other_bot, other_profile, JAMAAT_IN, register_app
-from core.db import is_app_member, other_bot_member
+from core.db import (is_app_member, other_bot_member, other_bot_known, ever_learning_student,
+                     is_any_group_admin, own_bot_dm_ok, other_bot_dm_ok)
 from core.i18n import T
 from core.side import known_side, remember_side, _leave_own_prep, side_buttons, SIDES
 from core.tg import get_bot_username
@@ -115,6 +116,15 @@ def _bot_links(profile):
     return other["chat_link"], other["start_link"]
 
 
+def _app_link(profile):
+    """Прямая ссылка приложения половины: открывает Mini App из любого чата,
+    «Старт» у бота половины для этого не нужен."""
+    if profile == config.PROFILE:
+        return config.MUSHAF_APP_LINK or _bot_links(profile)[0] or "—"
+    other = other_bot()
+    return (other or {}).get("app_link") or "—"
+
+
 # ── Разговор ─────────────────────────────────────────────────────────────────
 
 async def handle_text(uid, text):
@@ -138,6 +148,11 @@ async def handle_text(uid, text):
 async def way_in(uid):
     side = studies_in(uid)
     if side:
+        # Его канал - YassirApp (01.10.2026): не гоняем к боту половины,
+        # всё личное и так приходит сюда.
+        if app_route.via_app(uid):
+            await send(uid, T("app_member_here", link=_app_link(side)))
+            return
         chat_link, _ = _bot_links(side)
         await send(uid, T("app_member", jamaat=JAMAAT_IN[side], link=chat_link or "—"))
         return
@@ -169,12 +184,33 @@ async def handle_side_answer(uid, side):
     await send_to_side(uid, side)
 
 
+def is_newcomer(uid):
+    """Новичок для YassirApp: устаз ни одной половины его не пропускал (ни
+    pro/relaxed, ни роли устаза) и личку со своим ботом он не открывал.
+    Подготовительная не в счёт - её проходят именно новички. Кто привык к
+    своему боту, на нём и остаётся (решение пользователя 01.10: старые
+    ничего не должны заметить)."""
+    return not (ever_learning_student(uid) or is_any_group_admin(uid) or other_bot_known(uid)
+                or own_bot_dm_ok(uid) or other_bot_dm_ok(uid))
+
+
+def half_of(uid):
+    """Чья половина исполняет нажатие: где учится, иначе где ответил."""
+    return studies_in(uid) or known_side(uid)
+
+
 def note_contact(uid):
     """Человек написал или нажал кнопку - личка с YassirApp открыта
-    (core/app_route.py). Новичок - кто в этот момент нигде не учится; это
-    запоминается один раз, при первой встрече."""
-    if uid:
-        app_route.mark_started(uid, newcomer=studies_in(uid) is None)
+    (core/app_route.py). Новичок ли он, запоминается один раз, при первой
+    встрече. Если в этот момент он уже у какой-то половины (вошёл в
+    подготовительную по пересланной ссылке) - ей событие «started»: то же,
+    что первый «Старт» у её бота."""
+    if not uid:
+        return
+    if app_route.mark_started(uid, newcomer=is_newcomer(uid)):
+        side = studies_in(uid)
+        if side:
+            app_inbox.enqueue(side, "started", uid)
 
 
 async def handle_update(upd):
@@ -184,8 +220,23 @@ async def handle_update(upd):
         uid = str((cq.get("from") or {}).get("id", ""))
         if (cq.get("message") or {}).get("chat", {}).get("type") == "private":
             note_contact(uid)
-        parts = (cq.get("data") or "").split(":", 2)
+        data = cq.get("data") or ""
+        parts = data.split(":", 2)
         msg = cq.get("message") or {}
+        # Кнопки, которые прислала половина через YassirApp (джуз, «Далее»,
+        # переход в pro, ссылка другу): исполняет она, через очередь.
+        if data.startswith(app_inbox.FORWARDED):
+            if msg.get("message_id") and not data.startswith("inv:"):
+                await call("editMessageReplyMarkup", {
+                    "chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
+                    "reply_markup": {"inline_keyboard": []},
+                })
+            side = half_of(uid)
+            if side:
+                app_inbox.enqueue(side, "callback", uid, data)
+            else:
+                log.warning("app_bot: нажатие %s от %s - половина неизвестна", data, uid)
+            return
         # «side:<половина>:<uid>» - те же кнопки, что у ботов половин;
         # принимаем тап только адресата.
         if len(parts) == 3 and parts[0] == "side" and parts[2] == uid:

@@ -15,6 +15,7 @@ from config import TELEGRAM_TOKEN, PROFILE, REQUIRE_PREP_FOR_NEW_STUDENTS, MUSHA
 from config import APP_BOT_TOKEN
 from core import app_bot
 from core import app_route
+from core import app_inbox
 from core import tadabbur_mirror
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
@@ -57,6 +58,79 @@ async def queued_process_message(chat_id, sender, text, sender_name, is_media=Fa
         except Exception as e:
             log.error("process_message error chat=%s sender=%s: %s", chat_id, sender, e)
         await asyncio.sleep(0.3)
+
+
+async def handle_callback(cq_uid, cq_data, cq_chat_id, cq_message_id, own_chat=False):
+    """Нажатие инлайн-кнопки. Зовут двое: цикл getUpdates (нажатие в чате
+    этого бота, own_chat=True) и очередь лички YassirApp (core/app_inbox.py,
+    нажатие в чате YassirApp - ответ туда же сам уйдёт его токеном)."""
+    def cq_task(coro, chat=cq_chat_id):
+        # Нажатие в нашей личке - ответ туда же, а не в
+        # YassirApp (01.10.2026, core/app_route.py).
+        if own_chat and chat and not chat.startswith("-"):
+            coro = app_route.in_chat(chat, coro)
+        return asyncio.create_task(coro)
+    # "pjz:yes:<uid>" / "pjz:no:<uid>" - вопрос про джуз при выпуске
+    # из подготовительной. uid закодирован в callback_data, потому
+    # что кнопка может быть показана в ГРУППЕ (если личка студенту
+    # ещё недоступна) - там её видят и могут нажать все участники,
+    # поэтому обрабатываем только тап именно адресата (24.07.2026).
+    if cq_data.startswith("pjz:"):
+        parts = cq_data.split(":", 2)
+        if len(parts) == 3 and parts[2] == cq_uid:
+            if cq_chat_id and cq_message_id:
+                await remove_message_keyboard(cq_chat_id, cq_message_id)
+            cq_task(handle_juz_answer(cq_uid, parts[1] == "yes"))
+    # "pjzc:yes:<phone>" / "pjzc:no:<phone>" - подтверждение
+    # Умар устаза по самооценке "знаю 1-22 страницы"
+    # (25.08.2026). Кнопки шлются только в личку самого
+    # Умара - адресата дополнительно не сверяем, phone тут
+    # это студент, не тапнувший (Умар).
+    elif cq_data.startswith("pjzc:"):
+        parts = cq_data.split(":", 2)
+        if len(parts) == 3:
+            if cq_chat_id and cq_message_id:
+                await remove_message_keyboard(cq_chat_id, cq_message_id)
+            cq_task(handle_juz_confirm(parts[2], parts[1] == "yes"))
+    # "upg:stay:<uid>:<offer_id>" / "upg:pro:<uid>:<offer_id>" -
+    # предложение перейти из relaxed в pro-группу (25.07.2026).
+    # offer_id в data - чтобы тап по устаревшему сообщению не
+    # резолвил случайно текущее предложение того же студента.
+    elif cq_data.startswith("upg:"):
+        parts = cq_data.split(":", 3)
+        if len(parts) == 4 and parts[2] == cq_uid:
+            if cq_chat_id and cq_message_id:
+                await remove_message_keyboard(cq_chat_id, cq_message_id)
+            cq_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
+    # "ponb:<next_screen_idx>:<uid>" - кнопка "Далее" в онбординге
+    # подготовительной (13.08.2026, 6 экранов вместо потока из 9
+    # сообщений). Только личка - но uid всё равно сверяем, для
+    # единообразия с остальными callback-веткам.
+    # "side:male:<uid>" / "side:female:<uid>" - «ты брат или
+    # сестра» (20.09.2026, core/side.py). Только личка; адресат
+    # всё равно сверяется - старые кнопки в группах ещё висят.
+    elif cq_data.startswith("side:"):
+        parts = cq_data.split(":", 2)
+        if len(parts) == 3 and parts[2] == cq_uid:
+            if cq_chat_id and cq_message_id:
+                await remove_message_keyboard(cq_chat_id, cq_message_id)
+            cq_task(handle_side_answer(cq_uid, parts[1]))
+    # "inv:male" / "inv:female" - «ссылка для брата/сестры»
+    # (20.09.2026). Только личка, адресат = нажавший.
+    elif cq_data.startswith("inv:"):
+        parts = cq_data.split(":", 1)
+        if len(parts) == 2:
+            cq_task(handle_invite_pick(cq_uid, parts[1]))
+    elif cq_data.startswith("ponb:"):
+        parts = cq_data.split(":", 2)
+        if len(parts) == 3 and parts[2] == cq_uid:
+            if cq_chat_id and cq_message_id:
+                await remove_message_keyboard(cq_chat_id, cq_message_id)
+            cq_task(handle_prep_onboarding_next(cq_uid, int(parts[1])))
+    # Кнопки чатового тренажёра муфрадата (muf:/mufinc:/mufdec:/
+    # mufend:/muftop:/muflang*) убраны 15.09.2026 - тренажёр
+    # живёт только в приложении. Тап по старой карточке, если
+    # такая ещё висит у кого-то в личке, просто ничего не делает.
 
 
 async def main():
@@ -127,6 +201,9 @@ async def main():
     # процесс кладёт в общую очередь, женский - отправляет.
     if PROFILE == "female":
         asyncio.create_task(tadabbur_mirror.run())
+    # Нажатия и «первый Старт» из лички YassirApp (01.10.2026): слушает их
+    # мужской процесс, а исполняет половина человека - через общую очередь.
+    asyncio.create_task(app_inbox.run(handle_callback))
 
     offset = 0
     while True:
@@ -159,74 +236,7 @@ async def main():
                     cq_chat_id = str(cq_msg.get("chat", {}).get("id", ""))
                     cq_message_id = cq_msg.get("message_id")
                     await answer_callback_query(cq.get("id"))
-
-                    def cq_task(coro, chat=cq_chat_id):
-                        # Нажатие в нашей личке - ответ туда же, а не в
-                        # YassirApp (01.10.2026, core/app_route.py).
-                        if chat and not chat.startswith("-"):
-                            coro = app_route.in_chat(chat, coro)
-                        return asyncio.create_task(coro)
-                    # "pjz:yes:<uid>" / "pjz:no:<uid>" - вопрос про джуз при выпуске
-                    # из подготовительной. uid закодирован в callback_data, потому
-                    # что кнопка может быть показана в ГРУППЕ (если личка студенту
-                    # ещё недоступна) - там её видят и могут нажать все участники,
-                    # поэтому обрабатываем только тап именно адресата (24.07.2026).
-                    if cq_data.startswith("pjz:"):
-                        parts = cq_data.split(":", 2)
-                        if len(parts) == 3 and parts[2] == cq_uid:
-                            if cq_chat_id and cq_message_id:
-                                await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            cq_task(handle_juz_answer(cq_uid, parts[1] == "yes"))
-                    # "pjzc:yes:<phone>" / "pjzc:no:<phone>" - подтверждение
-                    # Умар устаза по самооценке "знаю 1-22 страницы"
-                    # (25.08.2026). Кнопки шлются только в личку самого
-                    # Умара - адресата дополнительно не сверяем, phone тут
-                    # это студент, не тапнувший (Умар).
-                    elif cq_data.startswith("pjzc:"):
-                        parts = cq_data.split(":", 2)
-                        if len(parts) == 3:
-                            if cq_chat_id and cq_message_id:
-                                await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            cq_task(handle_juz_confirm(parts[2], parts[1] == "yes"))
-                    # "upg:stay:<uid>:<offer_id>" / "upg:pro:<uid>:<offer_id>" -
-                    # предложение перейти из relaxed в pro-группу (25.07.2026).
-                    # offer_id в data - чтобы тап по устаревшему сообщению не
-                    # резолвил случайно текущее предложение того же студента.
-                    elif cq_data.startswith("upg:"):
-                        parts = cq_data.split(":", 3)
-                        if len(parts) == 4 and parts[2] == cq_uid:
-                            if cq_chat_id and cq_message_id:
-                                await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            cq_task(handle_upgrade_answer(cq_uid, parts[1], int(parts[3])))
-                    # "ponb:<next_screen_idx>:<uid>" - кнопка "Далее" в онбординге
-                    # подготовительной (13.08.2026, 6 экранов вместо потока из 9
-                    # сообщений). Только личка - но uid всё равно сверяем, для
-                    # единообразия с остальными callback-веткам.
-                    # "side:male:<uid>" / "side:female:<uid>" - «ты брат или
-                    # сестра» (20.09.2026, core/side.py). Только личка; адресат
-                    # всё равно сверяется - старые кнопки в группах ещё висят.
-                    elif cq_data.startswith("side:"):
-                        parts = cq_data.split(":", 2)
-                        if len(parts) == 3 and parts[2] == cq_uid:
-                            if cq_chat_id and cq_message_id:
-                                await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            cq_task(handle_side_answer(cq_uid, parts[1]))
-                    # "inv:male" / "inv:female" - «ссылка для брата/сестры»
-                    # (20.09.2026). Только личка, адресат = нажавший.
-                    elif cq_data.startswith("inv:"):
-                        parts = cq_data.split(":", 1)
-                        if len(parts) == 2:
-                            cq_task(handle_invite_pick(cq_uid, parts[1]))
-                    elif cq_data.startswith("ponb:"):
-                        parts = cq_data.split(":", 2)
-                        if len(parts) == 3 and parts[2] == cq_uid:
-                            if cq_chat_id and cq_message_id:
-                                await remove_message_keyboard(cq_chat_id, cq_message_id)
-                            cq_task(handle_prep_onboarding_next(cq_uid, int(parts[1])))
-                    # Кнопки чатового тренажёра муфрадата (muf:/mufinc:/mufdec:/
-                    # mufend:/muftop:/muflang*) убраны 15.09.2026 - тренажёр
-                    # живёт только в приложении. Тап по старой карточке, если
-                    # такая ещё висит у кого-то в личке, просто ничего не делает.
+                    await handle_callback(cq_uid, cq_data, cq_chat_id, cq_message_id, own_chat=True)
                     continue
 
                 # Заявка на вступление (23.09.2026): в подготовительную входят
