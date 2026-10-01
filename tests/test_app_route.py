@@ -173,16 +173,27 @@ def test_route_off_own(mode):
 
 # ── Отметка от YassirApp ────────────────────────────────────────────────────
 
-def test_note_contact_newcomer_decided_once(mode, monkeypatch):
+@pytest.fixture
+def no_app_api(monkeypatch):
+    calls = []
+
+    async def fake_call(method, payload=None, timeout=35):
+        calls.append((method, payload))
+        return {"ok": True}
+    monkeypatch.setattr(app_bot, "call", fake_call)
+    return calls
+
+
+def test_note_contact_newcomer_decided_once(mode, monkeypatch, no_app_api):
     mode("new")
     monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: True)
     monkeypatch.setattr(app_bot, "studies_in", lambda uid: None)
-    app_bot.note_contact("5010")
+    asyncio.run(app_bot.note_contact("5010"))
     assert ar.via_app("5010")
     monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: False)
-    app_bot.note_contact("5011")
+    asyncio.run(app_bot.note_contact("5011"))
     assert not ar.via_app("5011")
-    app_bot.note_contact("5010")          # уже не новичок - решение не меняется
+    asyncio.run(app_bot.note_contact("5010"))          # уже не новичок - решение не меняется
     assert ar.via_app("5010")
 
 
@@ -201,10 +212,10 @@ def test_is_newcomer_rules(mode):
     assert app_bot.is_newcomer("5023"), "подготовительная не в счёт"
 
 
-def test_first_contact_of_prep_student_sends_started(mode, monkeypatch):
+def test_first_contact_of_prep_student_sends_started(mode, monkeypatch, no_app_api):
     monkeypatch.setattr(app_bot, "studies_in", lambda uid: "female")
-    app_bot.note_contact("5030")
-    app_bot.note_contact("5030")          # вторая встреча - без события
+    asyncio.run(app_bot.note_contact("5030"))
+    asyncio.run(app_bot.note_contact("5030"))          # вторая встреча - без события
     monkeypatch.setattr(config, "PROFILE", "female")
     rows = ai.take()
     assert [(r["kind"], r["user_id"]) for r in rows] == [("started", "5030")]
@@ -388,3 +399,62 @@ def test_side_answer_no_prep_link_falls_back(mode, monkeypatch):
     mode("new")
     asyncio.run(app_bot.send_to_side(NEWBIE, "male"))
     assert "yassirquranbot?start=go" in sent[-1]
+
+
+# ── Шаг 5: приложение из чата YassirApp ─────────────────────────────────────
+
+def test_app_button_only_for_app_channel(mode, monkeypatch, no_app_api):
+    mode("new")
+    monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: True)
+    asyncio.run(app_bot.note_contact("5060"))
+    buttons = [p for m, p in no_app_api if m == "setChatMenuButton"]
+    assert buttons and buttons[0]["chat_id"] == 5060
+    assert buttons[0]["menu_button"]["web_app"]["url"].endswith("?bot=app")
+    no_app_api.clear()
+    monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: False)
+    asyncio.run(app_bot.note_contact("5061"))
+    assert not [m for m, _ in no_app_api if m == "setChatMenuButton"], "старому кнопку не ставим"
+
+
+def _signed(token, uid):
+    import hashlib
+    import hmac
+    import json
+    import time
+    from urllib.parse import urlencode
+    pairs = {"auth_date": str(int(time.time())), "user": json.dumps({"id": int(uid)})}
+    dcs = chr(10).join(f"{k}={v}" for k, v in sorted(pairs.items()))
+    secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+    pairs["hash"] = hmac.new(secret, dcs.encode(), hashlib.sha256).hexdigest()
+    return urlencode(pairs)
+
+
+def test_init_user_accepts_app_signature(mode, monkeypatch):
+    import core.mufradat_api as api
+    monkeypatch.setattr(api, "TELEGRAM_TOKEN", "own-token")
+    assert api.init_user(_signed("own-token", 5070))["id"] == 5070
+    assert api.init_user(_signed("app-token", 5071))["id"] == 5071
+    assert api.init_user(_signed("stranger-token", 5072)) is None
+    monkeypatch.setattr(config, "APP_SEND_TOKEN", "")
+    assert api.init_user(_signed("app-token", 5071)) is None
+
+
+def test_whoami(mode, monkeypatch):
+    import core.mufradat_api as api
+    monkeypatch.setattr(api, "TELEGRAM_TOKEN", "own-token")
+    monkeypatch.setattr(api, "PROFILE", "male")
+    monkeypatch.setattr(api, "is_app_member", lambda uid: uid == "5080")
+    monkeypatch.setattr(api, "other_bot_member", lambda uid: uid == "5081")
+
+    class Req:
+        def __init__(self, raw):
+            self.headers = {"X-Telegram-Init-Data": raw}
+
+    def ask(raw):
+        import json
+        resp = asyncio.run(api.handle_whoami(Req(raw)))
+        return resp.status, json.loads(resp.body)
+    assert ask(_signed("app-token", 5080)) == (200, {"profile": "male"})
+    assert ask(_signed("app-token", 5081)) == (200, {"profile": "female"})
+    assert ask(_signed("app-token", 5082)) == (200, {"profile": None})
+    assert ask("garbage")[0] == 401

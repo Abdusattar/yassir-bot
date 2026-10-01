@@ -4032,6 +4032,23 @@
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
 
+  // Открыто кнопкой в чате @YassirAppBot (?bot=app, 01.10.2026). Бот один
+  // на обе половины, а API у половин свои - спрашиваем, чья половина
+  // (/whoami смотрит обе базы), и открываемся заново уже с ней. Хэш с
+  // initData сохраняем: из него Telegram и узнаёт человека. Не ответил -
+  // мужская: сестре сервер ответит wrong_bot, и она увидит кнопку в своё.
+  var openedAs = new URLSearchParams(window.location.search);
+  if (openedAs.get('bot') === 'app' && tg && tg.initData) {
+    fetch('/api/muf/male/whoami', { headers: { 'X-Telegram-Init-Data': tg.initData } })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return {}; })
+      .then(function (d) {
+        openedAs.set('bot', (d && d.profile) || 'male');
+        window.location.replace(window.location.pathname + '?' + openedAs.toString() + window.location.hash);
+      });
+    return;
+  }
+
   // ── Кто мы такие (10.09.2026) ─────────────────────────────────────────
   // Внутри Telegram нас узнаёт initData - подписанная строка, живёт сутки,
   // приходит от самого Telegram. Открытое как сайт (yassirilm.com) то же

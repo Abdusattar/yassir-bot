@@ -29,6 +29,7 @@ from urllib.parse import parse_qsl
 import aiohttp
 from aiohttp import web
 
+import config
 from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
 from core.app_trail import add_trail, ua_short
 from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy
@@ -136,7 +137,7 @@ def with_auth(handler):
     async def wrapped(request):
         raw = request.headers.get("X-Telegram-Init-Data", "")
         if raw:
-            user = validate_init_data(raw, TELEGRAM_TOKEN)
+            user = init_user(raw)
             if user is None or not user.get("id"):
                 return web.json_response({"error": "unauthorized"}, status=401)
             uid = str(user["id"])
@@ -161,6 +162,17 @@ def with_auth(handler):
             return web.json_response({"error": "unauthorized"}, status=401)
         return await handler(request, user_id)
     return wrapped
+
+
+def init_user(raw):
+    """initData -> user или None. Подпись своего бота - как было; с 01.10.2026
+    ещё и @YassirAppBot: приложение открывают кнопкой в его чате
+    (core/app_route.py). Подпись удостоверяет только, что это этот человек
+    из Telegram; впускает его всё равно членство в ЭТОЙ базе (with_auth)."""
+    user = validate_init_data(raw, TELEGRAM_TOKEN)
+    if user is None and config.APP_SEND_TOKEN:
+        user = validate_init_data(raw, config.APP_SEND_TOKEN)
+    return user
 
 
 def _wrong_bot_payload():
@@ -2494,6 +2506,25 @@ def app_version():
     return v
 
 
+async def handle_whoami(request):
+    """GET - чья половина у открывшего приложение из чата YassirApp
+    (?bot=app, 01.10.2026). Общий бот - одна дверь, а API у половин свои:
+    приложение спрашивает любую, она смотрит обе базы (свою и соседа, только
+    чтение) и называет профиль; дальше приложение работает с ним как обычно.
+    Незнакомцу - null: приложение покажет ему те же экраны, что и раньше."""
+    user = init_user(request.headers.get("X-Telegram-Init-Data", ""))
+    if user is None or not user.get("id"):
+        return web.json_response({"error": "unauthorized"}, status=401)
+    uid = str(user["id"])
+    if is_app_member(uid):
+        profile = PROFILE
+    elif other_bot_member(uid):
+        profile = other_profile()
+    else:
+        profile = None
+    return web.json_response({"profile": profile})
+
+
 async def handle_version(request):
     """GET — метка версии. Без авторизации намеренно: она ничего не
     рассказывает о человеке, а работать должна и тогда, когда сессия
@@ -2507,6 +2538,7 @@ def build_app():
     # до нашего обработчика. Свой предел проверяем уже в handle_hifz_submit.
     app = web.Application(client_max_size=HIFZ_MAX_UPLOAD_BYTES + 1024 * 1024)
     app.router.add_get("/api/muf/version", handle_version)
+    app.router.add_get("/api/muf/whoami", handle_whoami)
     app.router.add_post("/api/muf/auth/start", handle_auth_start)
     app.router.add_get("/api/muf/auth/poll", handle_auth_poll)
     app.router.add_post("/api/muf/auth/logout", handle_auth_logout)

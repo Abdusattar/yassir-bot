@@ -206,7 +206,7 @@ def half_of(uid):
     return studies_in(uid) or known_side(uid)
 
 
-def note_contact(uid):
+async def note_contact(uid):
     """Человек написал или нажал кнопку - личка с YassirApp открыта
     (core/app_route.py). Новичок ли он, запоминается один раз, при первой
     встрече. Если в этот момент он уже у какой-то половины (вошёл в
@@ -218,6 +218,20 @@ def note_contact(uid):
         side = studies_in(uid)
         if side:
             app_inbox.enqueue(side, "started", uid)
+    if app_route.via_app(uid):
+        await set_app_button(uid)
+
+
+async def set_app_button(uid):
+    """Кнопка приложения в ЕГО чате с YassirApp (01.10.2026). Только тем, чей
+    канал - YassirApp: старые студенты ничего нового не видят. Приложение по
+    ?bot=app само узнаёт половину (mufradat_api /whoami). Повторный вызов
+    безвреден - Telegram просто ставит ту же кнопку."""
+    await call("setChatMenuButton", {
+        "chat_id": int(uid),
+        "menu_button": {"type": "web_app", "text": "YassirApp",
+                        "web_app": {"url": config.MUSHAF_URL + "?bot=app"}},
+    })
 
 
 async def handle_update(upd):
@@ -226,7 +240,7 @@ async def handle_update(upd):
         await call("answerCallbackQuery", {"callback_query_id": cq.get("id")})
         uid = str((cq.get("from") or {}).get("id", ""))
         if (cq.get("message") or {}).get("chat", {}).get("type") == "private":
-            note_contact(uid)
+            await note_contact(uid)
         data = cq.get("data") or ""
         parts = data.split(":", 2)
         msg = cq.get("message") or {}
@@ -262,7 +276,7 @@ async def handle_update(upd):
     uid = str((msg.get("from") or {}).get("id", ""))
     if not uid or (msg.get("from") or {}).get("is_bot"):
         return
-    note_contact(uid)
+    await note_contact(uid)
     await handle_text(uid, msg.get("text") or "")
 
 
