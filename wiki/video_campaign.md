@@ -94,7 +94,8 @@
    (`api.qurancdn.com/api/qdc/audio/reciters/{id}/audio_files?chapter=N&segments=true`).
 4. Сборка — ffmpeg, громкость `loudnorm I=-16`.
 5. Ролик 1 собран так: `materials/video/yassir_teaser_01_name.mp4`, чтение Мишари
-   Аль-Афаси (quranicaudio; право на использование в видео не проверено).
+   Аль-Афаси (quranicaudio). Решение пользователя 02.10: чтецы-хафизы выкладывают
+   чтение ради награды и для блага, право у Аль-Афаси дано — используем.
 
 ## Открытые вопросы
 
