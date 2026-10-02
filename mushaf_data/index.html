@@ -14347,12 +14347,19 @@
      шрифта, рваться нечему. Шрифт свой у листа, семейство отдельное
      ('trainer-v4'), чтобы не сбить лист, открытый в мусхафе. Не загрузился
      шрифт - строка простым текстом БЕЗ меток: пусть без цвета, но цельная. */
-  var trainerV4Face = null, trainerV4Url = null;
+  /* trainerV4Want - лист последней строки (02.10.2026, Нурсултан с айфона).
+     Ответил быстро: шрифт прошлого листа ещё качался, новая строка взяла уже
+     стоящий шрифт своего листа, а потом докачался старый и подменил его -
+     глифы стр. 15 нарисовались буквами стр. 4, выделенное слово стало чужим,
+     и среди вариантов «нет верного». Опоздавший шрифт теперь не ставится. */
+  var trainerV4Face = null, trainerV4Url = null, trainerV4Want = null;
   function trainerLineFont(url) {
+    trainerV4Want = url;
     if (!url || typeof FontFace === 'undefined') return Promise.resolve(false);
     if (url === trainerV4Url) return Promise.resolve(true);
     var face = new FontFace('trainer-v4', "url('" + url + "')");
     return face.load().then(function (loaded) {
+      if (trainerV4Want !== url) return false;
       if (trainerV4Face) { try { document.fonts.delete(trainerV4Face); } catch (e) {} }
       document.fonts.add(loaded);
       trainerV4Face = loaded; trainerV4Url = url;
