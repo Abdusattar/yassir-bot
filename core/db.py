@@ -936,16 +936,40 @@ def get_best_group_for_transfer(group_type, lang):
         """, (group_type, lang)).fetchone()
 
 
-UPGRADE_MAX_GROUP_SIZE = 10  # для relaxed→pro предлагаем только группы < 10 студентов
+UPGRADE_MAX_GROUP_SIZE = 15  # для relaxed→pro предлагаем только группы < 15 студентов (02.10.2026, было 10)
 
 
-def get_best_pro_group_for_upgrade(lang, exclude_title="N-1"):
-    """Наименее заполненная pro-группа нужного языка со ссылкой, кроме
-    группы exclude_title (зарезервирована под выпускников подготовительной,
-    знающих джуз - core/prep.py _PREP_JUZ_KNOWN_TARGET_TITLE) и с местом
-    (< UPGRADE_MAX_GROUP_SIZE студентов) - для перехода relaxed→pro (25.07.2026)."""
+def hifz_page(phone):
+    """Мединская страница заучивания по Telegram id; None - места нет."""
+    from core.mushaf_words import get_hifz_pointer
+    ptr = get_hifz_pointer(phone) if phone else None
+    if not ptr or not ptr.get("page"):
+        return None
+    return int(ptr.get("madani_page") or ptr["page"])
+
+
+def group_hifz_median(group_id):
+    """Медиана страниц заучивания студентов группы; None - ни у кого нет места."""
+    pages = sorted(p for p in (hifz_page(s["phone"]) for s in get_students(group_id)) if p)
+    if not pages:
+        return None
+    mid = len(pages) // 2
+    return pages[mid] if len(pages) % 2 else (pages[mid - 1] + pages[mid]) / 2
+
+
+def get_best_pro_group_for_upgrade(lang, page=None, exclude_title="N-1"):
+    """Pro-группа нужного языка со ссылкой и местом (< UPGRADE_MAX_GROUP_SIZE),
+    кроме группы exclude_title (зарезервирована под выпускников подготовительной,
+    знающих джуз - core/prep.py _PREP_JUZ_KNOWN_TARGET_TITLE) - для перехода
+    relaxed→pro (25.07.2026).
+
+    Группа - по странице заучивания (02.10.2026, решение пользователя: Эрлан
+    с подготовительной ушёл в N-2a, где все далеко впереди). Берём группу, чья
+    медиана страниц ближе всего к странице студента; поровну - менее
+    заполненная. Нет страницы у студента или у групп - наименее заполненная,
+    как раньше."""
     with db() as c:
-        return c.execute("""
+        rows = c.execute("""
             SELECT g.*,
                    (SELECT COUNT(*) FROM user_groups ug
                     WHERE ug.group_id=g.id AND ug.role='student' AND ug.active=1) as cnt
@@ -955,8 +979,17 @@ def get_best_pro_group_for_upgrade(lang, exclude_title="N-1"):
             GROUP BY g.id
             HAVING cnt < ?
             ORDER BY cnt
-            LIMIT 1
-        """, (lang, exclude_title, UPGRADE_MAX_GROUP_SIZE)).fetchone()
+        """, (lang, exclude_title, UPGRADE_MAX_GROUP_SIZE)).fetchall()
+    if not rows:
+        return None
+    if not page:
+        return rows[0]
+    far = float("inf")
+
+    def distance(g):
+        median = group_hifz_median(g["id"])
+        return far if median is None else abs(median - page)
+    return min(rows, key=lambda g: (distance(g), g["cnt"]))
 
 
 def create_upgrade_offer(student_id, group_id, channel="dm"):

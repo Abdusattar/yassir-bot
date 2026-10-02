@@ -26,7 +26,7 @@ from core.db import (
     get_tadabbur_group, get_prep_group, get_overdue_unregistered, remove_unregistered,
     find_by_phone, find_user_by_phone, get_learning_group, is_any_group_admin,
     is_pending_prep_return, prep_days_done, mark_pending_prep_return,
-    get_dm_ok_by_phone, get_best_pro_group_for_upgrade, create_upgrade_offer,
+    get_dm_ok_by_phone, get_best_pro_group_for_upgrade, hifz_page, create_upgrade_offer,
     delete_upgrade_offer, get_last_upgrade_offer_at, get_upgrade_offer_by_id,
     set_upgrade_decision, get_pending_upgrade_target, resolve_upgrade_offer,
     get_pending_group_nudge, get_return_nudge_candidates, get_last_return_nudge_at,
@@ -275,7 +275,7 @@ async def _check_upgrade(student, group, lang):
         return
 
     # Нет ни одной pro-группы с местом — предложение бессмысленно, не шлём.
-    if not get_best_pro_group_for_upgrade(lang):
+    if not get_best_pro_group_for_upgrade(lang, hifz_page(phone)):
         return
 
     if get_dm_ok_by_phone(phone):
@@ -371,7 +371,7 @@ async def handle_upgrade_answer(phone, choice, offer_id):
 
     # choice == "pro" — пересчитываем доступную группу заново (место могли
     # занять между отправкой предложения и нажатием кнопки).
-    target = get_best_pro_group_for_upgrade(lang)
+    target = get_best_pro_group_for_upgrade(lang, hifz_page(phone))
     if not target:
         set_upgrade_decision(row["id"], "pro_no_room")
         await send_message(phone, T("upgrade_pro_no_room", lang, name=name))
