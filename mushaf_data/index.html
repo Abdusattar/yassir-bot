@@ -7610,10 +7610,16 @@
   // .load() ПЕРЕД тем, как вставлять текст в DOM, никакого кадра с неверным
   // шрифтом просто не возникает физически. currentV4Face - чтобы не
   // копить в document.fonts все посещённые страницы разом (604 файла).
-  var currentV4Face = null;
+  // wantV4Url (02.10.2026) - шрифт последнего открытого листа. Листали
+  // быстро, шрифт прошлого листа докачался позже нового - он не ставится,
+  // иначе глифы листа нарисовались бы буквами соседнего (гонка, пойманная
+  // в тренажёре слов, см. trainerV4Want).
+  var currentV4Face = null, wantV4Url = null;
   function loadV4Font(url) {
+    wantV4Url = url;
     var face = new FontFace('mushaf-v4', "url('" + url + "')");
     return face.load().then(function (loaded) {
+      if (wantV4Url !== url) return;
       if (currentV4Face) { try { document.fonts.delete(currentV4Face); } catch (e) {} }
       document.fonts.add(loaded);
       currentV4Face = loaded;
@@ -7639,7 +7645,9 @@
     var fp = pageExtraFontPage(data);
     if (!fp || fp === currentV4FaceBPage) return main;
     var face = new FontFace('mushaf-v4-b', "url('" + v4FontUrl(fp) + "')");
+    var want = data.font_url;
     var extra = face.load().then(function (loaded) {
+      if (wantV4Url !== want) return;
       if (currentV4FaceB) { try { document.fonts.delete(currentV4FaceB); } catch (e) {} }
       document.fonts.add(loaded);
       currentV4FaceB = loaded;
