@@ -50,3 +50,9 @@ qul_cache/
 # Аудит раскладки мусхафа (пересоздаётся scripts/audit_mushaf_layout.py)
 sources/layout_audit.json
 sources/qul_layout_cache/
+
+# Яссир Медиа: тяжёлые файлы роликов не в git
+media/**/*.mp4
+media/**/*.wav
+media/**/*.mp3
+media/**/*.png
