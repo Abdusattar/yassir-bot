@@ -16,8 +16,9 @@ from timeline import AUDIO, chapter_of, fetch
 SR = 48000
 
 
-def decode(path, seconds):
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-t", str(seconds), "-ar", str(SR),
+def decode(path, seconds, start=0.0):
+    """Декодировать [start, start+seconds); -ss после -i — точная перемотка по отсчётам."""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-ss", "%.6f" % start, "-t", str(seconds), "-ar", str(SR),
                           "-ac", "2", "-f", "f32le", "-"], capture_output=True, check=True).stdout
     return np.frombuffer(raw, np.float32).reshape(-1, 2).copy()
 
@@ -70,14 +71,14 @@ def check_edges(x, t_in, t_out):
         quiet = [i for i in range(j) if db[i] < -50 and db[j] - db[i] > 15]
         if quiet:
             new_out = ts[quiet[0]] + 0.010
-            note.append("хвост: подъём %.0f дБ в %.2f -> out %.3f" % (db[j] - db[quiet[0]], ts[j], new_out))
+            note.append("хвост: подъём %.0f дБ -> out сдвинут на %.3f с раньше" % (db[j] - db[quiet[0]], t_out - new_out))
             break
     ts, db = rms_db(x, t_in, t_in + 0.4, hop=0.010)
     new_in = t_in
     for k in range(len(db)):
         if db[k] < -50 and max(db[:k], default=-200) > max(db[k] + 15, -50):
             new_in = ts[k]
-            note.append("начало: остаток прошлого слова до %.2f -> in %.3f" % (ts[k], new_in))
+            note.append("начало: остаток прошлого слова -> in сдвинут на %.3f с позже" % (new_in - t_in))
             break
     return new_in, new_out, note
 
@@ -108,6 +109,14 @@ def loudnorm(src, dst, tp=-1.5):
     err = subprocess.run(["ffmpeg", "-hide_banner", "-y", "-i", str(src), "-af", f, "-ar", str(SR),
                           "-c:a", "pcm_f32le", str(dst)], capture_output=True, text=True, encoding="utf-8").stderr
     m2 = json.loads(re.findall(r"\{[^{}]+\}", err)[-1])
+    if m2["normalization_type"] != "linear":
+        # линейно не выходит (пик шума): усиление до I −16 и лимитер на пике (style §7), запас 0,5 дБ под true peak
+        g = -16 - float(m["input_i"])
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-af",
+                        "volume=%.2fdB,alimiter=limit=%.4f:level=false:attack=5:release=50" % (g, 10 ** ((tp - 0.5) / 20)),
+                        "-ar", str(SR), "-c:a", "pcm_f32le", str(dst)], check=True)
+        m2 = {"output_i": "≈-16", "output_tp": "≤%.1f" % (tp - 0.5),
+              "normalization_type": "linear+лимитер (dynamic отклонён)"}
     return m, m2
 
 
@@ -122,6 +131,36 @@ def room_tone(n, level_dbfs, seed=1405):
     return y
 
 
+def lowpass(x, f):
+    from scipy.signal import butter, sosfiltfilt
+    return sosfiltfilt(butter(4, f, fs=SR, output="sos"), x, axis=0)
+
+
+def noise(a, sheet_dir):
+    """Живой шум до чтения. end: «muffle» — «шум глохнет» (style §7): исходный -> lowpass 1500 ->
+    lowpass 300 и −12 дБ, склейки по 0,6 с (как acrossfade=d=0.6), в конце фейд 50 мс;
+    «cut» — резкий обрыв (фейд 10 мс); иначе фейд 0,3 с."""
+    from timeline import ROOT_DIR
+    src = Path(a["src"])
+    src = src if src.is_absolute() else (ROOT_DIR / src if (ROOT_DIR / src).exists() else Path(sheet_dir) / src)
+    x = decode(src, a["out"])[int(a["in"] * SR):].astype(np.float64) * 10 ** (a.get("gain_db", 0) / 20)
+    n = len(x)
+    if a.get("end") == "muffle":
+        d = int(0.6 * SR)
+        l1, l2 = lowpass(x, 1500), lowpass(x, 300) * 10 ** (-12 / 20)
+        w0, w1, w2 = np.ones(n), np.zeros(n), np.zeros(n)
+        r = np.linspace(0, 1, d)
+        a0 = n - 2 * d
+        w0[a0:a0 + d], w0[a0 + d:] = 1 - r, 0
+        w1[a0:a0 + d], w1[a0 + d:] = r, 1 - r
+        w2[a0 + d:] = r
+        x = x * w0[:, None] + l1 * w1[:, None] + l2 * w2[:, None]
+        x = fade(x, 0, 0.05)
+    else:
+        x = fade(x, 0, 0.01 if a.get("end") == "cut" else 0.3)
+    return fade(x, a.get("fade_in", 0.0), 0).astype(np.float32)
+
+
 def prepare(sheet, cache):
     """Декодировать источники и замерить offset_measured для каждого отрезка чтения."""
     src = {}
@@ -132,11 +171,13 @@ def prepare(sheet, cache):
         ch = chapter_of(a["src"])
         if ch not in src:
             mp3 = fetch(AUDIO % ch, Path(cache) / ("%d.mp3" % ch))
-            need = max(b["out"] for b in sheet["audio"] if b.get("src") == a["src"]) + 2
-            src[ch] = decode(mp3, need)
-        x = src[ch]
+            same = [b for b in sheet["audio"] if b.get("src") == a["src"]]
+            base = max(0.0, min(b["in"] for b in same) - 2)
+            src[ch] = (decode(mp3, max(b["out"] for b in same) + 2 - base, base), base)
+        x, base = src[ch]
         q0 = a["qdc"][a["words"][0]][0]
-        onset, rule = measure_onset(x, q0)
+        onset, rule = measure_onset(x, q0 - base)
+        onset += base
         a["offset_measured"] = round(onset - q0, 3)
         a["_onset_rule"] = rule
         report.append("%s: qdc %.3f, замер %.3f (%s) -> offset_measured %+.3f" % (a["id"], q0, onset, rule,
@@ -144,7 +185,7 @@ def prepare(sheet, cache):
     return src, report
 
 
-def build(sheet, src, total, work, out_wav):
+def build(sheet, src, total, work, out_wav, sheet_dir=None):
     """Свести дорожку длиной ровно total секунд."""
     work = Path(work)
     n = int(round(total * SR))
@@ -153,13 +194,21 @@ def build(sheet, src, total, work, out_wav):
     for a in sheet["audio"]:
         if a["kind"] != "recitation":
             continue
-        x = src[chapter_of(a["src"])]
-        t_in, t_out, note = check_edges(x, a["in"], a["out"])
+        x, base = src[chapter_of(a["src"])]
+        t_in, t_out, note = check_edges(x, a["in"] - base, a["out"] - base)
+        t_in, t_out = t_in + base, t_out + base
         notes += ["%s %s" % (a["id"], s) for s in note]
         fo = a["fade_out"] if t_out == a["out"] else 0.15
-        seg = fade(x[int(round(t_in * SR)):int(round(t_out * SR))].copy(), a["fade_in"], fo)
+        seg = fade(x[int(round((t_in - base) * SR)):int(round((t_out - base) * SR))].copy(), a["fade_in"], fo)
         p = int(round((a["at"] + t_in - a["in"]) * SR))
         speech[p:p + len(seg)] += seg[:n - p]
+    for a in sheet["audio"]:
+        if a["kind"] == "noise":
+            seg = noise(a, sheet_dir)
+            p = int(round(a["at"] * SR))
+            speech[p:p + len(seg)] += seg[:n - p]
+            notes.append("шум %s: %.2f–%.2f, конец «%s»" % (Path(a["src"]).name, a["at"],
+                                                            a["at"] + len(seg) / SR, a.get("end", "fade")))
     write_wav(work / "speech.wav", speech)
     m1, m2 = loudnorm(work / "speech.wav", work / "speech_norm.wav")
     notes.append("loudnorm: вход I %s LUFS TP %s; выход I %s TP %s, режим %s" % (

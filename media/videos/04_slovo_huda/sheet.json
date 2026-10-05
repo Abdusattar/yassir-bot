@@ -46,7 +46,7 @@
     {"scene": 3, "plan": 2, "t_start": "R3.w6.start-0.39", "t_end": 22.75, "mode": "B",
      "_note": "2:2 целиком, слова 1–5 dim; هُدًى золото с первого кадра; корень под голосом; B→C после чтения; полный перевод Кулиева",
      "voice": "R3", "key": [6], "key_from_scene": true, "lit_end": "R3.end-0.02",
-     "move": {"at": "R3.end-0.02", "dur": 0.5},
+     "move": {"at": "R3.end-0.02", "dur": 0.5, "to": "C"},
      "texts": [
        {"role": "root", "letters": ["ه", "د", "ي"], "on": "R3.w7.start", "fade_in": 0.25, "off": "R3.end-0.02", "fade_out": 0.2},
        {"role": "root_line", "text": "Один корень с „ихдина“", "on": "R3.w7.start", "fade_in": 0.25, "off": "R3.end-0.02", "fade_out": 0.2},

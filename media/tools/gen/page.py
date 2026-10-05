@@ -23,10 +23,16 @@ body{position:relative;font-variant-numeric:lining-nums;-webkit-font-smoothing:a
 .tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.05;mix-blend-mode:multiply}
 .plan,.cam{position:absolute;left:0;top:0;width:1080px;height:1920px}
 .cam{transform-origin:540px 760px}
-.blk{position:absolute;left:0;top:0;width:1080px}
+.blk{position:absolute;left:0;top:0;width:1080px;transform-origin:540px 0}
 .row{display:flex;direction:rtl;justify-content:center;gap:0 26px;white-space:nowrap}
-.w{line-height:1.6}
-.tx{position:absolute;text-align:center}
+.col{display:flex;flex-direction:column;align-items:center}
+.w{line-height:1.6;white-space:nowrap}
+.mn{color:var(--ink-2);text-align:center;white-space:nowrap;direction:ltr}
+.live{position:absolute;left:0;top:0;width:1080px;height:1920px}
+.paper{position:absolute;inset:0;background:radial-gradient(ellipse 900px 700px at 50% 45%,var(--paper-glow),transparent 70%),
+ linear-gradient(var(--paper-top),var(--paper-mid) 50%,var(--paper-low))}
+.card{background:rgba(251,246,234,.90);border-radius:32px;padding:40px 56px}
+.tx{position:absolute;text-align:center;text-wrap:balance}
 .cg{font-family:'Cormorant Garamond',serif;font-weight:600}
 .in{font-family:Inter,sans-serif;font-weight:500}
 .roots{position:absolute;left:0;width:1080px;top:300px;display:flex;direction:rtl;justify-content:center;gap:32px}
@@ -34,15 +40,15 @@ body{position:relative;font-variant-numeric:lining-nums;-webkit-font-smoothing:a
  justify-content:center;font-family:hafs;font-size:120px;color:var(--ink);line-height:1}
 .plate span{transform:translateY(-6px)}
 .glyph{position:absolute;left:420px;top:624px;width:240px;height:192px}
-body.solo,html:has(body.solo){background:transparent} body.solo .bg,body.solo .tex{visibility:hidden}
+body.solo,html:has(body.solo){background:transparent} body.solo>.bg,body.solo>.tex{visibility:hidden}
 """
 
 JS = r"""
 const D = __DATA__;
-const ZONE = {B: 749, C: 431};            // центр блока аята L_0: режим B y 560–938, режим C y 290–572
 const STEPS = [118, 111, 104, 98, 92, 88]; // ступени кегля (style §2)
 const ZMAX = 1.04;                         // наибольший наезд: ширины делим на него (безопасные поля)
 const W_FIELD = 950 / ZMAX, W_LOW = 820 / ZMAX;
+const MODES = ['A', 'B', 'C'];
 const lerp = (a, b, u) => a + (b - a) * u;
 const ease = u => u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
 const mix = (a, b, u) => Array.isArray(a) ? a.map((x, i) => lerp(x, b[i], u)) : lerp(a, b, u);
@@ -63,21 +69,37 @@ function el(tag, cls, parent, html) { const e = document.createElement(tag); if 
 function measure(text, font) { const s = el('span', '', document.body); s.style.cssText =
   `position:absolute;white-space:nowrap;visibility:hidden;font:${font}`; s.textContent = text;
   const w = s.getBoundingClientRect().width; s.remove(); return w; }
+// неразрывные пробелы: тире не начинает строку, короткие слова (≤3 букв) не висят в конце строки
+function nb(s) { s = s.replace(/ —/g, ' —');
+  for (let i = 0; i < 2; i++) s = s.replace(/(^|[\s ])([А-Яа-яЁё]{1,3}) /g, '$1$2 '); return s; }
 
-// Раскладка аята (style §2): столбцы, ступени кегля, балансный перенос ≤25 %, перенос по вакфу
+// Столбец слова (style §2 п. 2): w = max(глиф, значение); значение Cormorant 46 -> Inter 40 -> 2 строки
+const MF = ["600 46px/1.1 'Cormorant Garamond'", '500 40px/1.1 Inter'];
+function column(gw, m) {
+  if (m === null) return {w: gw, f: 0, two: false};
+  const c = measure(m, MF[0]); if (c <= gw + 60) return {w: Math.max(gw, c), f: 0, two: false};
+  const i = measure(m, MF[1]); if (i <= gw + 60) return {w: Math.max(gw, i), f: 1, two: false};
+  return {w: gw + 60, f: 1, two: true};
+}
+// Раскладка аята (style §2): ступени кегля, балансный перенос ≤25 %, перенос по вакфу
 function layout(b) {
   const fam = 'v2p' + b.page;
-  const cols = b.words.map((w, i) => w.glyph + (i === b.words.length - 1 ? b.end : ''));
-  const w118 = cols.map(c => measure(c, `118px ${fam}`));
+  const glyphs = b.words.map((w, i) => w.glyph + (i === b.words.length - 1 && b.end ? b.end : ''));
+  const g118 = glyphs.map(c => measure(c, `118px ${fam}`));
   const PRI = {'ۘ': 4, 'ۗ': 3, 'ۖ': 2, 'ۚ': 1};
   for (const k of STEPS) {
-    const w = w118.map(x => x * k / 118), n = w.length;
+    const cols = g118.map((x, i) => column(x * k / 118, b.values ? b.words[i].meaning : null));
+    const w = cols.map(c => c.w), n = w.length;
     const sum = (a, z) => w.slice(a, z).reduce((s, x) => s + x, 0) + 26 * (z - a - 1);
-    if (sum(0, n) <= W_FIELD) return {k, rows: [cols], warn: null};
+    const two = cols.some(c => c.two);
+    const res = (rows, ratio) => ({k, cols, glyphs, rows, ratio, two, warn: null});
+    if (sum(0, n) <= W_FIELD) return res([[0, n]], 0);
+    // значения в 2 строки: нижняя строка блока уходит ниже y 1050 — она ≤820 (style §3)
+    const W2max = two ? W_LOW : W_FIELD;
     let best = null, cand = [];
     for (let i = 1; i < n; i++) {
       const W1 = sum(0, i), W2 = sum(i, n), r = Math.abs(W1 - W2) / Math.max(W1, W2);
-      if (W1 > W_FIELD || W2 > W_FIELD || r > .25 || b.words[i - 1].waqf.includes('ۙ')) continue;
+      if (W1 > W_FIELD || W2 > W2max || r > .25 || b.words[i - 1].waqf.includes('ۙ')) continue;
       cand.push([i, r]); if (!best || r < best[1]) best = [i, r];
     }
     if (!best) continue;
@@ -86,9 +108,20 @@ function layout(b) {
       const p = Math.max(0, ...[...b.words[i - 1].waqf].map(ch => PRI[ch] || 0));
       if (Math.abs(i - best[0]) <= 2 && p > pr) { pr = p; br = i; }
     }
-    return {k, rows: [cols.slice(0, br), cols.slice(br)], warn: null, ratio: best[1]};
+    return res([[0, br], [br, n]], best[1]);
   }
-  return {k: 88, rows: [cols], warn: 'аят не влез в 2 строки на 88 px — нужны части (style §2 п. 7)'};
+  const waqf = b.words.filter(w => w.waqf && !w.waqf.includes('ۙ')).map(w => w.pos);
+  const cols = g118.map((x, i) => column(x * 88 / 118, b.values ? b.words[i].meaning : null));
+  return {k: 88, cols, glyphs, rows: [[0, b.words.length]], ratio: 0, two: false,
+          warn: `аят ${b.ref} не влез в 2 строки на 88 px — делить на части (план на часть, "words") после слов со знаком вакфа: ${waqf}`};
+}
+// Геометрия блока в режиме (style §3): верх и масштаб; зона по L_0 / L_m, короткий блок — по центру зоны
+function geom(o, mode) {
+  const m = o.p.block.values, H = o.H;
+  if (mode === 'C') { const s = 88 / o.L.k, zh = m ? 384 : 282;
+    return {top: 290 + Math.max(0, (zh - H * s) / 2), s}; }
+  const [zt, zh] = m ? [520, 480] : [560, 378];
+  return {top: zt + Math.max(0, (zh - H) / 2), s: 1};
 }
 
 const P = [];  // построенные планы
@@ -96,19 +129,35 @@ window.LAYOUT = [];
 function build() {
   for (const p of D.plans) {
     const pd = el('div', 'plan', document.body), cam = el('div', 'cam', pd);
-    const o = {p, pd, cam, words: [], texts: []};
+    const o = {p, pd, cam, glyphs: [], means: [], texts: []};
+    if (p.live) {  // живой кадр — картинка из нарезанных ffmpeg PNG; поверх слой бумаги для светления
+      o.img = el('img', 'live', cam); o.cover = el('div', 'paper', cam);
+      el('img', 'tex', o.cover).src = D.tex;
+    }
     if (p.block) {
       const L = layout(p.block); o.L = L;
       const blk = el('div', 'blk', cam); o.blk = blk;
-      let idx = 0;
-      for (const r of L.rows) {
+      const mh = p.block.values ? (L.two ? 84 : 51) : 0;
+      for (const [a, z] of L.rows) {
         const row = el('div', 'row', blk);
-        for (const c of r) { const s = el('span', 'w', row, c); s.style.font = `${L.k}px/1.6 v2p${p.block.page}`;
-          o.words.push(s); idx++; }
+        for (let i = a; i < z; i++) {
+          const col = el('div', 'col', row); col.style.width = L.cols[i].w + 'px';
+          const g = el('span', 'w', col, L.glyphs[i]); g.style.font = `${L.k}px/1.6 v2p${p.block.page}`;
+          o.glyphs.push(g);
+          if (p.block.values) {
+            const m = el('div', 'mn', col, p.block.words[i].meaning); m.style.font = MF[L.cols[i].f];
+            m.style.height = mh + 'px';
+            if (L.cols[i].two) { m.style.whiteSpace = 'normal'; m.style.lineHeight = '1.05'; }
+            o.means.push(m);
+          }
+        }
       }
-      o.H = L.rows.length * L.k * 1.6;
-      blk.style.height = o.H + 'px'; blk.style.transformOrigin = `540px ${o.H / 2}px`;
-      window.LAYOUT.push({ref: p.block.ref, k: L.k, rows: L.rows.map(r => r.length), warn: L.warn, ratio: L.ratio || 0});
+      o.H = L.rows.length * (L.k * 1.6 + mh);
+      blk.style.height = o.H + 'px';
+      o.G = {A: geom(o, 'A'), B: geom(o, 'B'), C: geom(o, 'C')};
+      o.botC = o.G.C.top + o.H * o.G.C.s;
+      window.LAYOUT.push({ref: p.block.ref, k: L.k, rows: L.rows.map(r => r[1] - r[0]), warn: L.warn,
+                          ratio: L.ratio, values: p.block.values, two: L.two});
     }
     for (const x of p.texts) o.texts.push([x, text(x, cam, o)]);
     P.push(o);
@@ -117,32 +166,46 @@ function build() {
 function box(parent, cls, top, width, html) {
   const d = el('div', 'tx ' + cls, parent, html);
   d.style.top = top + 'px'; d.style.left = (1080 - width) / 2 + 'px'; d.style.width = width + 'px'; return d; }
+function card(d) {  // светлая карточка по ширине строки (текст на живом кадре, style §1)
+  d.classList.add('card'); d.style.width = 'fit-content'; d.style.maxWidth = W_FIELD + 'px';
+  d.style.left = Math.round((1080 - d.getBoundingClientRect().width) / 2) + 'px'; return d; }
 function text(x, cam, o) {
-  const C = x.mode === 'C';
+  const C = x.mode === 'C', m = o.p.block && o.p.block.values;
+  const tC = m ? Math.round(o.botC + 36) : 640;            // перевод в C: под фактическим низом блока
+  const tB = m ? 1010 : 980;                                // перевод в B
+  const t = x.text ? nb(x.text) : '';
   switch (x.role) {
-    case 'hook': { const d = box(cam, 'cg', 290, W_FIELD, x.text);
-      d.style.cssText += ';font-size:84px;line-height:1.18;color:var(--ink)'; return d; }
-    case 'translation': { const d = box(cam, 'cg', C ? 640 : 980, W_LOW, x.text);
-      d.style.cssText += ';font-size:60px;line-height:1.25;color:var(--ink-2)'; return d; }
-    case 'line': { const d = box(cam, 'cg', 640 + 75 * x.slot, W_LOW, x.text);
+    case 'hook': { const d = box(cam, 'cg', 290, W_FIELD, t);
+      d.style.cssText += ';font-size:84px;line-height:1.18;color:var(--ink)'; return o.p.live ? card(d) : d; }
+    case 'translation': { const d = box(cam, 'cg', C ? tC : tB, C ? 820 : W_LOW, t);  // выше y 1050 — 820 по style
+      d.style.cssText += ';font-size:60px;line-height:1.25;color:var(--ink-2)';
+      if (!C) o.lowB = d.getBoundingClientRect().bottom; return d; }
+    case 'line': { const d = box(cam, 'cg', tC + 75 * x.slot, 820, t);
       d.style.cssText += `;font-size:60px;line-height:1.25;white-space:nowrap;color:var(${x.key_line ? '--ink' : '--ink-2'});font-weight:${x.key_line ? 700 : 600}`; return d; }
     case 'source': { // одна строка Inter 40; не влезает — перенос по « · », низ остаётся на низе зоны
-      const W = C ? W_FIELD : W_LOW, d = box(cam, 'in', C ? 980 : 1160, W, x.text);
+      const bot = C ? (m ? tC + 300 + 40 + 48 : 1028) : x.mode === 'A' ? 1208 : (m ? 1218 : 1208);
+      const W = bot > 1050 ? W_LOW : W_FIELD;  // строка уходит ниже y 1050 — ширина ≤820 (с наездом)
+      const d = box(cam, 'in', bot - 48, W, x.text);
       d.style.cssText += ';font-size:40px;line-height:1.2;color:var(--muted);white-space:nowrap';
       if (d.scrollWidth > W + 1) { d.innerHTML = x.text.replace(' · ', '<br>');
-        d.style.top = ((C ? 1028 : 1208) - d.getBoundingClientRect().height) + 'px';
+        // две строки: низ на низе зоны, но не выше низа перевода режима B (+10 px)
+        const top = Math.max(bot - d.getBoundingClientRect().height, !C && o.lowB ? o.lowB + 10 : 0);
+        d.style.top = top + 'px';
+        const zb = 760 + (top + d.getBoundingClientRect().height - 760) * ZMAX;
+        if (zb > 1250) window.LAYOUT.push({warn: `источник «${x.text}» с наездом уходит до y ${Math.round(zb)} > 1250 — сцену в режим C`});
         window.LAYOUT.push({warn: `источник «${x.text}» шире ${Math.round(W)} px — в две строки`}); }
       return d; }
     case 'root': { const d = el('div', 'roots', cam);
       for (const ch of x.letters) el('div', 'plate', d, `<span>${ch}</span>`); return d; }
-    case 'root_line': { const d = box(cam, 'cg', 980, W_LOW, x.text);
+    case 'root_line': { const d = box(cam, 'cg', tB, W_LOW, t);
       d.style.cssText += ';font-size:60px;line-height:1.25;color:var(--ink)'; return d; }
     case 'question': { // 84 px; не влезает в 2 строки — 60 px; по центру живого поля (y 760)
-      let fs = 84; const d = box(cam, 'cg', 0, W_FIELD, x.text);
+      const d = box(cam, 'cg', 0, W_FIELD, t);
       d.style.cssText += ';font-size:84px;line-height:1.18;color:var(--ink)';
-      if (d.getBoundingClientRect().height > 2 * 84 * 1.18 + 1) { fs = 60; d.style.fontSize = '60px'; d.style.lineHeight = '1.25'; }
-      d.style.top = (760 - d.getBoundingClientRect().height / 2) + 'px'; return d; }
-    case 'label': { const d = box(cam, 'cg', 500, W_FIELD, x.text);
+      if (d.getBoundingClientRect().height > 2 * 84 * 1.18 + 1) { d.style.fontSize = '60px'; d.style.lineHeight = '1.25'; }
+      if (o.p.live) card(d);
+      d.style.top = Math.round(760 - d.getBoundingClientRect().height / 2) + 'px'; return d; }
+    case 'label': { const d = box(cam, 'cg', 500, W_FIELD, t);
       d.style.cssText += ';font-size:48px;line-height:1.2;color:var(--muted)'; return d; }
     case 'glyph': return el('div', 'glyph', cam, D.glyph);
     case 'yassir': { const d = box(cam, 'in', 880, W_FIELD, x.text);
@@ -156,18 +219,29 @@ window.render = function (t) {
     const u = Math.min(1, Math.max(0, (t - p.t0) / (p.t1 - p.t0)));
     o.scale = 1 + p.zoom * u;  // наезд на план (style §4)
     o.cam.style.transform = window.NO_CAM ? 'none' : `scale(${o.scale.toFixed(6)})`;
+    if (o.img) {
+      const L = p.live, i = Math.max(0, Math.min(L.n - 1, Math.floor((t - L.at) * 30 + 1e-6)));
+      const src = L.base + String(i).padStart(5, '0') + '.png';
+      if (o.img.getAttribute('src') !== src) o.img.src = src;
+      const b = ev(L.bright, t);  // светление в бумагу (style §1 п. 3)
+      o.img.style.filter = `brightness(${(1 + .35 * b).toFixed(4)}) saturate(${(1 - .3 * b).toFixed(4)})`;
+      o.cover.style.opacity = (.55 * b).toFixed(4);
+    }
     if (o.blk) {
-      const m = ev(p.block.move, t), cy = lerp(ZONE.B, ZONE.C, m), sc = lerp(1, 88 / o.L.k, m);
-      o.blk.style.transform = `translate(0px,${(cy - o.H / 2).toFixed(3)}px) scale(${sc.toFixed(6)})`;
-      o.words.forEach((s, i) => s.style.color = rgba(ev(p.block.colors[i], t)));
+      const w = ev(p.block.move, t);  // веса режимов A/B/C (переезд — ease-in-out в ключевых точках)
+      let top = 0, s = 0; MODES.forEach((md, i) => { top += w[i] * o.G[md].top; s += w[i] * o.G[md].s; });
+      o.blk.style.transform = `translate(0px,${top.toFixed(3)}px) scale(${s.toFixed(6)})`;
+      o.glyphs.forEach((g, i) => g.style.color = rgba(ev(p.block.colors[i], t)));
+      o.means.forEach((m, i) => m.style.opacity = ev(p.block.means[i], t).toFixed(4));
     }
     for (const [x, d] of o.texts) d.style.opacity = ev(x.op, t).toFixed(4);
   }
 };
 // Снимок по слоям: Chromium под scale() привязывает базовую линию текста к пикселю (дрожь до 0,4 px),
 // поэтому наезд накладывает Python точным ресэмплом. layers(t) — видимые планы и их масштаб.
-window.layers = function (t) {
+window.layers = async function (t) {
   window.NO_CAM = true; render(t);
+  await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
   return P.filter(o => parseFloat(o.pd.style.opacity) > 0).map(o => [o.p.id, o.scale]);
 };
 window.solo = function (id) {  // только один план, без бумаги — фон прозрачный
@@ -175,8 +249,8 @@ window.solo = function (id) {  // только один план, без бум�
   for (const o of P) o.pd.style.visibility = (id === null || o.p.id === id) ? 'visible' : 'hidden';
 };
 window.boot = async function () {
-  const fams = ['118px v2p1', '118px v2p2', '120px hafs', "600 60px 'Cormorant Garamond'",
-                "700 60px 'Cormorant Garamond'", '500 40px Inter'];
+  const fams = D.pages.map(n => `118px v2p${n}`).concat(['120px hafs', "600 60px 'Cormorant Garamond'",
+                "700 60px 'Cormorant Garamond'", '500 40px Inter', "600 46px 'Cormorant Garamond'"]);
   for (const f of fams) await document.fonts.load(f, 'ابجد Аб');
   await document.fonts.ready;
   build(); render(0);
@@ -189,7 +263,7 @@ def html(data, pages):
     faces = "".join("@font-face{font-family:v2p%d;src:url(%s) format('woff2');font-display:block}" % (n, V2 % n)
                     for n in pages)
     faces += "@font-face{font-family:hafs;src:url(%s) format('woff2');font-display:block}" % HAFS
-    data = dict(data, glyph=GLYPH.read_text("utf-8").replace('width="752" height="602"', 'width="240" height="192"'))
+    data = dict(data, pages=list(pages), tex=TEX.as_uri(), glyph=GLYPH.read_text("utf-8").replace('width="752" height="602"', 'width="240" height="192"'))
     return ("<!doctype html><html><head><meta charset='utf-8'>"
             "<link href='https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700"
             "&family=Inter:wght@500&display=block' rel='stylesheet'>"

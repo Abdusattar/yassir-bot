@@ -49,7 +49,7 @@ def png_range(work, t0, t1):
     d = Path(work) / "frames"
     if not (d / "00000.png").exists():
         return None
-    return np.stack([np.asarray(Image.open(d / ("%05d.png" % i)).convert("L"), float)
+    return np.stack([np.asarray(Image.open(d / ("%05d.png" % i)).convert("L"), np.float32)
                      for i in range(round(t0 * FPS), round(t1 * FPS))])
 
 
@@ -106,9 +106,11 @@ def main():
         if p["block"]:
             for k in p["block"]["move"]["kfs"]:
                 events.append((k[0], "переезд план %d" % p["id"], k[2]))
-            for c in p["block"]["colors"]:
+            for c in p["block"]["colors"] + p["block"]["means"]:
                 for k in c["kfs"]:
                     events.append((k[0], "цвет слова", k[2]))
+        if p["live"]:
+            events.append((p["live"]["at"], "живой кадр", p["t1"] - p["live"]["at"]))
         for x in p["texts"]:
             texts.append((p, x))
             for k in x["op"]["kfs"]:
@@ -143,10 +145,27 @@ def main():
     #    остаток к квадратичной подгонке и вторая разность кадр к кадру
     bg = background(work)
     jit, d2s, slow = [], [], []
-    for t0, t1, zones in ((2.3, 5.3, ((240, 520), (560, 940))), (23.0, 26.5, ((600, 920),)),
-                          (8.45, 11.7, ((250, 640), (620, 1040)))):
+    def plan_op(p, t):  # opacity плана по ключевым точкам (как в странице, линейно)
+        v = 0.0
+        for t0, val, d, _ in p["op"]["kfs"]:
+            if t >= t0:
+                v = val if d == 0 or t >= t0 + d else v + (val - v) * (t - t0) / d
+        return v
+
+    def visible(t):
+        return [p for p in D["plans"] if plan_op(p, t) > 0]
+    # статичные отрезки ≥2 с: ни одного перехода, один план без живого кадра — там меряем дрожь наезда
+    marks = sorted({0.0, D["duration"]} | {round(e[0], 4) for e in events} | {round(e[0] + e[2], 4) for e in events})
+    wins = []
+    for a_, b_ in zip(marks, marks[1:]):
+        busy = any(e[0] < b_ - 1e-6 and e[0] + e[2] > a_ + 1e-6 for e in events if e[2] > 0)
+        vis = visible((a_ + b_) / 2)
+        if b_ - a_ >= 2.0 and not busy and len(vis) == 1 and not vis[0]["live"]:
+            wins.append((b_ - a_, a_ + 0.05, b_ - 0.05))
+    for _, t0, t1 in sorted(wins, reverse=True)[:3]:
+        zones, t1 = ((270, 1250),), min(t1, t0 + 3.0)
         fr = png_range(work, t0, t1)
-        fr = fr if fr is not None else frames_range(mp4, t0, t1).astype(float)
+        fr = fr if fr is not None else frames_range(mp4, t0, t1).astype(np.float32)
         for y0, y1 in zones:
             w = np.clip(bg[None, y0:y1] - fr[:, y0:y1], 0, None)
             w[w < 3] = 0
@@ -163,24 +182,30 @@ def main():
                 d2s.append(np.abs(np.diff(c[:, k], 2)).max())
     zooms = ["план %d: 1→%.2f" % (p["id"], 1 + p["zoom"]) for p in D["plans"]]
     src = "PNG до кодера" if png_range(work, 0, 0.04) is not None else "mp4 (с шумом кодера)"
-    res(4, max(jit) < 0.2, src + ": центр текста гуляет по кадрам max %.3f px (от скользящего среднего 5 кадров); медленная волна "
-        "от квадратичной подгонки max %.3f px (фаза пикселя при ресэмпле, у идеального ресэмпла 0,19); %s; "
-        "наезд — ресэмпл Lanczos слоя плана (dsf 2), без скачка: входящий план с 1,00" % (
-            max(jit), max(slow), ", ".join(zooms)))
+    res(4, max(jit) < 0.2 and max(slow) < 0.2, src + ": центр текста гуляет по кадрам max %.3f px (от скользящего среднего 5 кадров); медленная волна "
+        "от квадратичной подгонки max %.3f px; %s; "
+        "окна %s; наезд — ресэмпл Lanczos слоя плана, без скачка: входящий план с 1,00" % (
+            max(jit), max(slow), ", ".join(zooms), ", ".join("%.2f–%.2f" % w[1:] for w in sorted(wins)[-3:])))
 
     # 5. Безопасные зоны: всё, что отличается от чистой бумаги
-    allv = frames_range(mp4, 0, D["frames"] / FPS)[::3].astype(float)
-    m = (np.abs(allv - bg[None]) > 14).any(0)
+    idx = [i for i in range(0, D["frames"], 3) if not any(p["live"] for p in visible(i / FPS))]
+    m = np.zeros((1920, 1080), bool)
+    for c0 in range(0, D["frames"], 60):  # по 2 с, чтобы не держать весь ролик в памяти
+        fr = frames_range(mp4, c0 / FPS, (c0 + 60) / FPS)
+        sel = [i - c0 for i in idx if c0 <= i < c0 + len(fr)]
+        if sel:
+            m |= (np.abs(fr[sel].astype(np.float32) - bg[None]) > 14).any(0)
     ys, xs = np.nonzero(m)
     low = m[1050:]
     lys, lxs = np.nonzero(low)
     ok5 = xs.min() >= 65 and xs.max() <= 1015 and ys.min() >= 270 and ys.max() <= 1250 and \
         (not len(lxs) or (lxs.min() >= 130 and lxs.max() <= 950))
     res(5, ok5, "содержимое x %d–%d, y %d–%d; ниже 1050: x %s" % (
-        xs.min(), xs.max(), ys.min(), ys.max(), "%d–%d" % (lxs.min(), lxs.max()) if len(lxs) else "пусто"))
+        xs.min(), xs.max(), ys.min(), ys.max(), "%d–%d" % (lxs.min(), lxs.max()) if len(lxs) else "пусто") +
+        ("; кадры с живой съёмкой не мерились" if len(idx) < len(range(0, D["frames"], 3)) else ""))
 
     # 6. Время на текст (style §6)
-    def visible(p, x):
+    def shown(p, x):
         on = x["op"]["kfs"][0][0]
         off = x.get("t_off", p["op"]["kfs"][-1][0] if len(p["op"]["kfs"]) > 1 else D["duration"])
         return on, off
@@ -189,7 +214,7 @@ def main():
     for p, x in texts:
         if "text" not in x and x["role"] not in ("root",):
             continue
-        on, off = visible(p, x)
+        on, off = shown(p, x)
         n = len(x.get("text", "").split())
         need = {"translation": max(2.5, n / 3 + 0.5, 4.0 if n >= 10 else 0)}.get(x["role"], max(1.2, n / 3 + 0.5))
         if x["role"] in ("source", "label", "yassir", "root"):
@@ -205,23 +230,41 @@ def main():
                      for a in ev if any(e[0] > a[0] + a[2] - 1e-9 for e in ev)])
     res(6, ok6 and gaps.max() <= 4.0 + 1e-6, "; ".join(lines) + "; дольше всего без смены %.2f с" % gaps.max())
 
-    # 7. Синхрон: акустическое начало ٱهْدِنَا (R1) в готовой дорожке тем же правилом, что и замер
-    #    (style §7), против начала перехода цвета на кадрах (середина 0,1-с перехода − 0,05 с)
+    # 7. Синхрон: акустическое начало первого слова каждого отрезка (то же правило, что замер, style §7)
+    #    против начала перехода цвета этого слова на кадрах (середина 0,1-с перехода − 0,05 с)
     import audio
     au = {x["id"]: x for x in B["audio"]}
-    x = audio.decode(vdir / "audio_final.wav", 2.0)
-    r1, rule = audio.measure_onset(x, au["R1"]["at"] + 0.1)
-    fr = frames_range(mp4, 0, 1.0, gray=False).astype(float)[:, 560:940]
-    chroma = (fr.max(3) - fr.min(3)).mean((1, 2))
-    lo, hi = chroma[:3].mean(), chroma[-5:].mean()
-    k = int(np.argmax(chroma > (lo + hi) / 2))
-    t_half = (k - 1 + ((lo + hi) / 2 - chroma[k - 1]) / (chroma[k] - chroma[k - 1])) / FPS
-    lead = (t_half - 0.05) - r1
+    wav = audio.decode(vdir / "audio_final.wav", D["duration"] + 1)
+    syn, ok7 = [], True
+    for sid, x in au.items():
+        if x["kind"] != "recitation":
+            continue
+        vs = min(v[0] for v in B["voiced"] if v[0] >= x["at"] - 1e-6)
+        kf = []  # переход цвета первого слова (если слово уже горит золотом — менять нечему)
+        for p in D["plans"]:
+            for c in (p["block"]["colors"] if p["block"] else []):
+                prev = c["c0"]
+                for k in c["kfs"]:
+                    if abs(k[0] - (vs - 0.04)) < 0.01 and k[1] != prev:
+                        kf.append(k[0])
+                    prev = k[1]
+        if not kf or any(e[1].startswith("план") and e[2] > 0 and e[0] < kf[0] + 0.3 and e[0] + e[2] > kf[0] - 0.2
+                         for e in events):
+            syn.append("%s: первое слово уже горит / окно в растворении — не мерилось" % sid)
+            continue
+        onset, rule = audio.measure_onset(wav, vs)
+        fr = frames_range(mp4, kf[0] - 0.2, kf[0] + 0.35, gray=False).astype(float)[:, 270:1250]
+        chroma = (fr.max(3) - fr.min(3)).mean((1, 2))
+        lo, hi = chroma[:3].mean(), chroma[-3:].mean()
+        k = int(np.argmax(chroma > (lo + hi) / 2))
+        t_half = kf[0] - 0.2 + (k - 1 + ((lo + hi) / 2 - chroma[k - 1]) / (chroma[k] - chroma[k - 1])) / FPS
+        lead = onset - (t_half - 0.05)
+        ok7 &= abs(lead - 0.04) <= 0.06
+        syn.append("%s: голос %.3f (%s), слово загорается %.3f -> опережение %.0f мс" % (
+            sid, onset, rule, t_half - 0.05, 1000 * lead))
     chg = B["warnings"]
-    res(7, abs(lead + 0.04) <= 0.06 and not chg,
-        "ٱهْدِنَا: голос %.3f с (%s), золото начинает загораться %.3f с -> опережение %.0f мс (норма 40 ±60); "
-        "остальные слова — qdc + offset_measured (%s); смены текста вне границ: %s" % (
-            r1, rule, t_half - 0.05, -1000 * lead,
+    res(7, ok7 and not chg, "; ".join(syn) + " (норма 40 ±60); остальные слова — qdc + offset_measured (%s); "
+        "смены текста вне границ / шум под чтением: %s" % (
             ", ".join("%s %+.3f" % (k_, v["offset_measured"]) for k_, v in au.items() if "offset_measured" in v),
             chg or "нет"))
 
@@ -250,7 +293,8 @@ def main():
 
     # 14. Полосы: растяжка ×12, шум бумаги
     out = []
-    for t, name in ((3.5, "ayah"), (28.8, "final")):
+    ayah_t = sorted(wins)[-1][1] + 0.5 if wins else 1.0
+    for t, name in ((ayah_t, "ayah"), (D["duration"] - 0.3, "final")):
         y = frame(mp4, t, gray=True).astype(float)
         st = np.clip((y - y.mean()) * 12 + 128, 0, 255).astype(np.uint8)
         Image.fromarray(st).resize((360, 640), Image.LANCZOS).save(work / "check" / ("x12_%s.png" % name))
@@ -260,6 +304,17 @@ def main():
         out.append("%s σ %.2f" % (name, sd))
     res(14, all(float(re.search(r"σ ([\d.]+)", o).group(1)) >= 0.8 for o in out), "; ".join(out) +
         " (≥0,8); кольца и ступени — глазами по x12_*.png")
+
+    # 15. Живой кадр: светление в бумагу 1,0–1,5 с, затем растворение; тёплая коррекция
+    lv = [p for p in D["plans"] if p["live"]]
+    if lv:
+        br = [k[2] for p in lv for k in p["live"]["bright"]["kfs"]]
+        notes = [o for o in B["offsets"] if o.startswith("живой")]
+        ok15 = all(1.0 <= d <= 1.5 for d in br) and all(float(re.search(r"UAVG ([\d.]+)", o).group(1)) <= 128 and
+                                                         float(re.search(r"VAVG ([\d.]+)", o).group(1)) >= 128 for o in notes)
+        res(15, ok15, "светление %s с, затем растворение плана; %s" % (br, "; ".join(notes)))
+    else:
+        res(15, True, "живого кадра нет — пункт не применим")
 
     # полосы кадров вокруг смен — смотреть глазами
     keyt = sorted({round(e[0], 2) for e in events if not e[1].startswith("цвет")})

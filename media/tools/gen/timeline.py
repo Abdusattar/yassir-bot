@@ -10,6 +10,7 @@ from pathlib import Path
 
 QDC = "https://api.qurancdn.com/api/qdc/audio/reciters/7/audio_files?chapter=%d&segments=true"
 AUDIO = "https://download.quranicaudio.com/qdc/mishari_al_afasy/murattal/%d.mp3"
+ROOT_DIR = Path(__file__).resolve().parents[3]
 ANCHOR = re.compile(r"^(R\d+)\.(?:w(\d+)\.)?(start|end)([+-]\d+(?:\.\d+)?)?$")
 
 
