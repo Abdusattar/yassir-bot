@@ -67,6 +67,20 @@ def _connect():
     return c
 
 
+def remember_source(uid, source):
+    """Откуда человек пришёл впервые (05.10.2026, «Яссир Медиа»): метка из
+    ссылки t.me/YassirAppBot?start=ig|wa|tg|shorts. Пишется только первая -
+    вернувшийся позже по другой ссылке пришёл всё равно оттуда, откуда начал."""
+    try:
+        with _connect() as c:
+            c.execute("CREATE TABLE IF NOT EXISTS app_source(user_id TEXT PRIMARY KEY,"
+                      " source TEXT NOT NULL, at TEXT NOT NULL)")
+            c.execute("INSERT OR IGNORE INTO app_source(user_id, source, at) VALUES(?,?,?)",
+                      (str(uid), source, _now()))
+    except sqlite3.Error as e:
+        log.error("app_source: не записал %s (%s)", uid, e)
+
+
 def _now():
     from core.db import get_now
     return get_now().strftime("%Y-%m-%d %H:%M:%S")

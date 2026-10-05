@@ -12,6 +12,7 @@ import pytest
 
 import config
 import core.app_bot as app_bot
+import core.app_route as app_route
 import core.bots as bots
 import core.db as db
 import core.mufradat_api as api
@@ -190,3 +191,29 @@ def test_without_the_common_bot_everything_works_as_before(test_db, world, monke
         c.execute("DELETE FROM bot_registry WHERE profile='app'")
     assert bots.app_bot_username() == ""
     assert bots.app_invite_link() is None
+
+
+# ── Пришёл из роликов (05.10.2026, «Яссир Медиа») ────────────────────────────
+
+def test_stranger_from_instagram_gets_the_media_greeting_and_the_source_is_kept(test_db, world, wire):
+    _dm(STRANGER, "/start ig")
+
+    assert "Коран отвечает" in wire[0][1]
+    assert "брат или сестра" in wire[0][1]
+    assert [b[1] for b in wire[0][2]] == ["side:male:333", "side:female:333"]
+    with app_route._connect() as c:
+        assert c.execute("SELECT source FROM app_source WHERE user_id=?",
+                         (STRANGER,)).fetchone()[0] == "ig"
+
+
+def test_only_the_first_source_counts(test_db, world, wire):
+    _dm(STRANGER, "/start ig")
+    _dm(STRANGER, "/start wa")
+    with app_route._connect() as c:
+        assert c.execute("SELECT source FROM app_source WHERE user_id=?",
+                         (STRANGER,)).fetchone()[0] == "ig"
+
+
+def test_student_from_a_media_link_is_still_sent_to_his_own_bot(test_db, world, wire):
+    _dm(BROTHER, "/start ig")
+    assert "мужском джамаате" in wire[0][1]

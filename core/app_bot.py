@@ -54,7 +54,7 @@ LOGIN_CODE_EXPIRED = (
 )
 
 DESCRIPTION = (
-    "Ясир — заучивание и чтение Корана с устазом: заучивание, повторение, "
+    "Yassir — заучивание и чтение Корана с устазом: заучивание, повторение, "
     "слова и живой разбор. Братья и сёстры учатся раздельно — нажми "
     "«Начать», и я направлю тебя в твою группу."
 )
@@ -127,8 +127,18 @@ def _app_link(profile):
 
 # ── Разговор ─────────────────────────────────────────────────────────────────
 
+# Метки ссылок из роликов (05.10.2026, «Яссир Медиа», media/strategy.md §9):
+# t.me/YassirAppBot?start=ig - профиль Instagram, wa/tg/shorts - остальные двери.
+MEDIA_SOURCES = ("ig", "wa", "tg", "shorts")
+
+
 async def handle_text(uid, text):
     text = (text or "").strip()
+    param = text.split(" ", 1)[1].strip() if text.startswith("/start ") else ""
+    if param in MEDIA_SOURCES:
+        app_route.remember_source(uid, param)
+        await way_in(uid, from_media=True)
+        return
     if text.startswith("/start " + LOGIN_START_PREFIX):
         code = text.split(" ", 1)[1][len(LOGIN_START_PREFIX):].strip()
         side = studies_in(uid)
@@ -145,7 +155,7 @@ async def handle_text(uid, text):
     await way_in(uid)
 
 
-async def way_in(uid):
+async def way_in(uid, from_media=False):
     side = studies_in(uid)
     if side:
         # Его канал - YassirApp (01.10.2026): не гоняем к боту половины,
@@ -162,7 +172,9 @@ async def way_in(uid):
     if side:
         await send_to_side(uid, side)
         return
-    await send(uid, T("side_question"), side_buttons(uid))
+    # Пришедшему из роликов - приветствие, которое продолжает их мысль, а не
+    # сразу «проект заучивания»: его тронул смысл аята (05.10.2026).
+    await send(uid, T("side_question_media" if from_media else "side_question"), side_buttons(uid))
 
 
 def _prep_link(side):
