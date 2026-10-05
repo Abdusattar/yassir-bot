@@ -66,4 +66,5 @@ async def main():
             print("ok", name)
         await b.close()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
