@@ -271,11 +271,16 @@ def remove_starred_by_progress_key(user_id, progress_key):
         return
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_schema(conn)
-        conn.execute(
+        cur = conn.execute(
             "DELETE FROM mushaf_starred_words WHERE user_id=? AND progress_key=?",
             (user_id, progress_key)
         )
-        _reset_progress_streak(conn, user_id, progress_key)
+        # Сброс - только если слово правда было в «Моих словах» (05.10.2026).
+        # С 28.08 серия обнулялась у ЛЮБОГО слова на пороге: выученных не
+        # оставалось ни у кого, а «Общий вес» падал от верных ответов
+        # (жалоба Толкун, «Группа 2 устаза Зейнеб»).
+        if cur.rowcount > 0:
+            _reset_progress_streak(conn, user_id, progress_key)
 
 
 def get_starred_progress_keys(user_id):
