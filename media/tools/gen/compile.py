@@ -138,5 +138,9 @@ def compile_sheet(sheet, tl, live=None):
         if p["block"]:
             for c in p["block"]["colors"] + p["block"]["means"]:
                 c["kfs"].sort(key=lambda k: k[0])
+            # знак конца аята идёт за последним словом, но синим и золотым не бывает: dim -> ink
+            last = p["block"]["colors"][-1]
+            p["block"]["end_color"] = {"c0": DIM, "kfs": [[k[0], DIM if k[1] == DIM else INK, k[2], k[3]]
+                                                         for k in last["kfs"] if k[1] != BLUE]}
     frames = math.ceil(dur * fps - 1e-9)
     return {"fps": fps, "duration": dur, "frames": frames, "plans": plans}

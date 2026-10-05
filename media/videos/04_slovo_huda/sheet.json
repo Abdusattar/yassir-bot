@@ -1,6 +1,6 @@
 {
   "id": "04_slovo_huda",
-  "version": "v31",
+  "version": "v32",
   "format": "reel_9x16",
   "fps": 30,
   "duration": 29.15,
@@ -13,15 +13,15 @@
     {"id": "R2", "kind": "recitation", "src": "qdc:mishari_al_afasy/1", "surah": 1, "ayah": 6, "words": [1, 2, 3],
      "in": 27.60, "out": 33.20, "at": 6.30, "fade_in": 0.03, "fade_out": 0.15},
     {"id": "R3", "kind": "recitation", "src": "qdc:mishari_al_afasy/2", "surah": 2, "ayah": 2, "words": [6, 7],
-     "in": 12.60, "out": 16.52, "at": 13.65, "fade_in": 0.04, "fade_out": 0.10},
-    {"id": "room", "kind": "room_tone", "level_dbfs": -60, "at": 17.55, "fade_in": 0.3}
+     "in": 12.60, "out": 16.52, "at": 13.80, "fade_in": 0.04, "fade_out": 0.10},
+    {"id": "room", "kind": "room_tone", "level_dbfs": -60, "at": 0.0, "fade_in": 0}
   ],
   "plans": [
     {"plan": 1, "zoom": 0.04, "in": {"at": 0.0, "dur": 0}, "out": {"at": "R3.w6.start-0.39", "dur": 0.35},
      "ayah": {"surah": 1, "ayah": 6, "page": 1}},
-    {"plan": 2, "zoom": 0.04, "in": {"at": "R3.w6.start-0.39", "dur": 0.35}, "out": {"at": 22.40, "dur": 0.35},
+    {"plan": 2, "zoom": 0.04, "in": {"at": "R3.w6.start-0.39", "dur": 0.35}, "out": {"at": 22.55, "dur": 0.25},
      "ayah": {"surah": 2, "ayah": 2, "page": 2}},
-    {"plan": 3, "zoom": 0.04, "in": {"at": 22.40, "dur": 0.35}, "out": {"at": 26.75, "dur": 0.5}},
+    {"plan": 3, "zoom": 0.04, "in": {"at": 22.80, "dur": 0.30}, "out": {"at": 26.75, "dur": 0.5}},
     {"plan": 4, "zoom": 0.03, "in": {"at": 27.25, "dur": 0.4}, "out": null, "finale": true}
   ],
   "scenes": [
@@ -31,7 +31,7 @@
      "texts": [
        {"role": "hook", "text": "Если мы на прямом пути — зачем просить?", "on": 0.0, "fade_in": 0, "off": "R1.end", "fade_out": 0.25},
        {"role": "translation", "text": "Веди нас прямым путём", "on": "R1.w3.start", "fade_in": 0.35, "off": "R1.end", "fade_out": 0.25},
-       {"role": "source", "text": "Сура 1, аят 6 · смысловой перевод: Кулиев", "on": "R1.w3.start", "fade_in": 0.35, "off": "R1.end", "fade_out": 0.25}
+       {"role": "source", "text": "1:6 · смысловой перевод: Кулиев", "on": "R1.w3.start", "fade_in": 0.35, "off": "R1.end", "fade_out": 0.25}
      ]},
     {"scene": 2, "plan": 1, "t_start": "R1.end", "t_end": "R3.w6.start-0.04", "mode": "C",
      "_note": "переезд B→C в паузе; ٱلصِّرَٰطَ, ٱلْمُسْتَقِيمَ → dim 0,25 с, ٱهْدِنَا остаётся золотом; повтор R2; три значения ас-Саади",
@@ -43,20 +43,20 @@
        {"role": "line", "slot": 2, "text": "Помоги следовать им", "key_line": true, "on": "R2.end-0.1", "fade_in": 0.25},
        {"role": "source", "text": "ас-Саади, тафсир 1:6", "on": "R2.w1.start-0.035", "fade_in": 0.25}
      ]},
-    {"scene": 3, "plan": 2, "t_start": "R3.w6.start-0.39", "t_end": 22.75, "mode": "B",
+    {"scene": 3, "plan": 2, "t_start": "R3.w6.start-0.39", "t_end": 22.80, "mode": "B",
      "_note": "2:2 целиком, слова 1–5 dim; هُدًى золото с первого кадра; корень под голосом; B→C после чтения; полный перевод Кулиева",
      "voice": "R3", "key": [6], "key_from_scene": true, "lit_end": "R3.end-0.02",
      "move": {"at": "R3.end-0.02", "dur": 0.5, "to": "C"},
      "texts": [
        {"role": "root", "letters": ["ه", "د", "ي"], "on": "R3.w7.start", "fade_in": 0.25, "off": "R3.end-0.02", "fade_out": 0.2},
        {"role": "root_line", "text": "Один корень с „ихдина“", "on": "R3.w7.start", "fade_in": 0.25, "off": "R3.end-0.02", "fade_out": 0.2},
-       {"role": "translation", "mode": "C", "text": "Это Писание, в котором нет сомнения, является верным руководством для богобоязненных", "on": 17.90, "fade_in": 0.35},
-       {"role": "source", "mode": "C", "text": "Сура 2, аят 2 · смысловой перевод: Кулиев", "on": 20.15, "fade_in": 0.25}
+       {"role": "translation", "mode": "C", "text": "Это Писание, в котором нет сомнения, является верным руководством для богобоязненных", "on": 18.05, "fade_in": 0.35},
+       {"role": "source", "mode": "C", "text": "2:2 · смысловой перевод: Кулиев", "on": 20.30, "fade_in": 0.25}
      ]},
-    {"scene": 4, "plan": 3, "t_start": 22.40, "t_end": 27.25, "mode": "Q",
+    {"scene": 4, "plan": 3, "t_start": 22.80, "t_end": 27.25, "mode": "Q",
      "_note": "такт 3: вопрос на бумаге, без аята",
      "texts": [
-       {"role": "question", "text": "О чём мы попросим, когда в намазе скажем „ихдина“?", "on": 22.40, "fade_in": 0}
+       {"role": "question", "text": "О чём мы попросим, когда в намазе скажем „ихдина“?", "on": 22.80, "fade_in": 0}
      ]},
     {"scene": 5, "plan": 4, "t_start": 27.25, "t_end": 29.15, "mode": "final",
      "_note": "финал style §8: метка рубрики, глиф 240 px, YASSIR",

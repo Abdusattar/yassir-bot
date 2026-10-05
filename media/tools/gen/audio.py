@@ -161,6 +161,24 @@ def noise(a, sheet_dir):
     return fade(x, a.get("fade_in", 0.0), 0).astype(np.float32)
 
 
+FRICATIVE = set("هحخسشصفث")  # глухие/фрикативные: начало слова тихое, скачка энергии нет
+
+
+def first_letter(sheet, a):
+    """Первая буква первого слова отрезка (по странице мусхафа плана с этим аятом)."""
+    import re as _re
+    from compile import ROOT
+    pages = [p["ayah"]["page"] for p in sheet["plans"] if p.get("ayah") and
+             (p["ayah"]["surah"], p["ayah"]["ayah"]) == (a["surah"], a["ayah"])]
+    if not pages:
+        return ""
+    d = json.loads((ROOT / "mushaf_data" / ("page%d.json" % pages[0])).read_text("utf-8"))
+    ay = [x for x in d["ayahs"] if (x["surah"], x["ayah"]) == (a["surah"], a["ayah"])][0]
+    tok = [t for t in ay["tokens"] if t.get("position") == a["words"][0]][0]
+    txt = _re.sub(r"<[^>]+>", "", tok["html"])
+    return next((c for c in txt if "ء" <= c <= "ي" or c == "ٱ"), "")
+
+
 def prepare(sheet, cache):
     """Декодировать источники и замерить offset_measured для каждого отрезка чтения."""
     src = {}
@@ -176,7 +194,12 @@ def prepare(sheet, cache):
             src[ch] = (decode(mp3, max(b["out"] for b in same) + 2 - base, base), base)
         x, base = src[ch]
         q0 = a["qdc"][a["words"][0]][0]
-        onset, rule = measure_onset(x, q0 - base)
+        if first_letter(sheet, a) in FRICATIVE:
+            # глухое начало (ه …): первое окно 10 мс > −45 dBFS после fade-in отрезка
+            ts, db = rms_db(x, a["in"] + a["fade_in"] - base, q0 - base + 0.4)
+            onset, rule = ts[int(np.argmax(db > -45))], "глухая буква: > −45 dBFS после fade-in"
+        else:
+            onset, rule = measure_onset(x, q0 - base)
         onset += base
         a["offset_measured"] = round(onset - q0, 3)
         a["_onset_rule"] = rule

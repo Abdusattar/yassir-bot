@@ -8,7 +8,6 @@ from pathlib import Path
 from compile import ROOT
 
 V2 = "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v2/woff2/p%d.woff2"
-HAFS = "https://static-cdn.tarteel.ai/qul/fonts/UthmanicHafs1Ver18.woff2"  # KFGQPC Uthmanic Hafs v18
 TEX = ROOT / "media" / "brand" / "paper_texture.png"
 GLYPH = ROOT / "media" / "brand" / "glyph_book.svg"
 
@@ -37,7 +36,7 @@ body{position:relative;font-variant-numeric:lining-nums;-webkit-font-smoothing:a
 .in{font-family:Inter,sans-serif;font-weight:500}
 .roots{position:absolute;left:0;width:1080px;top:300px;display:flex;direction:rtl;justify-content:center;gap:32px}
 .plate{width:160px;height:160px;border:2px solid var(--gold);border-radius:24px;display:flex;align-items:center;
- justify-content:center;font-family:hafs;font-size:120px;color:var(--ink);line-height:1}
+ justify-content:center;font-family:Amiri,serif;font-size:120px;color:var(--ink);line-height:1}
 .plate span{transform:translateY(-6px)}
 .glyph{position:absolute;left:420px;top:624px;width:240px;height:192px}
 body.solo,html:has(body.solo){background:transparent} body.solo>.bg,body.solo>.tex{visibility:hidden}
@@ -142,8 +141,10 @@ function build() {
         const row = el('div', 'row', blk);
         for (let i = a; i < z; i++) {
           const col = el('div', 'col', row); col.style.width = L.cols[i].w + 'px';
-          const g = el('span', 'w', col, L.glyphs[i]); g.style.font = `${L.k}px/1.6 v2p${p.block.page}`;
-          o.glyphs.push(g);
+          const last = i === p.block.words.length - 1 && p.block.end;
+          const w = el('span', 'w', col); w.style.font = `${L.k}px/1.6 v2p${p.block.page}`;
+          o.glyphs.push(el('span', '', w, p.block.words[i].glyph));
+          if (last) o.endEl = el('span', '', w, p.block.end);  // знак аята — свой цвет, синим не бывает
           if (p.block.values) {
             const m = el('div', 'mn', col, p.block.words[i].meaning); m.style.font = MF[L.cols[i].f];
             m.style.height = mh + 'px';
@@ -179,11 +180,15 @@ function text(x, cam, o) {
       d.style.cssText += ';font-size:84px;line-height:1.18;color:var(--ink)'; return o.p.live ? card(d) : d; }
     case 'translation': { const d = box(cam, 'cg', C ? tC : tB, C ? 820 : W_LOW, t);  // выше y 1050 — 820 по style
       d.style.cssText += ';font-size:60px;line-height:1.25;color:var(--ink-2)';
-      if (!C) o.lowB = d.getBoundingClientRect().bottom; return d; }
+      const bt = d.getBoundingClientRect().bottom;
+      if (C) o.lowC = Math.max(o.lowC || 0, bt); else o.lowB = bt; return d; }
     case 'line': { const d = box(cam, 'cg', tC + 75 * x.slot, 820, t);
-      d.style.cssText += `;font-size:60px;line-height:1.25;white-space:nowrap;color:var(${x.key_line ? '--ink' : '--ink-2'});font-weight:${x.key_line ? 700 : 600}`; return d; }
-    case 'source': { // одна строка Inter 40; не влезает — перенос по « · », низ остаётся на низе зоны
-      const bot = C ? (m ? tC + 300 + 40 + 48 : 1028) : x.mode === 'A' ? 1208 : (m ? 1218 : 1208);
+      d.style.cssText += `;font-size:60px;line-height:1.25;white-space:nowrap;color:var(${x.key_line ? '--ink' : '--ink-2'});font-weight:${x.key_line ? 700 : 600}`;
+      o.lowC = Math.max(o.lowC || 0, d.getBoundingClientRect().bottom); return d; }
+    case 'source': { // одна строка Inter 40 («1:6 · смысловой перевод: Кулиев», style §2); в C — на 40 px
+      // под последним занятым слотом перевода; не влезает — страховка: перенос по « · » с предупреждением
+      const bot = C ? (o.lowC ? Math.round(o.lowC) + 40 + 48 : (m ? tC + 300 + 40 + 48 : 1028))
+                    : x.mode === 'A' ? 1208 : (m ? 1218 : 1208);
       const W = bot > 1050 ? W_LOW : W_FIELD;  // строка уходит ниже y 1050 — ширина ≤820 (с наездом)
       const d = box(cam, 'in', bot - 48, W, x.text);
       d.style.cssText += ';font-size:40px;line-height:1.2;color:var(--muted);white-space:nowrap';
@@ -232,6 +237,7 @@ window.render = function (t) {
       let top = 0, s = 0; MODES.forEach((md, i) => { top += w[i] * o.G[md].top; s += w[i] * o.G[md].s; });
       o.blk.style.transform = `translate(0px,${top.toFixed(3)}px) scale(${s.toFixed(6)})`;
       o.glyphs.forEach((g, i) => g.style.color = rgba(ev(p.block.colors[i], t)));
+      if (o.endEl) o.endEl.style.color = rgba(ev(p.block.end_color, t));
       o.means.forEach((m, i) => m.style.opacity = ev(p.block.means[i], t).toFixed(4));
     }
     for (const [x, d] of o.texts) d.style.opacity = ev(x.op, t).toFixed(4);
@@ -249,7 +255,7 @@ window.solo = function (id) {  // только один план, без бум�
   for (const o of P) o.pd.style.visibility = (id === null || o.p.id === id) ? 'visible' : 'hidden';
 };
 window.boot = async function () {
-  const fams = D.pages.map(n => `118px v2p${n}`).concat(['120px hafs', "600 60px 'Cormorant Garamond'",
+  const fams = D.pages.map(n => `118px v2p${n}`).concat(['120px Amiri', "600 60px 'Cormorant Garamond'",
                 "700 60px 'Cormorant Garamond'", '500 40px Inter', "600 46px 'Cormorant Garamond'"]);
   for (const f of fams) await document.fonts.load(f, 'ابجد Аб');
   await document.fonts.ready;
@@ -262,11 +268,10 @@ window.boot = async function () {
 def html(data, pages):
     faces = "".join("@font-face{font-family:v2p%d;src:url(%s) format('woff2');font-display:block}" % (n, V2 % n)
                     for n in pages)
-    faces += "@font-face{font-family:hafs;src:url(%s) format('woff2');font-display:block}" % HAFS
     data = dict(data, pages=list(pages), tex=TEX.as_uri(), glyph=GLYPH.read_text("utf-8").replace('width="752" height="602"', 'width="240" height="192"'))
     return ("<!doctype html><html><head><meta charset='utf-8'>"
             "<link href='https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700"
-            "&family=Inter:wght@500&display=block' rel='stylesheet'>"
+            "&family=Inter:wght@500&family=Amiri&display=block' rel='stylesheet'>"
             "<style>" + faces + CSS + "</style></head><body><div class='bg'></div>"
             "<img class='tex' src='" + TEX.as_uri() + "'>"
             "<script>" + JS.replace("__DATA__", json.dumps(data, ensure_ascii=False)) + "</script></body></html>")
