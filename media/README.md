@@ -43,7 +43,7 @@ WhatsApp, Telegram, Shorts). Цель — любовь к Корану и обр
 
 | Файл | Что |
 |---|---|
-| `.claude/skills/media-scenarist`, `media-editor`, `.claude/agents/media-critic.md` | **наши скиллы** (05.10): сценарист, монтажёр, независимый рецензент — грузятся, когда `media/` подключена (`/add-dir D:ispace\yassir_Bot\media`) |
+| `.claude/skills/media-scenarist`, `media-editor`, `.claude/agents/media-critic.md`, `media-director.md`, `media-craft.md` | **наши скиллы и агенты** (05.10): сценарист, монтажёр; рецензенты — по смыслу и адабу (critic), креативный директор «третья сторона» (director), монтажёр-постановщик по кадрам (craft) — грузятся, когда `media/` подключена (`/add-dir D:ispace\yassir_Bot\media`) |
 | `process.md` | **конвейер ролика**: шаги, шаблон брифа, рубрика независимого критика, проверка по тафсирам |
 | `strategy.md` | вся стратегия: мерка довольства Всевышнего, анализ, темы, рубрики, запуск, порядок работы, производство, стандарт кадра, вход в бота, открытые решения |
 | `journal.md` | решения и уроки по датам |
