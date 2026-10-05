@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="164 239 752 602" width="752" height="602">
+  <!-- Знак «Яссир»: книга и три луча — контуры со значка приложения (avatar_blue_1080.png, 1080 px),
+       белые линии → синий бренда #2456b8, без плитки. В финале ширина 230 px (style.md §8). -->
+  <g fill="none" stroke="#2456b8" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M540 258V368M393 311L435 382M687 311L645 382"/>
+    <path d="M183 487L183 680Q361.5 716.7 540 821Q718.5 716.7 897 680L897 487Q718.5 524 540 640Q361.5 524 183 487Z"/>
+  </g>
+</svg>
