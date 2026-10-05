@@ -5924,14 +5924,15 @@
   };
   // Доска важного (17.09.2026) - отдельно от строки чата: строка показывает
   // последнее, а важное висит, пока не открыл (объявление - до своей даты).
+  // Название группы в шапке карточки убрано (05.10.2026, решение
+  // пользователя): только тип. Откуда - видно по тапу, он ведёт в ленту группы.
   function boardRender(list) {
     var box = document.getElementById('dash-board');
     list = list || [];
     box.innerHTML = list.map(function (n, i) {
       return '<div class="bd-row' + (n.read ? ' read' : '') + '" data-i="' + i + '" tabindex="0" role="button">' +
         '<span class="bd-ic"><svg viewBox="0 0 24 24" aria-hidden="true">' + (NOTICE_ICON[n.type] || NOTICE_ICON.announce) + '</svg></span>' +
-        '<span class="bd-body"><span class="bd-h"><span>' + feedEsc(T('notice_' + n.type)) + '</span>' +
-        (n.source ? '<i>' + feedEsc(n.source) + '</i>' : '') + '</span>' +
+        '<span class="bd-body"><span class="bd-h"><span>' + feedEsc(T('notice_' + n.type)) + '</span></span>' +
         '<span class="bd-t">' + feedEsc(n.text) + '</span></span><span class="bd-go">›</span></div>';
     }).join('');
     box.classList.toggle('on', !!list.length);
