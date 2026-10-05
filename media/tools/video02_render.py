@@ -20,7 +20,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 OUT = ROOT / "media" / "videos" / "02_ty_uchish" / "frames"
 
 _page = json.load(open(ROOT / "mushaf_data" / "page2.json", encoding="utf-8"))
-FONT = _page["font_url"]
+# Шрифт V2 (quran.com), не V4-таджвид (05.10.2026, рецензия): в V4 у فِيهِ на стр. 2
+# кясра нарисована в рамке - дефект глифа, его видно и в приложении. Коды глифов те же.
+FONT = "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v2/woff2/p2.woff2"
 _ayah = [a for a in _page["ayahs"] if a["ayah"] == 2][0]
 WORDS = [(t["code_v4"], t["translation"]) for t in _ayah["tokens"] if t["type"] == "word"]
 END = [t["code_v4"] for t in _ayah["tokens"] if t["type"] == "ayah_end"][0]
@@ -50,7 +52,8 @@ def ayah(lit, meanings, hook):
         cells.append('<span class="w%s"><b>%s</b><i>%s</i></span>' % (
             "" if on else " dim", glyph, tr.rstrip(" –,") if (meanings and on) else ""))
     cells.append('<span class="e">%s</span>' % END)
-    head = '<div class="center ru hook">Ты знаешь это<br>наизусть.</div>' if hook else ""
+    # Вопрос с первого кадра (рецензия 05.10): утверждение без вопроса не держит.
+    head = '<div class="center ru hook">Ты знаешь это наизусть.<br>А понимаешь?</div>' if hook else ""
     return page(head + '<div class="ar2">%s</div>' % "".join(cells), "bg-dawn")
 
 
@@ -59,7 +62,8 @@ SHOTS = {
     "kuliev.png": page('<div class="center tr" style="top:640px;font-size:68px">%s</div>'
                        '<div class="center src" style="top:1180px">Сура 2, аят 2 · перевод Кулиева</div>'
                        % KULIEV, "bg-dawn"),
-    "end.png": page('<div class="center ru" style="top:720px;font-size:104px">Коран отвечает</div>'
+    # Рубрика не «Коран отвечает» - в конце только знак (рецензия 05.10).
+    "end.png": page('<div class="center ru" style="top:720px;font-size:104px">&nbsp;</div>'
                     '<div class="center" style="top:900px;font-size:54px;letter-spacing:14px;'
                     'opacity:.75;font-weight:500">YASSIR</div>', "bg-dawn"),
 }
