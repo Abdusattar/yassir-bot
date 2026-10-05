@@ -857,13 +857,18 @@
      выделение оставалось. Закрыты и они.
      25.09.2026: и снова «иногда», лёжа - закрывали по одному месту, панель
      находила следующее (строка страниц в конце листа, шапка, подписи).
-     Теперь весь экран мусхафа (#app) без выделения, кроме полей ввода. */
-  #app, #ayah-text, #hifz-big-words, .trainer-line, .trainer-word,
+     Теперь весь экран мусхафа (#app) без выделения, кроме полей ввода.
+     05.10.2026: панель вылезла в тренажёре слов (пользователь; у Нурлана
+     из G-8 тап по верному варианту «не шёл» - Chrome забирал касание под
+     выделение). Тренажёры, дашборд, лента и остальные экраны лежат вне
+     #app - закрываем всё приложение разом, по одному месту больше не
+     догоняем. */
+  body, #ayah-text, #hifz-big-words, .trainer-line, .trainer-word,
   #word-popup, .word-row, #meaning-list {
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
   }
-  #app input, #app textarea {
+  input, textarea, [contenteditable="true"] {
     -webkit-user-select: text; user-select: text;
   }
   #ayah-text {

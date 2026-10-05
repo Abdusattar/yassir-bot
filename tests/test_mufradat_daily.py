@@ -100,3 +100,30 @@ def test_generate_question_передаёт_исключение():
     for _ in range(30):
         q = mufradat.generate_question(words, {}, exclude_keys=set(range(11)))
         assert q["word"]["progress_key"] == 11
+
+
+def test_маленькая_закладка_норма_по_размеру_пула(daily_db, monkeypatch):
+    """Стр. 2 - 32 годных слова при норме 40 (05.10.2026): счётчик вставал
+    на 32/40 навсегда. Норма - сколько тренажёр вообще может спросить."""
+    mufradat._daily_target_cache.clear()
+    monkeypatch.setattr(mufradat, "get_current_page", lambda uid: 2)
+    monkeypatch.setattr(mufradat, "get_words_for_bookmark", lambda uid: _words(3))
+
+    mufradat.record_daily_answered_word("u1", 0, correct=True)
+    mufradat.record_daily_answered_word("u1", 1, correct=True)
+    st = mufradat.record_daily_answered_word("u1", 2, correct=False)
+
+    assert st["target"] == 3
+    assert st["correct_target"] == 2
+    assert st["done"] is True
+
+
+def test_пустой_пул_не_даёт_зачёт_даром(daily_db, monkeypatch):
+    mufradat._daily_target_cache.clear()
+    monkeypatch.setattr(mufradat, "get_current_page", lambda uid: 2)
+    monkeypatch.setattr(mufradat, "get_words_for_bookmark", lambda uid: [])
+
+    st = mufradat.get_daily_words_status("u1")
+
+    assert st["target"] == 4
+    assert st["done"] is False

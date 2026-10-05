@@ -14,6 +14,10 @@
 группы Мохидил: 28.09 18 минут повторения отверг сервер из-за удвоенного
 таймера продолжения). По умолчанию ноль - только серия.
 
+--tasks t - дописать только эти задания, а не все недостающие (05.10.2026:
+студенты на стр. 2 проходили все 32 слова пула верно, а норма была 40 -
+закрывали одни «Слова» с обычным баллом: --tasks t --points 1).
+
 Запускать на сервере из корня репозитория от владельца базы (stursunkul).
 """
 import argparse
@@ -33,6 +37,7 @@ def main():
     ap.add_argument("--date", required=True, help="учебный день YYYY-MM-DD")
     ap.add_argument("--why", help="причина - пишется в note; без неё только показать")
     ap.add_argument("--points", type=int, default=0, choices=[0, 1])
+    ap.add_argument("--tasks", help="только эти задания, через запятую (t,m,...)")
     ap.add_argument("--undo", action="store_true")
     a = ap.parse_args()
 
@@ -59,7 +64,8 @@ def main():
             have = {r["subcategory"] for r in c.execute(
                 "SELECT subcategory FROM score_events WHERE student_id=? AND group_id=?"
                 " AND date=? AND category='task'", (u["id"], g["id"], a.date))}
-            missing = [k for k in tasks if k not in have]
+            only = set(a.tasks.split(",")) if a.tasks else None
+            missing = [k for k in tasks if k not in have and (only is None or k in only)]
             for k in missing:
                 c.execute("INSERT OR IGNORE INTO score_events"
                           "(student_id,group_id,date,category,subcategory,points,note)"

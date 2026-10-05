@@ -532,6 +532,24 @@ def _scaled_repeat_threshold(words):
     return max(3, round(n * 0.006))
 
 
+def _question_candidates(words, progress_by_id, min_repeat_exclude=None):
+    """Слова пула, которые вообще могут стать целью вопроса (фильтры см.
+    pick_question_word). Отдельно - потому что по ним же считается дневная
+    норма на маленькой закладке (daily_word_target)."""
+    if min_repeat_exclude is None:
+        min_repeat_exclude = _scaled_repeat_threshold(words)
+    repeated = _repeated_glosses(words, min_repeat_exclude)
+    candidates = []
+    for w in words:
+        if _is_scaffold(w["translation"]) or _normalize_gloss(w["translation"]) in repeated:
+            continue
+        progress = progress_by_id.get(w["progress_key"])
+        if is_mastered(progress) and not _is_stale(progress):
+            continue
+        candidates.append(w)
+    return candidates
+
+
 def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_keys=None):
     """words - результат get_words_in_range. Целью вопроса не может быть
     слово с пояснением в скобках (не проверяет знание слова, угадывается
@@ -557,17 +575,7 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_k
     сегодня остаются в обороте - их возвращает квота «Моих слов». Если без
     сегодняшних верных кандидатов не остаётся вовсе, исключение снимается:
     лучше повтор, чем тупик «слова закончились»."""
-    if min_repeat_exclude is None:
-        min_repeat_exclude = _scaled_repeat_threshold(words)
-    repeated = _repeated_glosses(words, min_repeat_exclude)
-    candidates = []
-    for w in words:
-        if _is_scaffold(w["translation"]) or _normalize_gloss(w["translation"]) in repeated:
-            continue
-        progress = progress_by_id.get(w["progress_key"])
-        if is_mastered(progress) and not _is_stale(progress):
-            continue
-        candidates.append(w)
+    candidates = _question_candidates(words, progress_by_id, min_repeat_exclude)
     if exclude_keys:
         fresh = [w for w in candidates if w["progress_key"] not in exclude_keys]
         if fresh:
@@ -1202,16 +1210,45 @@ def _ensure_daily_answered_schema(conn):
         conn.execute("ALTER TABLE mufradat_daily_answered_words ADD COLUMN correct INTEGER NOT NULL DEFAULT 0")
 
 
-def _daily_status_row(conn, user_id, today):
+# Норма на маленькой закладке (05.10.2026, решение пользователя). На стр. 2
+# в пуле всего 32 годных слова - 40 разных не набрать никак: студенты
+# проходили все 32 верно, счётчик вставал на 32/40, а вопросы шли по кругу
+# (одно и то же слово сразу после верного ответа - «нажал, дальше не идёт»).
+# Норма = сколько слов тренажёр вообще может спросить, но не больше 40;
+# верных - не больше самой нормы. Размер пула считается раз в день на
+# закладку: пул большой закладки - десятки тысяч строк, а статус дня
+# спрашивается на каждый ответ.
+_daily_target_cache = {}
+
+
+def daily_word_target(user_id):
+    page = get_current_page(user_id)
+    if not page:
+        return DAILY_WORDS_FOR_TASK_CREDIT
+    key = (user_id, _today(), page)
+    if key not in _daily_target_cache:
+        if len(_daily_target_cache) > 5000:
+            _daily_target_cache.clear()
+        words = get_words_for_bookmark(user_id)
+        progress = get_progress_map(user_id, [w["progress_key"] for w in words])
+        n = len({w["progress_key"] for w in _question_candidates(words, progress)})
+        # Пусто - тренажёр и так покажет «сдвинь страницу»; норма 0 засчитала
+        # бы задание без единого ответа.
+        _daily_target_cache[key] = min(DAILY_WORDS_FOR_TASK_CREDIT, n) if n else DAILY_WORDS_FOR_TASK_CREDIT
+    return _daily_target_cache[key]
+
+
+def _daily_status_row(conn, user_id, today, target):
     count, correct = conn.execute(
         "SELECT COUNT(*), COALESCE(SUM(correct), 0) FROM mufradat_daily_answered_words "
         "WHERE user_id=? AND date=?",
         (user_id, today)
     ).fetchone()
+    correct_target = min(DAILY_CORRECT_FOR_TASK_CREDIT, target)
     return {
-        "count": count, "target": DAILY_WORDS_FOR_TASK_CREDIT,
-        "correct": correct, "correct_target": DAILY_CORRECT_FOR_TASK_CREDIT,
-        "done": count >= DAILY_WORDS_FOR_TASK_CREDIT and correct >= DAILY_CORRECT_FOR_TASK_CREDIT,
+        "count": count, "target": target,
+        "correct": correct, "correct_target": correct_target,
+        "done": count >= target and correct >= correct_target,
     }
 
 
@@ -1226,6 +1263,7 @@ def record_daily_answered_word(user_id, word_id, correct=False):
     же "разный" счётчик не увеличивает (PRIMARY KEY не пускает дубль) - и это
     ожидаемо: технически другая позиция, но по факту то же самое слово."""
     today = _today()
+    target = daily_word_target(user_id)
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_daily_answered_schema(conn)
         conn.execute(
@@ -1237,7 +1275,7 @@ def record_daily_answered_word(user_id, word_id, correct=False):
                 "UPDATE mufradat_daily_answered_words SET correct=1 WHERE user_id=? AND date=? AND word_id=?",
                 (user_id, today, word_id)
             )
-        return _daily_status_row(conn, user_id, today)
+        return _daily_status_row(conn, user_id, today, target)
 
 
 def get_daily_words_status(user_id):
@@ -1247,9 +1285,10 @@ def get_daily_words_status(user_id):
     для API, шапки тренажёра и дашборда - раньше каждый из них сравнивал
     count с порогом сам."""
     today = _today()
+    target = daily_word_target(user_id)
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_daily_answered_schema(conn)
-        return _daily_status_row(conn, user_id, today)
+        return _daily_status_row(conn, user_id, today, target)
 
 
 def get_today_correct_keys(user_id):

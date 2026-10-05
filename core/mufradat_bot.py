@@ -24,8 +24,7 @@ from core.db import (
     get_group, get_user_by_id, get_dm_ok, other_bot_member,
 )
 from core.mufradat import (
-    get_leaderboard, DAILY_WORDS_FOR_TASK_CREDIT, DAILY_CORRECT_FOR_TASK_CREDIT,
-    compute_overall_score,
+    get_leaderboard, get_daily_words_status, compute_overall_score,
 )
 from core.mushaf_words import get_hifz_pointer, get_mushaf_layout, madani_page, page_text_line_count
 from core.i18n import T, get_group_lang
@@ -63,10 +62,12 @@ async def _credit_task_if_applicable(user_id, chat_id):
     if already.get("t"):
         return
     save_report(user["id"], group["id"], get_date(), {"t": True})
+    # Норма своя у маленькой закладки (стр. 2 - 32 слова, daily_word_target).
+    st = get_daily_words_status(user_id)
     await send_message(
         chat_id,
-        f"🎉 Задание «Слова» на сегодня засчитано — {DAILY_WORDS_FOR_TASK_CREDIT} слов проработано, "
-        f"{DAILY_CORRECT_FOR_TASK_CREDIT}+ из них верно!"
+        f"🎉 Задание «Слова» на сегодня засчитано — {st['target']} слов проработано, "
+        f"{st['correct_target']}+ из них верно!"
     )
 
     if group["chat_id"]:
