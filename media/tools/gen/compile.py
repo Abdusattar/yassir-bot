@@ -73,7 +73,8 @@ def compile_sheet(sheet, tl, live=None):
             br = {"c0": 0, "kfs": []}
             if L.get("brighten"):
                 br["kfs"].append([T(L["brighten"]["at"]), 1, L["brighten"]["dur"], 1])
-            plan["live"] = {"base": base, "n": n, "at": T(L.get("at", p["in"]["at"])), "bright": br}
+            plan["live"] = {"base": base, "n": n, "at": T(L.get("at", p["in"]["at"])), "bright": br,
+                            "green": bool(L.get("green"))}
         plans.append(plan)
     byid = {p["id"]: p for p in plans}
     for a in sheet["audio"]:  # шум — до и после чтения, никогда под ним (style §7)

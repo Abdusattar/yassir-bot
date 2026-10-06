@@ -228,7 +228,11 @@ def main():
     ev = sorted(events)
     gaps = np.array([max(0, min(e[0] for e in ev if e[0] > a[0] + a[2] - 1e-9) - (a[0] + a[2]))
                      for a in ev if any(e[0] > a[0] + a[2] - 1e-9 for e in ev)])
-    res(6, ok6 and gaps.max() <= 4.0 + 1e-6, "; ".join(lines) + "; дольше всего без смены %.2f с" % gaps.max())
+    starts = [a[0] + a[2] for a in ev if any(e[0] > a[0] + a[2] - 1e-9 for e in ev)]
+    # живой кадр в движении — не «статичный» отрезок: правило 4 с — про бумагу (ролик 6: вопрос на живом поле)
+    gaps = np.array([0.0 if any(p["live"] for p in visible(t0 + g / 2)) else g for t0, g in zip(starts, gaps)])
+    res(6, ok6 and gaps.max() <= 4.0 + 1e-6, "; ".join(lines) + "; дольше всего без смены %.2f с (с %.2f)" % (
+        gaps.max(), starts[int(gaps.argmax())]))
 
     # 7. Синхрон: акустическое начало первого слова каждого отрезка (то же правило, что замер, style §7)
     #    против начала перехода цвета этого слова на кадрах (середина 0,1-с перехода − 0,05 с)
@@ -313,8 +317,13 @@ def main():
     if lv:
         br = [k[2] for p in lv for k in p["live"]["bright"]["kfs"]]
         notes = [o for o in B["offsets"] if o.startswith("живой")]
-        ok15 = all(1.0 <= d <= 1.5 for d in br) and all(float(re.search(r"UAVG ([\d.]+)", o).group(1)) <= 128 and
-                                                         float(re.search(r"VAVG ([\d.]+)", o).group(1)) >= 128 for o in notes)
+        green = {p["id"] for p in D["plans"] if p["live"] and p["live"].get("green")}
+        # VAVG ≥ 128 — против холодных (ночь, синее небо); у кадров природы, где зелень — содержание
+        # (листья, трава; в листе "green": true), требуем только UAVG ≤ 128 — нет синего сдвига (style §1 п. 4)
+        ok15 = all(1.0 <= d <= 1.5 for d in br) and all(
+            float(re.search(r"UAVG ([\d.]+)", o).group(1)) <= 128 and
+            (int(re.search(r"план (\d+)", o).group(1)) in green or float(re.search(r"VAVG ([\d.]+)", o).group(1)) >= 128)
+            for o in notes)
         res(15, ok15, "светление %s с, затем растворение плана; %s" % (br, "; ".join(notes)))
     else:
         res(15, True, "живого кадра нет — пункт не применим")
