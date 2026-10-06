@@ -58,6 +58,21 @@ class Timeline:
                 q = qdc_words(cache, chapter_of(a["src"]), a["ayah"])
                 a["qdc"] = {p: q[p] for p in a["words"]}
         self.warnings = []
+        # санитарная проверка данных qdc (06.10: слово 6 в 50:9 было записано двумя сегментами, код брал
+        # второй — постановщик услышал): большой зазор или очень длинное слово -> проверить на слух
+        self.notes = []
+        for a in sheet["audio"]:
+            if a["kind"] != "recitation":
+                continue
+            ws = a["words"]
+            for i, pos in enumerate(ws):
+                s0, e0 = a["qdc"][pos]
+                if e0 - s0 > 3.0:
+                    self.notes.append("%s: слово %d длится %.2f с — проверить на слух (qdc мог слить сегменты)" % (a["id"], pos, e0 - s0))
+                if i + 1 < len(ws):
+                    gap = a["qdc"][ws[i + 1]][0] - e0
+                    if gap > 0.6:
+                        self.notes.append("%s: зазор между словами %d и %d — %.2f с: проверить на слух (пауза чтеца или слово записано частями)" % (a["id"], pos, ws[i + 1], gap))
 
     def word(self, sid, pos):
         """(t, t_end) слова на шкале ролика с замеренным смещением."""

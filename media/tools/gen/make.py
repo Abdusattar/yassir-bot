@@ -2,7 +2,12 @@
 
     python media/tools/gen/make.py media/videos/04_slovo_huda/sheet.json
     python media/tools/gen/make.py <sheet> --stills 0,1.9,5.9      # только контрольные кадры
+    python media/tools/gen/make.py <sheet> --proof                  # СУХОЙ ПРОГОН: звук, лист, кадры на всех
+                                                                    # стыках -> work/proof.png + build.json,
+                                                                    # затем check.py --dry (секунды, без рендера)
     python media/tools/gen/make.py <sheet> --work <папка>           # временные файлы (кадры, звук)
+
+Правило (06.10): полная сборка — только после зелёного сухого прогона и просмотра proof.png глазами.
 
 Выход рядом с листом: <version>.mp4, cover.png, audio_final.wav. Порядок: лист -> замер звука ->
 шкала -> страница render(t) -> кадры Playwright -> звук -> ffmpeg (style §12) -> обложка.
@@ -42,6 +47,71 @@ def yuv_means(d):
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     y = .2126 * r + .7152 * g + .0722 * b
     return 128 + (b - y).mean() / 1.8556 * 224 / 255, 128 + (r - y).mean() / 1.5748 * 224 / 255
+
+
+def sheet_notes(data):
+    """Предупреждения листа до рендера: время на текст ниже нормы (style §6) и два текста, делящие одно
+    место (style §5: уход, потом вход). То же считает check.py п. 6, но здесь — за секунды, до кадров."""
+    notes = []
+    area = {"hook": "верх", "question": "верх", "translation": "низ", "line": "низ", "root_line": "низ"}
+    for p in data["plans"]:
+        end = p["op"]["kfs"][-1][0] if len(p["op"]["kfs"]) > 1 else data["duration"]
+        items = []
+        for x in p["texts"]:
+            if "text" not in x:
+                continue
+            on, off = x["t_on"], x.get("t_off", end)
+            fo = x["op"]["kfs"][-1][2] if "t_off" in x else 0
+            n, role = len(x["text"].split()), x["role"]
+            need = {"translation": max(2.5, n / 3 + 0.5, 4.0 if n >= 10 else 0)}.get(role, max(1.2, n / 3 + 0.5))
+            if role in ("source", "label", "yassir", "root"):
+                need = 1.2
+            if role == "yassir":
+                need = 1.9
+            if off - on < need - 1e-6:
+                notes.append("время на текст: «%s» %.2f с < нормы %.1f (план %d)" % (x["text"][:30], off - on, need, p["id"]))
+            items.append((on, off + fo, area.get(role, role), x["text"][:30]))
+        items.sort()
+        for i, a in enumerate(items):
+            for b in items[i + 1:]:
+                if a[2] == b[2] and a[3] != b[3] and b[0] < a[1] - 0.05:
+                    notes.append("наложение: «%s» и «%s» делят место (%s) в %.2f–%.2f (план %d) — style §5: уход, потом вход"
+                                 % (a[3], b[3], a[2], b[0], a[1], p["id"]))
+    return notes
+
+
+def proof_times(data):
+    """Кадры для контактного листа: кадр 0, конец, и у каждого события (план, текст, светление) — кадр до,
+    середина перехода и кадр после. Ловит каши на стыках и мигание — то, что лист не видит."""
+    fps = data["fps"]
+    ts = {0.0, data["duration"] - 0.3}
+    ev = []
+    for p in data["plans"]:
+        ev += [(k[0], k[2]) for k in p["op"]["kfs"]]
+        if p["live"]:
+            ev += [(k[0], k[2]) for k in p["live"]["bright"]["kfs"]]
+        for x in p["texts"]:
+            ev += [(k[0], k[2]) for k in x["op"]["kfs"]]
+    for t, d in ev:
+        ts.update([t - 1 / fps, t + d / 2, t + d + 1 / fps] if d > 0 else [t - 1 / fps, t + 1 / fps])
+    return sorted({round(float(min(max(t, 0.0), data["duration"] - 1 / fps)), 3) for t in ts})  # float: значения из numpy ломают JS
+
+
+def contact_sheet(frames_dir, times, out, cols=8, w=180):
+    from PIL import Image, ImageDraw
+    ims = []
+    for t in times:
+        im = Image.open(frames_dir / ("t%06.3f.png" % t)).convert("RGB")
+        im = im.resize((w, round(w * im.height / im.width)), Image.LANCZOS)
+        ImageDraw.Draw(im).rectangle([0, 0, 52, 14], fill=(0, 0, 0))
+        ImageDraw.Draw(im).text((2, 1), "%.2f" % t, fill=(255, 255, 255))
+        ims.append(im)
+    h = ims[0].height
+    rows = (len(ims) + cols - 1) // cols
+    sheet = Image.new("RGB", (cols * w, rows * h), (40, 40, 40))
+    for i, im in enumerate(ims):
+        sheet.paste(im, ((i % cols) * w, (i // cols) * h))
+    sheet.save(out)
 
 
 def cut_live(sheet, timeline, work):
@@ -86,6 +156,7 @@ def main():
     ap.add_argument("sheet")
     ap.add_argument("--work", default=None)
     ap.add_argument("--stills", default=None, help="времена через запятую: только кадры в work/stills")
+    ap.add_argument("--proof", action="store_true", help="сухой прогон: кадры на всех стыках -> work/proof.png, звук и build.json без рендера")
     ap.add_argument("--dsf", type=int, default=4, help="deviceScaleFactor слоёв (наезд — ресэмпл Lanczos, 4: волна центра <0,2 px)")
     ap.add_argument("--keep-frames", action="store_true")
     a = ap.parse_args()
@@ -107,10 +178,22 @@ def main():
     build = {"offsets": report + live_notes, "warnings": tl.warnings, "voiced": tl.voiced(), "data": data,
              "audio": [{k: v for k, v in x.items() if k != "qdc"} for x in sheet["audio"]]}
 
-    if a.stills:
-        ts = [float(x) for x in a.stills.split(",")]
-        lay = page.frames(work / "page.html", work / "stills", ts, a.dsf, ["t%06.3f.png" % t for t in ts])
-        print("\n".join(report + live_notes + tl.warnings), "\nраскладка:", lay)
+    s_notes = sheet_notes(data)
+    if a.stills or a.proof:
+        if a.proof:
+            ts = proof_times(data)
+            lay = page.frames(work / "page.html", work / "proof", ts, 2, ["t%06.3f.png" % t for t in ts])
+            contact_sheet(work / "proof", ts, work / "proof.png")
+            notes = audio.build(sheet, src, total, work, vdir / "audio_final.wav", vdir)
+            build.update(layout=lay, audio_notes=notes)
+            (work / "build.json").write_text(json.dumps(build, ensure_ascii=False, indent=1), "utf-8")
+            print("контактный лист: %s (%d кадров)" % (work / "proof.png", len(ts)))
+        else:
+            ts = [float(x) for x in a.stills.split(",")]
+            lay = page.frames(work / "page.html", work / "stills", ts, a.dsf, ["t%06.3f.png" % t for t in ts])
+        print("\n".join(report + live_notes + tl.warnings + tl.notes + s_notes), "\nраскладка:", lay)
+        if tl.warnings or s_notes:
+            print("ПРЕДУПРЕЖДЕНИЯ ЛИСТА: %d — исправить до полной сборки" % (len(tl.warnings) + len(s_notes)))
         return
 
     notes = audio.build(sheet, src, total, work, vdir / "audio_final.wav", vdir)
@@ -124,7 +207,7 @@ def main():
     page.cover(sheet, work, vdir / "cover.png")
     build.update(layout=lay, audio_notes=notes)
     (work / "build.json").write_text(json.dumps(build, ensure_ascii=False, indent=1), "utf-8")
-    print("\n".join(report + live_notes + tl.warnings + notes))
+    print("\n".join(report + live_notes + tl.warnings + tl.notes + s_notes + notes))
     print("раскладка:", lay)
     print("готово:", out, vdir / "cover.png")
 

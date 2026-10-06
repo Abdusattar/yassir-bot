@@ -84,11 +84,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("sheet")
     ap.add_argument("--work", required=True)
+    ap.add_argument("--dry", action="store_true", help="сухой прогон по make.py --proof: без mp4 (пункты 1, 4, 13, 14 и синхрон по кадрам — после сборки)")
     a = ap.parse_args()
     sheet_path = Path(a.sheet).resolve()
     sheet = json.loads(sheet_path.read_text("utf-8"))
     vdir, work = sheet_path.parent, Path(a.work)
     mp4 = vdir / ("%s.mp4" % sheet.get("version", "draft"))
+    dry = a.dry or not mp4.exists()
     B = json.loads((work / "build.json").read_text("utf-8"))
     D = B["data"]
     (work / "check").mkdir(exist_ok=True)
@@ -118,10 +120,13 @@ def main():
     events.sort()
 
     # 1. Склейки: детектор сцен
-    err = sh(["ffmpeg", "-i", str(mp4), "-vf", "select='gt(scene,0.25)',showinfo", "-f", "null", "-"]).stderr
-    cuts = [float(x) for x in re.findall(r"pts_time:([\d.]+)", err)]
     fades = sorted({round(e[2], 2) for e in events if e[1].startswith("план") and e[2] > 0})
-    res(1, not cuts, "scene>0.25: %d склеек %s; растворения планов %s с" % (len(cuts), cuts, fades))
+    if dry:
+        res(1, True, "после сборки (нужен mp4); растворения планов по листу %s с" % fades)
+    else:
+        err = sh(["ffmpeg", "-i", str(mp4), "-vf", "select='gt(scene,0.25)',showinfo", "-f", "null", "-"]).stderr
+        cuts = [float(x) for x in re.findall(r"pts_time:([\d.]+)", err)]
+        res(1, not cuts, "scene>0.25: %d склеек %s; растворения планов %s с" % (len(cuts), cuts, fades))
 
     # 2. Ни один текст не появляется/исчезает за 1 кадр
     bad = []
@@ -162,7 +167,7 @@ def main():
         vis = visible((a_ + b_) / 2)
         if b_ - a_ >= 2.0 and not busy and len(vis) == 1 and not vis[0]["live"]:
             wins.append((b_ - a_, a_ + 0.05, b_ - 0.05))
-    for _, t0, t1 in sorted(wins, reverse=True)[:3]:
+    for _, t0, t1 in (sorted(wins, reverse=True)[:3] if not dry else []):
         zones, t1 = ((270, 1250),), min(t1, t0 + 3.0)
         fr = png_range(work, t0, t1)
         fr = fr if fr is not None else frames_range(mp4, t0, t1).astype(np.float32)
@@ -182,6 +187,9 @@ def main():
                 d2s.append(np.abs(np.diff(c[:, k], 2)).max())
     zooms = ["план %d: 1→%.2f" % (p["id"], 1 + p["zoom"]) for p in D["plans"]]
     src = "PNG до кодера" if png_range(work, 0, 0.04) is not None else "mp4 (с шумом кодера)"
+    if dry:
+        jit, slow = [0.0], [0.0]
+        src = "после сборки (дрожь по кадрам)"
     res(4, max(jit) < 0.2 and max(slow) < 0.2, src + ": центр текста гуляет по кадрам max %.3f px (от скользящего среднего 5 кадров); медленная волна "
         "от квадратичной подгонки max %.3f px; %s; "
         "окна %s; наезд — ресэмпл Lanczos слоя плана, без скачка: входящий план с 1,00" % (
@@ -190,7 +198,13 @@ def main():
     # 5. Безопасные зоны: всё, что отличается от чистой бумаги
     idx = [i for i in range(0, D["frames"], 3) if not any(p["live"] for p in visible(i / FPS))]
     m = np.zeros((1920, 1080), bool)
-    for c0 in range(0, D["frames"], 60):  # по 2 с, чтобы не держать весь ролик в памяти
+    if dry:  # по кадрам контактного листа (make.py --proof): все стыки и середины переходов
+        for f in sorted((work / "proof").glob("t*.png")):
+            t = float(f.stem[1:])
+            if not any(p["live"] for p in visible(t)):
+                fr = np.asarray(Image.open(f).convert("L"), np.float32)
+                m |= np.abs(fr - bg) > 14
+    for c0 in (range(0, D["frames"], 60) if not dry else []):  # по 2 с, чтобы не держать весь ролик в памяти
         fr = frames_range(mp4, c0 / FPS, (c0 + 60) / FPS)
         sel = [i - c0 for i in idx if c0 <= i < c0 + len(fr)]
         if sel:
@@ -276,6 +290,9 @@ def main():
                          for e in events):
             syn.append("%s: первое слово уже горит / окно в растворении — не мерилось" % sid)
             continue
+        if dry:
+            syn.append("%s: синхрон по кадрам — после сборки" % sid)
+            continue
         onset, rule = audio.measure_onset(wav, vs)
         fr = frames_range(mp4, kf[0] - 0.2, kf[0] + 0.35, gray=False).astype(float)[:, 270:1250]
         chroma = (fr.max(3) - fr.min(3)).mean((1, 2))
@@ -293,24 +310,30 @@ def main():
             chg or "нет"))
 
     # 8. Звук
-    err = sh(["ffmpeg", "-i", str(mp4), "-af", "ebur128=peak=true", "-f", "null", "-"]).stderr
+    src8 = vdir / "audio_final.wav" if dry else mp4
+    err = sh(["ffmpeg", "-i", str(src8), "-af", "ebur128=peak=true", "-f", "null", "-"]).stderr
     I = float(re.findall(r"I:\s+(-?[\d.]+) LUFS", err)[-1])
     TP = float(re.findall(r"Peak:\s+(-?[\d.]+) dBFS", err)[-1])
-    err = sh(["ffmpeg", "-i", str(mp4), "-af", "silencedetect=noise=-90dB:d=2", "-f", "null", "-"]).stderr
+    err = sh(["ffmpeg", "-i", str(src8), "-af", "silencedetect=noise=-90dB:d=2", "-f", "null", "-"]).stderr
     sil = re.findall(r"silence_start: ([\d.]+)", err)
-    pr = json.loads(sh(["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(mp4)]).stdout)
-    v = [x for x in pr["streams"] if x["codec_type"] == "video"][0]
+    pr = json.loads(sh(["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(src8)]).stdout)
     au_s = [x for x in pr["streams"] if x["codec_type"] == "audio"][0]
-    dv, da = float(v["duration"]), float(au_s["duration"])
+    da = float(au_s["duration"])
+    v = None if dry else [x for x in pr["streams"] if x["codec_type"] == "video"][0]
+    dv = D["duration"] if dry else float(v["duration"])
     res(8, au_s["sample_rate"] == "48000" and abs(I + 16) <= 1 and TP <= -1.5 and not sil and abs(dv - da) <= 1 / FPS,
         "48 кГц %s; I %.1f LUFS, TP %.1f dBTP; −∞ >2 с: %s; видео %.3f / звук %.3f с; %s" % (
             au_s["sample_rate"], I, TP, sil or "нет", dv, da, "; ".join(B["audio_notes"])))
 
     # 13. Выход
-    ok13 = v["codec_name"] == "h264" and v["profile"] == "High" and v["pix_fmt"] == "yuv420p" and \
+    if dry:
+        res(13, True, "после сборки (ffprobe mp4)")
+        v = {"codec_name": "", "profile": "", "pix_fmt": "", "r_frame_rate": "", "avg_frame_rate": "", "nb_frames": ""}
+    ok13 = (not dry) and v["codec_name"] == "h264" and v["profile"] == "High" and v["pix_fmt"] == "yuv420p" and \
         v.get("color_primaries") == v.get("color_transfer") == v.get("color_space") == "bt709" and \
         v["r_frame_rate"] == v["avg_frame_rate"] == "30/1" and au_s["codec_name"] == "aac"
-    res(13, ok13, "%s %s %s, %s/%s/%s, %s CFR (avg %s), %s %s Гц, %s кадров" % (
+    if not dry:
+      res(13, ok13, "%s %s %s, %s/%s/%s, %s CFR (avg %s), %s %s Гц, %s кадров" % (
         v["codec_name"], v["profile"], v["pix_fmt"], v.get("color_primaries"), v.get("color_transfer"),
         v.get("color_space"), v["r_frame_rate"], v["avg_frame_rate"], au_s["codec_name"], au_s["sample_rate"],
         v.get("nb_frames")))
@@ -318,7 +341,7 @@ def main():
     # 14. Полосы: растяжка ×12, шум бумаги
     out = []
     ayah_t = sorted(wins)[-1][1] + 0.5 if wins else 1.0
-    for t, name in ((ayah_t, "ayah"), (D["duration"] - 0.3, "final")):
+    for t, name in (((ayah_t, "ayah"), (D["duration"] - 0.3, "final")) if not dry else ()):
         y = frame(mp4, t, gray=True).astype(float)
         st = np.clip((y - y.mean()) * 12 + 128, 0, 255).astype(np.uint8)
         Image.fromarray(st).resize((360, 640), Image.LANCZOS).save(work / "check" / ("x12_%s.png" % name))
@@ -326,8 +349,8 @@ def main():
         from scipy.ndimage import gaussian_filter
         sd = (pap - gaussian_filter(pap, 12)).std()
         out.append("%s σ %.2f" % (name, sd))
-    res(14, all(float(re.search(r"σ ([\d.]+)", o).group(1)) >= 0.8 for o in out), "; ".join(out) +
-        " (≥0,8); кольца и ступени — глазами по x12_*.png")
+    res(14, all(float(re.search(r"σ ([\d.]+)", o).group(1)) >= 0.8 for o in out), ("; ".join(out) +
+        " (≥0,8); кольца и ступени — глазами по x12_*.png") if not dry else "после сборки (полосы ×12)")
 
     # 15. Живой кадр: светление в бумагу 1,0–1,5 с, затем растворение; тёплая коррекция
     lv = [p for p in D["plans"] if p["live"]]
@@ -347,9 +370,12 @@ def main():
 
     # полосы кадров вокруг смен — смотреть глазами
     keyt = sorted({round(e[0], 2) for e in events if not e[1].startswith("цвет")})
-    for i, t in enumerate(keyt):
+    for i, t in (enumerate(keyt) if not dry else ()):
         strip(mp4, [t - 0.1, t, t + 0.1, t + 0.2, t + 0.4], work / "check" / ("s%02d_%05.2f.png" % (i, t)))
 
+    if dry:
+        print("СУХОЙ ПРОГОН по make.py --proof: пункты 1, 4, 13, 14 и синхрон по кадрам — после сборки; "
+              "контактный лист — %s" % (work / "proof.png"))
     for n, ok, msg in sorted(R):
         print("%2d %s %s" % (n, ok, msg))
 
