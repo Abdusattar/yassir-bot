@@ -1,0 +1,272 @@
+{
+ "id": "05_dom_deti",
+ "version": "v1",
+ "format": "reel_9x16",
+ "fps": 30,
+ "duration": 29.9,
+ "rubric": "Коран отвечает",
+ "values": false,
+ "_note": "Н3, серия «Дом». 25:74 двумя частями 1–8 / 9–13 (вакфа нет, целиком в 2 строки 88 px не влезает — исключение из style §2 п. 7, стык в мадде وَذُرِّيَّـٰتِنَا). Перевод Кулиева тремя кусками ≤8 слов под словами (w3 / w10 / w13), без «Они говорят:» (полный — в подписи). Ключевое — إِمَامًا. Хвост — якорями от R1.end (критик 06.10). Шумов нет.",
+ "audio": [
+  {
+   "id": "R1",
+   "kind": "recitation",
+   "src": "qdc:mishari_al_afasy/25",
+   "surah": 25,
+   "ayah": 74,
+   "words": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+   ],
+   "in": 1121.8,
+   "out": 1139.25,
+   "at": 0.1,
+   "fade_in": 0.03,
+   "fade_out": 0.08
+  },
+  {
+   "id": "room",
+   "kind": "room_tone",
+   "level_dbfs": -60,
+   "at": 0.0,
+   "fade_in": 0
+  }
+ ],
+ "plans": [
+  {
+   "plan": 1,
+   "zoom": 0.04,
+   "in": {
+    "at": 0.0,
+    "dur": 0
+   },
+   "out": {
+    "at": "R1.w9.start-0.09",
+    "dur": 0.35
+   },
+   "ayah": {
+    "surah": 25,
+    "ayah": 74,
+    "page": 366,
+    "words": [
+     1,
+     8
+    ]
+   }
+  },
+  {
+   "plan": 2,
+   "zoom": 0.04,
+   "in": {
+    "at": "R1.w9.start-0.09",
+    "dur": 0.35
+   },
+   "out": {
+    "at": "R1.end+5.75",
+    "dur": 0.25
+   },
+   "ayah": {
+    "surah": 25,
+    "ayah": 74,
+    "page": 366,
+    "words": [
+     9,
+     13
+    ]
+   }
+  },
+  {
+   "plan": 3,
+   "zoom": 0.03,
+   "in": {
+    "at": "R1.end+6.00",
+    "dur": 0.3
+   },
+   "out": {
+    "at": "R1.end+9.90",
+    "dur": 0.5
+   }
+  },
+  {
+   "plan": 4,
+   "zoom": 0.03,
+   "in": {
+    "at": "R1.end+10.40",
+    "dur": 0.4
+   },
+   "out": null,
+   "finale": true
+  }
+ ],
+ "scenes": [
+  {
+   "scene": 1,
+   "plan": 1,
+   "t_start": 0.0,
+   "t_end": "R1.w9.start-0.04",
+   "mode": "B",
+   "voice": "R1",
+   "_note": "крючок с кадра 0; «Господь наш!» с уходом крючка",
+   "texts": [
+    {
+     "role": "hook",
+     "text": "Что мы просим для своих детей?",
+     "on": 0.0,
+     "fade_in": 0,
+     "off": "R1.w3.end",
+     "fade_out": 0.25
+    },
+    {
+     "role": "translation",
+     "text": "«Господь наш!",
+     "on": "R1.w3.end",
+     "fade_in": 0.3
+    }
+   ]
+  },
+  {
+   "scene": 2,
+   "plan": 2,
+   "t_start": "R1.w9.start-0.09",
+   "t_end": "R1.end+0.90",
+   "mode": "B",
+   "voice": "R1",
+   "key": [
+    13
+   ],
+   "_note": "إِمَامًا — золото с голоса; перевод под словами",
+   "texts": [
+    {
+     "role": "translation",
+     "text": "Даруй нам отраду глаз в наших супругах и потомках",
+     "on": "R1.w10.start",
+     "fade_in": 0.35,
+     "off": "R1.w13.start-0.1",
+     "fade_out": 0.25
+    },
+    {
+     "role": "translation",
+     "text": "и сделай нас образцом для богобоязненных»",
+     "on": "R1.w13.start+0.1",
+     "fade_in": 0.3,
+     "off": "R1.end+0.90",
+     "fade_out": 0.25
+    },
+    {
+     "role": "source",
+     "text": "25:74 · смысловой перевод: Кулиев",
+     "on": "R1.w10.start",
+     "fade_in": 0.35,
+     "off": "R1.end+0.90",
+     "fade_out": 0.25
+    }
+   ]
+  },
+  {
+   "scene": 3,
+   "plan": 2,
+   "t_start": "R1.end+0.90",
+   "t_end": "R1.end+5.75",
+   "mode": "C",
+   "key": [
+    13
+   ],
+   "_note": "B→C после чтения; ас-Саади о «сделай нас образцом» — первая половина его фразы слово в слово",
+   "move": {
+    "at": "R1.end+0.90",
+    "dur": 0.5
+   },
+   "reset": {
+    "at": "R1.end+0.90",
+    "dur": 0.25
+   },
+   "texts": [
+    {
+     "role": "line",
+     "slot": 0,
+     "text": "Сделай так,",
+     "on": "R1.end+1.15",
+     "fade_in": 0.25
+    },
+    {
+     "role": "line",
+     "slot": 1,
+     "text": "чтобы наши поступки",
+     "on": "R1.end+1.55",
+     "fade_in": 0.25
+    },
+    {
+     "role": "line",
+     "slot": 2,
+     "text": "были достойны подражания",
+     "key_line": true,
+     "on": "R1.end+1.95",
+     "fade_in": 0.25
+    },
+    {
+     "role": "source",
+     "text": "ас-Саади, тафсир 25:74",
+     "on": "R1.end+1.15",
+     "fade_in": 0.25
+    }
+   ]
+  },
+  {
+   "scene": 4,
+   "plan": 3,
+   "t_start": "R1.end+6.00",
+   "t_end": "R1.end+10.40",
+   "mode": "Q",
+   "_note": "такт 3",
+   "texts": [
+    {
+     "role": "question",
+     "text": "Просили ли мы когда‑нибудь так, как в этом аяте?",
+     "on": "R1.end+6.00",
+     "fade_in": 0
+    }
+   ]
+  },
+  {
+   "scene": 5,
+   "plan": 4,
+   "t_start": "R1.end+10.40",
+   "t_end": 29.9,
+   "mode": "final",
+   "texts": [
+    {
+     "role": "label",
+     "text": "Коран отвечает",
+     "on": "R1.end+10.40",
+     "fade_in": 0
+    },
+    {
+     "role": "glyph",
+     "on": "R1.end+10.40",
+     "fade_in": 0
+    },
+    {
+     "role": "yassir",
+     "text": "YASSIR",
+     "on": "R1.end+10.40",
+     "fade_in": 0
+    }
+   ]
+  }
+ ],
+ "cover": {
+  "text": "Дуа за детей",
+  "label": "Коран отвечает"
+ }
+}
