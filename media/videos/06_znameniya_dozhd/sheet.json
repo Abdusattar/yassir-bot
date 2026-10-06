@@ -1,6 +1,6 @@
 {
  "id": "06_znameniya_dozhd",
- "version": "v3",
+ "version": "v4",
  "format": "reel_9x16",
  "fps": 30,
  "duration": 30.3,
@@ -262,7 +262,7 @@
    "texts": [
     {
      "role": "question",
-     "text": "Когда дождь в последний раз был для тебя благом, а не помехой?",
+     "text": "Какое благо принёс тебе последний дождь?",
      "on": "R1.end+0.90",
      "fade_in": 0.3
     }
