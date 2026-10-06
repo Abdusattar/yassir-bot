@@ -211,10 +211,27 @@ def main():
         return on, off
     lines = []
     ok6 = True
+    # одна и та же строка той же роли, переходящая через смену плана без разрыва (ролик 6: перевод части 1
+    # держится через смену частей аята) — считаем одним показом
+    spans = {}
+    for p, x in texts:
+        if "text" in x:
+            spans.setdefault((x["role"], x["text"]), []).append(shown(p, x))
+    def merged(x, on, off):
+        for a, b in sorted(spans.get((x["role"], x.get("text")), [])):
+            if a <= off + 0.05 and b > off:
+                off = b
+            if b >= on - 0.05 and a < on:
+                on = a
+        return on, off
+    seen = set()
     for p, x in texts:
         if "text" not in x and x["role"] not in ("root",):
             continue
-        on, off = shown(p, x)
+        on, off = merged(x, *shown(p, x))
+        if (x["role"], x.get("text"), round(on, 2)) in seen:
+            continue
+        seen.add((x["role"], x.get("text"), round(on, 2)))
         n = len(x.get("text", "").split())
         need = {"translation": max(2.5, n / 3 + 0.5, 4.0 if n >= 10 else 0)}.get(x["role"], max(1.2, n / 3 + 0.5))
         if x["role"] in ("source", "label", "yassir", "root"):

@@ -33,7 +33,19 @@ def qdc_words(cache, chapter, ayah):
     """{позиция слова: (начало, конец)} в секундах файла суры."""
     d = json.loads(fetch(QDC % chapter, Path(cache) / ("qdc_%d.json" % chapter)).read_text("utf-8"))
     v = [x for x in d["audio_files"][0]["verse_timings"] if x["verse_key"] == "%d:%d" % (chapter, ayah)][0]
-    return {s[0]: (s[1] / 1000, s[2] / 1000) for s in v["segments"] if len(s) == 3}
+    # Одно слово бывает записано несколькими сегментами (50:9 слово 6: 118235–119335 + 119335–121255):
+    # смежные куски сливаем в один (начало первого, конец последнего). Несмежный повтор позиции —
+    # чтец повторил слова (13:28: 6–7 дважды); берём последнее вхождение, как раньше (06.10, постановщик).
+    out = {}
+    for s in v["segments"]:
+        if len(s) != 3:
+            continue
+        a, b = s[1] / 1000, s[2] / 1000
+        if s[0] in out and abs(out[s[0]][1] - a) < 0.02:
+            out[s[0]] = (out[s[0]][0], b)
+        else:
+            out[s[0]] = (a, b)
+    return out
 
 
 class Timeline:
