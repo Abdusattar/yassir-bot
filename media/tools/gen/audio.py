@@ -110,12 +110,14 @@ def loudnorm(src, dst, tp=-1.5):
                           "-c:a", "pcm_f32le", str(dst)], capture_output=True, text=True, encoding="utf-8").stderr
     m2 = json.loads(re.findall(r"\{[^{}]+\}", err)[-1])
     if m2["normalization_type"] != "linear":
-        # линейно не выходит (пик шума): усиление до I −16 и лимитер на пике (style §7), запас 0,5 дБ под true peak
+        # линейно не выходит (пик шума): усиление до I −16 и лимитер на пике (style §7), запас 1 дБ под true peak (AAC добавляет ~0,6)
         g = -16 - float(m["input_i"])
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-af",
-                        "volume=%.2fdB,alimiter=limit=%.4f:level=false:attack=5:release=50" % (g, 10 ** ((tp - 0.5) / 20)),
+                        # лимитер на 4× частоте: межотсчётные пики (true peak) ловятся, а не вылезают после AAC (ролик 1 v4: −0,7)
+                        "aresample=%d,volume=%.2fdB,alimiter=limit=%.4f:level=false:attack=5:release=50,aresample=%d"
+                        % (4 * SR, g, 10 ** ((tp - 1.0) / 20), SR),
                         "-ar", str(SR), "-c:a", "pcm_f32le", str(dst)], check=True)
-        m2 = {"output_i": "≈-16", "output_tp": "≤%.1f" % (tp - 0.5),
+        m2 = {"output_i": "≈-16", "output_tp": "≤%.1f" % (tp - 1.0),
               "normalization_type": "linear+лимитер (dynamic отклонён)"}
     return m, m2
 

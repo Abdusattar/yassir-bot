@@ -338,12 +338,17 @@ def cover(sheet, work, out):
     from PIL import Image
     from playwright.async_api import async_playwright
     from compile import ayah_tokens
-    c, w = sheet["cover"], sheet["cover"]["word"]
-    words, _ = ayah_tokens(w["page"], w["surah"], w["ayah"])
-    glyph = [x for x in words if x["pos"] == w["pos"]][0]["glyph"]
-    body = ("<div class='tx cg' style='top:600px;left:65px;width:950px;font-size:48px;line-height:1.2;"
-            "color:var(--muted)'>%s</div><div class='tx' style='top:660px;left:0;width:1080px;"
-            "font:260px/1.6 v2p%d;color:var(--blue)'>%s</div>" % (c["label"], w["page"], glyph))
+    c, w = sheet["cover"], sheet["cover"].get("word") or {"page": 1}
+    if c.get("text"):  # «Коран отвечает», «Путь»: ≤3 русских слова 120 px --ink (style §10)
+        body = ("<div class='tx cg' style='top:600px;left:65px;width:950px;font-size:48px;line-height:1.2;"
+                "color:var(--muted)'>%s</div><div class='tx cg' style='top:700px;left:65px;width:950px;"
+                "font-size:120px;line-height:1.1;color:var(--ink)'>%s</div>" % (c["label"], c["text"]))
+    else:
+        words, _ = ayah_tokens(w["page"], w["surah"], w["ayah"])
+        glyph = [x for x in words if x["pos"] == w["pos"]][0]["glyph"]
+        body = ("<div class='tx cg' style='top:600px;left:65px;width:950px;font-size:48px;line-height:1.2;"
+                "color:var(--muted)'>%s</div><div class='tx' style='top:660px;left:0;width:1080px;"
+                "font:260px/1.6 v2p%d;color:var(--blue)'>%s</div>" % (c["label"], w["page"], glyph))
     doc = ("<!doctype html><html><head><meta charset='utf-8'><link href='https://fonts.googleapis.com/css2?"
            "family=Cormorant+Garamond:wght@600&display=block' rel='stylesheet'><style>@font-face{font-family:v2p%d;"
            "src:url(%s) format('woff2');font-display:block}" % (w["page"], V2 % w["page"]) + CSS +

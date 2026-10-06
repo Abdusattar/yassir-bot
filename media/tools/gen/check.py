@@ -234,7 +234,10 @@ def main():
     #    против начала перехода цвета этого слова на кадрах (середина 0,1-с перехода − 0,05 с)
     import audio
     au = {x["id"]: x for x in B["audio"]}
-    wav = audio.decode(vdir / "audio_final.wav", D["duration"] + 1)
+    # начало голоса меряем до loudnorm: порог −40 dBFS абсолютный, а нормализация поднимает шум записи
+    # чтеца (−43) выше порога — ложное «начало» (ролик 1 v4, R2: −69 мс при верном синхроне)
+    sp = Path(work) / "speech.wav"
+    wav = audio.decode(sp if sp.exists() else vdir / "audio_final.wav", D["duration"] + 1)
     syn, ok7 = [], True
     for sid, x in au.items():
         if x["kind"] != "recitation":

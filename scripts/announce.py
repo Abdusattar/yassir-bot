@@ -12,6 +12,7 @@
     ... --groups "N-1,G-12"         по названиям (точное совпадение)
     ... --groups task:j              группам, где есть задание (j, n, h...)
     ... --type task                  «Новое задание» вместо «Объявление»
+    ... --no-board                   только в группы, без доски важного (06.10.2026)
     ... --send                       отправить на самом деле
 """
 import argparse
@@ -57,6 +58,7 @@ async def main():
     ap.add_argument("--until", default=None, help="дата ISO, до которой висит на доске (по умолчанию 2 дня)")
     ap.add_argument("--type", default="announce", choices=("announce", "task"))
     ap.add_argument("--title", default=None, help="строка для доски (по умолчанию первая строка текста)")
+    ap.add_argument("--no-board", action="store_true", help="не вешать на доску важного")
     ap.add_argument("--send", action="store_true")
     args = ap.parse_args()
     if args.until:
@@ -66,7 +68,8 @@ async def main():
         raise SystemExit("пустой текст")
     db.init()
     groups = pick_groups(args.groups)
-    print("тип: %s · висит до: %s · групп: %d" % (args.type, args.until or "+2 дня", len(groups)))
+    print("тип: %s · висит до: %s · групп: %d" % (
+        args.type, "без доски" if args.no_board else (args.until or "+2 дня"), len(groups)))
     for g in groups:
         print("  -", g["title"])
     print("-" * 40)
@@ -76,8 +79,11 @@ async def main():
         print("НЕ отправлено: это просмотр. Для отправки добавь --send")
         return
     for g in groups:
-        with important(args.type, until=args.until, title=args.title):
+        if args.no_board:
             res = await send_message(g["chat_id"], text)
+        else:
+            with important(args.type, until=args.until, title=args.title):
+                res = await send_message(g["chat_id"], text)
         print("  %s: %s" % (g["title"], "ок" if res and res.get("ok") else "НЕ ДОШЛО"))
         await asyncio.sleep(0.4)
 

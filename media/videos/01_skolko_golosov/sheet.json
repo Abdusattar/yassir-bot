@@ -1,0 +1,67 @@
+{
+  "id": "01_skolko_golosov",
+  "version": "v5",
+  "format": "reel_9x16",
+  "fps": 30,
+  "duration": 29.0,
+  "rubric": "Коран отвечает",
+  "values": false,
+  "_note": "первая сборка генератором. Шум N1 — ВРЕМЕННЫЙ (b.mp4 из Flow, сгенерирован): до выпуска заменить живой записью дождя/улицы (style §7). Мост «А Его слово ты слышишь?» снят: его несёт такт 2 (ас-Саади, второе толкование).",
+  "audio": [
+    {"id": "N1", "kind": "noise", "src": "media/videos/01_skolko_golosov/b.mp4", "in": 0.0, "out": 5.0, "at": 0.0,
+     "end": "muffle", "gain_db": -4, "fade_in": 0.0},
+    {"id": "R1", "kind": "recitation", "src": "qdc:mishari_al_afasy/13", "surah": 13, "ayah": 28, "words": [7, 8, 9, 10, 11],
+     "in": 791.60, "out": 798.80, "at": 5.40, "fade_in": 0.03, "fade_out": 0.10},
+    {"id": "R2", "kind": "recitation", "src": "qdc:mishari_al_afasy/13", "surah": 13, "ayah": 28, "words": [7, 8, 9, 10, 11],
+     "in": 791.60, "out": 798.80, "at": 13.50, "fade_in": 0.03, "fade_out": 0.10},
+    {"id": "room", "kind": "room_tone", "level_dbfs": -60, "at": 0.0, "fade_in": 0}
+  ],
+  "plans": [
+    {"plan": 1, "zoom": 0.03, "in": {"at": 0.0, "dur": 0}, "out": {"at": 2.6, "dur": 0.35},
+     "live": {"src": "media/videos/01_skolko_golosov/rain_35213341.mp4", "in": 1.0, "crop": [180, 0, 1080, 1920], "warm": true}},
+    {"plan": 2, "zoom": 0.03, "in": {"at": 2.6, "dur": 0.35}, "out": {"at": "R1.w7.start-0.39", "dur": 0.35},
+     "live": {"src": "media/videos/01_skolko_golosov/rain_39004498.mp4", "in": 2.0, "warm": true,
+              "brighten": {"at": 3.8, "dur": 1.2}}},
+    {"plan": 3, "zoom": 0.04, "in": {"at": "R1.w7.start-0.39", "dur": 0.35}, "out": {"at": 22.00, "dur": 0.25},
+     "ayah": {"surah": 13, "ayah": 28, "page": 252, "words": [7, 11]}},
+    {"plan": 4, "zoom": 0.03, "in": {"at": 22.25, "dur": 0.30}, "out": {"at": 26.50, "dur": 0.5}},
+    {"plan": 5, "zoom": 0.03, "in": {"at": 27.00, "dur": 0.4}, "out": null, "finale": true}
+  ],
+  "scenes": [
+    {"scene": 1, "plan": 1, "t_start": 0.0, "t_end": 2.95, "mode": "live",
+     "_note": "крючок с кадра 0 на карточке; огни сквозь мокрое стекло",
+     "texts": [{"role": "hook", "text": "Тебе тоже шумно внутри?", "on": 0.0, "fade_in": 0, "off": 2.35, "fade_out": 0.25}]},
+    {"scene": 2, "plan": 2, "t_start": 2.6, "t_end": "R1.w7.start-0.04", "mode": "live",
+     "_note": "поток машин в дождь; с 3,8 шум глохнет, кадр светлеет в бумагу",
+     "texts": []},
+    {"scene": 3, "plan": 3, "t_start": "R1.w7.start-0.39", "t_end": 13.00, "mode": "B",
+     "_note": "13:28 слова 7–11; تَطْمَئِنُّ — ключевое (concept §1, вопрос такта 3 из него)",
+     "voice": "R1", "key": [10],
+     "texts": [
+       {"role": "translation", "text": "Разве не поминанием Аллаха утешаются сердца?", "on": "R1.w11.start", "fade_in": 0.35, "off": 13.00, "fade_out": 0.25},
+       {"role": "source", "text": "13:28 · смысловой перевод: Кулиев", "on": "R1.w11.start", "fade_in": 0.35, "off": 13.00, "fade_out": 0.25}
+     ]},
+    {"scene": 4, "plan": 3, "t_start": 13.00, "t_end": 22.00, "mode": "C",
+     "_note": "переезд B→C в паузе; повтор R2; ас-Саади (второе толкование): поминание — Коран, сердца утешаются, познавая смысл аятов",
+     "move": {"at": 13.00, "dur": 0.5}, "reset": {"at": 13.00, "dur": 0.25},
+     "voice": "R2", "key": [10],
+     "texts": [
+       {"role": "line", "slot": 0, "text": "Поминание Аллаха — и Коран", "on": "R2.w7.start-0.035", "fade_in": 0.25},
+       {"role": "line", "slot": 1, "text": "Сердца находят утешение,", "on": "R2.w10.start", "fade_in": 0.25},
+       {"role": "line", "slot": 2, "text": "познавая смысл его аятов", "key_line": true, "on": "R2.w11.start", "fade_in": 0.25},
+       {"role": "source", "text": "ас-Саади, 13:28 · одно из толкований", "on": "R2.w7.start-0.035", "fade_in": 0.25}
+     ]},
+    {"scene": 5, "plan": 4, "t_start": 22.25, "t_end": 27.00, "mode": "Q",
+     "_note": "такт 3: вопрос из تَطْمَئِنُّ (concept §1, банк §5)",
+     "texts": [
+       {"role": "question", "text": "Когда сердце в последний раз было по-настоящему спокойно?", "on": 22.25, "fade_in": 0}
+     ]},
+    {"scene": 6, "plan": 5, "t_start": 27.00, "t_end": 29.0, "mode": "final",
+     "texts": [
+       {"role": "label", "text": "Коран отвечает", "on": 27.00, "fade_in": 0},
+       {"role": "glyph", "on": 27.00, "fade_in": 0},
+       {"role": "yassir", "text": "YASSIR", "on": 27.00, "fade_in": 0}
+     ]}
+  ],
+  "cover": {"text": "Шумно внутри?", "label": "Коран отвечает"}
+}
