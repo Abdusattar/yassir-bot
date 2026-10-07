@@ -79,3 +79,13 @@ def test_buckets():
     assert nasiha_bank.days_bucket(40) == "11+"
     assert nasiha_bank.skips_bucket(8, 10) == "near_limit"
     assert nasiha_bank.skips_bucket(5, 10) == "warning"
+
+
+def test_render_collapses_doubled_unit_word():
+    """07.10.2026: шаблон «{limit} пропусков в месяц» + {limit}=«20 пропусков»
+    давал «20 пропусков пропусков» в живых предупреждениях 30.09."""
+    from core.nasiha_bank import render, skips_text, days_text
+    out = render("Правило: {limit} пропусков в месяц, у тебя {skips}, осталось {left} дней.",
+                 limit=skips_text(20), skips=skips_text(5), left=days_text(2))
+    assert out == "Правило: 20 пропусков в месяц, у тебя 5 пропусков, осталось 2 дня."
+    assert render("{days} подряд", days=days_text(7)) == "7 дней подряд"

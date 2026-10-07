@@ -10,7 +10,7 @@
 | Что | Сколько | Где |
 |---|---|---|
 | Задание (приложение; в чате — только у групп без `app_only_from`) | +1 | `save_report`, `core/db.py` |
-| Урок «у» / «Я был» | +5, до 2 в неделю, сутки между | `credit_lesson_attendance` |
+| Урок «у» / «Я был» | +5, одна отметка за календарную неделю (с 07.10; 14.09–07.10 было две) | `credit_lesson_attendance` |
 | Узр | **0** (с 30.09) | `add_bonus(..., 0, "excuse")`, `core/handlers.py` |
 | Недельный бонус за календарную неделю без пропуска | +5 | `weekly_report`, `core/scheduler.py` |
 | Апелляция (бот потерял работу) | 0 или 1 | `scripts/appeal_credit.py --points` |
@@ -34,6 +34,7 @@
 | «Отвергнуть» запись повторения | `cancel_task_on`, why «запись повторения отвергнута» | в группу и в личку |
 | Устаз снимает отметку урока | `remove_lesson_attendance`, `mufradat_api` | в личку (с 30.09; раньше −5 молча) |
 | Скрипты `appeal_credit --undo`, `fix_night_rows` | вручную | нет, мимо `score_removals` |
+| Ложная отметка урока: снятие +5 и штраф −20 (`category='penalty'`) | `scripts/lesson_penalty.py`, через `remove_scores` | в личку (`--send`) |
 
 ## Где видно
 

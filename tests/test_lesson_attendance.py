@@ -1,5 +1,5 @@
-"""Отметка онлайн-урока (14.09.2026): до двух отметок за календарную неделю,
-сутки между ними; кнопка в приложении и «у» в Telegram - одно правило;
+"""Отметка онлайн-урока (14.09.2026, с 07.10.2026 - одна отметка за календарную
+неделю, сутки между отметками; кнопка в приложении и «у» в Telegram - одно правило;
 устаз снимает ошибочную отметку только в своей группе; «Знания» показывают
 предметы по заданиям группы."""
 
@@ -46,28 +46,21 @@ def _auth(monkeypatch, supers=()):
     monkeypatch.setattr(api, "SUPER_ADMIN_IDS", list(supers))
 
 
-def test_monday_for_last_week_and_sunday_lesson_both_count(test_db, monkeypatch):
-    """Живой случай 2 группы Асмы: урок прошлой недели отмечен в понедельник,
-    конференция в воскресенье той же календарной недели."""
+def test_second_mark_in_a_week_is_refused(test_db, monkeypatch):
+    """07.10.2026, Ибрахим (G-9): две отметки «Я был» за один урок с промежутком
+    26 часов прошли лимит «две в неделю». Теперь одна за календарную неделю,
+    даже через несколько дней; следующая неделя открывает снова."""
     g = _group()
-    sid = db.add_student("Бегайым", g["id"], phone="777")
-    _today(monkeypatch, "2026-09-07")
+    sid = db.add_student("Ибрахим", g["id"], phone="777")
+    _today(monkeypatch, "2026-09-29")
     assert db.credit_lesson_attendance(sid, g["id"]) is True
-    _age_marks(24 * 6)
-    _today(monkeypatch, "2026-09-13")
-    assert db.credit_lesson_attendance(sid, g["id"]) is True
-
-
-def test_third_mark_in_a_week_is_refused(test_db, monkeypatch):
-    g = _group()
-    sid = db.add_student("Зубейда", g["id"], phone="777")
-    for day in ("2026-09-08", "2026-09-10"):
-        _today(monkeypatch, day)
-        assert db.credit_lesson_attendance(sid, g["id"]) is True
-        _age_marks(48)
-    _today(monkeypatch, "2026-09-12")
+    _age_marks(26)
+    _today(monkeypatch, "2026-09-30")
     assert db.credit_lesson_attendance(sid, g["id"]) is False
-    _today(monkeypatch, "2026-09-14")          # новая неделя
+    _age_marks(72)
+    _today(monkeypatch, "2026-10-03")
+    assert db.credit_lesson_attendance(sid, g["id"]) is False
+    _today(monkeypatch, "2026-10-05")          # новая неделя
     assert db.credit_lesson_attendance(sid, g["id"]) is True
 
 
