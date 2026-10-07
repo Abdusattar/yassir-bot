@@ -3945,6 +3945,32 @@ def save_survey_age(phone, text):
 # бытовое сообщение как ответ), см. коммит ec747cd.
 
 PROFILE_NAME_MAX = 60
+
+# Не имена, которыми люди называют себя в Telegram (07.10.2026: в
+# подготовительной сдаёт «Неизвестный»). Проверка намеренно узкая - только
+# явные не-имена и мусор, чтобы «Амин», «Абу Самийя», «Rayana M.» не попали.
+_NON_NAMES = {
+    "неизвестный", "неизвестная", "неизвестно", "unknown", "user", "пользователь",
+    "student", "студент", "ученик", "ученица", "брат", "сестра", "brother", "sister",
+    "telegram", "deleted account", "удалённый аккаунт", "удаленный аккаунт", "name", "имя",
+    "test", "тест", "none", "null", "-", ".", "..", "...",
+} | (_NOT_NAME_WORDS - {"амин"})   # «ок», «спасибо»… тоже не имена; «Амин» - имя
+
+
+def name_needs_fix(name):
+    """Имя пустое, не-имя или не похоже на имя (эмодзи, цифры, ник вида
+    @xxx, одни знаки) - приложение держит на главном экране просьбу
+    написать своё имя в настройках, пока не станет похоже на имя."""
+    raw = " ".join(str(name or "").split())
+    if not raw:
+        return True
+    low = raw.lower().strip(" .!?")
+    if low in _NON_NAMES:
+        return True
+    if not _PLAIN_NAME_RE.match(raw) or len(raw) < 2 or len(raw.split()) > 4:
+        return True
+    letters = [ch for ch in raw if ch.isalpha()]
+    return len(letters) < 2
 PROFILE_LOCATION_MAX = 80
 PROFILE_BIRTH_YEAR_MIN = 1930
 PROFILE_MIN_AGE = 5          # ниже этого - явная опечатка, а не возраст
@@ -3987,6 +4013,8 @@ def update_profile(phone, name=None, birth_year=None, location=None):
             raise ValueError("name_empty")
         if len(name) > PROFILE_NAME_MAX:
             raise ValueError("name_too_long")
+        if name_needs_fix(name):
+            raise ValueError("name_not_name")
         fields.append("name=?")
         params.append(name)
 

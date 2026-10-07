@@ -4352,6 +4352,8 @@
       nahw_wrong: 'Правильно: %A%',
       nahw_next: 'Дальше',
       notice_lesson: 'Новый урок',
+      notice_name: 'Напиши своё имя',
+      notice_name_text: 'Зайди в настройки и напиши своё имя — его видят устаз и группа.',
       notice_kick: 'Важно для тебя',
       notice_announce: 'Объявление',
       notice_transfer: 'Перевод',
@@ -5828,6 +5830,7 @@
   var SAVE_ERRORS = {
     name_empty: 'Без имени нельзя — его видит устаз.',
     name_too_long: 'Слишком длинное имя.',
+    name_not_name: 'Напиши настоящее имя — так тебя узнают устаз и группа.',
     birth_year_bad: 'Не похоже на год рождения.',
     birth_year_locked: 'Год рождения указан устазом.',
     location_too_long: 'Слишком длинно.'
@@ -5956,15 +5959,20 @@
     kick: '<path d="M12 4 3 19.5h18zM12 10v4.5M12 17.2v.3"/>',
     announce: '<path d="M4 10v4h3l7 4V6l-7 4zM17.5 9.5a4 4 0 0 1 0 5M7 14l1.5 5h2.5"/>',
     transfer: '<path d="M4 12h15M13.5 6.5 19 12l-5.5 5.5"/>',
-    task: '<path d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="9"/>'
+    task: '<path d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="9"/>',
+    name: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'
   };
+  // Имя не похоже на имя (07.10.2026): карточка на доске важного, пока не
+  // поправит в настройках. Не из ленты - из heartbeat, поэтому без id.
+  var nameFix = false;
   // Доска важного (17.09.2026) - отдельно от строки чата: строка показывает
   // последнее, а важное висит, пока не открыл (объявление - до своей даты).
   // Название группы в шапке карточки убрано (05.10.2026, решение
   // пользователя): только тип. Откуда - видно по тапу, он ведёт в ленту группы.
   function boardRender(list) {
     var box = document.getElementById('dash-board');
-    list = list || [];
+    list = (list || []).slice();
+    if (nameFix) list.unshift({ type: 'name', text: T('notice_name_text'), read: false });
     box.innerHTML = list.map(function (n, i) {
       return '<div class="bd-row' + (n.read ? ' read' : '') + '" data-i="' + i + '" tabindex="0" role="button">' +
         '<span class="bd-ic"><svg viewBox="0 0 24 24" aria-hidden="true">' + (NOTICE_ICON[n.type] || NOTICE_ICON.announce) + '</svg></span>' +
@@ -5984,6 +5992,7 @@
   // Тап: отмечаем открытым и ведём к делу - урок в урок, остальное - в
   // чат, прямо на само сообщение.
   function boardGo(n, row) {
+    if (n.type === 'name') { settOpen(); return; }
     apiCall('/feed/notice', { method: 'POST', body: { id: n.id } }).then(function () {
       sendHeartbeat();
     }).catch(function () {});
@@ -6471,6 +6480,7 @@
       // Строка ленты (11.09.2026) - тем же ответом, чтобы она оживала без
       // перезагрузки экрана. null значит «писать пока нечего» - тогда
       // строки просто нет, пустой карточки не показываем.
+      if (res.data) nameFix = !!res.data.name_fix;
       if (res.data) feedBrief(res.data.feed);
     });
   }

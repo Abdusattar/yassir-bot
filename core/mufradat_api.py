@@ -1156,6 +1156,9 @@ async def handle_heartbeat(request, user_id):
         # сколько сдач ждёт устаза. Едут этим же ответом, а не тремя новыми
         # запросами: heartbeat и так ходит каждые 20 секунд.
         "facts": _dashboard_facts(user_id),
+        # Просьба написать имя (07.10.2026): висит на главном, пока имя не
+        # станет похоже на имя - см. db.name_needs_fix.
+        "name_fix": _name_fix(user_id),
         # Строка ленты на дашборде (11.09.2026) - этим же ответом, а не
         # отдельным запросом: heartbeat и так ходит каждые 20 секунд, а
         # строка обязана оживать без перезагрузки экрана.
@@ -1754,6 +1757,12 @@ def _dashboard_facts(user_id):
         # только личкой (22.09.2026, «теперь истина - база»). None - нечего.
         "prep_grad": _prep_grad_facts(user_id),
     }
+
+
+def _name_fix(user_id):
+    from core.db import name_needs_fix
+    u = find_user_by_phone(user_id)
+    return bool(u) and name_needs_fix(u["name"])
 
 
 def _prep_grad_facts(user_id):
