@@ -674,7 +674,9 @@ async def morning_miss_nasiha(lang="ru", hadith=None, ayah=None):
         + "Encourage them warmly to open the Quran today, "
         + ("mention the meaning of the ayah/hadith above with its reference, " if source_block else "")
         + "end with a brief dua. No names, no blame, no guilt.\n"
-        + "Do NOT address the reader by gender: no «брат», no «сестра».\n"
+        + "Do NOT address the reader by gender: no «брат», no «сестра». "
+        + "No past-tense verbs about the reader (Russian past tense shows gender: "
+        + "no «ты был», «ты пропустил») - use present tense or imperative.\n"
         + lang_instruction(lang) + " Tone: very soft. 3-4 lines."
     )
     # Текст один на оба бота (см. _miss_nasiha_text: кэш в общей hadiths.db,

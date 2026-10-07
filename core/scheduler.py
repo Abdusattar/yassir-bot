@@ -126,6 +126,21 @@ async def _miss_nasiha_text(lang, date_str):
     return text
 
 
+# Недостающее задание в родительном падеже - для короткой строки сдавшему
+# часть (07.10.2026). Только русский: ky/uz одним проходом позже (правило
+# «сначала русский»), T() сам откатывается на русский.
+_TASK_GENITIVE = {"m": "заучивания", "r": "повторения", "t": "слов",
+                  "j": "таджвида", "n": "нахва", "h": "хадиса"}
+
+
+def partial_day_text(miss_keys, lang="ru"):
+    """«Вчера не хватило повторения, поэтому день не закрылся в серию.
+    Сегодня успеешь 🤲» - без имени, без рода, без оценки."""
+    words = [_TASK_GENITIVE.get(k, k) for k in miss_keys]
+    what = ", ".join(words[:-1]) + " и " + words[-1] if len(words) > 1 else (words[0] if words else "задания")
+    return T("partial_day_dm", lang, what=what)
+
+
 # ── Утренний отчёт в Тадаббур (07:00) — итоги вчера по всем группам ──────────
 
 async def morning_tadabbur_report():
@@ -182,13 +197,30 @@ async def morning_tadabbur_report():
             # человеку не чаще раза в MISS_NASIHA_MIN_DAYS дней (09.09.2026,
             # решение пользователя): каждое утро — слишком часто. Отбор идёт
             # ДО обращения к ИИ, чтобы не тратить запрос, когда слать некому.
+            # 07.10.2026 (Сумая, 2 группа Асмы): сдала два задания из трёх, а
+            # утром получила сочинённую насыху «вчерашний день не задался… ты
+            # был несправедлив к себе». Решение пользователя: длинная насыха —
+            # только тем, у кого вчера ноль заданий; сдавшим часть — короткая
+            # шаблонная строка с названием недостающего задания, без ИИ, без
+            # рода и без укора. Тот же интервал в MISS_NASIHA_MIN_DAYS дней.
             missing = get_missing_students(group["id"], group_tasks, date=yesterday)
-            phones = [s["phone"] for s, _ in missing if s["phone"]]
-            phones = [p for p in phones if _days_since(get_last_miss_nasiha_at(p)) >= MISS_NASIHA_MIN_DAYS]
-            if phones:
+            done_map = {c["id"]: c["done"] for c in counts}
+            zero, partial = [], []
+            for s, miss_keys in missing:
+                if not s["phone"] or _days_since(get_last_miss_nasiha_at(s["phone"])) < MISS_NASIHA_MIN_DAYS:
+                    continue
+                (partial if done_map.get(s["id"], 0) > 0 else zero).append((s["phone"], miss_keys))
+            for phone, miss_keys in partial:
+                try:
+                    await send_message(phone, partial_day_text(miss_keys, glang))
+                    mark_miss_nasiha_sent(phone)
+                except Exception:
+                    pass
+                await pace(0.5)
+            if zero:
                 msg_personal = await _miss_nasiha_text(glang, yesterday)
                 if msg_personal and len(msg_personal) >= 20:
-                    for phone in phones:
+                    for phone, _ in zero:
                         try:
                             await send_message(phone, "🤲 " + msg_personal)
                             mark_miss_nasiha_sent(phone)

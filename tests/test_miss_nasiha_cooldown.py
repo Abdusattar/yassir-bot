@@ -59,3 +59,19 @@ def test_shared_miss_nasiha_prompt_has_no_gender():
     gendered = ("Брат", "Сестра", "Братья", "Сёстры")
     assert not any(w in ai._MOTIVATIONAL_SYSTEM_NEUTRAL for w in gendered)
     assert any(w in ai._MOTIVATIONAL_SYSTEM for w in gendered)
+
+
+def test_partial_day_text_names_the_missing_task():
+    """07.10.2026, Сумая: сдала два из трёх - короткая строка про недостающее,
+    без имени, рода и укора; при двух пропущенных - перечисление."""
+    from core.scheduler import partial_day_text
+    assert partial_day_text(["r"]) == "Вчера не хватило повторения, поэтому день не закрылся в серию. Сегодня успеешь 🤲"
+    assert "заучивания и повторения" in partial_day_text(["m", "r"])
+    assert "слов" in partial_day_text(["t"], "ky")          # ky пока откатывается на русский
+
+
+def test_miss_nasiha_prompt_forbids_past_tense():
+    """Прошедшее время выдаёт род («ты был» ушло сестре 07.10.2026)."""
+    import inspect
+    import core.ai as ai
+    assert "No past-tense verbs" in inspect.getsource(ai.morning_miss_nasiha)
