@@ -2488,7 +2488,23 @@
   #learn-step p {
     margin: 0; font-size: clamp(13.5px, 3.8vw, 16px); line-height: 1.55; color: var(--ink);
   }
-  #learn-foot { flex: 0 0 auto; padding: 0 16px 16px; direction: ltr; }
+  /* Шаг без снимка («Правила», 07.10.2026): текст - единственное, что на
+     экране, и размер снимочных шагов ему мал (жалоба пользователя: «текст
+     маленький, внизу пусто»). Крупнее заголовок и абзац, строка до ~60
+     знаков, воздух сверху - читается как страница, а не как подпись. */
+  #learn-step.text { gap: 14px; padding-top: 10px; }
+  #learn-step.text h3 { font-size: clamp(21px, 5.8vw, 25px); line-height: 1.25; }
+  #learn-step.text p { font-size: clamp(17px, 4.7vw, 19px); line-height: 1.6; max-width: 34em; }
+  /* Глава-страница: пункты подряд, между ними тонкая линия - это разные
+     правила, а не абзацы одного. Заголовок пункта чуть меньше заголовка
+     страницы в шапке. */
+  #learn-step.article section { display: flex; flex-direction: column; gap: 8px; }
+  #learn-step.article section + section { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--card-border); }
+  #learn-step.article h3 { font-size: clamp(18.5px, 5vw, 21px); }
+  /* Низ - над панелью Telegram и полосой iPhone (07.10.2026: «нижняя
+     кнопка не видна» - подвал уходил под них), как у остальных экранов. */
+  #learn-foot { flex: 0 0 auto; direction: ltr;
+    padding: 0 16px max(16px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)); }
   #learn-dots { display: flex; gap: 5px; justify-content: center; margin: 0 0 10px; }
   #learn-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--card-border); display: block; }
   #learn-dots i.on { background: var(--ok); width: 16px; border-radius: 3px; }
@@ -11985,7 +12001,7 @@
         var right = empty ? T('learn_soon')
           : (done.indexOf(sec.id) >= 0
               ? '<span class="done">✓ ' + T('learn_read') + '</span>'
-              : learnPlural(sec.steps.length));
+              : (group === 'rules' ? '' : learnPlural(sec.steps.length)));   // правила - страница, не шаги
         out += '<button class="learn-item"' + (empty ? ' disabled style="opacity:.55"' : ' data-sec="' + i + '"') + '>' +
           '<span class="mk">' + sec.mark + '</span>' +
           '<span><span class="nm">' + sec.name + '</span>' +
@@ -12127,8 +12143,43 @@
     }).catch(function () { lessonsRenderList(subject); });
   }
 
+  /* Глава «Правил» - одной страницей (07.10.2026, после снимка на телефоне:
+     правило короткое, экран на абзац оставлял две трети пустоты). Правила
+     читают как справку, а не проходят как путь: все пункты подряд, со
+     снимком там, где он есть, внизу одна кнопка «Готово». Шаги-снимки
+     онбординга остаются по одному на экран - там важно довести до конца. */
+  function learnRenderArticle(si) {
+    var sec = LEARN[si];
+    learnAt = { section: si, step: 0 };
+    document.getElementById('learn-title').textContent = sec.name;
+    document.getElementById('learn-back').textContent = T('learn_back_toc');
+    var html = '<div id="learn-step" class="text article">';
+    sec.steps.forEach(function (s) {
+      html += '<section>' +
+        (s[0] ? '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
+                '<p class="learn-zoomhint">' + T('learn_zoom') + '</p>' : '') +
+        '<h3>' + s[1] + '</h3><p>' + s[2] + '</p></section>';
+    });
+    var body = document.getElementById('learn-body');
+    body.innerHTML = html + '</div>';
+    body.scrollTop = 0;
+    Array.prototype.forEach.call(body.querySelectorAll('.shot'), function (shot) {
+      shot.addEventListener('click', function () {
+        var zoom = document.getElementById('learn-zoom');
+        zoom.querySelector('img').src = shot.querySelector('img').src;
+        zoom.classList.add('visible');
+      });
+    });
+    document.getElementById('learn-dots').innerHTML = '';
+    document.getElementById('learn-prev').style.display = 'none';
+    document.getElementById('learn-next').textContent = T('learn_done');
+    document.getElementById('learn-foot').style.display = '';
+    learnMarkDone(sec.id);
+  }
+
   function learnRenderStep(si, step) {
     var sec = LEARN[si];
+    if (sec.group === 'rules') return learnRenderArticle(si);
     learnAt = { section: si, step: step };
     var s = sec.steps[step], last = step === sec.steps.length - 1;
     document.getElementById('learn-title').textContent =
@@ -12137,7 +12188,7 @@
     var body = document.getElementById('learn-body');
     // Шаг без снимка (главы «Правила», 07.10.2026): только заголовок и текст.
     body.innerHTML =
-      '<div id="learn-step">' +
+      '<div id="learn-step"' + (s[0] ? '' : ' class="text"') + '>' +
       (s[0] ? '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
               '<p class="learn-zoomhint">' + T('learn_zoom') + '</p>' : '') +
       '<h3>' + s[1] + '</h3><p>' + s[2] + '</p></div>';
@@ -12160,6 +12211,7 @@
   function learnStepBy(delta) {
     if (!learnAt) return;
     var sec = LEARN[learnAt.section], next = learnAt.step + delta;
+    if (sec.group === 'rules') return learnRenderToc();   // глава-страница: «Готово» - в оглавление
     // Край в любую сторону возвращает в оглавление: «назад» с первого шага и
     // «Готово» с последнего ведут в одно и то же место, откуда любой раздел
     // открывается одним тапом.
