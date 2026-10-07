@@ -22,6 +22,13 @@ score_events с category='penalty' и отрицательными баллам�
         --why 'второй «Я был» за один урок' --text-file /tmp/dm.txt"
     ... --send                 применить и отправить
     ... --penalty 0            только снять отметку, без штрафа
+    ... --undo [--restore-mark] [--text-file ...] [--send]
+                               отменить (07.10.2026, решение пользователя: не
+                               все знали, что «Я был» - раз в неделю; дальше
+                               лишнее нажатие просто не засчитывается, без
+                               штрафа). Штраф уходит в score_removals;
+                               --restore-mark ещё и возвращает снятую отметку
+                               за --date (Отбор: у детей два очных урока).
 """
 import argparse
 import asyncio
@@ -43,10 +50,16 @@ def main():
     ap.add_argument("--group", required=True, help="название группы, как в базе (точно)")
     ap.add_argument("--date", required=True, help="учебный день ложной отметки YYYY-MM-DD")
     ap.add_argument("--penalty", type=int, default=20, help="штраф в баллах, 0 - без штрафа")
-    ap.add_argument("--why", required=True, help="причина - в score_removals.why и в note штрафа")
+    ap.add_argument("--why", help="причина - в score_removals.why и в note штрафа")
+    ap.add_argument("--undo", action="store_true", help="снять штраф (и с --restore-mark вернуть отметку)")
+    ap.add_argument("--restore-mark", action="store_true")
     ap.add_argument("--text-file", help="текст личного сообщения студенту (utf-8)")
     ap.add_argument("--send", action="store_true")
     a = ap.parse_args()
+    if a.undo:
+        return undo(a)
+    if not a.why:
+        ap.error("нужен --why")
 
     with db() as c:
         u = c.execute("SELECT id, name, phone, dm_ok FROM users WHERE id=?", (a.user_id,)).fetchone()
@@ -96,6 +109,63 @@ def main():
         add_bonus(u["id"], g["id"], get_date(), -abs(a.penalty), PENALTY_CATEGORY, PENALTY_SUB,
                   note="ложная отметка урока за " + a.date + ": " + a.why)
         print("штраф записан")
+    if text and u["phone"] and u["dm_ok"]:
+        from core.tg import send_message
+        asyncio.run(send_message(u["phone"], text))
+        print("сообщение отправлено")
+    elif text:
+        print("сообщение НЕ отправлено: личка закрыта")
+    return 0
+
+
+def undo(a):
+    with db() as c:
+        u = c.execute("SELECT id, name, phone, dm_ok FROM users WHERE id=?", (a.user_id,)).fetchone()
+        g = c.execute("SELECT id, title FROM groups WHERE title=?", (a.group,)).fetchone()
+        if not u or not g:
+            print("нет пользователя или группы:", a.user_id, a.group)
+            return 1
+        pens = c.execute(
+            "SELECT date, points, note FROM score_events WHERE student_id=? AND group_id=?"
+            " AND category=? AND subcategory=?",
+            (u["id"], g["id"], PENALTY_CATEGORY, PENALTY_SUB)).fetchall()
+        removed = c.execute(
+            "SELECT id, date, points, note, created_at FROM score_removals WHERE student_id=? AND group_id=?"
+            " AND category='attendance' AND subcategory='online' AND date=? AND removed_by='lesson_penalty.py'"
+            " ORDER BY id DESC LIMIT 1", (u["id"], g["id"], a.date)).fetchone() if a.restore_mark else None
+        back = c.execute(
+            "SELECT 1 FROM score_events WHERE student_id=? AND group_id=? AND category='attendance'"
+            " AND subcategory='online' AND date=?", (u["id"], g["id"], a.date)).fetchone() if a.restore_mark else None
+    print("студент: %s (id %s), группа %s, личка: %s" % (u["name"], u["id"], g["title"], "да" if u["dm_ok"] else "НЕТ"))
+    for r in pens:
+        print("снять штраф: %s %s (%s)" % (r["date"], r["points"], r["note"]))
+    if not pens:
+        print("штрафов false_lesson нет")
+    if a.restore_mark:
+        if back:
+            print("отметка за %s уже на месте" % a.date)
+        elif removed:
+            print("вернуть отметку: %s +%s (%s)" % (removed["date"], removed["points"], removed["created_at"]))
+        else:
+            print("снятой скриптом отметки за %s нет" % a.date)
+    text = pathlib.Path(a.text_file).read_text(encoding="utf-8").strip() if a.text_file else ""
+    if text:
+        print("-" * 40)
+        print(text)
+        print("-" * 40)
+    if not a.send:
+        print("(проверка: ничего не изменено; применить - добавь --send)")
+        return 0
+    with db() as c:
+        n = remove_scores(c, "student_id=? AND group_id=? AND category=? AND subcategory=?",
+                          (u["id"], g["id"], PENALTY_CATEGORY, PENALTY_SUB),
+                          by="lesson_penalty.py --undo", why=a.why or "штраф за отметку урока отменён")
+        print("снято штрафов:", n)
+        if a.restore_mark and removed and not back:
+            c.execute("INSERT INTO score_events(student_id,group_id,date,category,subcategory,points,note,created_at)"
+                      " VALUES(?,?,?,'attendance','online',?,?,?)",
+                      (u["id"], g["id"], removed["date"], removed["points"], removed["note"], removed["created_at"]))
+            print("отметка возвращена")
     if text and u["phone"] and u["dm_ok"]:
         from core.tg import send_message
         asyncio.run(send_message(u["phone"], text))
