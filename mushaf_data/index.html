@@ -2739,6 +2739,14 @@
   }
   .stu-cal .c.d3.les::after { background: #fff; }
   .stu-cal .c.les.tap { cursor: pointer; }
+  /* Неполный день отвечает на тап (07.10.2026): тонкая обводка цветом
+     долга - «здесь есть что посмотреть», без крика. */
+  .stu-cal .c.part { cursor: pointer; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--no) 55%, transparent); }
+  .stu-day { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--card-bg, #fff);
+             border: 1px solid var(--card-border); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+  .stu-day .stu-day-head { font-weight: 600; margin-bottom: 2px; }
+  .stu-day .no { color: var(--no); }
+  .stu-day .trail { color: var(--muted); font-size: 11.5px; margin-top: 6px; line-height: 1.45; }
   /* Строка «Онлайн-урок» у студента. Кнопка контурная: сплошной зелёный на
      этом экране занят «Разбором устаза», отметка раз в неделю не должна
      перетягивать внимание. */
@@ -4482,7 +4490,12 @@
       offline_text: 'Нет связи с сервером',
       offline_retry: 'Попробовать снова',
       subs_month_open: 'нажми — месяц по дням',
-      subs_month_legend: 'Чем светлее день, тем меньше сдано',
+      subs_month_legend: 'Чем светлее день, тем меньше сдано · тап по неполному дню — что не сдано',
+      // Мини-отчёт по дню (07.10.2026).
+      day_not_done: 'не сдано',
+      day_excuse: 'узр',
+      day_lesson: 'онлайн-урок отмечен',
+      day_trail: 'в приложении в этот день',
       ustaz_students_empty: 'В этой группе пока нет активных студентов',
       ustaz_misses: 'пропусков %N% из %M%',
       ustaz_misses_no_limit: 'пропусков %N%',
@@ -11459,6 +11472,51 @@
     hifzHead();
   }
 
+  /* Мини-отчёт по дню (07.10.2026, решение пользователя): тап по неполному
+     дню календаря показывает из базы, что сдано и во сколько, чего не
+     хватило, узр, урок и короткий след действий в приложении. Полный день
+     и пустой тапом не отвечают: там и так всё ясно. Одна функция рисует
+     отчёт и студенту, и устазу в «Студентах» - картина одна у обоих. */
+  function dayIsPartial(d, tasks) {
+    var total = d.tasks_total || 3;
+    return tasks.length > 0 && tasks.length < total;
+  }
+
+  function dayReportHTML(r) {
+    var out = '<div class="stu-day-head">' + lessonDate(r.date) + '</div>';
+    (r.tasks || []).forEach(function (t) {
+      out += t.done
+        ? '<div class="ok">✓ ' + t.name + (t.at ? ' ' + t.at : '') + (t.detail ? ' · ' + ustazEsc(t.detail) : '') + '</div>'
+        : '<div class="no">✗ ' + t.name + ' — ' + T('day_not_done') + '</div>';
+    });
+    if (r.excuse != null) out += '<div class="ok">' + T('day_excuse') + (r.excuse ? ': ' + ustazEsc(r.excuse) : '') + '</div>';
+    if (r.lesson) out += '<div class="ok">' + T('day_lesson') + '</div>';
+    if (r.trail && r.trail.length) {
+      out += '<div class="trail"><b>' + T('day_trail') + '</b><br>' + r.trail.map(ustazEsc).join('<br>') + '</div>';
+    }
+    return out;
+  }
+
+  // Рисует отчёт под календарём внутри host; повторный тап по тому же дню
+  // сворачивает. path - свой день или день студента у устаза.
+  function dayReportToggle(host, cell, path) {
+    var box = host.querySelector('.stu-day');
+    var date = cell.getAttribute('data-date');
+    if (box && box.getAttribute('data-date') === date) { box.parentNode.removeChild(box); return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'stu-day';
+      var cal = host.querySelector('.stu-cal');
+      (cal && cal.nextSibling) ? cal.parentNode.insertBefore(box, cal.nextSibling) : host.appendChild(box);
+    }
+    box.setAttribute('data-date', date);
+    box.innerHTML = '<div class="stu-day-head">' + lessonDate(date) + ' …</div>';
+    apiCall(path + (path.indexOf('?') >= 0 ? '&' : '?') + 'date=' + date).then(function (res) {
+      if (!res.data || res.status !== 200 || box.getAttribute('data-date') !== date) return;
+      box.innerHTML = dayReportHTML(res.data);
+    }).catch(function () { box.innerHTML = ''; });
+  }
+
   /* Свой месяц в "Сдачах" (04.09.2026) - ТОТ ЖЕ календарь и тот же счёт
      пропусков, что видит устаз в зоне "Студенты". Условие макета: у обоих
      одна картина, иначе разговор "ты пропускал" снова становится спором.
@@ -11473,7 +11531,10 @@
       var tasks = (d.days || {})[stuDayKey(d.month, day)] || [];
       var cls = day > info.today ? 'future' : (tasks.length ? 'd' + Math.min(3, tasks.length) : '');
       if ((d.lessons || []).indexOf(stuDayKey(d.month, day)) >= 0) cls += ' les';
-      cells += '<div class="c ' + cls + '">' + day + '</div>';
+      // Неполный день отвечает на тап мини-отчётом (07.10.2026) - помечаем
+      // его, чтобы палец видел, куда нажимать.
+      if (dayIsPartial(d, tasks)) cls += ' part';
+      cells += '<div class="c ' + cls + '" data-date="' + stuDayKey(d.month, day) + '">' + day + '</div>';
     }
     var miss = d.threshold
       ? T('subs_month_misses', { N: d.missed, M: d.threshold })
@@ -11616,8 +11677,13 @@
       // что у устаза в "Студентах". Полоски при этом никуда не деваются:
       // сворачивать их обратно незачем, они и так две строки.
       box.style.cursor = 'pointer';
-      box.addEventListener('click', function () {
-        if (box.getAttribute('data-open') === '1') return;
+      box.addEventListener('click', function (e) {
+        if (box.getAttribute('data-open') === '1') {
+          // Календарь открыт: тап по неполному дню - мини-отчёт (07.10.2026).
+          var cell = e.target && e.target.closest ? e.target.closest('.stu-cal .c.part') : null;
+          if (cell) dayReportToggle(box, cell, '/day');
+          return;
+        }
         box.setAttribute('data-open', '1');
         box.insertAdjacentHTML('beforeend', subsCalendarHTML(d));
       });
@@ -11813,7 +11879,7 @@
       desc: 'Цвета дней, точка урока, запас',
       steps: [
         ['month', 'Что значит цвет дня',
-         'Открой «Работа с устазом» и тапни по полоскам — раскроется месяц по дням. Тёмно-зелёный — сданы все задания. Зелёный посветлее — два. Совсем светлый — одно. Розоватый — в этот день ничего, и сегодняшний такой же, пока не сдал. Серый — день ещё не наступил.'],
+         'Открой «Работа с устазом» и тапни по полоскам — раскроется месяц по дням. Тёмно-зелёный — сданы все задания. Зелёный посветлее — два. Совсем светлый — одно. Розоватый — в этот день ничего, и сегодняшний такой же, пока не сдал. Серый — день ещё не наступил. Тапни по неполному дню — под календарём покажу, что сдано и во сколько, чего не хватило и что ты делал в приложении в тот день. Устаз видит то же самое.'],
         [null, 'Точка под числом и запас',
          'Точка под днём — в этот день ты отметил онлайн-урок. Полоска «пропусков N из M» — запас месяца: красные чёрточки уже сгорели, пустые ещё есть. Сколько даёт группа — в главе «Пропуски и переводы».']
       ]
@@ -13523,6 +13589,7 @@
         var cls = day > info.today ? 'future' : (tasks.length ? 'd' + Math.min(3, tasks.length) : '');
         var key = stuDayKey(d.month, day);
         if ((d.lessons || []).indexOf(key) >= 0) cls += ' les' + (d.can_edit_lessons ? ' tap' : '');
+        if (dayIsPartial(d, tasks)) cls += ' part';
         cells += '<div class="c ' + cls + '" data-date="' + key + '">' + day + '</div>';
       }
       var missed = 0;
@@ -13551,6 +13618,14 @@
               method: 'POST', body: { student_id: studentId, group_id: stuShown, date: date }
             }).then(function () { stuOpenStudent(studentId); });
           });
+        });
+      });
+      // Неполный день - мини-отчёт по студенту (07.10.2026), тот же, что
+      // видит он сам. День с точкой урока и правом снимать её остаётся за
+      // снятием отметки - у него свой тап выше.
+      Array.prototype.forEach.call(body.querySelectorAll('.stu-cal .c.part:not(.tap)'), function (c) {
+        c.addEventListener('click', function () {
+          dayReportToggle(body, c, '/ustaz/day?id=' + studentId + '&group=' + stuShown);
         });
       });
     }).catch(function () {

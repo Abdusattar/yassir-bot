@@ -360,8 +360,12 @@ SCENE_SCRIPT = """
       await state('fresh');
       $('dash-subs').click(); await wait(1800);
       $('subs-month').click(); await wait(600);
+      // Тап по неполному дню (3-е: два задания) - мини-отчёт под календарём
+      // (07.10.2026), он тоже должен быть на снимке главы «Мой месяц».
+      var part = document.querySelector('.stu-cal .c.part');
+      if (part) { part.click(); await wait(900); }
       // Календарь внизу экрана и режется - подводим его в кадр целиком.
-      document.querySelector('.stu-cal').scrollIntoView({ block: 'center' }); await wait(400);
+      document.querySelector('.stu-cal').scrollIntoView({ block: 'start' }); await wait(400);
       spot('.stu-cal');
     },
 

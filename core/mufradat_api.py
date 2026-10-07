@@ -1907,6 +1907,10 @@ async def handle_my_month(request, user_id):
         # Онлайн-урок (14.09.2026): точки в своём месяце и строка «Я был».
         "lessons": get_lesson_dates(user["id"], group["id"], request.query.get("month")),
         "lesson": lesson_attendance_status(user["id"], group["id"]),
+        # Сколько заданий в полном дне у ЭТОГО студента (у хафиза без
+        # заучивания) - приложение по нему решает, какой день неполный и
+        # отвечает на тап мини-отчётом (07.10.2026).
+        "tasks_total": len(student_tasks(user["id"], get_group_tasks(group))),
     }
     # У подготовительной правило другое (см. core/prep.py): не «сколько
     # пропустил до перевода», а «сколько полных дней набрал до срока».
@@ -1990,7 +1994,48 @@ async def handle_ustaz_student(request, user_id):
         "threshold": group_miss_threshold(group["group_type"] if group else None),
         "month": request.query.get("month") or get_date()[:7],
         "today": get_date(),
+        "tasks_total": len(student_tasks(student_id, get_group_tasks(group))) if group else 0,
     })
+
+
+def _valid_date(s):
+    return isinstance(s, str) and len(s) == 10 and s[4] == "-" and s[7] == "-"
+
+
+@with_auth
+async def handle_my_day(request, user_id):
+    """GET ?date= - мини-отчёт по своему дню: что сдано и когда, чего не
+    хватило, узр, урок, след действий (core/day_report.py, 07.10.2026)."""
+    from core.day_report import day_report
+    date = request.query.get("date", "")
+    if not _valid_date(date):
+        return web.json_response({"error": "bad_date"}, status=400)
+    user = find_user_by_phone(user_id)
+    group = get_learning_group(user_id, include_prep=True)
+    if not user or not group:
+        return web.json_response({"error": "no_group"}, status=400)
+    return web.json_response(day_report(user["id"], group["id"], date, phone=user_id))
+
+
+@with_auth
+async def handle_ustaz_day(request, user_id):
+    """GET ?id=&group=&date= - тот же мини-отчёт по дню студента для устаза:
+    одна картина у обоих, иначе разговор «ты не сдал» снова спор."""
+    from core.day_report import day_report
+    if not _is_ustaz(user_id):
+        return web.json_response({"error": "not_ustaz"}, status=403)
+    try:
+        student_id = int(request.query.get("id", ""))
+        group_id = int(request.query.get("group", ""))
+    except ValueError:
+        return web.json_response({"error": "bad_id"}, status=400)
+    date = request.query.get("date", "")
+    if not _valid_date(date):
+        return web.json_response({"error": "bad_date"}, status=400)
+    student = next((s for s in get_students(group_id) if s["id"] == student_id), None)
+    if not student:
+        return web.json_response({"error": "not_found"}, status=404)
+    return web.json_response(day_report(student_id, group_id, date, phone=student["phone"]))
 
 
 @with_auth
@@ -2575,6 +2620,8 @@ def build_app():
     app.router.add_get("/api/muf/ustaz/groups", handle_ustaz_groups)
     app.router.add_get("/api/muf/ustaz/reviewed", handle_ustaz_reviewed)
     app.router.add_get("/api/muf/month", handle_my_month)
+    app.router.add_get("/api/muf/day", handle_my_day)
+    app.router.add_get("/api/muf/ustaz/day", handle_ustaz_day)
     app.router.add_post("/api/muf/lesson/mark", handle_lesson_mark)
     app.router.add_get("/api/muf/ustaz/students", handle_ustaz_students)
     app.router.add_get("/api/muf/ustaz/student", handle_ustaz_student)

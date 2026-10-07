@@ -115,6 +115,19 @@ def add_trail(user_id, profile, events, ua=""):
     return len(rows)
 
 
+def get_trail_between(user_id, since_iso, until_iso):
+    """След за отрезок [since, until) - для мини-отчёта по дню
+    (core/day_report.py, 07.10.2026)."""
+    with sqlite3.connect(_mw.HADITHS_DB) as conn:
+        conn.execute(_SCHEMA)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT ts, profile, event, page, line, stage, note FROM app_trail "
+            "WHERE user_id=? AND ts >= ? AND ts < ? ORDER BY ts, id",
+            (str(user_id), since_iso, until_iso)).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_trail(user_id, hours=72):
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     with sqlite3.connect(_mw.HADITHS_DB) as conn:
