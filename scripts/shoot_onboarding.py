@@ -79,7 +79,7 @@ SHOT_QUALITY = 65
 # Сцена -> имя файла. Порядок тот же, что в LEARN (mushaf_data/index.html).
 # Сцены на "u_" снимаются под аккаунтом устаза (см. USTAZ и /frame?as=ustaz):
 # у студента этих экранов нет вообще.
-SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs", "look",
+SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs", "month", "look",
           "read", "bookmark", "revision", "revision_ask",
           "trainer_start", "trainer_q", "trainer_daily", "trainer_range", "trainer_answer",
           "word_tap", "word_add", "mywords",
@@ -354,6 +354,17 @@ SCENE_SCRIPT = """
 
     subs: async function () { await state('fresh'); $('dash-subs').click(); await wait(1800); },
 
+    // «Мой месяц» по дням - тап по полоскам раскрывает календарь (глава
+    // «Правила», 07.10.2026).
+    month: async function () {
+      await state('fresh');
+      $('dash-subs').click(); await wait(1800);
+      $('subs-month').click(); await wait(600);
+      // Календарь внизу экрана и режется - подводим его в кадр целиком.
+      document.querySelector('.stu-cal').scrollIntoView({ block: 'center' }); await wait(400);
+      spot('.stu-cal');
+    },
+
     // --- повторение ---
     // Повторение идёт с начала Аль-Бакары - показываем её начало, а не
     // Фатиху, на которой мусхаф открывается по умолчанию.
@@ -525,6 +536,30 @@ def dev_index(user_id=STUDENT, name="Абдулла"):
 TADABBUR = "-1009900001"
 
 
+def seed_month():
+    """«Мой месяц» для главы «Правила» (07.10.2026): все цвета дня на одном
+    снимке - полный день, два задания, одно, пустой, и точка урока. Сеем
+    только прошедшие дни текущего месяца: будущие рисуются серыми сами."""
+    group = db.get_group(CHAT)
+    user = db.find_user_by_phone(STUDENT)
+    today = db.get_date()
+    month = today[:7]
+    with sqlite3.connect(db.DB) as conn:
+        if conn.execute("SELECT 1 FROM score_events WHERE student_id=? AND date LIKE ?",
+                        (user["id"], month + "-%")).fetchone():
+            return
+    pattern = {1: "mrt", 2: "mrt", 3: "mt", 4: "", 5: "r", 6: "mrt", 7: "mrt", 8: "mr",
+               9: "", 10: "mrt", 11: "mrt", 12: "t", 13: "mrt", 14: "mrt", 15: "mrt"}
+    last = int(today[8:10]) - 1
+    for day in range(1, max(1, last) + 1):
+        keys = pattern.get(day, "mrt")
+        date = "%s-%02d" % (month, day)
+        if keys:
+            db.save_report(user["id"], group["id"], date, {k: True for k in keys})
+        if day in (2, 7, 14) and day <= last:
+            db.add_bonus(user["id"], group["id"], date, 5, "attendance", "online")
+
+
 def seed_feed():
     """Лента (11.09.2026): разбор устаза в ответ студенту, групповой шум,
     насыха общей группы и личное от бота — ровно тот набор, на котором видно,
@@ -609,6 +644,7 @@ def seed_lessons():
 def build_app():
     seed()
     seed_submissions()
+    seed_month()
     seed_feed()
     seed_lessons()
     app = api.build_app()
