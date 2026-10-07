@@ -16,6 +16,7 @@ Telegram.WebApp.initData на фронтенде) - см. validate_init_data. us
 остальная кодовая база (users.phone это Telegram ID, см. память проекта) -
 маппинга на отдельный внутренний id не нужно.
 """
+import asyncio
 import hashlib
 import hmac
 import json
@@ -80,6 +81,8 @@ from core.web_auth import (
     new_login_code, take_session_for_code, poll_login_code, login_code_profile,
     resolve_session, revoke_session, LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
 )
+from core import email_login
+from core.mailer import mail_configured, send_mail
 from core.bots import other_bot, other_profile, JAMAAT_IN, app_bot_username
 
 log = logging.getLogger(__name__)
@@ -2490,6 +2493,55 @@ async def handle_auth_poll(request):
     })
 
 
+async def _json_body(request):
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = None
+    return body if isinstance(body, dict) else {}
+
+
+async def handle_auth_email_start(request):
+    """POST {email} - выслать код на привязанную почту (07.10.2026,
+    core/email_login.py). Незнакомую почту называем честно ('not_linked'):
+    застрявшему человеку важнее понять, что делать, чем нам - скрыть, чья
+    это почта."""
+    if not mail_configured():
+        return web.json_response({"error": "mail_off"}, status=503)
+    if not _login_rate_ok(_client_ip(request)):
+        return web.json_response({"error": "too_many"}, status=429)
+    email = (await _json_body(request)).get("email", "")
+    code, err = email_login.issue_code(email)
+    if err:
+        return web.json_response({"error": err}, status=429 if err == "too_many" else 400)
+    e = email_login.normalize_email(email)
+    text = ("Ассаляму алейкум!\n\n"
+            "Код для входа в YassirApp: %s\n\n"
+            "Он действует %d минут. Если ты не входил(а) в YassirApp - "
+            "просто не обращай внимания на это письмо." % (code, email_login.CODE_TTL_MINUTES))
+    html = ("<div style=\"font-family:-apple-system,Segoe UI,sans-serif;font-size:16px;color:#1f2a37\">"
+            "<p>Ассаляму алейкум!</p><p>Код для входа в YassirApp:</p>"
+            "<p style=\"font-size:32px;font-weight:700;letter-spacing:6px;margin:8px 0 16px\">%s</p>"
+            "<p style=\"color:#6b7280;font-size:14px\">Он действует %d минут. Если ты не входил(а) "
+            "в YassirApp - просто не обращай внимания на это письмо.</p></div>"
+            % (code, email_login.CODE_TTL_MINUTES))
+    ok = await asyncio.to_thread(send_mail, e, "Код входа в YassirApp: %s" % code, text, html)
+    if not ok:
+        return web.json_response({"error": "send_failed"}, status=502)
+    return web.json_response({"sent": True, "ttl_minutes": email_login.CODE_TTL_MINUTES})
+
+
+async def handle_auth_email_verify(request):
+    """POST {email, code} - верный код превращается в обычный код входа,
+    подтверждённый для половины человека; вкладка забирает сессию через
+    /auth/poll, как после Telegram."""
+    body = await _json_body(request)
+    login_code, profile, err = email_login.check_code(body.get("email", ""), str(body.get("code", "")))
+    if err:
+        return web.json_response({"error": err}, status=400)
+    return web.json_response({"code": login_code, "profile": profile})
+
+
 @with_auth
 async def handle_auth_logout(request, user_id):
     """POST - выйти на ЭТОМ устройстве. Токен гасим по нему самому, а не по
@@ -2595,6 +2647,8 @@ def build_app():
     app.router.add_get("/api/muf/whoami", handle_whoami)
     app.router.add_post("/api/muf/auth/start", handle_auth_start)
     app.router.add_get("/api/muf/auth/poll", handle_auth_poll)
+    app.router.add_post("/api/muf/auth/email/start", handle_auth_email_start)
+    app.router.add_post("/api/muf/auth/email/verify", handle_auth_email_verify)
     app.router.add_post("/api/muf/auth/logout", handle_auth_logout)
     app.router.add_get("/api/muf/state", handle_state)
     app.router.add_post("/api/muf/page", handle_page)

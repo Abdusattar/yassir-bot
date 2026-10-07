@@ -3209,6 +3209,21 @@
   .login-status { margin: 14px 0 6px; font-size: 13px; color: var(--muted); line-height: 1.5; }
   .login-status.bad { color: var(--no); }
   #login-step-go { margin-top: 4px; }
+  #login-mail-open { margin-top: 4px; text-decoration: underline; text-underline-offset: 3px; }
+  #login-step-mail .login-q { text-align: left; color: var(--muted); font-size: 13px; margin: 0 0 6px 2px; }
+  .login-field {
+    display: block; width: 100%; box-sizing: border-box;
+    font: inherit; font-size: 16px;          /* меньше 16 - iOS приближает экран при вводе */
+    padding: 13px 14px; margin-bottom: 14px;
+    border-radius: 14px; border: 1px solid var(--card-border);
+    background: var(--card-bg); color: var(--ink);
+  }
+  .login-field:focus { outline: none; border-color: var(--accent); }
+  .login-code {
+    text-align: center; font-size: 26px; font-weight: 600;
+    letter-spacing: 10px; padding-left: 24px;
+    font-variant-numeric: tabular-nums;
+  }
   .login-ios {
     margin: 18px 0 0; padding-top: 14px;
     border-top: 1px solid var(--card-border);
@@ -3232,7 +3247,8 @@
      Правило по id возвращает hidden его смысл. Общее [hidden]{...!important}
      не годится: приложение переключает экраны через style.display, и
      !important в таблице стилей перебил бы даже inline-стиль. */
-  #login[hidden], #wrongbot[hidden], #dash-logout[hidden] { display: none; }
+  #login[hidden], #wrongbot[hidden], #dash-logout[hidden],
+  #login .login-plain[hidden], #login .login-alt[hidden], #login .login-go[hidden] { display: none; }
 
   /* ─── Чтение лёжа (21.09.2026) ─────────────────────────────────────────
      Просьба братьев: стоя экран узкий, буквы мелкие. Лёжа (класс .land
@@ -4027,6 +4043,25 @@
         учится в Яссире 🤲 Ответь мне в Telegram на вопрос — покажу, с чего начать.
       </p>
       <button id="login-start" class="login-go">Войти через Telegram</button>
+      <!-- Запасная дверь (07.10.2026, core/email_login.py): Telegram на новом
+           телефоне иногда просит Premium. Тихой ссылкой, не второй кнопкой -
+           главный путь по-прежнему Telegram. -->
+      <button id="login-mail-open" class="login-plain">Войти по почте</button>
+    </div>
+
+    <div id="login-step-mail" hidden>
+      <p class="login-q">Почта, привязанная к твоему аккаунту</p>
+      <input id="login-mail" class="login-field" type="email" inputmode="email"
+             autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="name@mail.ru">
+      <div id="login-mail-code-box" hidden>
+        <p class="login-q">Код из письма</p>
+        <input id="login-mail-code" class="login-field login-code" type="text" inputmode="numeric"
+               autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+      </div>
+      <button id="login-mail-go" class="login-go">Прислать код</button>
+      <p id="login-mail-status" class="login-status"></p>
+      <button id="login-mail-again" class="login-plain" hidden>Прислать код ещё раз</button>
+      <button id="login-mail-back" class="login-alt">← Назад</button>
     </div>
 
     <div id="login-step-go" hidden>
@@ -4198,6 +4233,92 @@
       status.textContent = text;
       status.className = 'login-status' + (bad ? ' bad' : '');
     }
+
+    // ── Вход по почте (07.10.2026, core/email_login.py) ──
+    // Письмо шлёт мужской процесс (как и ссылка в Telegram ведёт в мужской
+    // бот), верный код он превращает в обычный код входа для половины
+    // человека - дальше тот же waitFor, что и после Telegram.
+    var stepMail = document.getElementById('login-step-mail');
+    var mailIn = document.getElementById('login-mail');
+    var codeBox = document.getElementById('login-mail-code-box');
+    var codeIn = document.getElementById('login-mail-code');
+    var mailGo = document.getElementById('login-mail-go');
+    var mailAgain = document.getElementById('login-mail-again');
+    var mailStatus = document.getElementById('login-mail-status');
+    var mailBusy = false;
+    var MAIL_ERR = {
+      email_bad: 'Это не похоже на адрес почты. Проверь, нет ли опечатки.',
+      not_linked: 'Эта почта не привязана ни к одному аккаунту. Войди через Telegram или попроси устаза привязать почту.',
+      too_many: 'Слишком много писем подряд. Попробуй через час.',
+      mail_off: 'Вход по почте пока не работает. Войди через Telegram.',
+      send_failed: 'Письмо не ушло. Попробуй ещё раз через минуту.',
+      wrong: 'Код не подходит. Проверь цифры в последнем письме.',
+      expired: 'Код больше не действует. Нажми «Прислать код ещё раз».'
+    };
+    function sayMail(text, bad) {
+      mailStatus.textContent = text;
+      mailStatus.className = 'login-status' + (bad ? ' bad' : '');
+    }
+    function postJson(path, body) {
+      return fetch('/api/muf/male' + path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      }).then(function (r) { return r.json().catch(function () { return {}; }); });
+    }
+    function sendMailCode() {
+      if (mailBusy) return;
+      var email = mailIn.value.trim();
+      if (!email) { mailIn.focus(); return; }
+      mailBusy = true;
+      sayMail('Отправляю письмо…');
+      postJson('/auth/email/start', { email: email }).then(function (d) {
+        mailBusy = false;
+        if (!d.sent) { sayMail(MAIL_ERR[d.error] || MAIL_ERR.send_failed, true); return; }
+        codeBox.hidden = false;
+        mailAgain.hidden = false;
+        mailGo.textContent = 'Войти';
+        sayMail('Отправил код на ' + email + '. Если письма нет, загляни в «Спам».');
+        codeIn.value = '';
+        codeIn.focus();
+      }, function () { mailBusy = false; sayMail('Нет связи с сервером. Попробуй ещё раз.', true); });
+    }
+    function checkMailCode() {
+      if (mailBusy) return;
+      var code = codeIn.value.replace(/\D/g, '');
+      if (code.length !== 6) { sayMail('В коде 6 цифр.', true); codeIn.focus(); return; }
+      mailBusy = true;
+      sayMail('Проверяю…');
+      postJson('/auth/email/verify', { email: mailIn.value.trim(), code: code }).then(function (d) {
+        mailBusy = false;
+        if (!d.code) { sayMail(MAIL_ERR[d.error] || MAIL_ERR.wrong, true); return; }
+        // Дальше как после Telegram: опрос заберёт сессию у нужной половины.
+        status = mailStatus;
+        waitFor(d.code, d.profile || 'male');
+      }, function () { mailBusy = false; sayMail('Нет связи с сервером. Попробуй ещё раз.', true); });
+    }
+    document.getElementById('login-mail-open').addEventListener('click', function () {
+      stepSide.hidden = true;
+      stepMail.hidden = false;
+      mailIn.focus();
+    });
+    document.getElementById('login-mail-back').addEventListener('click', function () {
+      if (poll) { clearInterval(poll); poll = null; }
+      status = document.getElementById('login-status');
+      stepMail.hidden = true;
+      codeBox.hidden = true;
+      mailAgain.hidden = true;
+      mailGo.textContent = 'Прислать код';
+      sayMail('');
+      stepSide.hidden = false;
+    });
+    mailGo.addEventListener('click', function () {
+      if (codeBox.hidden) sendMailCode(); else checkMailCode();
+    });
+    mailAgain.addEventListener('click', sendMailCode);
+    mailIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') mailGo.click(); });
+    codeIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') mailGo.click(); });
+    codeIn.addEventListener('input', function () {
+      if (codeIn.value.replace(/\D/g, '').length === 6) checkMailCode();
+    });
 
     // profile - чей процесс просим о коде. Ссылка ведёт в этот бот, а вот
     // сессию выдаст тот, где человек учится: сестре мужской бот подтвердит
