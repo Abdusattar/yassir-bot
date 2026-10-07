@@ -1898,6 +1898,10 @@
   }
   .dash-card .label { font-size: 17px; font-weight: 600; color: var(--ink); }
   .dash-card .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  /* «Правила» в подписи двери «Знания» (07.10.2026): акцент приложения, тот
+     же --accent, что у действий и зачтённого; жирность как у .label, размер
+     остаётся подписи - подсветка, а не второй заголовок. */
+  .dash-card .sub .dash-sub-hl { color: var(--accent); font-weight: 600; }
   /* Красный счётчик = долг (03.09.2026, пункт 13 старого макета) - тот же
      смысл, что у --no везде в приложении (см. .trainer-feedback.no). */
   .dash-card-count {
@@ -13606,7 +13610,14 @@
     var el = document.getElementById('dash-learn-sub');
     if (!el || !f || !f.learn) return;
     var j = f.learn.indexOf('j') >= 0, n = f.learn.indexOf('n') >= 0;
-    el.textContent = T(j && n ? 'dash_learn_sub' : j ? 'dash_learn_j' : n ? 'dash_learn_n' : 'dash_learn_how');
+    var text = T(j && n ? 'dash_learn_sub' : j ? 'dash_learn_j' : n ? 'dash_learn_n' : 'dash_learn_how');
+    // Первое слово - «Правила» - подсвечено (07.10.2026, просьба пользователя):
+    // дверь должна выдавать, что правила методики внутри. Слово берём до
+    // первой запятой или « и », остальное - как было.
+    var m = /^([^,]+?)(,| и | жана | ва )(.*)$/.exec(text);
+    el.innerHTML = m
+      ? '<b class="dash-sub-hl">' + m[1] + '</b>' + m[2] + m[3]
+      : text;
   }
 
   function openTrainers() {
