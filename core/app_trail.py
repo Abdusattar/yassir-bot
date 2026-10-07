@@ -25,14 +25,17 @@ from datetime import datetime, timedelta, timezone
 
 from core import mushaf_words as _mw  # HADITHS_DB берём в момент вызова: тесты подменяют
 
-TRAIL_DAYS = 3
+TRAIL_DAYS = 7   # 07.10.2026: неделя вместо трёх дней (решение пользователя) - разбор звука у устаза приходит не сразу
 TRAIL_MAX_BATCH = 60
 TRAIL_NOTE_MAX = 80
 # rev_* - запись повторения (30.09.2026): приложение слало их с 16-20.09, а
 # сервер молча выбрасывал - у Азили не было в следе ни одного ответа сервера.
 TRAIL_EVENTS = {"open", "page", "enter", "exit", "fix", "unit", "pick",
                 "save", "retake", "submit", "rec", "layout",
-                "rev_open", "rev_broken", "rev_submit"}
+                "rev_open", "rev_broken", "rev_submit",
+                # audio - звук сдачи у устаза (07.10.2026): got/fail fetch/fail play
+                # с размером и именем ошибки телефона.
+                "audio"}
 
 _SCHEMA = """
     CREATE TABLE IF NOT EXISTS app_trail (

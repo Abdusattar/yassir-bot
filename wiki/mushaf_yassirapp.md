@@ -1765,7 +1765,7 @@ Telegram» не нужен — хватает ряда чипов.
 
 ### «След» действий студента (13.09.2026, вечер)
 
-`core/app_trail.py`, таблица `app_trail` в `sources/hadiths.db`, 3 дня.
+`core/app_trail.py`, таблица `app_trail` в `sources/hadiths.db`, 7 дней (с 07.10.2026; было 3).
 Только то, чего нигде нет: действия на экране (`open` с устройством, `page`,
 `enter`, `exit` с `cancel`/`pick`, `fix`, `unit`, `pick`, `save` с кодом
 ответа, `retake`, `submit`), — сдачи, текущее место, страницы (nginx) и

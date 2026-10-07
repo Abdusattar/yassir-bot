@@ -34,7 +34,7 @@ def test_phone_clock_far_off_falls_back_to_server_time(test_hadiths_db):
 
 def test_old_rows_are_purged_on_write(test_hadiths_db):
     trail.add_trail("u1", "male", [{"e": "enter"}])
-    old = (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
+    old = (datetime.now(timezone.utc) - timedelta(days=trail.TRAIL_DAYS + 1)).isoformat()
     with sqlite3.connect(mw.HADITHS_DB) as conn:
         conn.execute("UPDATE app_trail SET ts=?", (old,))
     trail.add_trail("u1", "male", [{"e": "exit"}])
@@ -86,3 +86,11 @@ def test_heartbeat_remembers_phone_timezone(test_db, test_hadiths_db, monkeypatc
     assert tz_of() == "Europe/London"
     assert _heartbeat(api.build_app, "301", {"tz": "Asia/Bishkek", "trail": [{"e": "open"}]}) == 200
     assert tz_of() == "Asia/Bishkek"
+
+
+def test_audio_event_is_accepted_with_note(test_hadiths_db):
+    """07.10.2026: «звук сдачи» у устаза - что получил телефон и чем ответил."""
+    trail.add_trail("u1", "male", [{"e": "audio", "n": "fail play 7249 own NotSupportedError x"}])
+    rows = trail.get_trail("u1", hours=1)
+    assert [r["event"] for r in rows] == ["audio"]
+    assert "NotSupportedError" in rows[0]["note"]

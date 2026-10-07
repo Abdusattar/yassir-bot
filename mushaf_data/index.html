@@ -12327,7 +12327,14 @@
     var btn = document.getElementById(kind === 'own' ? 'review-play' : 'review-mine');
     btn.disabled = true;
     var path = '/ustaz/audio?id=' + review.sub.id + '&kind=' + kind;
+    // След «звук» (07.10.2026, Умар устаз: «не могу прослушать» 15-минутную
+    // запись, а сервер отдал файл дважды целиком): пишем, что телефон получил,
+    // заиграл ли и чем ответил - чтобы разбирать такое по следу, а не гадать.
+    var tag = review.sub.id + ' ' + kind;
+    var stage = 'fetch';
     audioFetch(path).then(function (blob) {
+      trail('audio', { n: 'got ' + tag + ' ' + blob.size + 'b ' + (blob.type || '?') });
+      stage = 'play';
       reviewAudio.src = URL.createObjectURL(blob);
       reviewPlaying = kind;
       btn.disabled = false;
@@ -12336,7 +12343,8 @@
       back.textContent = T('review_back10');
       back.style.display = '';
       return audioPlay(reviewAudio, audioReload(reviewAudio, path));
-    }).catch(function () {
+    }).catch(function (e) {
+      trail('audio', { n: 'fail ' + stage + ' ' + tag + ' ' + ((e && (e.name + ' ' + e.message)) || '?') });
       btn.disabled = false;
       btn.textContent = T('review_failed');
       // Запись не пошла - отматывать нечего, кнопка не должна остаться.
