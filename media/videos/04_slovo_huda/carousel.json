@@ -1,0 +1,45 @@
+{
+  "id": "04_slovo_huda_carousel",
+  "version": "v2",
+  "note": "Карусель «Одно слово: هُدًى» (concept §4, style §9; аудит директора 06.10 п. 1). Тексты — из листа ролика v32 и tafsir_1_6.md / tafsir_2_2.md; слайд 4 — Ибн Касир с арабского (tafsir_1_6.md, сверено 09.10).",
+  "slides": [
+    {"items": [
+      {"type": "label", "text": "Одно слово"},
+      {"type": "word", "page": 1, "surah": 1, "ayah": 6, "pos": 1, "size": 190, "color": "blue", "mt": 40},
+      {"type": "text", "text": "Если мы на прямом пути — зачем просить?", "size": 96, "weight": 600, "color": "ink", "mt": 40}
+    ]},
+    {"items": [
+      {"type": "text", "text": "Эти слова читают в каждом намазе", "size": 60, "color": "ink-2"},
+      {"type": "ayah", "page": 1, "surah": 1, "ayah": 6, "key": [1], "values": true, "mt": 70},
+      {"type": "source", "text": "Сура 1 «аль-Фатиха», аят 6", "mt": 70}
+    ]},
+    {"items": [
+      {"type": "word", "page": 1, "surah": 1, "ayah": 6, "pos": 1, "size": 150, "color": "gold"},
+      {"type": "text", "text": "«Ихдина» — это значит:", "size": 60, "color": "ink-2", "mt": 30},
+      {"type": "text", "text": "Покажи нам прямой путь", "size": 72, "color": "ink-2", "mt": 50},
+      {"type": "text", "text": "Направь на него", "size": 72, "color": "ink-2", "mt": 24},
+      {"type": "text", "text": "Помоги следовать им", "size": 72, "weight": 700, "color": "ink", "mt": 24},
+      {"type": "source", "text": "ас-Саади, тафсир 1:6", "mt": 60}
+    ]},
+    {"items": [
+      {"type": "text", "text": "Зачем верующему просить о руководстве в намазе и вне его, если оно у него уже есть?", "size": 60, "color": "ink-2"},
+      {"type": "text", "text": "Раб каждый час и в каждом состоянии нуждается в Аллахе, чтобы Он утверждал его на руководстве и прибавлял ему руководства…", "size": 66, "weight": 700, "color": "ink", "mt": 70},
+      {"type": "source", "text": "Ибн Касир, тафсир 1:6", "mt": 60}
+    ]},
+    {"items": [
+      {"type": "root", "letters": ["ه", "د", "ي"]},
+      {"type": "text", "text": "Тот же корень, что в «ихдина».", "size": 60, "color": "ink-2", "mt": 20},
+      {"type": "text", "text": "Этим словом Аллах называет Коран:", "size": 60, "color": "ink-2"},
+      {"type": "ayah", "page": 2, "surah": 2, "ayah": 2, "key": [6], "mt": 14},
+      {"type": "text", "text": "Это Писание, в котором нет сомнения, является верным руководством для богобоязненных", "size": 60, "color": "ink-2", "mt": 8},
+      {"type": "source", "text": "2:2 · смысловой перевод: Кулиев", "mt": 24}
+    ]},
+    {"items": [
+      {"type": "text", "text": "«Веди нас прямым путём»", "size": 60, "color": "ink-2"},
+      {"type": "source", "text": "1:6 · смысловой перевод: Кулиев", "mt": 16},
+      {"type": "text", "text": "О чём мы попросим, когда в намазе скажем «ихдина»?", "size": 84, "weight": 600, "color": "ink", "mt": 90},
+      {"type": "glyph", "w": 96, "mt": 110},
+      {"type": "yassir", "size": 40, "mt": 24}
+    ]}
+  ]
+}
