@@ -202,4 +202,4 @@ Cloudflare сознательно не ставили: от блокировки
 они не меняются, а понадобится замена — проще дать новое имя файла.
 
 ## Сжатие nginx (11.10.2026)
-`/etc/nginx/nginx.conf`: `gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml; gzip_comp_level 5; gzip_min_length 1024;` (раньше `gzip_types` был закомментирован — сжимался только HTML). page*.json 47 КБ → ~6 КБ. Бэкап: `/etc/nginx/nginx.conf.bak-20261011`. Мусхаф заранее грузит соседние листы n+1, n−1, n+2 (JSON + шрифт V4, `mushafPrefetch` в index.html).
+`/etc/nginx/nginx.conf`: `gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml; gzip_comp_level 5; gzip_min_length 1024;` (раньше `gzip_types` был закомментирован — сжимался только HTML). page*.json 47 КБ → ~6 КБ. Бэкап: `/etc/nginx/nginx.conf.bak-20261011`. Мусхаф заранее грузит соседние листы n+1, n+2, n+3 и n−1 (JSON + шрифт V4, `mushafPrefetch` в index.html).

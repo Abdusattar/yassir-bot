@@ -8342,7 +8342,7 @@
      задержка»). У каждой страницы свой JSON (~47 КБ) и свой шрифт V4 (~85 КБ),
      и до этого оба качались только в момент перелистывания: 0,7-0,9 с на
      новый лист. Теперь после отрисовки тянем следующий, предыдущий и через
-     один: JSON - в память (cache), шрифт - FontFace.load() без добавления в
+     один (с 11.10 - на три вперёд): JSON - в память (cache), шрифт - FontFace.load() без добавления в
      document.fonts (байты ложатся в кэш браузера и service worker), и
      loadV4Font на перелистывании берёт его оттуда. */
   var mushafPrefetching = {}, mushafWarmFonts = {};
@@ -8353,7 +8353,7 @@
       .catch(function () { delete mushafWarmFonts[url]; });
   }
   function mushafPrefetch(n) {
-    [n + 1, n - 1, n + 2].forEach(function (p) {
+    [n + 1, n - 1, n + 2, n + 3].forEach(function (p) {   // вперёд три (11.10: устаз листает быстро)
       if (p < FIRST_PAGE || p > LAST_PAGE) return;
       var key = p + ':' + UI_LANG + ':' + pageLayout();
       if (cache[key]) { mushafWarmFont(cache[key].font_url); return; }
