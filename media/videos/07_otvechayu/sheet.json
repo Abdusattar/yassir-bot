@@ -1,6 +1,6 @@
 {
  "id": "07_otvechayu",
- "version": "v2",
+ "version": "v3",
  "format": "reel_9x16",
  "fps": 30,
  "duration": 29.4,
@@ -238,12 +238,6 @@
     {
      "role": "translation",
      "text": "и отвечаю на зов молящегося, когда он взывает ко Мне",
-     "on": "R1.w7.start-0.25",
-     "fade_in": 0.35
-    },
-    {
-     "role": "source",
-     "text": "2:186 · смысловой перевод: Кулиев",
      "on": "R1.w7.start-0.25",
      "fade_in": 0.35
     }
