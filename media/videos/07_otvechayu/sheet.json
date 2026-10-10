@@ -1,9 +1,9 @@
 {
  "id": "07_otvechayu",
- "version": "v1",
+ "version": "v2",
  "format": "reel_9x16",
  "fps": 30,
- "duration": 28.85,
+ "duration": 29.4,
  "rubric": "Коран отвечает",
  "values": false,
  "_note": "2:186 слова 1–11 (до вакфа ۖ после دَعَانِ). Рамка (style §1.1): ночь — стол с лампой (Veo, метка ИИ) → бумага: аят частями 1–6 / 7–11 → قَرِيبٌ + ас-Саади → тот же стол утром (Veo) с вопросом → финал. Под аятом только бумага. Звук — комнатный фон, музыки нет. Конец R1 — 4162,0 (qdc ставит конец слова 11 на 4161,645, а madd دَعَانِ звучит до ~4161,85; пауза вдоха 4161,9–4162,25 — замер RMS 10.10).",
@@ -28,10 +28,16 @@
     11
    ],
    "in": 4147.4,
-   "out": 4162.0,
-   "at": 2.75,
+   "out": 4162.1,
+   "at": 2.95,
    "fade_in": 0.03,
-   "fade_out": 0.15
+   "fade_out": 0.2,
+   "word_fix": {
+    "6": [
+     4153.245,
+     4155.8
+    ]
+   }
   },
   {
    "id": "room",
@@ -50,7 +56,7 @@
     "dur": 0
    },
    "out": {
-    "at": "R1.w1.start-0.39",
+    "at": "R1.w1.start-0.55",
     "dur": 0.35
    },
    "live": {
@@ -64,8 +70,8 @@
     ],
     "warm": false,
     "brighten": {
-     "at": 1.4,
-     "dur": 1.0
+     "at": 1.2,
+     "dur": 1.3
     }
    }
   },
@@ -73,11 +79,11 @@
    "plan": 2,
    "zoom": 0.04,
    "in": {
-    "at": "R1.w1.start-0.39",
+    "at": "R1.w1.start-0.55",
     "dur": 0.35
    },
    "out": {
-    "at": "R1.w7.start-0.1",
+    "at": "R1.w6.end+0.02",
     "dur": 0.2
    },
    "ayah": {
@@ -94,8 +100,8 @@
    "plan": 3,
    "zoom": 0.02,
    "in": {
-    "at": "R1.w7.start+0.1",
-    "dur": 0.3
+    "at": "R1.w7.start-0.25",
+    "dur": 0.2
    },
    "out": {
     "at": "R1.end+0.55",
@@ -119,7 +125,7 @@
     "dur": 0.3
    },
    "out": {
-    "at": "R1.end+4.60",
+    "at": "R1.end+4.75",
     "dur": 0.35
    },
    "ayah": {
@@ -129,18 +135,22 @@
     "words": [
      6,
      6
-    ]
+    ],
+    "values": true,
+    "meanings": {
+     "6": "близок"
+    }
    }
   },
   {
    "plan": 5,
    "zoom": 0.03,
    "in": {
-    "at": "R1.end+4.60",
+    "at": "R1.end+4.75",
     "dur": 0.35
    },
    "out": {
-    "at": "R1.end+9.00",
+    "at": "R1.end+9.15",
     "dur": 0.35
    },
    "live": {
@@ -153,9 +163,9 @@
      1280
     ],
     "warm": false,
-    "at": "R1.end+4.60",
+    "at": "R1.end+4.75",
     "brighten": {
-     "at": "R1.end+8.00",
+     "at": "R1.end+8.15",
      "dur": 1.0
     }
    }
@@ -164,7 +174,7 @@
    "plan": 6,
    "zoom": 0.03,
    "in": {
-    "at": "R1.end+9.35",
+    "at": "R1.end+9.50",
     "dur": 0.4
    },
    "out": null,
@@ -176,7 +186,7 @@
    "scene": 1,
    "plan": 1,
    "t_start": 0.0,
-   "t_end": "R1.w1.start-0.04",
+   "t_end": "R1.w1.start-0.20",
    "mode": "live",
    "_note": "ночь, стол, лампа; крючок на карточке",
    "texts": [
@@ -185,7 +195,7 @@
      "text": "Кажется, что тебя никто не слышит?",
      "on": 0.0,
      "fade_in": 0,
-     "off": "R1.w1.start-0.39",
+     "off": "R1.w1.start-0.55",
      "fade_out": 0.35
     }
    ]
@@ -193,8 +203,8 @@
   {
    "scene": 2,
    "plan": 2,
-   "t_start": "R1.w1.start-0.39",
-   "t_end": "R1.w7.start-0.1",
+   "t_start": "R1.w1.start-0.55",
+   "t_end": "R1.w6.end+0.02",
    "mode": "B",
    "voice": "R1",
    "key": [
@@ -219,7 +229,7 @@
   {
    "scene": 3,
    "plan": 3,
-   "t_start": "R1.w7.start+0.1",
+   "t_start": "R1.w7.start-0.25",
    "t_end": "R1.end+0.55",
    "mode": "B",
    "voice": "R1",
@@ -228,13 +238,13 @@
     {
      "role": "translation",
      "text": "и отвечаю на зов молящегося, когда он взывает ко Мне",
-     "on": "R1.w7.start+0.1",
+     "on": "R1.w7.start-0.25",
      "fade_in": 0.35
     },
     {
      "role": "source",
      "text": "2:186 · смысловой перевод: Кулиев",
-     "on": "R1.w7.start+0.1",
+     "on": "R1.w7.start-0.25",
      "fade_in": 0.35
     }
    ]
@@ -243,8 +253,8 @@
    "scene": 4,
    "plan": 4,
    "t_start": "R1.end+0.90",
-   "t_end": "R1.end+4.60",
-   "mode": "B",
+   "t_end": "R1.end+4.75",
+   "mode": "A",
    "key": [
     6
    ],
@@ -268,15 +278,15 @@
   {
    "scene": 5,
    "plan": 5,
-   "t_start": "R1.end+4.60",
-   "t_end": "R1.end+9.35",
+   "t_start": "R1.end+4.75",
+   "t_end": "R1.end+9.50",
    "mode": "live",
    "_note": "тот же стол утром; телефон на месте; такт 3",
    "texts": [
     {
      "role": "question",
      "text": "О чём ты скажешь Ему сегодня, зная, что Он близок?",
-     "on": "R1.end+4.95",
+     "on": "R1.end+5.10",
      "fade_in": 0.3
     }
    ]
@@ -284,25 +294,25 @@
   {
    "scene": 6,
    "plan": 6,
-   "t_start": "R1.end+9.35",
-   "t_end": 28.85,
+   "t_start": "R1.end+9.50",
+   "t_end": 29.4,
    "mode": "final",
    "texts": [
     {
      "role": "label",
      "text": "Коран отвечает",
-     "on": "R1.end+9.35",
+     "on": "R1.end+9.50",
      "fade_in": 0
     },
     {
      "role": "glyph",
-     "on": "R1.end+9.35",
+     "on": "R1.end+9.50",
      "fade_in": 0
     },
     {
      "role": "yassir",
      "text": "YASSIR",
-     "on": "R1.end+9.35",
+     "on": "R1.end+9.50",
      "fade_in": 0
     }
    ]

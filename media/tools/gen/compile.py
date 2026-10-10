@@ -63,7 +63,7 @@ def compile_sheet(sheet, tl, live=None):
                 w["meaning"] = a.get("meanings", {}).get(str(w["pos"]), w["meaning"])
             first = [s["mode"] for s in sheet["scenes"] if s["plan"] == p["plan"]][0]
             plan["block"] = {"page": a["page"], "ref": "%d:%d" % (a["surah"], a["ayah"]), "words": words,
-                             "end": end, "values": bool(sheet.get("values")),
+                             "end": end, "values": bool(a.get("values", sheet.get("values"))),
                              "move": {"c0": onehot(first), "kfs": []},
                              "colors": [{"c0": DIM, "kfs": []} for _ in words],
                              "means": [{"c0": 0, "kfs": []} for _ in words]}
@@ -94,9 +94,11 @@ def compile_sheet(sheet, tl, live=None):
                 for m in b["means"]:
                     m["kfs"].append([at, 0, 0.25, 0])
         if b and s.get("key_from_scene") and not s.get("voice"):  # сцена без голоса: ключевое золотом с кадра 0
-            for w, c in zip(b["words"], b["colors"]):
+            for w, c, m in zip(b["words"], b["colors"], b["means"]):
                 if w["pos"] in s.get("key", []):
                     c["c0"] = GOLD
+                    if b["values"]:
+                        m["c0"] = 1  # значение под словом видно с кадра 0 (ролик 7: «близок» под قَرِيبٌ)
         if b and s.get("reset"):
             at = T(s["reset"]["at"])
             for w, c in zip(b["words"], b["colors"]):
