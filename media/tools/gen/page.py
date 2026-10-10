@@ -19,7 +19,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:#fefbf4}
 body{position:relative;font-variant-numeric:lining-nums;-webkit-font-smoothing:antialiased}
 .bg{position:absolute;inset:0;background:radial-gradient(ellipse 900px 700px at 50% 45%,var(--paper-glow),transparent 70%),
  linear-gradient(var(--paper-top),var(--paper-mid) 50%,var(--paper-low))}
-.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.03;mix-blend-mode:multiply}
+.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.04;mix-blend-mode:multiply}
 .plan,.cam{position:absolute;left:0;top:0;width:1080px;height:1920px}
 .cam{transform-origin:540px 760px}
 .blk{position:absolute;left:0;top:0;width:1080px;transform-origin:540px 0}

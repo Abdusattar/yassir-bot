@@ -93,6 +93,10 @@ def compile_sheet(sheet, tl, live=None):
             if to != "A":  # в B и C значения прозрачны, место за ними остаётся (style §3)
                 for m in b["means"]:
                     m["kfs"].append([at, 0, 0.25, 0])
+        if b and s.get("key_from_scene") and not s.get("voice"):  # сцена без голоса: ключевое золотом с кадра 0
+            for w, c in zip(b["words"], b["colors"]):
+                if w["pos"] in s.get("key", []):
+                    c["c0"] = GOLD
         if b and s.get("reset"):
             at = T(s["reset"]["at"])
             for w, c in zip(b["words"], b["colors"]):

@@ -182,6 +182,7 @@ def main():
     if a.stills or a.proof:
         if a.proof:
             ts = proof_times(data)
+            shutil.rmtree(work / "proof", ignore_errors=True)  # старые кадры прошлых таймингов путали check.py --dry (10.10)
             lay = page.frames(work / "page.html", work / "proof", ts, 2, ["t%06.3f.png" % t for t in ts])
             contact_sheet(work / "proof", ts, work / "proof.png")
             notes = audio.build(sheet, src, total, work, vdir / "audio_final.wav", vdir)

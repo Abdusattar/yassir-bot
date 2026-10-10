@@ -29,7 +29,7 @@ body{position:relative;font-variant-numeric:lining-nums;-webkit-font-smoothing:a
 .bg{position:absolute;inset:0}
 /* золото с блеском — только арабское ключевое слово ≥96 px (style §1, ревизия директора 10.10) */
 .gilt{background:linear-gradient(180deg,#9c6c14 0%,#9c6c14 22%,#c6973a 42%,#8a6015 64%,#9c6c14 100%);-webkit-background-clip:text;background-clip:text;color:transparent!important}
-.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.03;mix-blend-mode:multiply}
+.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.04;mix-blend-mode:multiply}
 .slide{position:absolute;left:100px;top:110px;width:880px;height:1120px;display:flex;flex-direction:column;
  align-items:center;justify-content:center;text-align:center}
 .cg{font-family:'Cormorant Garamond',serif;font-weight:600;text-wrap:balance}
