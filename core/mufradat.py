@@ -671,14 +671,18 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None, ex
 
 
 def _today():
-    return datetime.now(_TZ).strftime("%Y-%m-%d")
+    """Учебная дата (до трёх ночи — ещё вчерашний день), как у всех зачётов:
+    core/db.py:get_date. Раньше здесь был календарь — счётчик слов обнулялся в
+    полночь, а зачёт шёл по учебным суткам (жалоба студента 11.10.2026)."""
+    from core.db import get_date
+    return get_date()
 
 
 def _days_since(date_str):
     if not date_str:
         return None
     d = datetime.strptime(date_str, "%Y-%m-%d").date()
-    return (datetime.now(_TZ).date() - d).days
+    return (datetime.strptime(_today(), "%Y-%m-%d").date() - d).days
 
 
 def _is_stale(progress_row):
