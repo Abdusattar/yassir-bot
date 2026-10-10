@@ -69,6 +69,9 @@ function ayah(x, parent) {
       const m = x.words[i].meaning, a = measure(m, MF[0]);
       if (a <= gw + 60) return {w: Math.max(gw, a), f: 0};
       return {w: Math.max(gw, measure(m, MF[1])), f: 1}; });
+    // один шрифт значений на весь аят: Cormorant и Inter вперемешку в строке — небрежно (11.10, 13:28)
+    if (x.values && cols.some(c => c.f === 1))
+      cols.forEach((c, i) => { c.f = 1; c.w = Math.max(measure(g[i], `${k}px ${fam}`), measure(x.words[i].meaning, MF[1])); });
     const w = cols.map(c => c.w), sum = (a, z) => w.slice(a, z).reduce((s, v) => s + v, 0) + 26 * (z - a - 1);
     let rows = null;
     if (sum(0, n) <= FIELD) rows = [[0, n]];
@@ -127,7 +130,7 @@ def resolve(spec):
     for sl in spec["slides"]:
         for x in sl["items"]:
             if x["type"] in ("word", "ayah"):
-                words, end = ayah_tokens(x["page"], x["surah"], x["ayah"])
+                words, end = ayah_tokens(x["page"], x["surah"], x["ayah"], x.get("words"))  # отрывок [от, до] (13:28 слова 7–11)
                 pages.add(x["page"])
                 for w in words:
                     w["meaning"] = x.get("meanings", {}).get(str(w["pos"]), w["meaning"])
