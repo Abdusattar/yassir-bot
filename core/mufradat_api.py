@@ -33,7 +33,8 @@ from aiohttp import web
 import config
 from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
 from core.app_trail import add_trail, ua_short
-from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy
+from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy, local_copy_path
+import core.audio_compat as audio_compat
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
     count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, in_night_tail, get_all_groups,
@@ -2136,7 +2137,13 @@ async def _telegram_audio_response(file_id, request=None):
     ogg: см. core/audio_compat.py (28.09.2026, устаз Зейнеб).
 
     Сначала - недельная копия m4a: её играет любой телефон, и в Telegram
-    идти не нужно."""
+    идти не нужно.
+
+    ?link=1 (10.10.2026) - не сам звук, а {"url"} подписанного потока той же
+    копии (см. handle_audio_stream); url пустой - копии нет, клиент просит
+    звук целиком, как раньше. Работает у всех эндпоинтов звука разом."""
+    if request is not None and request.query.get("link") == "1":
+        return web.json_response({"url": _audio_link(file_id)})
     copy = local_copy(file_id)
     if copy:
         return web.Response(body=copy, content_type="audio/mp4")
@@ -2196,6 +2203,56 @@ async def handle_ustaz_submission(request, user_id):
         # (07.09.2026, см. core/db.py:is_retake_answered).
         "redone": is_retake_answered(sub),
         "error_words": json.loads(sub["error_words"] or "[]"),
+    })
+
+
+# ── Звук потоком (10.10.2026) ────────────────────────────────────────────────
+#
+# Устазы ждали длинные сдачи 40+40: приложение качало запись ЦЕЛИКОМ (fetch →
+# blob) и только потом включало, и так при каждом открытии - 3-25 МБ по
+# мобильной сети. Теперь <audio> получает адрес и играет, пока докачивается;
+# перемотка просит у сервера нужный кусок (Range - его FileResponse умеет сам).
+#
+# Заголовок авторизации <audio> послать не может, поэтому адрес подписан:
+# имя файла копии + срок, HMAC на ключе от токена бота. Кто знает адрес -
+# слышит запись, поэтому живёт он недолго и выдаётся только тем, кому запись
+# и так отдал бы handle_ustaz_audio. Копии нет (старше недели, не успела) -
+# url пустой, приложение идёт старым путём.
+_AUDIO_LINK_TTL = 3 * 3600
+_AUDIO_LINK_KEY = hashlib.sha256(("audio-link:" + TELEGRAM_TOKEN).encode()).digest()
+
+
+def _audio_link_sig(name, exp):
+    return hmac.new(_AUDIO_LINK_KEY, ("%s|%d" % (name, exp)).encode(),
+                    hashlib.sha256).hexdigest()[:32]
+
+
+def _audio_link(file_id):
+    """Относительный адрес потока ('/audio/s?t=...') или None."""
+    path = local_copy_path(file_id)
+    if not path:
+        return None
+    name = os.path.basename(path)
+    exp = int(time.time()) + _AUDIO_LINK_TTL
+    return "/audio/s?t=%s.%d.%s" % (name, exp, _audio_link_sig(name, exp))
+
+
+async def handle_audio_stream(request):
+    """GET ?t=<подпись> - копия m4a потоком, без with_auth (см. выше)."""
+    try:
+        name, exp, sig = request.query.get("t", "").rsplit(".", 2)
+        exp = int(exp)
+    except ValueError:
+        return web.json_response({"error": "bad_link"}, status=400)
+    if (not re.fullmatch(r"[0-9a-f]{40}\.m4a", name) or exp < time.time()
+            or not hmac.compare_digest(sig, _audio_link_sig(name, exp))):
+        return web.json_response({"error": "bad_link"}, status=403)
+    path = os.path.join(audio_compat.CACHE_DIR, name)
+    if not os.path.isfile(path):
+        return web.json_response({"error": "not_found"}, status=404)
+    return web.FileResponse(path, headers={
+        "Content-Type": "audio/mp4",
+        "Cache-Control": "private, max-age=%d" % _AUDIO_LINK_TTL,
     })
 
 
@@ -2691,6 +2748,7 @@ def build_app():
     app.router.add_post("/api/muf/ustaz/lesson/remove", handle_ustaz_lesson_remove)
     app.router.add_get("/api/muf/ustaz/submission", handle_ustaz_submission)
     app.router.add_get("/api/muf/ustaz/audio", handle_ustaz_audio)
+    app.router.add_get("/api/muf/audio/s", handle_audio_stream)
     app.router.add_post("/api/muf/ustaz/verdict", handle_ustaz_verdict)
     app.router.add_post("/api/muf/ustaz/comment", handle_ustaz_comment)
     app.router.add_get("/api/muf/pulse", handle_pulse)

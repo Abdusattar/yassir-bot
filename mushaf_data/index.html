@@ -6189,9 +6189,9 @@
     feedAudio.pause();
     btn.disabled = true;
     var path = '/feed/media?id=' + id;
-    audioFetch(path)
-      .then(function (blob) {
-        feedAudio.src = URL.createObjectURL(blob);
+    audioSource(path)
+      .then(function (url) {
+        feedAudio.src = url;
         feedPlayingId = id;
         btn.disabled = false;
         btn.textContent = '⏸ голосовое';
@@ -11040,10 +11040,34 @@
     });
   }
 
+  /* Звук потоком (10.10.2026: устазы ждали длинные 40+40 - запись качалась
+     целиком перед каждым прослушиванием). Сервер на ?link=1 даёт подписанный
+     адрес недельной копии, <audio> играет его, пока докачивается, и
+     перематывает кусками. Копии нет или поток однажды не заиграл
+     (audioStreamOff) - прежний путь: fetch целиком и blob.
+     Отдаёт строку для el.src; revokeObjectURL на ней безвреден. */
+  var audioStreamOff = false;
+  function audioSource(path) {
+    var blob = function () {
+      return audioFetch(path).then(function (b) { return URL.createObjectURL(b); });
+    };
+    if (audioStreamOff) return blob();
+    return fetch(apiBase() + path + '&link=1', { headers: authHeaders() })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (d) { return d && d.url ? apiBase() + d.url : blob(); });
+  }
+
   // play() с одной попыткой в mp3; reload заново кладёт звук в el
   // (там, где blob держится на карточке, - сбросив его).
   function audioPlay(el, reload) {
     return el.play().catch(function (e) {
+      // Не заиграл поток - не mp3 виноват: дальше качаем целиком.
+      if (el.src && el.src.indexOf('blob:') !== 0 && !audioStreamOff) {
+        audioStreamOff = true;
+        trail('audio', { n: 'stream off ' + ((e && e.name) || '?') });
+        return reload().then(function () { return el.play(); });
+      }
       if (!e || e.name !== 'NotSupportedError' || audioMp3) throw e;
       audioMp3 = true;
       try { localStorage.setItem(AUDIO_MP3_KEY, '1'); } catch (e2) {}
@@ -11053,9 +11077,9 @@
 
   function audioReload(el, path) {
     return function () {
-      return audioFetch(path).then(function (blob) {
+      return audioSource(path).then(function (url) {
         if (el.src && el.src.indexOf('blob:') === 0) URL.revokeObjectURL(el.src);
-        el.src = URL.createObjectURL(blob);
+        el.src = url;
       });
     };
   }
@@ -11214,8 +11238,8 @@
     var label = btn.textContent;
     btn.disabled = true;
     var path = '/submissions/audio?id=' + id + '&kind=' + kind;
-    audioFetch(path).then(function (blob) {
-      subsAudio.src = URL.createObjectURL(blob);
+    audioSource(path).then(function (url) {
+      subsAudio.src = url;
       subsPlayingKey = key;
       btn.disabled = false;
       subsRenderButtons();
@@ -11459,8 +11483,8 @@
   function lookLoadAudio() {
     if (look.url) return Promise.resolve();
     if (!look.item || !look.item.has_review_audio) return Promise.reject();
-    return audioFetch('/submissions/audio?id=' + look.item.id + '&kind=review').then(function (blob) {
-      look.url = URL.createObjectURL(blob);
+    return audioSource('/submissions/audio?id=' + look.item.id + '&kind=review').then(function (url) {
+      look.url = url;
       lookAudio.src = look.url;
     });
   }
@@ -12680,10 +12704,10 @@
     // заиграл ли и чем ответил - чтобы разбирать такое по следу, а не гадать.
     var tag = review.sub.id + ' ' + kind;
     var stage = 'fetch';
-    audioFetch(path).then(function (blob) {
-      trail('audio', { n: 'got ' + tag + ' ' + blob.size + 'b ' + (blob.type || '?') });
+    audioSource(path).then(function (url) {
+      trail('audio', { n: 'got ' + tag + ' ' + (url.indexOf('blob:') === 0 ? 'blob' : 'stream') });
       stage = 'play';
-      reviewAudio.src = URL.createObjectURL(blob);
+      reviewAudio.src = url;
       reviewPlaying = kind;
       btn.disabled = false;
       btn.textContent = T('review_stop');
@@ -13151,9 +13175,9 @@
     revCardEl = card;
     var pp = card.querySelector('.pp');
     if (pp) pp.textContent = '…';
-    return audioFetch('/ustaz/revision_audio?id=' + id)
-      .then(function (blob) {
-        revAudio.src = URL.createObjectURL(blob);
+    return audioSource('/ustaz/revision_audio?id=' + id)
+      .then(function (url) {
+        revAudio.src = url;
         revLoadedId = id;
         if (pp) pp.textContent = '▶';
       });

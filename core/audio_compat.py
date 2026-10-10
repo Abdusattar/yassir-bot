@@ -89,6 +89,15 @@ def cached_mp3(file_id):
     return _read(_cache_path(file_id))
 
 
+def local_copy_path(file_id):
+    """Путь к недельной копии m4a или None (10.10.2026: её отдаём потоком,
+    см. core/mufradat_api.py, handle_audio_stream)."""
+    if not file_id:
+        return None
+    path = _cache_path(file_id, "m4a")
+    return path if os.path.isfile(path) else None
+
+
 def local_copy(file_id):
     """Недельная копия m4a (играет везде) или None."""
     return _read(_cache_path(file_id, "m4a")) if file_id else None

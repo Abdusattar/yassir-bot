@@ -182,3 +182,57 @@ def test_local_copy_served_to_every_phone(tmp_path, ua):
     resp = asyncio.run(api._telegram_audio_response("fid-c", _Req(ua)))
     assert resp.content_type == "audio/mp4"
     assert resp.body == b"M4Afake"
+
+
+def _stream(path, headers=None):
+    async def go():
+        from aiohttp.test_utils import TestClient, TestServer
+        client = TestClient(TestServer(api.build_app()))
+        await client.start_server()
+        try:
+            r = await client.get("/api/muf" + path, headers=headers or {})
+            return r.status, await r.read(), r.headers
+        finally:
+            await client.close()
+    return asyncio.run(go())
+
+
+def test_stream_link_plays_with_range(tmp_path, monkeypatch):
+    """10.10.2026: устаз ждал длинную 40+40, пока она скачается целиком.
+    ?link=1 даёт подписанный адрес копии, а поток отдаёт её кусками (Range)."""
+    monkeypatch.setattr(ac, "CACHE_DIR", str(tmp_path))
+    ac._store(ac._cache_path("fid-s", "m4a"), b"0123456789" * 100)
+    resp = asyncio.run(api._telegram_audio_response("fid-s", _Req("x", {"link": "1"})))
+    import json
+    url = json.loads(resp.body)["url"]
+    assert url.startswith("/audio/s?t=")
+
+    status, body, headers = _stream(url, {"Range": "bytes=10-19"})
+    assert status == 206 and body == b"0123456789"
+    assert headers["Content-Type"] == "audio/mp4"
+
+    status, body, _ = _stream(url)
+    assert status == 200 and len(body) == 1000
+
+
+def test_stream_link_refuses_forged_or_expired(tmp_path, monkeypatch):
+    monkeypatch.setattr(ac, "CACHE_DIR", str(tmp_path))
+    ac._store(ac._cache_path("fid-s", "m4a"), b"secret")
+    url = api._audio_link("fid-s")
+    name, exp, sig = url.split("t=", 1)[1].rsplit(".", 2)
+    other = ac._cache_path("fid-other", "m4a")
+    ac._store(other, b"other")
+    forged = "/audio/s?t=%s.%s.%s" % (os.path.basename(other), exp, sig)
+    assert _stream(forged)[0] == 403
+    old = int(exp) - 10 * api._AUDIO_LINK_TTL
+    expired = "/audio/s?t=%s.%d.%s" % (name, old, api._audio_link_sig(name, old))
+    assert _stream(expired)[0] == 403
+    assert _stream("/audio/s?t=../../etc/passwd.1.x")[0] in (400, 403)
+
+
+def test_no_copy_no_link(tmp_path, monkeypatch):
+    """Копии нет - url пустой, приложение качает целиком, как раньше."""
+    monkeypatch.setattr(ac, "CACHE_DIR", str(tmp_path))
+    resp = asyncio.run(api._telegram_audio_response("fid-none", _Req("x", {"link": "1"})))
+    import json
+    assert json.loads(resp.body) == {"url": None}
