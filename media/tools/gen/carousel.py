@@ -21,13 +21,15 @@ W, H = 1080, 1350
 FIELD = 880  # 1080 − 2×100
 
 CSS = """
-:root{--paper-top:#f7efdf;--paper-mid:#fbf6ea;--paper-low:#f3e8d3;--paper-glow:#fffaf0;
+:root{--paper-top:#fbf6ec;--paper-mid:#fefbf4;--paper-low:#f8f1e4;--paper-glow:#ffffff;
 --ink:#1d1a16;--ink-2:#2b2620;--blue:#2456b8;--gold:#8a6015;--muted:#6f6557}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:1080px;height:1350px;overflow:hidden;background:#fbf6ea}
+html,body{width:1080px;height:1350px;overflow:hidden;background:#fefbf4}
 body{position:relative;font-variant-numeric:lining-nums;-webkit-font-smoothing:antialiased}
 .bg{position:absolute;inset:0}
-.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.05;mix-blend-mode:multiply}
+/* золото с блеском — только арабское ключевое слово ≥96 px (style §1, ревизия директора 10.10) */
+.gilt{background:linear-gradient(180deg,#9c6c14 0%,#9c6c14 22%,#c6973a 42%,#8a6015 64%,#9c6c14 100%);-webkit-background-clip:text;background-clip:text;color:transparent!important}
+.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.03;mix-blend-mode:multiply}
 .slide{position:absolute;left:100px;top:110px;width:880px;height:1120px;display:flex;flex-direction:column;
  align-items:center;justify-content:center;text-align:center}
 .cg{font-family:'Cormorant Garamond',serif;font-weight:600;text-wrap:balance}
@@ -80,7 +82,7 @@ function ayah(x, parent) {
     for (const [a, z] of rows) { const row = el('div', 'row', blk);
       for (let i = a; i < z; i++) { const col = el('div', 'col', row); col.style.width = cols[i].w + 'px';
         const s = el('span', '', col); s.style.font = `${k}px/1.6 ${fam}`;
-        s.innerHTML = `<span style="color:${x.key.includes(x.words[i].pos) ? C('gold') : C('ink')}">${x.words[i].glyph}</span>`
+        s.innerHTML = `<span${x.key.includes(x.words[i].pos) ? ' class="gilt"' : ''} style="color:${x.key.includes(x.words[i].pos) ? C('gold') : C('ink')}">${x.words[i].glyph}</span>`
           + (i === n - 1 ? `<span style="color:${C('ink')}">${x.end}</span>` : '');
         if (x.values) { const m = el('div', 'mn', col, x.words[i].meaning); m.style.font = MF[cols[i].f];
           m.style.marginTop = '-14px'; } } }
@@ -101,7 +103,7 @@ window.build = async function (i) {
       case 'text': d = el('div', 'cg', box, nb(x.text)); d.style.cssText +=
         `;font-size:${x.size || 60}px;line-height:${x.size >= 80 ? 1.18 : 1.25};font-weight:${x.weight || 600};color:${C(x.color || 'ink-2')};max-width:880px;width:max-content`; break;
       case 'source': d = el('div', 'in', box, x.text); d.style.cssText += ';font-size:40px;line-height:1.2;color:var(--muted);white-space:nowrap'; break;
-      case 'word': d = el('div', '', box, x.glyph); d.style.cssText += `;font:${x.size}px/1.3 v2p${x.page};color:${C(x.color)}`; break;
+      case 'word': d = el('div', x.color === 'gold' ? 'gilt' : '', box, x.glyph); d.style.cssText += `;font:${x.size}px/1.3 v2p${x.page};color:${C(x.color)}`; break;
       case 'ayah': { const r = ayah(x, box); d = r.el; info.push({ref: x.ref, k: r.k, rows: r.rows, warn: r.warn}); break; }
       case 'root': d = el('div', 'roots', box); for (const ch of x.letters) el('div', 'plate', d, `<span>${ch}</span>`); break;
       case 'glyph': d = el('div', '', box, S.glyph); d.firstElementChild.setAttribute('width', x.w);

@@ -12,14 +12,14 @@ TEX = ROOT / "media" / "brand" / "paper_texture.png"
 GLYPH = ROOT / "media" / "brand" / "glyph_book.svg"
 
 CSS = """
-:root{--paper-top:#f7efdf;--paper-mid:#fbf6ea;--paper-low:#f3e8d3;--paper-glow:#fffaf0;
+:root{--paper-top:#fbf6ec;--paper-mid:#fefbf4;--paper-low:#f8f1e4;--paper-glow:#ffffff;
 --ink:#1d1a16;--ink-2:#2b2620;--dim:rgba(29,26,22,.40);--blue:#2456b8;--gold:#8a6015;--muted:#6f6557}
 *{margin:0;padding:0;box-sizing:border-box;transition:none!important;animation:none!important}
-html,body{width:1080px;height:1920px;overflow:hidden;background:#fbf6ea}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#fefbf4}
 body{position:relative;font-variant-numeric:lining-nums;-webkit-font-smoothing:antialiased}
 .bg{position:absolute;inset:0;background:radial-gradient(ellipse 900px 700px at 50% 45%,var(--paper-glow),transparent 70%),
  linear-gradient(var(--paper-top),var(--paper-mid) 50%,var(--paper-low))}
-.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.05;mix-blend-mode:multiply}
+.tex{position:absolute;left:0;top:0;width:1080px;height:1920px;opacity:.03;mix-blend-mode:multiply}
 .plan,.cam{position:absolute;left:0;top:0;width:1080px;height:1920px}
 .cam{transform-origin:540px 760px}
 .blk{position:absolute;left:0;top:0;width:1080px;transform-origin:540px 0}
@@ -63,6 +63,17 @@ function ev(o, t) {
   return v;
 }
 const rgba = c => `rgba(${c[0].toFixed(2)},${c[1].toFixed(2)},${c[2].toFixed(2)},${c[3].toFixed(4)})`;
+// Золото с блеском (style §1, ревизия директора 10.10): ключевое слово анимируется rgba к GOLD; чем ближе
+// цвет к золоту (k → 1), тем сильнее проступает градиент. Края (огласовки) тёмные, блик неподвижен в теле букв.
+const GOLD_RGB = [138, 96, 21];
+const SHEEN = [[156, 108, 20, 0], [156, 108, 20, 22], [198, 151, 58, 42], [138, 96, 21, 64], [156, 108, 20, 100]];
+function paint(g, c) {
+  const k = Math.max(0, 1 - Math.hypot(c[0] - GOLD_RGB[0], c[1] - GOLD_RGB[1], c[2] - GOLD_RGB[2]) / 150);
+  if (k <= 0) { if (g.style.backgroundImage) { g.style.backgroundImage = ''; } g.style.color = rgba(c); return; }
+  const st = SHEEN.map(s => rgba([c[0] + (s[0] - c[0]) * k, c[1] + (s[1] - c[1]) * k, c[2] + (s[2] - c[2]) * k, c[3]]) + ' ' + s[3] + '%');
+  g.style.backgroundImage = 'linear-gradient(180deg,' + st.join(',') + ')';
+  g.style.webkitBackgroundClip = 'text'; g.style.backgroundClip = 'text'; g.style.color = 'transparent';
+}
 function el(tag, cls, parent, html) { const e = document.createElement(tag); if (cls) e.className = cls;
   if (html !== undefined) e.innerHTML = html; parent.appendChild(e); return e; }
 function measure(text, font) { const s = el('span', '', document.body); s.style.cssText =
@@ -236,7 +247,7 @@ window.render = function (t) {
       const w = ev(p.block.move, t);  // веса режимов A/B/C (переезд — ease-in-out в ключевых точках)
       let top = 0, s = 0; MODES.forEach((md, i) => { top += w[i] * o.G[md].top; s += w[i] * o.G[md].s; });
       o.blk.style.transform = `translate(0px,${top.toFixed(3)}px) scale(${s.toFixed(6)})`;
-      o.glyphs.forEach((g, i) => g.style.color = rgba(ev(p.block.colors[i], t)));
+      o.glyphs.forEach((g, i) => paint(g, ev(p.block.colors[i], t)));
       if (o.endEl) o.endEl.style.color = rgba(ev(p.block.end_color, t));
       o.means.forEach((m, i) => m.style.opacity = ev(p.block.means[i], t).toFixed(4));
     }
