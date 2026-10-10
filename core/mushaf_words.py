@@ -488,6 +488,31 @@ def get_mushaf_layout(user_id):
     return row[0] if row and row[0] in LAYOUTS else "madani"
 
 
+def unit_in_layout(page, line, stage, src, dst):
+    """Та же единица 40+40 в другой раскладке: (страница, строка) или None.
+
+    Правило 23.09.2026 - то, по которому переезжает указатель: строка новой
+    раскладки, где стоит первое слово исходной; этап 2 - начало той же
+    половины, этап 3 - начало листа. Вынесено 10.10.2026, когда тем же
+    правилом стала закрываться пересдача, сданная после смены раскладки
+    (Абу Абдуллах, G 2b: вердикт по мадинской строке пришёл, когда он уже
+    перешёл на египетскую и пересдал её там)."""
+    src, dst = src or "madani", dst or "madani"
+    if src == dst:
+        return page, line
+    words = _line_word_triples(page, line, src)
+    where = word_place(dst, words[0]) if words else None
+    if not where:
+        return None
+    page, line = where
+    n = page_text_line_count(page, layout=dst)
+    if stage == 2:
+        line = 0 if line < n // 2 else n // 2   # начало той же половины
+    elif stage == 3:
+        line = 0
+    return page, line
+
+
 def set_mushaf_layout(user_id, layout):
     """Сменить раскладку. Указатель 40+40 переезжает на ту строку новой
     раскладки, где стоит первое слово его строки, этап тот же (правило
@@ -512,16 +537,9 @@ def set_mushaf_layout(user_id, layout):
             _, p, l, st = prev[0].split("|")
             moved = (int(p), int(l), int(st))
         else:
-            words = _line_word_triples(pointer["page"], pointer["line"], old)
-            where = word_place(layout, words[0]) if words else None
+            where = unit_in_layout(pointer["page"], pointer["line"], pointer["stage"], old, layout)
             if where:
-                page, line = where
-                n = page_text_line_count(page, layout=layout)
-                if pointer["stage"] == 2:
-                    line = 0 if line < n // 2 else n // 2   # начало той же половины
-                elif pointer["stage"] == 3:
-                    line = 0
-                moved = (page, line, pointer["stage"])
+                moved = (where[0], where[1], pointer["stage"])
         if moved:
             set_hifz_pointer(user_id, *moved)
             # Счётчик 40+40 этапов 2/3 переезжает вместе с местом (решение

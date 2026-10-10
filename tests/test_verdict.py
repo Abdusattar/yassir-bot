@@ -383,3 +383,27 @@ def test_принятую_работу_заморозка_не_трогает(te
     _submission(sid, group, 2, 6, 7, 1)
 
     assert db.is_retake_answered(db.get_submission(sub_id)) is False
+
+
+def test_retake_closed_by_same_line_in_other_layout(test_db):
+    """10.10.2026, Абу Абдуллах (G 2b): вердикт «на пересдачу» пришёл по
+    мадинской строке, когда он уже перешёл на египетскую раскладку и пересдал
+    её там. Закрывает пересдачу то же МЕСТО в Коране - строка, куда при смене
+    раскладки переехал бы указатель (первое слово строки): мадинская стр. 300,
+    строка 10 - египетская стр. 300, строка 9."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    sub_id = _submission(sid, group, 1, 300, 10, 1)
+    _with_comment(sid, 1)
+    db.set_submission_verdict(sub_id, db.VERDICT_RETAKE, "888002")
+
+    # Те же номера в египетской - это другая строка, долг висит.
+    db.save_voice_submission(sid, group["id"], CHAT, 2, db.get_date(), file_id="f2",
+                             hifz_page=300, hifz_line=10, hifz_stage=1, hifz_layout="dm")
+    assert db.get_open_retakes(sid, group["id"])
+    assert not db.is_retake_answered(db.get_submission(sub_id))
+
+    db.save_voice_submission(sid, group["id"], CHAT, 3, db.get_date(), file_id="f3",
+                             hifz_page=300, hifz_line=9, hifz_stage=1, hifz_layout="dm")
+    assert db.get_open_retakes(sid, group["id"]) == []
+    assert db.is_retake_answered(db.get_submission(sub_id))

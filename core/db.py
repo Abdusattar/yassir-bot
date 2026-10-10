@@ -7,10 +7,23 @@ from config import DB, TZ
 from core.content import TASK_KEYS, TASK_WORDS
 
 
+def _same_unit(page, line, stage, layout, n_page, n_line, n_layout):
+    """SQL same_unit(...): запись n - та же единица 40+40, что (page, line,
+    stage) в раскладке layout, хотя бы и сданная в другой раскладке (10.10.2026,
+    см. mushaf_words.unit_in_layout). Этап сравнивает сам запрос."""
+    if (layout or "madani") == (n_layout or "madani"):
+        return int((page, line) == (n_page, n_line))
+    if page is None:
+        return 0
+    from core.mushaf_words import unit_in_layout
+    return int(unit_in_layout(page, line, stage, layout, n_layout) == (n_page, n_line))
+
+
 def db():
     c = sqlite3.connect(DB)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys = ON")
+    c.create_function("same_unit", 7, _same_unit, deterministic=True)
     return c
 
 
@@ -2033,8 +2046,9 @@ def save_submission_review(chat_id, message_id, review_type, review_file_id=None
 _REDONE_EXISTS = (
     "SELECT 1 FROM voice_submissions n"
     " WHERE n.student_id = vs.student_id AND n.group_id = vs.group_id"
-    "   AND n.hifz_page IS vs.hifz_page AND n.hifz_line IS vs.hifz_line"
-    "   AND n.hifz_stage IS vs.hifz_stage AND n.hifz_layout IS vs.hifz_layout"
+    "   AND n.hifz_stage IS vs.hifz_stage"
+    "   AND same_unit(vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.hifz_layout,"
+    "                 n.hifz_page, n.hifz_line, n.hifz_layout)"
     "   AND n.id > COALESCE(vs.verdict_after_id, vs.id) LIMIT 1"
 )
 
@@ -2342,10 +2356,10 @@ def is_retake_answered(submission):
     with db() as c:
         row = c.execute(
             "SELECT 1 FROM voice_submissions"
-            " WHERE student_id=? AND group_id=?"
-            " AND hifz_page IS ? AND hifz_line IS ? AND hifz_stage IS ?"
-            " AND hifz_layout IS ? AND id > ? LIMIT 1",
-            (submission["student_id"], submission["group_id"],
+            " WHERE student_id=? AND group_id=? AND hifz_stage IS ?"
+            " AND same_unit(?, ?, ?, ?, hifz_page, hifz_line, hifz_layout)"
+            " AND id > ? LIMIT 1",
+            (submission["student_id"], submission["group_id"], submission["hifz_stage"],
              submission["hifz_page"], submission["hifz_line"], submission["hifz_stage"],
              submission["hifz_layout"], submission["verdict_after_id"] or submission["id"])
         ).fetchone()
