@@ -2331,6 +2331,11 @@
     background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 2px;
   }
   #learn-body > .learn-lead, #learn-body > .learn-item { max-width: 520px; width: 100%; align-self: center; }
+  /* Блоки не сжимаются под высоту экрана - лента прокручивается (11.10.2026):
+     во флекс-колонке у детей flex-shrink: 1, а у .k-card overflow: hidden, и
+     на телефоне карточки ужимались и резали низ («9 из 9» у края, последний
+     пункт «Как работать» срезан посередине). */
+  #learn-body > * { flex-shrink: 0; }
   #learn-body {
     flex: 1 1 auto; min-height: 0; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
