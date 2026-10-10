@@ -2058,24 +2058,6 @@
     padding: 13px 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
     width: 100%; max-width: 320px;
   }
-  /* «Дальше» в нахве после верного ответа: полоска показывает, сколько
-     осталось до автоперелистывания. Длительность - от длины объяснения
-     (--auto-ms, 28.09.2026: за 3 с не успевали дочитать). */
-  .tj-go.nh-auto { position: relative; overflow: hidden; }
-  .tj-go.nh-auto::after {
-    content: ''; position: absolute; left: 0; bottom: 0; height: 4px; width: 100%;
-    background: rgba(255,255,255,.65); transform-origin: left center;
-    animation: nh-auto-run var(--auto-ms, 3s) linear forwards;
-  }
-  #nh-after .nh-fb { cursor: pointer; }
-  @keyframes nh-auto-run { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-  /* Хадис: верный ответ листается сам, черта бежит по низу разбора. */
-  .nh-fb.hd-fb-auto { position: relative; overflow: hidden; cursor: pointer; flex: 0 0 auto; }
-  .nh-fb.hd-fb-auto::after {
-    content: ''; position: absolute; left: 0; bottom: 0; height: 4px; width: 100%;
-    background: var(--accent); transform-origin: left center;
-    animation: nh-auto-run 3s linear forwards;
-  }
   /* Тренажёр нахва (17.09.2026). Слово показывается в аяте - вид слова
      узнаётся по соседям (харф джарр перед исмом, قَدْ перед фиалем), -
      но только окном вокруг него: длинный аят не должен вытеснять вопрос.
@@ -14124,16 +14106,7 @@
     return html + '</div>';
   }
 
-  var NAHW_AUTO_MS = 3000, nahwAutoTimer = null;
-  // Сколько держать верный ответ (28.09.2026): 3 с хватало на «Верно», но не
-  // на разбор слова и перевод - время от длины текста, от 3 до 8 с.
-  var NAHW_AUTO_MAX_MS = 8000, NAHW_AUTO_TAIL_MS = 250;
-  function nahwAutoMs(fb) {
-    var text = [fb.explain, fb.meaning, fb.word].concat((fb.breakdown || []).map(function (b) {
-      return (b.t || '') + ' ' + (b.label || '');
-    })).join(' ');
-    return Math.min(NAHW_AUTO_MAX_MS, Math.max(NAHW_AUTO_MS, 2000 + 45 * text.length));
-  }
+  var nahwAutoTimer = null;   // автолистание снято 11.10.2026, таймер остался только как страховка в renderNahw
 
   function renderNahw(d) {
     clearTimeout(nahwAutoTimer);
@@ -14212,15 +14185,10 @@
             if (b.getAttribute('data-key') === fb.answer) b.classList.add('ok');
           });
           if (!fb.correct) btn.classList.add('no');
-          // После верного ответа карточка листается сама через NAHW_AUTO_MS
-          // (17.09.2026): объяснение успевают прочитать, а норма дня - не 20
-          // нажатий. Ждём «Дальше» после ошибки и при первой встрече с типом
-          // случая: там объяснение и есть урок.
-          var auto = fb.correct && !fb.first_meet;
-          var autoMs = auto ? nahwAutoMs(fb) : 0;
+          // Дальше — только по кнопке (11.10.2026, решение пользователя: студенты
+          // не успевали дочитать разбор внизу; автолистание 17.09–11.10 снято).
           document.getElementById('nh-after').innerHTML = nahwFeedback(fb) +
-            '<button class="tj-go' + (auto ? ' nh-auto' : '') + '" id="nh-next"' +
-            (auto ? ' style="--auto-ms:' + autoMs + 'ms"' : '') + '>' + T('nahw_next') + '</button>';
+            '<button class="tj-go" id="nh-next">' + T('nahw_next') + '</button>';
           var gone = false;
           var go = function () {
             if (gone) return;
@@ -14229,21 +14197,6 @@
             renderNahw(next);
           };
           document.getElementById('nh-next').addEventListener('click', go);
-          clearTimeout(nahwAutoTimer);
-          if (auto) {
-            nahwAutoTimer = setTimeout(function () {
-              // Ушёл с экрана или уже другая карточка - не трогаем.
-              if (document.getElementById('nahw').style.display === 'none' || nahwState !== d) return;
-              go();
-            }, autoMs + NAHW_AUTO_TAIL_MS);
-            // Тап по объяснению - «дай дочитать»: полоска гаснет, карточка
-            // ждёт «Дальше» (28.09.2026).
-            document.querySelector('#nh-after .nh-fb').addEventListener('click', function () {
-              clearTimeout(nahwAutoTimer);
-              var nb = document.getElementById('nh-next');
-              if (nb) { nb.classList.remove('nh-auto'); nb.style.removeProperty('--auto-ms'); }
-            });
-          }
         });
       });
     });
@@ -14254,10 +14207,7 @@
      закрепление вариантами в обе стороны → итог. При первом входе человек
      сам ставит, с какого хадиса и слова продолжает. */
   var hadithState = null;
-  var HADITH_AUTO_MS = 3000, hadithAutoTimer = null;   // черта под «Правильно» бежит 3 с
-  // Черта должна дойти до конца на глазах, а не оборваться на последних
-  // пикселях: листаем чуть позже её конца (24.09.2026, замечание пользователя).
-  var HADITH_AUTO_TAIL_MS = 250;
+  var hadithAutoTimer = null;   // автолистание снято 11.10.2026; clearTimeout ниже — страховка
 
   function openHadith() {
     document.getElementById('trainers').style.display = 'none';
@@ -14458,14 +14408,12 @@
           var fullBox = body.querySelector('.hd-full.hide-cur');
           if (fullBox) fullBox.classList.remove('hide-cur');
           var head = fb.correct ? T('hadith_right') : T('hadith_wrong', { A: fb.ar + ' — ' + fb.ru });
-          /* Верно - без кнопки «Дальше» (24.09.2026, предложение пользователя):
-             под «Правильно» пробегает черта, и карточка листается сама; тап по
-             разбору - сразу дальше. Неверно - кнопка остаётся: верный ответ
-             надо спокойно рассмотреть, торопить нельзя. */
-          document.getElementById('hd-after').innerHTML = fb.correct
-            ? '<div class="nh-fb hd-fb-auto" id="hd-next"><div class="exp"><b>' + nahwArabic(head) + '</b></div></div>'
-            : '<div class="nh-fb"><div class="exp"><b>' + nahwArabic(head) + '</b></div></div>' +
-              '<button class="tj-go" id="hd-next">' + T('hadith_next') + '</button>';
+          /* «Дальше» — всегда кнопкой (11.10.2026, решение пользователя): кто-то
+             читает и запоминает быстрее, кто-то медленнее; автолистание верного
+             ответа (24.09–11.10) снято, как и в нахве. */
+          document.getElementById('hd-after').innerHTML =
+            '<div class="nh-fb"><div class="exp"><b>' + nahwArabic(head) + '</b></div></div>' +
+            '<button class="tj-go" id="hd-next">' + T('hadith_next') + '</button>';
           var gone = false;
           var go = function () {
             if (gone) return;
@@ -14474,12 +14422,6 @@
             renderHadith(next);
           };
           document.getElementById('hd-next').addEventListener('click', go);
-          if (fb.correct) {
-            hadithAutoTimer = setTimeout(function () {
-              if (document.getElementById('hadith').style.display === 'none' || hadithState !== d) return;
-              go();
-            }, HADITH_AUTO_MS + HADITH_AUTO_TAIL_MS);
-          }
         });
       });
     });
