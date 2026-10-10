@@ -242,6 +242,28 @@ def check(pages):
     return problems, len(seq)
 
 
+def load_meanings(suffix=""):
+    """(surah, ayah) -> смысловой перевод из наших страниц (10.10.2026: без него
+    вкладка «Смысл» в египетской раскладке была пустой на всех языках)."""
+    out = {}
+    for p in range(1, 605):
+        path = os.path.join(DATA_DIR, "page%d%s.json" % (p, suffix))
+        if not os.path.exists(path):
+            continue
+        for a in json.load(open(path, encoding="utf-8")).get("ayahs") or []:
+            if a.get("meaning"):
+                out[(int(a["surah"]), int(a["ayah"]))] = a["meaning"]
+    return out
+
+
+def add_meanings(d, meanings):
+    for a in d["ayahs"]:
+        m = meanings.get((int(a["surah"]), int(a["ayah"])))
+        if m:
+            a["meaning"] = m
+    return d
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
@@ -250,8 +272,9 @@ def main():
     rows = {n: qul_rows(n) for n in range(1, 605)}
     if not a.check:
         ours = load_ours()
+        meanings = load_meanings()
         for n in range(1, 605):
-            d = build_page(n, rows[n], ours)
+            d = add_meanings(build_page(n, rows[n], ours), meanings)
             with open(os.path.join(OUT_DIR, "page%d.json" % n), "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
         for lang in LANGS:
@@ -260,12 +283,14 @@ def main():
             words = dict(src[0])
             words.update(loc[0])
             ours_l = (words, src[1], src[2], src[3], src[4])
+            meanings_l = dict(meanings)
+            meanings_l.update(load_meanings("_" + lang))
             have = {p for p in range(1, 605) if os.path.exists(os.path.join(DATA_DIR, "page%d_%s.json" % (p, lang)))}
             made = 0
             for n in range(1, 605):
                 if not any(fp in have for fp in _page_fps(n, rows[n], src)):
                     continue
-                d = build_page(n, rows[n], ours_l)
+                d = add_meanings(build_page(n, rows[n], ours_l), meanings_l)
                 with open(os.path.join(OUT_DIR, "page%d_%s.json" % (n, lang)), "w", encoding="utf-8") as f:
                     json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
                 made += 1

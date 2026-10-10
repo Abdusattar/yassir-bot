@@ -5822,7 +5822,7 @@
   // ?v у египетских листов: nginx держит no-cache только для /pageN.json в
   // корне, а dm/ идёт общим правилом, и телефон мог бы днями показывать
   // старую сборку (ловушка 29.08.2026). Пересобрали dm/ - поднять число.
-  var DM_DATA_VER = 1;
+  var DM_DATA_VER = 2;
   function pageJsonUrl(n, lang) {
     var file = 'page' + n + (lang && lang !== 'ru' ? '_' + lang : '') + '.json';
     return pageLayout() === 'dm' ? 'dm/' + file + '?v=' + DM_DATA_VER : file;
