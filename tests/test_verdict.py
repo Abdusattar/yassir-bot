@@ -14,6 +14,9 @@
 """
 
 import asyncio
+import os
+
+import pytest
 
 import core.db as db
 import core.mufradat_bot as bot
@@ -391,6 +394,8 @@ def test_retake_closed_by_same_line_in_other_layout(test_db):
     её там. Закрывает пересдачу то же МЕСТО в Коране - строка, куда при смене
     раскладки переехал бы указатель (первое слово строки): мадинская стр. 300,
     строка 10 - египетская стр. 300, строка 9."""
+    if not os.path.exists(os.path.join("mushaf_data", "page300.json")):
+        pytest.skip("мединских страниц мусхафа нет в git (CI)")
     group = _group()
     sid = db.add_student("Сатар", group["id"], phone="777001")
     sub_id = _submission(sid, group, 1, 300, 10, 1)
