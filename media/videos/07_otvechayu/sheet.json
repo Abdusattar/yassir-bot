@@ -1,6 +1,6 @@
 {
  "id": "07_otvechayu",
- "version": "v3",
+ "version": "v4",
  "format": "reel_9x16",
  "fps": 30,
  "duration": 29.4,
@@ -84,7 +84,7 @@
    },
    "out": {
     "at": "R1.w6.end+0.02",
-    "dur": 0.2
+    "dur": 0.15
    },
    "ayah": {
     "surah": 2,
@@ -100,8 +100,8 @@
    "plan": 3,
    "zoom": 0.02,
    "in": {
-    "at": "R1.w7.start-0.25",
-    "dur": 0.2
+    "at": "R1.w6.end+0.17",
+    "dur": 0.15
    },
    "out": {
     "at": "R1.end+0.55",
@@ -215,13 +215,13 @@
     {
      "role": "translation",
      "text": "Если Мои рабы спросят тебя обо Мне, то ведь Я близок",
-     "on": "R1.w5.start",
+     "on": "R1.w2.start",
      "fade_in": 0.35
     },
     {
      "role": "source",
      "text": "2:186 · смысловой перевод: Кулиев",
-     "on": "R1.w5.start",
+     "on": "R1.w2.start",
      "fade_in": 0.35
     }
    ]
@@ -229,7 +229,7 @@
   {
    "scene": 3,
    "plan": 3,
-   "t_start": "R1.w7.start-0.25",
+   "t_start": "R1.w6.end+0.17",
    "t_end": "R1.end+0.55",
    "mode": "B",
    "voice": "R1",
@@ -238,7 +238,7 @@
     {
      "role": "translation",
      "text": "и отвечаю на зов молящегося, когда он взывает ко Мне",
-     "on": "R1.w7.start-0.25",
+     "on": "R1.w7.start",
      "fade_in": 0.35
     }
    ]

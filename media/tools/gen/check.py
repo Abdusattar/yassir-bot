@@ -368,6 +368,27 @@ def main():
     else:
         res(15, True, "живого кадра нет — пункт не применим")
 
+    # 16. Смысл с голосом (директор 11.10): у каждой части аята, которую читают, смысл (перевод
+    #     или значение под словом) появляется не раньше голоса этой части и не позже 2,5 с после него
+    sm, ok16 = [], True
+    for p in D["plans"]:
+        b = p["block"]
+        starts = [c["kfs"][0][0] for c in (b["colors"] if b else []) if c["kfs"]]
+        if not starts:
+            continue  # части не читают (повтор ключевого слова после чтения)
+        voice = min(starts) + 0.04  # слово загорается за 40 мс до голоса (§7)
+        ons = [x["op"]["kfs"][0][0] for x in p["texts"] if x["role"] == "translation"] + \
+              [m["kfs"][0][0] for m in b["means"] if m["c0"] == 0 and m["kfs"]]
+        if not ons:
+            ok16 = False
+            sm.append("план %d: смысла нет ✗" % p["id"])
+            continue
+        lag = min(ons) - voice
+        ok = -0.05 <= lag <= 2.5
+        ok16 &= ok
+        sm.append("план %d: голос %.2f, смысл %+.2f с%s" % (p["id"], voice, lag, "" if ok else " ✗"))
+    res(16, ok16, "; ".join(sm) + " (норма 0…+2,5 с, не раньше голоса)" if sm else "чтения нет")
+
     # полосы кадров вокруг смен — смотреть глазами
     keyt = sorted({round(e[0], 2) for e in events if not e[1].startswith("цвет")})
     for i, t in (enumerate(keyt) if not dry else ()):
