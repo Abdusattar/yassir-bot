@@ -9677,8 +9677,10 @@
     // Откат на обычный микрофон (11.10.2026, Бехзод, Android 10): на части
     // телефонов запись без обработки доходит пустой (сервер слышит 0,1 с из
     // 130). Две такие подряд - телефон запоминает и пишет как раньше.
-    var plain = false;
-    try { plain = localStorage.getItem('hifz_mic_plain') === '1'; } catch (e) {}
+    // Samsung Internet - сразу как раньше: Азиз на той же версии (30) сдавал
+    // до правки, Бехзод после неё - ни разу, телефон сам мерил файл в 0 с.
+    var plain = /SamsungBrowser/.test(navigator.userAgent);
+    try { plain = plain || localStorage.getItem('hifz_mic_plain') === '1'; } catch (e) {}
     return navigator.mediaDevices.getUserMedia({ audio: plain ? true : {
       noiseSuppression: false, echoCancellation: false, autoGainControl: false
     } }).then(function (stream) {
