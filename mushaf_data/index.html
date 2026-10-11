@@ -9659,7 +9659,17 @@
     if (rec.stream && rec.stream.getTracks().some(function (t) { return t.readyState === 'live' && !t.muted; })) {
       return Promise.resolve(rec.stream);
     }
-    return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+    // Микрофон «как у диктофона», без обработки браузера (11.10.2026, Залкар
+    // G-10: «часть слышно, часть совсем тихо», а в WhatsApp ровно). При
+    // audio: true Chrome включает шумоподавление, и через 9-12 с оно
+    // принимает ровное распевное чтение за шум: замер его сдач по секундам -
+    // первые ~10 с около -25 дБ, дальше провал на 20-25 дБ до конца записи.
+    // Эхоподавление не нужно: Хусари глушится в начале записи
+    // при открытии шторки записи (hifzRecOpen). Где отключить нельзя (iOS),
+    // браузер просто проигнорирует и запишет как раньше.
+    return navigator.mediaDevices.getUserMedia({ audio: {
+      noiseSuppression: false, echoCancellation: false, autoGainControl: false
+    } }).then(function (stream) {
       rec.stream = stream;
       return stream;
     });
