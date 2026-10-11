@@ -9653,6 +9653,13 @@
      запомнить. На Android Telegram спрашивает системное разрешение
      один раз на себя, дальше вопрос внутри WebView; на iOS WKWebView
      переспрашивает при каждом новом запуске приложения. */
+  function hifzMicPlain() {
+    try { localStorage.setItem('hifz_mic_plain', '1'); } catch (e) {}
+    if (rec.stream) rec.stream.getTracks().forEach(function (t) { t.stop(); });
+    rec.stream = null;
+    trail('rec', { n: 'mic plain' });
+  }
+
   function hifzRecStream() {
     // Заглохший микрофон (muted) формально жив, но звука не даёт: на iPhone
     // из такого выходил файл в 0 байт (23.09.2026) - берём микрофон заново.
@@ -9667,7 +9674,12 @@
     // Эхоподавление не нужно: Хусари глушится в начале записи
     // при открытии шторки записи (hifzRecOpen). Где отключить нельзя (iOS),
     // браузер просто проигнорирует и запишет как раньше.
-    return navigator.mediaDevices.getUserMedia({ audio: {
+    // Откат на обычный микрофон (11.10.2026, Бехзод, Android 10): на части
+    // телефонов запись без обработки доходит пустой (сервер слышит 0,1 с из
+    // 130). Две такие подряд - телефон запоминает и пишет как раньше.
+    var plain = false;
+    try { plain = localStorage.getItem('hifz_mic_plain') === '1'; } catch (e) {}
+    return navigator.mediaDevices.getUserMedia({ audio: plain ? true : {
       noiseSuppression: false, echoCancellation: false, autoGainControl: false
     } }).then(function (stream) {
       rec.stream = stream;
@@ -9916,6 +9928,7 @@
         hifzRecSend();
         return;
       }
+      if (err === 'incomplete') hifzMicPlain();
       rec.resent = false;
       document.getElementById('hifz-rec-hint').textContent =
         err === 'retake_pending' ? T('hifz_retake_pending', { P: res.data.place || '' })
@@ -10062,6 +10075,7 @@
           revisionRecSend();
           return;
         }
+        if (err === 'incomplete') hifzMicPlain();
         rec.resent = false;
         document.getElementById('hifz-rec-hint').textContent =
           err === 'incomplete' ? T('hifz_rec_incomplete')
