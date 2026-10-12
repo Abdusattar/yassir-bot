@@ -12,6 +12,11 @@ TG_API = "https://api.telegram.org/bot" + TELEGRAM_TOKEN
 # Telegram user_id суперадминов (числа через запятую в SUPER_ADMIN_IDS)
 SUPER_ADMIN_IDS = [s.strip() for s in os.getenv("SUPER_ADMIN_IDS", os.getenv("ADMIN_IDS", "")).split(",") if s.strip()]
 
+# Кто пишет сдачу сразу в AAC/mp4, если телефон умеет (12.10.2026, проба на
+# одном телефоне перед всеми): такой оригинал играют все телефоны без
+# перекодировки. Пока только Залкар (G-10, Android 10).
+REC_AAC_IDS = {s.strip() for s in os.getenv("REC_AAC_IDS", "8450453139").split(",") if s.strip()}
+
 # Устаз, которому шлём черновики частей учебной программы (нахв/таджвид) на
 # одобрение реакцией 👍 — по умолчанию второй SUPER_ADMIN_ID (устаз Умар).
 CURRICULUM_REVIEWER_ID = os.getenv("CURRICULUM_REVIEWER_ID") or (

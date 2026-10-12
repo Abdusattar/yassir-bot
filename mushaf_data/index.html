@@ -6527,6 +6527,7 @@
   // Повторение только записью (16.09.2026, несовершеннолетние) - едет тем
   // же heartbeat, что и роль устаза.
   var meRevisionRecord = false;
+  var meRecAac = false;   // писать сдачу в AAC/mp4 (проба, config.REC_AAC_IDS)
   // Хафиз (26.09.2026): повторяет свою норму, а не от начала Аль-Бакары.
   var meHafiz = false;
   var ONLINE_BADGE_MIN = 3; // меньше - не показываем совсем (решение
@@ -6564,6 +6565,7 @@
       var isUstaz = !!(res.data && res.data.is_ustaz);
       meRevisionRecord = !!(res.data && res.data.revision_record);
       meHafiz = !!(res.data && res.data.hafiz);
+      meRecAac = !!(res.data && res.data.rec_aac);
       // Раздел «Проверка сдач» рисуется по этому же признаку. Если человек
       // стоял в оглавлении, когда ответ пришёл, - перерисуем, иначе раздел
       // появился бы только со второго захода.
@@ -9726,8 +9728,16 @@
       // делил биты на всю полосу до 24 кГц, и чтение звучало «компьютерно» -
       // все её сдачи из приложения с 16.09, а голосовые Telegram 03-04.09 с
       // того же телефона чистые. Минута ~480 КБ, до предела загрузки далеко.
+      // AAC/mp4 (12.10.2026, проба на одном телефоне): оригинал, который
+      // играют все телефоны. Формат задаём явно - isTypeSupported сам по
+      // себе ничего не меняет; не умеет телефон - пишем как раньше.
+      var recOpts = { audioBitsPerSecond: 64000 };
       try {
-        mr = new MediaRecorder(stream, { audioBitsPerSecond: 64000 });
+        if (meRecAac && MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) recOpts.mimeType = 'audio/mp4;codecs=mp4a.40.2';
+      } catch (e) {}
+      try {
+        mr = new MediaRecorder(stream, recOpts);
+        trail('rec', { n: 'fmt ' + (mr.mimeType || recOpts.mimeType || '?') });
       } catch (e) {
         mr = new MediaRecorder(stream);
       }

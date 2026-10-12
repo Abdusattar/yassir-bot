@@ -31,7 +31,7 @@ import aiohttp
 from aiohttp import web
 
 import config
-from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE
+from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE, REC_AAC_IDS
 from core.app_trail import add_trail, ua_short
 from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy, local_copy_path
 import core.audio_compat as audio_compat
@@ -1155,6 +1155,8 @@ async def handle_heartbeat(request, user_id):
         "revision_record": revision_record_required(user_id),
         # Хафиз (26.09.2026): вопрос на 🔁 без «с начала Аль-Бакары».
         "hafiz": is_hafiz_phone(user_id),
+        # Запись сдачи в AAC/mp4 (12.10.2026) - пока проба на одном телефоне.
+        "rec_aac": user_id in REC_AAC_IDS,
         # Факты для дверей дашборда (07.09.2026): раздел должен сам говорить,
         # что там внутри — на какой странице стоишь, сколько слов сделал,
         # сколько сдач ждёт устаза. Едут этим же ответом, а не тремя новыми
