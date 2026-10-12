@@ -11049,8 +11049,19 @@
     if (saved >= FIRST_PAGE && saved <= LAST_PAGE) startPage = saved;
   } catch (e) {}
   loadPage(startPage);
+  // «rec aac» - телефон умеет писать сдачу сразу в AAC/mp4, который играют
+  // все телефоны без перекодировки (12.10.2026, разведка: стоит ли уходить
+  // с opus на Android). chNNN - версия Chrome, от неё это и зависит.
+  var recCaps = '';
+  try {
+    var mrT = window.MediaRecorder && MediaRecorder.isTypeSupported;
+    recCaps = ' rec ' + (!mrT ? '-' : MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2') ? 'aac'
+      : MediaRecorder.isTypeSupported('audio/mp4') ? 'mp4' : 'opus');
+    var chV = /Chrome\/(\d+)/.exec(navigator.userAgent);
+    if (chV) recCaps += ' ch' + chV[1];
+  } catch (e) {}
   trail('open', { p: startPage,
-                  n: ((tg && tg.initData) ? 'tg' : 'web') + ' ' + window.innerWidth + 'x' + window.innerHeight });
+                  n: ((tg && tg.initData) ? 'tg' : 'web') + ' ' + window.innerWidth + 'x' + window.innerHeight + recCaps });
 
   // ── Тренажёр муфрадата в вебе (29.08.2026) ────────────────────────────
   // API - в ТОМ ЖЕ процессе бота (core/mufradat_api.py), свой порт на
