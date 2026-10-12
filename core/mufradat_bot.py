@@ -247,6 +247,10 @@ HIFZ_MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 # 600 сек (16.09.2026): путь Safari/iOS перекодирует целиком, 30 минут занимали
 # 58 сек - двухчасовая запись укладывается в ~4 минуты, но впритык к 180.
 _FFMPEG_TIMEOUT = 600
+# Полная перекодировка в opus (iPhone и повторный заход через файл). 64k, как
+# запись в приложении (12.10.2026): на 32k голос звучал «компьютерно», а из
+# этого ogg ещё делается копия m4a, если запись пришла кусками.
+_OGG_ENCODE = ["-c:a", "libopus", "-b:a", "64k", "-ac", "1", "-ar", "48000"]
 
 
 async def transcode_to_ogg(audio_bytes):
@@ -269,8 +273,7 @@ async def transcode_to_ogg(audio_bytes):
     # бывает в конце файла, из потока ffmpeg назад не перемотает и отдаёт
     # обрубок. Замер: 30-секундная запись потоком - 282 байта, файлом - все
     # 30 с. Похоже, так и обрывались страницы Саламата с iPhone.
-    return await _run_ffmpeg(
-        ["-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000"], audio_bytes, via_file=True)
+    return await _run_ffmpeg(_OGG_ENCODE, audio_bytes, via_file=True)
 
 
 async def transcode_parts_to_ogg(parts):
@@ -459,8 +462,7 @@ async def transcode_checked(audio_bytes, client_ms):
     if not lost_tail(sec, client_ms):
         return ogg, None
     log.warning("запись короче таймера: %.1f с из %.1f - переделываю через файл заново", sec, client_ms / 1000)
-    again = await _run_ffmpeg(["-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "48000"],
-                              audio_bytes, via_file=True)
+    again = await _run_ffmpeg(_OGG_ENCODE, audio_bytes, via_file=True)
     sec2 = again and await audio_seconds(again)
     if again and not lost_tail(sec2, client_ms):
         log.warning("через файл вышло целиком: %.1f с", sec2)
