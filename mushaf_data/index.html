@@ -9737,13 +9737,15 @@
       } catch (e) {}
       try {
         mr = new MediaRecorder(stream, recOpts);
-        trail('rec', { n: 'fmt ' + (mr.mimeType || recOpts.mimeType || '?') });
       } catch (e) {
         mr = new MediaRecorder(stream);
       }
       rec.mr = mr;
       mr.ondataavailable = function (e) {
         if (rec.mr !== mr || !e.data || !e.data.size) return;
+        // Формат пишем по первому куску (13.10.2026): до start() Chrome
+        // отдаёт пустой mimeType, и в след шло «fmt ?» у всех.
+        if (!chunks.length) trail('rec', { n: 'fmt ' + (mr.mimeType || e.data.type || '?') });
         rec.heardAt = Date.now();
         chunks.push(e.data);
         // Держим последнее сохранение: «Стоп» приходит сразу за куском, и
