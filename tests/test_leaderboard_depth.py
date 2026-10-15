@@ -5,6 +5,9 @@
 18 поднимала точность 74% на второе место. Кнопки оставлены, а в рейтинг идёт
 меньшее из закладки и места заучивания; хафизу - закладка. Не тренировался
 дольше 14 дней - не в общем списке, но себя видит.
+
+15.10.2026: и не дальше, чем покрыто словами (covered_page) - хафиз с
+закладкой 221 и 180 словами стоял третьим.
 """
 
 import sqlite3
@@ -29,11 +32,16 @@ def lb_db(tmp_path, monkeypatch):
         conn.execute(mufradat._PAGE_SCHEMA)
         conn.execute(mw._HIFZ_SCHEMA)
         conn.execute(mufradat._DAILY_ANSWERED_SCHEMA)
-        for i in range(1, 201):
-            conn.execute(
-                "INSERT INTO mufradat_words (id, surah_number, ayah_number, position, arabic_text,"
-                " translation, language, progress_key) VALUES (?,2,?,1,'كلمة','слово','ru',?)",
-                (i, i, i))
+        # Бакара целиком, по 10 разных слов на аят - 2860 слов: хватает,
+        # чтобы покрытие словами доходило до стр. 18-20.
+        i = 0
+        for ayah in range(1, 287):
+            for pos in range(1, 11):
+                i += 1
+                conn.execute(
+                    "INSERT INTO mufradat_words (id, surah_number, ayah_number, position, arabic_text,"
+                    " translation, language, progress_key) VALUES (?,2,?,?,'كلمة','слово','ru',?)",
+                    (i, ayah, pos, i))
     return path
 
 
@@ -55,31 +63,56 @@ def _student(path, uid, correct, wrong, words, bookmark, hifz=None, last=None):
                          " VALUES (?,?,1)", (uid, last))
 
 
-@pytest.mark.parametrize("bookmark, hifz, hafiz, want", [
-    (90, 18, False, 18),     # закладка впереди - в зачёт место заучивания
-    (5, 25, False, 5),       # закладка отстала - маленький пул, в зачёт закладка
-    (52, 52, False, 52),
-    (31, None, False, 31),   # места заучивания нет - как раньше
-    (10, 40, True, 10),      # хафиз - закладка
-    (90, 18, True, 90),
+@pytest.mark.parametrize("bookmark, hifz, hafiz, covered, want", [
+    (90, 18, False, None, 18),     # закладка впереди - в зачёт место заучивания
+    (5, 25, False, None, 5),       # закладка отстала - маленький пул, в зачёт закладка
+    (52, 52, False, None, 52),
+    (31, None, False, None, 31),   # места заучивания нет - как раньше
+    (10, 40, True, None, 10),      # хафиз - закладка
+    (90, 18, True, None, 90),
+    (221, 604, True, 3, 3),        # хафиз, 180 слов: глубже покрытого не идёт
+    (52, 52, False, 47, 47),       # покрыто чуть меньше места - в зачёт покрытое
+    (18, 18, False, 40, 18),       # покрыто с запасом - ничего не меняется
 ])
-def test_rating_depth(bookmark, hifz, hafiz, want):
-    assert mufradat.rating_depth(bookmark, hifz, hafiz) == want
+def test_rating_depth(bookmark, hifz, hafiz, covered, want):
+    assert mufradat.rating_depth(bookmark, hifz, hafiz, covered) == want
+
+
+def test_covered_page():
+    sizes = {1: 29, 2: 60, 3: 139, 4: 200}
+    assert mufradat.covered_page(0, sizes) == 1
+    assert mufradat.covered_page(29, sizes) == 1
+    assert mufradat.covered_page(30, sizes) == 2
+    assert mufradat.covered_page(180, sizes) == 4
+    assert mufradat.covered_page(5000, sizes) == 4   # открыл больше пула - вся глубина
 
 
 def test_bookmark_ahead_no_longer_lifts_rank(lb_db):
     """Живой случай: 74% с закладкой 90 при заучивании 18 обгоняла 95% на 18."""
-    _student(lb_db, "far", correct=740, wrong=260, words=100, bookmark=90, hifz=18)
-    _student(lb_db, "honest", correct=950, wrong=50, words=100, bookmark=18, hifz=18)
+    _student(lb_db, "far", correct=3 * 1400, wrong=1400, words=1400, bookmark=90, hifz=18)
+    _student(lb_db, "honest", correct=19 * 1400, wrong=1400, words=1400, bookmark=18, hifz=18)
     board = mufradat.get_leaderboard()
     assert [uid for uid, _ in board] == ["honest", "far"]
     far = dict(board)["far"]
     assert far["page"] == 18 and far["bookmark"] == 90 and far["hifz_page"] == 18
 
 
-def test_hafiz_keeps_bookmark(lb_db):
-    _student(lb_db, "h", correct=900, wrong=100, words=100, bookmark=90, hifz=18)
-    assert dict(mufradat.get_leaderboard(hafiz={"h"}))["h"]["page"] == 90
+def test_hafiz_bookmark_capped_by_coverage(lb_db):
+    """Хафизу - закладка, но не глубже покрытого словами."""
+    _student(lb_db, "h", correct=9 * 1400, wrong=1400, words=1400, bookmark=90, hifz=18)
+    covered = mufradat.covered_page(1400, mufradat._pool_sizes("ru"))
+    assert 18 < covered < 90
+    assert dict(mufradat.get_leaderboard(hafiz={"h"}))["h"]["page"] == covered
+
+
+def test_few_words_deep_bookmark_below_volume(lb_db):
+    """Живой случай 15.10.2026: хафиз, закладка 221, 180 слов, 97,8% - был
+    третьим, выше студентов с тысячами слов на своей глубине."""
+    _student(lb_db, "hafiz", correct=44 * 180, wrong=180, words=180, bookmark=221, hifz=604)
+    _student(lb_db, "worker", correct=19 * 1400, wrong=1400, words=1400, bookmark=19, hifz=19)
+    board = mufradat.get_leaderboard(hafiz={"hafiz"})
+    assert [uid for uid, _ in board] == ["worker", "hafiz"]
+    assert dict(board)["hafiz"]["page"] < 5
 
 
 def test_last_date_in_score(lb_db):

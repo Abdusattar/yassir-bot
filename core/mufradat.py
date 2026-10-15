@@ -979,7 +979,7 @@ def set_current_lang(user_id, language):
 
 
 def get_words_up_to_page(page_number, language=DEFAULT_LANGUAGE):
-    """Пул слов от начала диапазона (FIRST_PAGE, сура 2) до заданной
+    """Пул слов от начала диапазона (FIRST_PAGE, с 15.10.2026 - Фатиха) до заданной
     страницы РАЗОМ, вперемешку - решение пользователя 17.08.2026, пятый
     заход. С 18.08.2026 диапазон охватывает несколько сур (2-10, Бакара
     по Юнус - "семь длинных сур", решение пользователя), не только
@@ -1242,19 +1242,61 @@ def _accuracy_totals():
         ).fetchall())
 
     totals = {}
+    sizes = {}
     for uid, lang, c, w, n in rows:
         hifz = None
         if uid in pointers:
             p, line = pointers[uid]
             hifz = madani_page(layouts.get(uid, "madani"), p, line)
+        if lang not in sizes:
+            sizes[lang] = _pool_sizes(lang)
         totals.setdefault(uid, {})[lang] = {
             "correct": c or 0, "wrong": w or 0, "n": (c or 0) + (w or 0), "attempted": n,
             "bookmark": pages.get(uid, 0), "hifz_page": hifz, "last_date": last.get(uid),
+            "covered": covered_page(n, sizes[lang]),
         }
     return totals
 
 
-def rating_depth(bookmark, hifz_page, hafiz=False):
+# Сколько разных слов (progress_key) в пуле до каждой страницы - по языкам
+# (15.10.2026, для покрытия в рейтинге). Считается из базы одним проходом,
+# без кэша самих слов: рейтинг смотрят и для языков, на которых в этом боте
+# никто сейчас не тренируется, держать ради него слова в памяти незачем.
+_SIZES_CACHE = {}
+
+
+def _pool_sizes(language):
+    key = (str(HADITHS_DB), language)
+    sig = _pool_signature(language)
+    hit = _SIZES_CACHE.get(key)
+    if hit and hit[0] == sig:
+        return hit[1]
+    surahs, seen, firsts = set(SURAHS), set(), []
+    with sqlite3.connect(HADITHS_DB) as conn:
+        for s, a, k in conn.execute(
+                "SELECT surah_number, ayah_number, progress_key FROM mufradat_words "
+                "WHERE language=? AND progress_key IS NOT NULL "
+                "ORDER BY surah_number, ayah_number, position", (language,)):
+            if s in surahs and k not in seen:
+                seen.add(k)
+                firsts.append((s, a))
+    sizes = {page: bisect.bisect_right(firsts, last_ayah_on_page(page)) for page in PAGES}
+    _SIZES_CACHE[key] = (sig, sizes)
+    return sizes
+
+
+def covered_page(attempted, sizes):
+    """Докуда студент дошёл словами (15.10.2026): первая страница, в пуле
+    которой разных слов не меньше, чем он открыл. Открыл 180 слов - это
+    примерно Фатиха и первые страницы Бакары, глубже закладка не засчитывается.
+    Порогов нет: страница определяется числом слов, а не подобранной цифрой."""
+    for page in sorted(sizes):
+        if sizes[page] >= attempted:
+            return page
+    return max(sizes) if sizes else 0
+
+
+def rating_depth(bookmark, hifz_page, hafiz=False, covered=None):
     """Страница, которая идёт в рейтинг (28.09.2026, решение пользователя).
 
     Закладку тренажёра студент ставит сам (➖/➕), и в рейтинге она давала
@@ -1265,10 +1307,17 @@ def rating_depth(bookmark, hifz_page, hafiz=False):
     отстала от заучивания - маленький пул и лёгкие слова, в зачёт тоже
     меньшее (приложение подсказывает «На моё место»).
 
-    Хафизу и тому, у кого места заучивания нет, - закладка, как раньше."""
-    if hafiz or not hifz_page:
-        return bookmark or 0
-    return min(bookmark or 0, hifz_page)
+    Хафизу и тому, у кого места заучивания нет, - закладка, как раньше.
+
+    15.10.2026 (решение пользователя) - и не дальше, чем покрыто словами
+    (covered, см. covered_page). Живой случай: хафиз с закладкой 221 и 180
+    открытыми словами стоял третьим, выше тех, у кого по 1500-3600 слов, -
+    глубина бралась по закладке, а не по пройденному. Правило то же, что
+    28.09: в зачёт только то, что человек и правда прошёл."""
+    depth = (bookmark or 0) if hafiz or not hifz_page else min(bookmark or 0, hifz_page)
+    if covered is not None:
+        depth = min(depth, covered)
+    return depth
 
 
 def get_leaderboard(hafiz=frozenset()):
@@ -1301,8 +1350,8 @@ def get_leaderboard(hafiz=frozenset()):
     убила score10 на глубоких страницах, см. compute_overall_score) - ни
     один фактор не может задавить остальные два бесконечно.
 
-    page=2 (FIRST_PAGE, минимум для реального студента) даёт наименьший
-    возможный множитель глубины (log10(3)=0.48) - это НЕ баг/перекос
+    page=1 (FIRST_PAGE с 15.10.2026, Фатиха) даёт наименьший
+    возможный множитель глубины (log10(2)=0.30) - это НЕ баг/перекос
     против новичков, это по определению нижняя граница "как далеко можно
     продвинуться меньше некуда" (проверено эмпирически, что log10(page)
     без +1 сделал бы её ЕЩЁ ниже, не выше - альтернатива не годится).
@@ -1326,7 +1375,8 @@ def get_leaderboard(hafiz=frozenset()):
     результат (просто не выигрывает max()).
 
     С 28.09.2026 page - не закладка, а rating_depth (меньшее из закладки и
-    места заучивания; hafiz - множество user_id хафизов, им закладка).
+    места заучивания; hafiz - множество user_id хафизов, им закладка), с
+    15.10.2026 - ещё и не дальше покрытого словами (covered_page).
     Рядом bookmark, hifz_page и last_date - для подсказки и отбора
     неактивных (core/mufradat_bot.py)."""
     totals = _accuracy_totals()
@@ -1336,7 +1386,7 @@ def get_leaderboard(hafiz=frozenset()):
         for lang, t in by_lang.items():
             wilson = _wilson_lower_bound(t["correct"], t["n"])
             accuracy = round(100 * t["correct"] / t["n"], 1) if t["n"] else 0.0
-            page = rating_depth(t["bookmark"], t["hifz_page"], uid in hafiz)
+            page = rating_depth(t["bookmark"], t["hifz_page"], uid in hafiz, t["covered"])
             sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + page)
             candidate = {
                 "wilson": wilson, "accuracy": accuracy,
