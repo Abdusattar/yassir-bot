@@ -75,6 +75,15 @@ def _no_audio_probe(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _fresh_word_pool(monkeypatch):
+    """Кэш слов всего Корана (core/mufradat.py:_quran_pool) в бою сверяет
+    свежесть раз в 5 минут; тесты дописывают слова посреди теста - сверяем
+    на каждом вызове."""
+    import core.mufradat as muf
+    monkeypatch.setattr(muf, "_POOL_CHECK_SEC", 0)
+
+
+@pytest.fixture(autouse=True)
 def _no_pacing(monkeypatch):
     """Паузы между обращениями к Telegram (core/tg.py: pace) в тестах не
     ждём. В бою они берегут лимиты Bot API - рассылка без передышки ловит

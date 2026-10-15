@@ -24,15 +24,26 @@
     порог считается по сути вопроса - неоднозначности перевода, см.
     _repeated_glosses.
 """
+import bisect
+import functools
 import math
 import random
 import re
 import sqlite3
-from datetime import datetime
+import sys
+import threading
+import time
+from collections import OrderedDict
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss, ensure_mufradat_schema
-from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS
+from core.sampler import HADITHS_DB, normalize_gloss as _normalize_gloss_raw, ensure_mufradat_schema
+from core.quran_pages import resolve_page, last_ayah_on_page, SURAHS, PAGES
+
+# Нормализация перевода запоминается (15.10.2026): на пуле всего Корана это
+# 77 тыс. вызовов регулярного выражения на КАЖДЫЙ вопрос, а разных переводов
+# в разы меньше - строка считается один раз за жизнь процесса.
+_normalize_gloss = functools.lru_cache(maxsize=None)(_normalize_gloss_raw)
 from core.mushaf_words import (
     get_starred_progress_keys, remove_starred_by_progress_key, add_starred_word_by_progress_key,
     _merge_tail_arabic, _normalize_rasm, madani_page, _HIFZ_SCHEMA, _LAYOUT_SCHEMA,
@@ -192,6 +203,7 @@ _SCAFFOLD_RE = re.compile(r"[()]")
 _HAS_LETTER_RE = re.compile(r"[a-zа-яёқғўҳ]", re.IGNORECASE)
 
 
+@functools.lru_cache(maxsize=None)
 def _is_scaffold(translation):
     return bool(_SCAFFOLD_RE.search(translation))
 
@@ -444,7 +456,7 @@ def _is_consolidating(progress_row):
     return 0 < progress_row["correct_streak"] < MASTERY_STREAK
 
 
-def word_weight(progress_row):
+def word_weight(progress_row, cutoff=None):
     """progress_row - словарь с correct_streak/wrong_count/last_correct_date
     или None (слово ещё не спрашивали). Новое слово получает вес как у
     слова с одной верной серией подряд - не перегружаем вопросами
@@ -463,10 +475,12 @@ def word_weight(progress_row):
     иначе частично сохранённый прогресс конфликтовал бы с "слабое слово в
     приоритете" (advisor 17.08.2026, шестой заход - поймал, что мой
     предыдущий фикс "streak=0" был избыточным overcorrection именно
-    из-за этого условия)."""
+    из-за этого условия).
+
+    cutoff - см. _is_stale (передаёт pick_question_word, один на вопрос)."""
     if not progress_row:
         return 1.0 / (1 + 1)
-    if _is_stale(progress_row):
+    if _is_stale(progress_row, cutoff):
         return 1.0
     return 1.0 / (1 + progress_row["correct_streak"])
 
@@ -532,22 +546,64 @@ def _scaled_repeat_threshold(words):
     return max(3, round(n * 0.006))
 
 
-def _question_candidates(words, progress_by_id, min_repeat_exclude=None):
+def _question_candidates(words, progress_by_id, min_repeat_exclude=None, cutoff=None):
     """Слова пула, которые вообще могут стать целью вопроса (фильтры см.
     pick_question_word). Отдельно - потому что по ним же считается дневная
     норма на маленькой закладке (daily_word_target)."""
+    if cutoff is None:
+        cutoff = _stale_cutoff()
+    static = _slice_info(words, min_repeat_exclude)["static"]
+    # Отдыхающие слова - только среди тех, что студент уже трогал: у слова
+    # без строки прогресса отдыха нет. Строк у студента тысячи, слов в пуле
+    # до 76 тыс. - фильтр по ним, а не проверка каждого слова пула.
+    resting = {key for key, row in progress_by_id.items()
+               if is_mastered(row) and not _is_stale(row, cutoff)}
+    if not resting:
+        return list(static)
+    return [w for w in static if w["progress_key"] not in resting]
+
+
+# Всё, что зависит только от самого пула, а не от студента (15.10.2026):
+# слова без пояснений и частых переводов ("static") и набор progress_key
+# ("keys"). Пул закладки - срез кэша всего Корана (_quran_pool), его слова -
+# одни и те же объекты, поэтому срез узнаётся по длине и первому/последнему
+# слову; сами слова держим в записи, чтобы их id не занял другой объект.
+# Маленькие пулы (и тесты со своими списками) считаются заново каждый раз.
+# Память ограничена суммой длин запомненных срезов (~0,1 КБ на слово): на
+# сервере 1 ГБ на всё, давно не нужный срез уходит первым.
+_SLICE_MEMO = OrderedDict()
+_SLICE_MEMO_MIN = 2000
+_SLICE_MEMO_WORDS = 400_000
+
+
+def _slice_info(words, min_repeat_exclude=None):
     if min_repeat_exclude is None:
         min_repeat_exclude = _scaled_repeat_threshold(words)
+    key = None
+    if len(words) >= _SLICE_MEMO_MIN:
+        key = (len(words), id(words[0]), id(words[-1]), min_repeat_exclude)
+        hit = _SLICE_MEMO.get(key)
+        if hit is not None:
+            _SLICE_MEMO.move_to_end(key)
+            return hit
     repeated = _repeated_glosses(words, min_repeat_exclude)
-    candidates = []
-    for w in words:
-        if _is_scaffold(w["translation"]) or _normalize_gloss(w["translation"]) in repeated:
-            continue
-        progress = progress_by_id.get(w["progress_key"])
-        if is_mastered(progress) and not _is_stale(progress):
-            continue
-        candidates.append(w)
-    return candidates
+    info = {
+        "static": [w for w in words if not _is_scaffold(w["translation"])
+                   and _normalize_gloss(w["translation"]) not in repeated],
+        "keys": {w["progress_key"] for w in words},
+        "ends": (words[0], words[-1]) if words else None,
+    }
+    if key is not None:
+        _SLICE_MEMO[key] = info
+        while sum(k[0] for k in _SLICE_MEMO) > _SLICE_MEMO_WORDS and len(_SLICE_MEMO) > 1:
+            _SLICE_MEMO.popitem(last=False)
+    return info
+
+
+def pool_progress_keys(words):
+    """Набор progress_key пула - для проверки «вопрос ещё из пула?»
+    (core/mufradat_api.py:handle_state), без обхода пула на каждый запрос."""
+    return _slice_info(words)["keys"]
 
 
 def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_keys=None):
@@ -575,7 +631,8 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_k
     сегодня остаются в обороте - их возвращает квота «Моих слов». Если без
     сегодняшних верных кандидатов не остаётся вовсе, исключение снимается:
     лучше повтор, чем тупик «слова закончились»."""
-    candidates = _question_candidates(words, progress_by_id, min_repeat_exclude)
+    cutoff = _stale_cutoff()
+    candidates = _question_candidates(words, progress_by_id, min_repeat_exclude, cutoff)
     if exclude_keys:
         fresh = [w for w in candidates if w["progress_key"] not in exclude_keys]
         if fresh:
@@ -591,13 +648,19 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_k
         if roll >= COVERAGE_WAVE_SHARE:
             # Корзина закрепления: слово уже отвечено верно, но до
             # "выученного" не доведено. Пустая - падаем в волну ниже.
-            pool = [w for w in candidates
-                    if _is_consolidating(progress_by_id.get(w["progress_key"]))]
+            consolidating = {key for key, row in progress_by_id.items() if _is_consolidating(row)}
+            pool = [w for w in candidates if w["progress_key"] in consolidating]
         if roll < COVERAGE_WAVE_SHARE or not pool:
+            # Ни разу не показанное слово (нет строки прогресса) - 0 показов,
+            # меньше не бывает: если такие есть, волна - это они, считать
+            # показы по всем кандидатам не нужно (15.10.2026, скорость).
+            unseen = [w for w in candidates if not progress_by_id.get(w["progress_key"])]
+            if unseen:
+                return random.choices(unseen, weights=[word_weight(None)] * len(unseen), k=1)[0]
             shown = {id(w): _times_shown(progress_by_id.get(w["progress_key"])) for w in candidates}
             least = min(shown.values())
             pool = [w for w in candidates if shown[id(w)] == least]
-    weights = [word_weight(progress_by_id.get(w["progress_key"])) for w in pool]
+    weights = [word_weight(progress_by_id.get(w["progress_key"]), cutoff) for w in pool]
     return random.choices(pool, weights=weights, k=1)[0]
 
 
@@ -643,7 +706,9 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None, ex
     seen_norms = {target_norm}
     target_rasm = _normalize_rasm(target.get("arabic_text", ""))
     distractor_pool = []
-    for w in random.sample(words, len(words)):
+    for w in _random_order(words):
+        if len(distractor_pool) >= n_options - 1:
+            break
         if w["id"] == target["id"] or _is_scaffold(w["translation"]):
             continue
         # Другой перевод ТОГО ЖЕ слова вариантом быть не может (07.09.2026,
@@ -685,9 +750,50 @@ def _days_since(date_str):
     return (datetime.strptime(_today(), "%Y-%m-%d").date() - d).days
 
 
-def _is_stale(progress_row):
-    days_ago = _days_since(progress_row["last_correct_date"])
-    return days_ago is not None and days_ago >= RECHECK_AFTER_DAYS
+def _stale_cutoff():
+    """Последняя дата верного ответа, при которой слово уже отдохнуло
+    RECHECK_AFTER_DAYS дней (15.10.2026). Считается один раз на вопрос:
+    раньше _is_stale брал учебную дату и разбирал две даты на КАЖДОЕ слово
+    пула - на закладке 221 это были секунды на тап."""
+    return (date.fromisoformat(_today()) - timedelta(days=RECHECK_AFTER_DAYS)).isoformat()
+
+
+def _is_stale(progress_row, cutoff=None):
+    """Отдохнуло ли слово (прошло RECHECK_AFTER_DAYS дней с верного ответа).
+    Даты - строки YYYY-MM-DD, их порядок совпадает с порядком дат, поэтому
+    сравниваем строки с cutoff (_stale_cutoff) - то же, что
+    _days_since(...) >= RECHECK_AFTER_DAYS."""
+    last = progress_row["last_correct_date"]
+    if not last:
+        return False
+    return last <= (cutoff or _stale_cutoff())
+
+
+def _random_order(words):
+    """Слова пула в случайном порядке, лениво (15.10.2026). Вариантам ответа
+    нужно 7 слов, а random.sample(words, len(words)) перемешивал весь пул -
+    77 тыс. на закладке «весь Коран». Порядок тот же по смыслу (случайная
+    перестановка, читаемая с начала): берём случайные ещё не взятые номера,
+    а когда взята половина - мешаем остаток целиком."""
+    n = len(words)
+    if n <= 1000:
+        yield from random.sample(words, n)
+        return
+    taken = set()
+    while len(taken) * 2 < n:
+        i = random.randrange(n)
+        if i not in taken:
+            taken.add(i)
+            yield words[i]
+    rest = [words[i] for i in range(n) if i not in taken]
+    random.shuffle(rest)
+    yield from rest
+
+
+# Больше стольких ключей - читаем весь прогресс студента и отбираем в памяти
+# (15.10.2026): IN(...) на десятки тысяч ключей пула всего Корана медленнее,
+# чем несколько тысяч строк самого студента.
+_PROGRESS_IN_LIMIT = 500
 
 
 def get_progress_map(user_id, word_ids):
@@ -695,12 +801,18 @@ def get_progress_map(user_id, word_ids):
     (26.08.2026) - дедуп через set() чисто для размера IN(...) (пул может
     содержать десятки тысяч строк с сильно меньшим числом уникальных
     progress_key), на корректность не влияет."""
-    word_ids = list({*word_ids})
-    if not word_ids:
+    wanted = {*word_ids}
+    if not wanted:
         return {}
     with sqlite3.connect(HADITHS_DB) as conn:
         conn.row_factory = sqlite3.Row
         _ensure_progress_schema(conn)
+        if len(wanted) > _PROGRESS_IN_LIMIT:
+            rows = conn.execute(
+                "SELECT * FROM mufradat_progress WHERE user_id=?", (user_id,)
+            ).fetchall()
+            return {r["word_id"]: dict(r) for r in rows if r["word_id"] in wanted}
+        word_ids = list(wanted)
         placeholders = ",".join("?" * len(word_ids))
         rows = conn.execute(
             f"SELECT * FROM mufradat_progress WHERE user_id=? AND word_id IN ({placeholders})",
@@ -874,22 +986,81 @@ def get_words_up_to_page(page_number, language=DEFAULT_LANGUAGE):
     Бакару, поэтому простой BETWEEN по ayah_number внутри одной суры
     больше не работает (номера аятов начинаются заново с 1 в каждой
     суре) - берём ВСЕ слова каждой суры ПОЛНОСТЬЮ для сур строго до
-    суры закладки, и только до нужного аята для суры самой закладки."""
+    суры закладки, и только до нужного аята для суры самой закладки.
+
+    15.10.2026 (весь Коран, стр. 2-604): пул - срез начала кэша всего
+    Корана (_quran_pool), а не сборка из базы на каждый вызов. Сборка на
+    закладке 221 шла 3 с, на весь Коран - 11 с, и так на каждый тап. Слова в
+    срезе - общие объекты кэша, менять их нельзя (никто и не меняет: вопрос
+    копирует нужные поля в своё состояние)."""
     last = last_ayah_on_page(page_number)
     if last is None:
         return []
-    bookmark_surah, bookmark_ayah = last
+    pool = _quran_pool(language)
+    return pool["words"][:pool["ends"][page_number]]
 
+
+# Кэш слов всего Корана по языкам (15.10.2026) - (база, язык) -> {words,
+# ends, sig, checked}. words - все слова сур SURAHS в порядке мусхафа, ровно
+# то, что раньше собиралось из get_words_in_range по сурам; ends[страница] -
+# сколько первых слов входит в пул до этой страницы включительно. Строки
+# переводов и арабского общие (sys.intern): одинаковых пар в Коране больше
+# половины, память вдвое меньше. Язык грузится при первом обращении.
+#
+# Свежесть: слова меняют только скрипты загрузки (scripts/ingest_mufradat.py
+# и т.п.), бот их не пишет. Раз в _POOL_CHECK_SEC сверяем подпись таблицы по
+# языку (число строк, max id, суммарная длина переводов) и при изменении
+# собираем заново - правка перевода доезжает без перезапуска.
+_POOL_CACHE = {}
+_POOL_LOCK = threading.Lock()
+_POOL_CHECK_SEC = 300
+
+
+def _pool_signature(language):
+    with sqlite3.connect(HADITHS_DB) as conn:
+        ensure_mufradat_schema(conn)
+        return tuple(conn.execute(
+            "SELECT COUNT(*), MAX(id), TOTAL(LENGTH(translation)) FROM mufradat_words WHERE language=?",
+            (language,)
+        ).fetchone())
+
+
+def _build_quran_pool(language):
     words = []
     for surah in SURAHS:
-        if surah < bookmark_surah:
-            words.extend(get_words_in_range(surah, 1, 9999, language))
-        elif surah == bookmark_surah:
-            words.extend(get_words_in_range(surah, 1, bookmark_ayah, language))
-            break
-        else:
-            break
-    return words
+        for w in get_words_in_range(surah, 1, 9999, language):
+            w["arabic_text"] = sys.intern(w["arabic_text"])
+            w["translation"] = sys.intern(w["translation"])
+            words.append(w)
+    keys = [(w["surah_number"], w["ayah_number"]) for w in words]
+    ends = {page: bisect.bisect_right(keys, last_ayah_on_page(page)) for page in PAGES}
+    return {"words": words, "ends": ends}
+
+
+def _quran_pool(language):
+    key = (str(HADITHS_DB), language)
+    now = time.monotonic()
+    entry = _POOL_CACHE.get(key)
+    if entry and now - entry["checked"] < _POOL_CHECK_SEC:
+        return entry
+    with _POOL_LOCK:
+        entry = _POOL_CACHE.get(key)
+        if entry and now - entry["checked"] < _POOL_CHECK_SEC:
+            return entry
+        sig = _pool_signature(language)
+        if entry and entry["sig"] == sig:
+            entry["checked"] = now
+            return entry
+        entry = {**_build_quran_pool(language), "sig": sig, "checked": now}
+        _POOL_CACHE[key] = entry
+        return entry
+
+
+def warm_pool_cache(language=DEFAULT_LANGUAGE):
+    """Собрать кэш заранее, при старте бота (core/mufradat_api.py:run_server) -
+    иначе первый тап после каждого перезапуска (а деплой перезапускает)
+    ждал бы сборку всего Корана."""
+    _quran_pool(language)
 
 
 def get_words_for_bookmark(user_id):
@@ -942,9 +1113,12 @@ def compute_overall_score(user_id, words=None, progress=None):
     if progress is None:
         progress = get_progress_map(user_id, [w["progress_key"] for w in words])
 
-    pair_keys = {w["progress_key"] for w in words}
-    mastered = sum(1 for pk in pair_keys if is_mastered(progress.get(pk)))
-    stimulus_sum = sum(word_stimulus_credit(progress.get(pk)) for pk in pair_keys)
+    # Слово без строки прогресса даёт 0 и туда, и туда - суммируем только по
+    # строкам студента, что лежат в пуле (15.10.2026, скорость на весь Коран).
+    pair_keys = _slice_info(words)["keys"]
+    touched = [row for pk, row in progress.items() if pk in pair_keys]
+    mastered = sum(1 for row in touched if is_mastered(row))
+    stimulus_sum = sum(word_stimulus_credit(row) for row in touched)
     total = len(pair_keys)
     return {
         "total": total, "mastered": mastered, "remaining": total - mastered,

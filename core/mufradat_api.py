@@ -56,7 +56,7 @@ from core.mufradat import (
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
     record_daily_answered_word, get_daily_words_status, get_today_correct_keys,
-    get_starred_question_pool, _is_junk,
+    get_starred_question_pool, _is_junk, warm_pool_cache, pool_progress_keys,
 )
 from core.mufradat_bot import (
     submit_ustaz_verdict, send_ustaz_comment,
@@ -308,7 +308,7 @@ async def handle_state(request, user_id):
 
     state = _active.get(user_id)
     if state:
-        pool_keys = {w["progress_key"] for w in get_words_for_bookmark(user_id)}
+        pool_keys = pool_progress_keys(get_words_for_bookmark(user_id))
         if state["word_id"] not in pool_keys:
             state = None  # закладка сдвинулась в другом клиенте, вопрос больше не из пула
     if not state:
@@ -583,7 +583,7 @@ async def handle_words_remove(request, user_id):
 
 
 # Полный диапазон страниц чтения (mushaf_data/page1.json..page604.json) -
-# НЕ core.quran_pages.FIRST_PAGE/LAST_PAGE (те 2-221, только диапазон
+# НЕ core.quran_pages.FIRST_PAGE/LAST_PAGE (те 2-604, без Фатихи, только диапазон
 # тренажёра муфрадата, см. модульный docstring quran_pages.py). Закладка
 # страницы чтения (core/mushaf_words.py) - отдельная от тренажёрной,
 # охватывает весь мусхаф.
@@ -2787,3 +2787,11 @@ async def run_server(port=8081):
     site = web.TCPSite(runner, "127.0.0.1", port)
     await site.start()
     log.info("mufradat API listening on 127.0.0.1:%d", port)
+    # Кэш слов всего Корана (15.10.2026) - собрать в фоне сразу, иначе первый
+    # тап тренажёра после перезапуска ждал бы сборку. Не вышло - соберётся на
+    # первом тапе, как раньше.
+    try:
+        await asyncio.to_thread(warm_pool_cache)
+        log.info("тренажёр: кэш слов собран")
+    except Exception:
+        log.exception("тренажёр: кэш слов не собран заранее")
