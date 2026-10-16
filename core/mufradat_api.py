@@ -184,6 +184,9 @@ def _wrong_bot_payload():
     return {
         "error": "wrong_bot",
         "jamaat": other["jamaat"] if other else JAMAAT_IN[other_profile()],
+        # Половина словом для приложения (16.10.2026): «мужском» выше -
+        # готовый русский падеж, а фразу на ky/uz приложение собирает само.
+        "side": other["profile"] if other else other_profile(),
         "app_link": other["app_link"] if other else "",
     }
 

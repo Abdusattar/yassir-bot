@@ -179,7 +179,7 @@ def test_app_opened_from_the_wrong_bot_is_stopped_at_the_door(test_db, two_bots,
     monkeypatch.setattr(api, "validate_init_data", lambda raw, token: {"id": raw})
     status, data = _get("/api/muf/lang", SISTER)
     assert status == 403
-    assert data == {"error": "wrong_bot", "jamaat": "женском",
+    assert data == {"error": "wrong_bot", "jamaat": "женском", "side": "female",
                     "app_link": "https://t.me/yassir_female_bot"}
 
 

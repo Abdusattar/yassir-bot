@@ -3403,7 +3403,7 @@
          именем, годом рождения и местом. Угол справа - привычное место
          для настроек, и строка освобождается под «Мой день». -->
     <div id="dash-settings">
-      <button id="btn-profile" title="Настройки" aria-label="Настройки">⚙</button>
+      <button id="btn-profile" title="Настройки" aria-label="Настройки" data-i18n-title="sett_title">⚙</button>
     </div>
   </div>
   <!-- Строка ленты (11.09.2026). Стоит между шапкой и дверями: свежее перед
@@ -3493,10 +3493,10 @@
       <canvas id="pulse-heart" width="330" height="288"></canvas>
     <div class="p-days">
       <div class="p-row">
-        <button class="p-arrow" id="pulse-prev" aria-label="день назад">&lsaquo;</button>
+        <button class="p-arrow" id="pulse-prev" aria-label="день назад" data-i18n-aria="pulse_prev">&lsaquo;</button>
         <b id="pulse-day">&nbsp;</b>
         <span class="p-dots" id="pulse-dots"></span>
-        <button class="p-arrow" id="pulse-next" aria-label="день вперёд">&rsaquo;</button>
+        <button class="p-arrow" id="pulse-next" aria-label="день вперёд" data-i18n-aria="pulse_next">&rsaquo;</button>
       </div>
       <canvas id="pulse-wave" width="330" height="70"></canvas>
       <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
@@ -3517,8 +3517,8 @@
      проходом позже»), T() сам откатывается на русский. -->
 <div id="feed">
   <div class="l-head">
-    <button id="feed-back">← Дашборд</button>
-    <span class="l-title">Лента</span>
+    <button id="feed-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span class="l-title" data-i18n="feed_title">Лента</span>
   </div>
   <!-- Чипы чатов (11.09.2026). Вкладки «Всё» намеренно нет: это
        единственный режим, где группы смешиваются в один поток - ровно та
@@ -3530,37 +3530,37 @@
 
 <div id="sett">
   <div class="s-head">
-    <button id="sett-back">← Дашборд</button>
-    <span class="s-title">Настройки</span>
+    <button id="sett-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span class="s-title" data-i18n="sett_title">Настройки</span>
   </div>
 
   <div class="s-card">
-    <label class="s-lab" for="sett-name">Имя</label>
+    <label class="s-lab" for="sett-name" data-i18n="sett_name">Имя</label>
     <input class="s-inp" id="sett-name" maxlength="60" autocomplete="off">
-    <p class="s-hint" id="sett-name-hint">Это имя видят устаз в отчётах и вся группа в рейтинге.</p>
+    <p class="s-hint" id="sett-name-hint" data-i18n="sett_name_hint">Это имя видят устаз в отчётах и вся группа в рейтинге.</p>
   </div>
 
   <div class="s-card">
-    <label class="s-lab" for="sett-year">Год рождения <i>по желанию</i></label>
+    <label class="s-lab" for="sett-year"><span data-i18n="sett_year">Год рождения</span> <i>по желанию</i></label>
     <input class="s-inp" id="sett-year" inputmode="numeric" maxlength="4"
-           placeholder="например, 1994" autocomplete="off">
-    <label class="s-lab s-lab2" for="sett-place">Откуда сдаёшь задания <i>по желанию</i></label>
+           placeholder="например, 1994" data-i18n-ph="sett_year_ph" autocomplete="off">
+    <label class="s-lab s-lab2" for="sett-place"><span data-i18n="sett_place">Откуда сдаёшь задания</span> <i data-i18n="sett_optional">по желанию</i></label>
     <select class="s-inp" id="sett-place">
-      <option value="">Не указано</option>
-      <option>Бишкек</option>
-      <option>Ош</option>
-      <option>Чуйская область</option>
-      <option>Ошская область</option>
-      <option>Джалал-Абадская область</option>
-      <option>Иссык-Кульская область</option>
-      <option>Нарынская область</option>
-      <option>Таласская область</option>
-      <option>Баткенская область</option>
-      <option value="__other">Другая страна</option>
+      <option value="" data-i18n="place_none">Не указано</option>
+      <option value="Бишкек" data-i18n="place_bishkek">Бишкек</option>
+      <option value="Ош" data-i18n="place_osh_city">Ош</option>
+      <option value="Чуйская область" data-i18n="place_chui">Чуйская область</option>
+      <option value="Ошская область" data-i18n="place_osh">Ошская область</option>
+      <option value="Джалал-Абадская область" data-i18n="place_jalal">Джалал-Абадская область</option>
+      <option value="Иссык-Кульская область" data-i18n="place_issyk">Иссык-Кульская область</option>
+      <option value="Нарынская область" data-i18n="place_naryn">Нарынская область</option>
+      <option value="Таласская область" data-i18n="place_talas">Таласская область</option>
+      <option value="Баткенская область" data-i18n="place_batken">Баткенская область</option>
+      <option value="__other" data-i18n="place_other">Другая страна</option>
     </select>
     <!-- Живущим не в Кыргызстане область не подходит - им хватает страны. -->
     <input class="s-inp s-lab2" id="sett-country" hidden maxlength="60"
-           placeholder="Какая страна?" autocomplete="off">
+           placeholder="Какая страна?" data-i18n-ph="sett_country_ph" autocomplete="off">
     <p class="s-hint" id="sett-place-hint"></p>
   </div>
 
@@ -3591,33 +3591,33 @@
   </div>
 
   <div class="s-card">
-    <label class="s-lab">Язык</label>
+    <label class="s-lab" data-i18n="sett_lang">Язык</label>
     <div class="s-seg" id="sett-lang">
       <button data-lang="ru">Русский</button>
       <button data-lang="ky">Кыргызча</button>
       <button data-lang="uz">Ўзбекча</button>
     </div>
-    <label class="s-lab s-lab2">Тема</label>
+    <label class="s-lab s-lab2" data-i18n="sett_theme">Тема</label>
     <div class="s-seg" id="sett-theme">
-      <button data-theme="light">☀️ День</button>
-      <button data-theme="dark">🌙 Ночь</button>
+      <button data-theme="light" data-i18n="sett_theme_day">☀️ День</button>
+      <button data-theme="dark" data-i18n="sett_theme_night">🌙 Ночь</button>
     </div>
   </div>
 
   <!-- Раскладка мусхафа (23.09.2026): кто учит по египетской таджвидной
        книге Дар аль-Маарифа, видит листы и строки один в один с ней. -->
   <div class="s-card">
-    <label class="s-lab">Мусхаф</label>
+    <label class="s-lab" data-i18n="dash_mushaf">Мусхаф</label>
     <div class="s-seg" id="sett-layout">
-      <button data-layout="madani">Мединский</button>
-      <button data-layout="dm">Дар аль-Маариф (египетский)</button>
+      <button data-layout="madani" data-i18n="sett_layout_madani">Мединский</button>
+      <button data-layout="dm" data-i18n="sett_layout_dm">Дар аль-Маариф (египетский)</button>
     </div>
-    <p class="s-hint" id="sett-layout-hint">Выбери тот, по которому учишь с книги: страницы и строки будут как в ней.</p>
+    <p class="s-hint" id="sett-layout-hint" data-i18n="layout_hint">Выбери тот, по которому учишь с книги: страницы и строки будут как в ней.</p>
   </div>
 
   <!-- Выход - только у сессии сайта. Внутри Telegram выходить не из чего:
        там нас узнаёт сам Telegram при каждом открытии. -->
-  <button id="dash-logout" hidden>Выйти из приложения</button>
+  <button id="dash-logout" hidden data-i18n="sett_logout">Выйти из приложения</button>
 </div>
 <div id="word-popup"></div>
 <div id="hifz-big">
@@ -3634,14 +3634,14 @@
        площадь, тем вернее попадание. Текст она не перекрывает: кегль в
        «Крупно» подбирается под свободную область, и мишень входит в расчёт,
        потому что лежит в разметке, а не дорисовывается после. -->
-  <button id="big-count" title="Отметить повтор">
+  <button id="big-count" title="Отметить повтор" data-i18n-title="hifz_count_title">
     <span class="c-cap"></span>
     <span class="c-n"><b>0</b><i>/40</i></span>
     <span class="c-bar"><i></i></span>
   </button>
   <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
-    <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать">🔊</button>
-    <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer">🎙 Сдать</button>
+    <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen">🔊</button>
+    <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer" data-i18n="hifz_submit">🎙 Сдать</button>
   </div>
 </div>
 
@@ -3689,10 +3689,10 @@
            🔁 «Повторение» намеренно: это два из трёх дневных заданий, и оба
            теперь делаются там, где студент и так находится. Третье (слова) —
            тренажёр. -->
-      <button id="btn-hifz" title="Заучивание 40+40">📖</button>
-      <button id="btn-revision" title="Отметить повторение">🔁</button>
+      <button id="btn-hifz" title="Заучивание 40+40" data-i18n-title="btn_hifz_title">📖</button>
+      <button id="btn-revision" title="Отметить повторение" data-i18n-title="btn_revision_title">🔁</button>
       <!-- 📜 «Смысл» наверху (22.09.2026): нижнего меню больше нет. -->
-      <button id="btn-meaning" title="Смысл">📜</button>
+      <button id="btn-meaning" title="Смысл" data-i18n-title="btn_meaning_title">📜</button>
       <span id="ayah-range"></span>
     </div>
   </div>
@@ -3700,7 +3700,7 @@
   <!-- Режим заучивания: своя шапка вместо #page-nav и своя нижняя полоса
        вместо #tabbar. Место не отнимается — обе панели просто подменяются. -->
   <div id="hifz-head">
-    <button id="hifz-close" title="Выйти из режима">✕</button>
+    <button id="hifz-close" title="Выйти из режима" data-i18n-title="hifz_close_title">✕</button>
     <div class="where">
       <b><span id="hifz-where">—</span><span class="fix" id="hifz-fix">поправить</span></b>
       <small id="hifz-sub">—</small>
@@ -3760,7 +3760,7 @@
          « и » читались как «в начало/в конец», а значили закладку и
          начало Бакары. Сохранение теперь пункт меню - случайный тап при
          листании больше не перезаписывает место. -->
-    <button id="btn-bookmark" class="page-nav-util" title="Закладка"><span class="icon-gold">🔖</span></button>
+    <button id="btn-bookmark" class="page-nav-util" title="Закладка" data-i18n-title="btn_bookmark_title"><span class="icon-gold">🔖</span></button>
   </div>
   <div id="bm-menu">
     <button id="btn-bookmark-save"><span data-i18n="bm_save">🔖 Сохранить закладку здесь</span><small data-i18n="bm_save_sub">эта страница станет закладкой</small></button>
@@ -3784,12 +3784,12 @@
     <div class="row">
       <button id="review-play">▶ Прослушать сдачу</button>
       <button id="review-mine" style="display:none">▶ Мой разбор</button>
-      <button id="review-back10" style="display:none">↺ 10 сек</button>
-      <button id="review-comment">🎙 Замечание</button>
+      <button id="review-back10" style="display:none" data-i18n="review_back10">↺ 10 сек</button>
+      <button id="review-comment" data-i18n="review_comment">🎙 Замечание</button>
     </div>
     <div class="row">
-      <button id="review-accept" class="ok">✅ Принято</button>
-      <button id="review-retake" class="no">↺ На пересдачу</button>
+      <button id="review-accept" class="ok" data-i18n="review_accept">✅ Принято</button>
+      <button id="review-retake" class="no" data-i18n="review_retake">↺ На пересдачу</button>
     </div>
   </div>
 
@@ -3799,7 +3799,7 @@
   <div id="look-foot">
     <div class="who"><b id="look-who">Замечание устаза</b><span class="dur" id="look-dur">—</span></div>
     <div class="player">
-      <button id="look-play" title="Слушать">▶</button>
+      <button id="look-play" title="Слушать" data-i18n-title="listen_title">▶</button>
       <div class="bar">
         <div id="look-track"><div id="look-fill"></div></div>
         <div class="t"><span id="look-cur">0:00</span><span id="look-total">0:00</span></div>
@@ -3818,13 +3818,13 @@
          живёт и в «Крупно» (#hifz-big-listen-btn) — состояние общее,
          один <audio> на оба места, там же где студент делает 40
          повторов открывать заново не нужно. -->
-    <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать">🔊</button>
+    <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen">🔊</button>
     <!-- Счётчик 40+40 (11.09.2026). Стоит у 🔊 по просьбе пользователя: низ
          удобнее тапать, рука и так там, а Хусари включают ровно перед
          повторами. Число то же самое, что копила панель «сколько сделал
          сегодня» (mushaf_hifz_progress, 0-80): сорок глядя, сорок по
          памяти. Значит цифры переживают выход и видны с другого телефона. -->
-    <button id="hifz-count" title="Отметить повтор">
+    <button id="hifz-count" title="Отметить повтор" data-i18n-title="hifz_count_title">
       <span class="c-cap"></span><span class="c-n"><b>0</b><i>/40</i></span>
       <span class="c-bar"><i></i></span>
     </button>
@@ -3842,10 +3842,10 @@
   <!-- Запись сдачи: сначала слушаешь себя, только потом отправляешь. -->
   <div id="hifz-rec">
     <div class="card">
-      <button id="hifz-rec-close" title="Закрыть">✕</button>
+      <button id="hifz-rec-close" title="Закрыть" data-i18n-title="close_title">✕</button>
       <!-- Пересдача: разбор сворачивается сюда, чтобы переслушать замечание,
            не выходя из записи. -->
-      <div id="rec-review"><button id="rec-review-play" title="Слушать">▶</button><span id="rec-review-text">Замечание устаза</span></div>
+      <div id="rec-review"><button id="rec-review-play" title="Слушать" data-i18n-title="listen_title">▶</button><span id="rec-review-text">Замечание устаза</span></div>
       <div class="place" id="hifz-rec-place">—</div>
       <div class="timer" id="hifz-rec-timer">0:00</div>
       <div class="hint" id="hifz-rec-hint"></div>
@@ -3853,7 +3853,7 @@
            <audio controls> выглядит по-своему на каждом телефоне и спорит со
            всем остальным в приложении; тег остаётся, но только как мотор. -->
       <div id="hifz-rec-player" class="player" style="display:none">
-        <button id="hifz-rec-play" title="Слушать">▶</button>
+        <button id="hifz-rec-play" title="Слушать" data-i18n-title="listen_title">▶</button>
         <div class="bar">
           <div id="hifz-rec-track"><div id="hifz-rec-fill"></div></div>
           <div class="t"><span id="hifz-rec-cur">0:00</span><span id="hifz-rec-total">0:00</span></div>
@@ -3885,9 +3885,9 @@
         </div>
         <div class="hp-bar"><i id="hifz-progress-bar"></i><u></u></div>
         <div class="hp-adjust">
-          <button type="button" id="hifz-progress-minus" aria-label="минус один повтор">−</button>
+          <button type="button" id="hifz-progress-minus" aria-label="минус один повтор" data-i18n-aria="hifz_progress_minus">−</button>
           <b id="hifz-progress-count">0</b>
-          <button type="button" id="hifz-progress-plus" aria-label="плюс один повтор">+</button>
+          <button type="button" id="hifz-progress-plus" aria-label="плюс один повтор" data-i18n-aria="hifz_progress_plus">+</button>
         </div>
         <div class="hp-chips" id="hifz-progress-chips">
           <button type="button" id="hifz-progress-own" data-i18n="hifz_progress_own">вписать число</button>
@@ -4019,52 +4019,52 @@
   <div class="login-card">
     <div class="login-mark">۩</div>
     <h1>YassirApp</h1>
-    <p class="login-sub">Мусхаф, заучивание и слова Корана —<br>для тех, кто учится в Яссире.</p>
+    <p class="login-sub" data-i18n-html="login_sub">Мусхаф, заучивание и слова Корана —<br>для тех, кто учится в Яссире.</p>
 
     <!-- Сторону (мужская/женская) человек не выбирает (18.09.2026, решение
          пользователя): ссылка всегда ведёт в мужской бот, тот ищет по обеим
          базам и подтверждает вход для того бота, где человек учится. -->
     <div id="login-step-side">
-      <p id="login-wrong-side" class="login-status bad" hidden>
+      <p id="login-wrong-side" class="login-status bad" hidden data-i18n="login_wrong_side">
         Я не нашёл тебя среди учащихся. Приложение открывается тем, кто уже
         учится в Яссире 🤲 Ответь мне в Telegram на вопрос — покажу, с чего начать.
       </p>
-      <button id="login-start" class="login-go">Войти через Telegram</button>
+      <button id="login-start" class="login-go" data-i18n="login_tg">Войти через Telegram</button>
       <!-- Запасная дверь (07.10.2026, core/email_login.py): Telegram на новом
            телефоне иногда просит Premium. Тихой ссылкой, не второй кнопкой -
            главный путь по-прежнему Telegram. -->
-      <button id="login-mail-open" class="login-plain">Войти по почте</button>
+      <button id="login-mail-open" class="login-plain" data-i18n="login_mail_open">Войти по почте</button>
     </div>
 
     <div id="login-step-mail" hidden>
-      <p class="login-q">Почта, привязанная к твоему аккаунту</p>
+      <p class="login-q" data-i18n="login_mail_q">Почта, привязанная к твоему аккаунту</p>
       <input id="login-mail" class="login-field" type="email" inputmode="email"
              autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="name@mail.ru">
       <div id="login-mail-code-box" hidden>
-        <p class="login-q">Код из письма</p>
+        <p class="login-q" data-i18n="login_code_q">Код из письма</p>
         <input id="login-mail-code" class="login-field login-code" type="text" inputmode="numeric"
                autocomplete="one-time-code" maxlength="6" placeholder="••••••">
       </div>
-      <button id="login-mail-go" class="login-go">Прислать код</button>
+      <button id="login-mail-go" class="login-go" data-i18n="login_mail_send">Прислать код</button>
       <p id="login-mail-status" class="login-status"></p>
-      <button id="login-mail-again" class="login-plain" hidden>Прислать код ещё раз</button>
-      <button id="login-mail-back" class="login-alt">← Назад</button>
+      <button id="login-mail-again" class="login-plain" hidden data-i18n="login_mail_again">Прислать код ещё раз</button>
+      <button id="login-mail-back" class="login-alt" data-i18n="login_back">← Назад</button>
     </div>
 
     <div id="login-step-go" hidden>
       <!-- target="_blank": Telegram открывается отдельно, а эта вкладка
            остаётся жить и ждать подтверждения. Уйди мы по ссылке в том же
            окне - опрос оборвался бы на полпути. -->
-      <a id="login-link" class="login-go" target="_blank" rel="noopener">Открыть Telegram</a>
-      <p id="login-status" class="login-status">Открой ссылку и нажми «Начать» — я жду подтверждения.</p>
-      <button id="login-back" class="login-alt">← Назад</button>
+      <a id="login-link" class="login-go" target="_blank" rel="noopener" data-i18n="login_open_tg">Открыть Telegram</a>
+      <p id="login-status" class="login-status" data-i18n="login_wait">Открой ссылку и нажми «Начать» — я жду подтверждения.</p>
+      <button id="login-back" class="login-alt" data-i18n="login_back">← Назад</button>
     </div>
 
     <!-- Подсказка только для iPhone (10.09.2026). Android предлагает
          установку сам, iOS — никогда: там это делается руками, и человек об
          этом не догадается, если не сказать. Показываем на входе, потому что
          это первый и единственный экран, который видят все. -->
-    <p id="login-ios" class="login-ios" hidden>
+    <p id="login-ios" class="login-ios" hidden data-i18n="login_ios">
       На iPhone: «Поделиться» → «На экран Домой» — и приложение будет
       открываться со своего значка, как обычное.
     </p>
@@ -4080,8 +4080,8 @@
     <div class="login-mark">۩</div>
     <h1>YassirApp</h1>
     <p class="login-sub" id="wrongbot-text"></p>
-    <a id="wrongbot-link" class="login-go" href="#">Открыть мой YassirApp</a>
-    <p class="login-status">Там твоя группа, сдачи и задания. Здесь я тебя не записываю, чтобы ничего не перепуталось.</p>
+    <a id="wrongbot-link" class="login-go" href="#" data-i18n="wrongbot_open">Открыть мой YassirApp</a>
+    <p class="login-status" data-i18n="wrongbot_note">Там твоя группа, сдачи и задания. Здесь я тебя не записываю, чтобы ничего не перепуталось.</p>
   </div>
 </div>
 
@@ -4167,7 +4167,7 @@
     if (wrongBotShown) return;
     wrongBotShown = true;
     document.getElementById('wrongbot-text').textContent =
-      'Ты учишься в ' + (d.jamaat || 'другом') + ' джамаате, а это приложение открыто через бот другой половины.';
+      T(d.side === 'female' ? 'wrongbot_female' : d.side === 'male' ? 'wrongbot_male' : 'wrongbot_other');
     var a = document.getElementById('wrongbot-link');
     if (d.app_link) {
       a.href = d.app_link;
@@ -4234,13 +4234,13 @@
     var mailStatus = document.getElementById('login-mail-status');
     var mailBusy = false;
     var MAIL_ERR = {
-      email_bad: 'Это не похоже на адрес почты. Проверь, нет ли опечатки.',
-      not_linked: 'Эта почта не привязана ни к одному аккаунту. Войди через Telegram или попроси устаза привязать почту.',
-      too_many: 'Слишком много писем подряд. Попробуй через час.',
-      mail_off: 'Вход по почте пока не работает. Войди через Telegram.',
-      send_failed: 'Письмо не ушло. Попробуй ещё раз через минуту.',
-      wrong: 'Код не подходит. Проверь цифры в последнем письме.',
-      expired: 'Код больше не действует. Нажми «Прислать код ещё раз».'
+      email_bad: 'login_err_email_bad',
+      not_linked: 'login_err_not_linked',
+      too_many: 'login_err_too_many',
+      mail_off: 'login_err_mail_off',
+      send_failed: 'login_err_send_failed',
+      wrong: 'login_err_wrong',
+      expired: 'login_err_expired'
     };
     function sayMail(text, bad) {
       mailStatus.textContent = text;
@@ -4256,31 +4256,31 @@
       var email = mailIn.value.trim();
       if (!email) { mailIn.focus(); return; }
       mailBusy = true;
-      sayMail('Отправляю письмо…');
+      sayMail(T('login_mail_sending'));
       postJson('/auth/email/start', { email: email }).then(function (d) {
         mailBusy = false;
-        if (!d.sent) { sayMail(MAIL_ERR[d.error] || MAIL_ERR.send_failed, true); return; }
+        if (!d.sent) { sayMail(T(MAIL_ERR[d.error] || MAIL_ERR.send_failed), true); return; }
         codeBox.hidden = false;
         mailAgain.hidden = false;
-        mailGo.textContent = 'Войти';
-        sayMail('Отправил код на ' + email + '. Если письма нет, загляни в «Спам».');
+        mailGo.textContent = T('login_enter');
+        sayMail(T('login_mail_sent', { E: email }));
         codeIn.value = '';
         codeIn.focus();
-      }, function () { mailBusy = false; sayMail('Нет связи с сервером. Попробуй ещё раз.', true); });
+      }, function () { mailBusy = false; sayMail(T('login_no_net'), true); });
     }
     function checkMailCode() {
       if (mailBusy) return;
       var code = codeIn.value.replace(/\D/g, '');
-      if (code.length !== 6) { sayMail('В коде 6 цифр.', true); codeIn.focus(); return; }
+      if (code.length !== 6) { sayMail(T('login_code_6'), true); codeIn.focus(); return; }
       mailBusy = true;
-      sayMail('Проверяю…');
+      sayMail(T('login_checking'));
       postJson('/auth/email/verify', { email: mailIn.value.trim(), code: code }).then(function (d) {
         mailBusy = false;
-        if (!d.code) { sayMail(MAIL_ERR[d.error] || MAIL_ERR.wrong, true); return; }
+        if (!d.code) { sayMail(T(MAIL_ERR[d.error] || MAIL_ERR.wrong), true); return; }
         // Дальше как после Telegram: опрос заберёт сессию у нужной половины.
         status = mailStatus;
         waitFor(d.code, d.profile || 'male');
-      }, function () { mailBusy = false; sayMail('Нет связи с сервером. Попробуй ещё раз.', true); });
+      }, function () { mailBusy = false; sayMail(T('login_no_net'), true); });
     }
     document.getElementById('login-mail-open').addEventListener('click', function () {
       stepSide.hidden = true;
@@ -4293,7 +4293,7 @@
       stepMail.hidden = true;
       codeBox.hidden = true;
       mailAgain.hidden = true;
-      mailGo.textContent = 'Прислать код';
+      mailGo.textContent = T('login_mail_send');
       sayMail('');
       stepSide.hidden = false;
     });
@@ -4315,21 +4315,21 @@
       stepSide.hidden = true;
       stepGo.hidden = false;
       link.removeAttribute('href');
-      say('Готовлю вход…');
+      say(T('login_preparing'));
       fetch('/api/muf/' + profile + '/auth/start', { method: 'POST' })
         .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d || {} }; }); })
         .then(function (res) {
           if (!res.ok || !res.d.link) {
             say(res.d.error === 'too_many'
-              ? 'Слишком много попыток входа подряд. Попробуй через час 🤲'
-              : 'Не получилось начать вход. Проверь связь и попробуй ещё раз.', true);
+              ? T('login_err_tries')
+              : T('login_err_start'), true);
             return;
           }
           link.href = res.d.link;
-          say('Нажми кнопку выше, а в Telegram — «Начать». Жду подтверждения…');
+          say(T('login_press'));
           waitFor(res.d.code, profile);
         })
-        .catch(function () { say('Нет связи с сервером. Попробуй ещё раз.', true); });
+        .catch(function () { say(T('login_no_net'), true); });
     }
 
     // Опрос раз в две секунды. Держать соединение открытым (long-poll) не
@@ -4342,7 +4342,7 @@
         if (Date.now() > until) {
           clearInterval(poll);
           poll = null;
-          say('Ссылка на вход устарела — она живёт 15 минут. Выбери группу заново.', true);
+          say(T('login_expired'), true);
           return;
         }
         fetch('/api/muf/' + profile + '/auth/poll?code=' + encodeURIComponent(code))
@@ -4369,7 +4369,7 @@
             clearInterval(poll);
             poll = null;
             saveAuth({ token: d.token, profile: profile, name: d.name || '' });
-            say('Готово' + (d.name ? ', ' + d.name : '') + '. Открываю…');
+            say(T('login_done', { N: d.name ? ', ' + d.name : '' }));
             // Перезагрузка, а не ручной запуск приложения: оно поднимается
             // не одной функцией, а десятками мест по всему файлу (загрузка
             // страницы мусхафа, синхронизация языка, указатель 40+40,
@@ -4878,6 +4878,136 @@
       pulse_peak: 'плотнее всего в %H%:00',
       pulse_best: 'рекорд джамаата',
       pulse_record: 'рекорд %D% · %N%',
+      doc_title: 'Мусхаф — Яссир',
+      sett_title: 'Настройки',
+      sett_name: 'Имя',
+      sett_name_hint: 'Это имя видят устаз в отчётах и вся группа в рейтинге.',
+      sett_year: 'Год рождения',
+      sett_year_ph: 'например, 1994',
+      sett_place: 'Откуда сдаёшь задания',
+      sett_optional: 'по желанию',
+      sett_year_locked: 'указан устазом',
+      place_none: 'Не указано',
+      place_bishkek: 'Бишкек',
+      place_osh_city: 'Ош',
+      place_chui: 'Чуйская область',
+      place_osh: 'Ошская область',
+      place_jalal: 'Джалал-Абадская область',
+      place_issyk: 'Иссык-Кульская область',
+      place_naryn: 'Нарынская область',
+      place_talas: 'Таласская область',
+      place_batken: 'Баткенская область',
+      place_other: 'Другая страна',
+      sett_country_ph: 'Какая страна?',
+      sett_lang: 'Язык',
+      sett_theme: 'Тема',
+      sett_theme_day: '☀️ День',
+      sett_theme_night: '🌙 Ночь',
+      sett_layout_madani: 'Мединский',
+      sett_layout_dm: 'Дар аль-Маариф (египетский)',
+      sett_logout: 'Выйти из приложения',
+      sett_saved: 'Сохранено',
+      sett_save_failed: 'Не сохранилось — проверь связь.',
+      sett_err_name_empty: 'Без имени нельзя — его видит устаз.',
+      sett_err_name_long: 'Слишком длинное имя.',
+      sett_err_name_not_name: 'Напиши настоящее имя — так тебя узнают устаз и группа.',
+      sett_err_year_bad: 'Не похоже на год рождения.',
+      sett_err_year_locked: 'Год рождения указан устазом.',
+      sett_err_place_long: 'Слишком длинно.',
+      pulse_prev: 'день назад',
+      pulse_next: 'день вперёд',
+      pulse_sub_act_one: 'действие',
+      pulse_sub_act_few: 'действия',
+      pulse_sub_act_many: 'действий',
+      n_act_one: 'действие',
+      n_act_few: 'действия',
+      n_act_many: 'действий',
+      n_people_one: 'человек',
+      n_people_few: 'человека',
+      n_people_many: 'человек',
+      n_min_one: 'минуту',
+      n_min_few: 'минуты',
+      n_min_many: 'минут',
+      n_hour_one: 'час',
+      n_hour_few: 'часа',
+      n_hour_many: 'часов',
+      n_rec_one: 'запись',
+      n_rec_few: 'записи',
+      n_rec_many: 'записей',
+      feed_title: 'Лента',
+      feed_today: 'Сегодня',
+      feed_yesterday: 'Вчера',
+      feed_voice: 'голосовое',
+      feed_photo: 'фото',
+      feed_attach: 'вложение',
+      feed_failed_short: 'не открылось',
+      feed_empty_html: 'Пока пусто.<br>Здесь появится то, что пишут в твоей группе и лично тебе.',
+      feed_loading: 'Загружаю…',
+      feed_failed: 'Не открылось.',
+      hifz_count_title: 'Отметить повтор',
+      hifz_listen: 'Прослушать',
+      hifz_listen_stop: 'Остановить',
+      btn_hifz_title: 'Заучивание 40+40',
+      btn_revision_title: 'Отметить повторение',
+      btn_meaning_title: 'Смысл',
+      btn_bookmark_title: 'Закладка',
+      hifz_close_title: 'Выйти из режима',
+      hifz_progress_minus: 'минус один повтор',
+      hifz_progress_plus: 'плюс один повтор',
+      listen_title: 'Слушать',
+      close_title: 'Закрыть',
+      review_comment: '🎙 Замечание',
+      review_accept: '✅ Принято',
+      review_retake: '↺ На пересдачу',
+      lesson_date: '%D% %M%',
+      month_1: 'января',
+      month_2: 'февраля',
+      month_3: 'марта',
+      month_4: 'апреля',
+      month_5: 'мая',
+      month_6: 'июня',
+      month_7: 'июля',
+      month_8: 'августа',
+      month_9: 'сентября',
+      month_10: 'октября',
+      month_11: 'ноября',
+      month_12: 'декабря',
+      login_sub: 'Мусхаф, заучивание и слова Корана —<br>для тех, кто учится в Яссире.',
+      login_wrong_side: 'Я не нашёл тебя среди учащихся. Приложение открывается тем, кто уже учится в Яссире 🤲 Ответь мне в Telegram на вопрос — покажу, с чего начать.',
+      login_tg: 'Войти через Telegram',
+      login_mail_open: 'Войти по почте',
+      login_mail_q: 'Почта, привязанная к твоему аккаунту',
+      login_code_q: 'Код из письма',
+      login_mail_send: 'Прислать код',
+      login_mail_again: 'Прислать код ещё раз',
+      login_back: '← Назад',
+      login_open_tg: 'Открыть Telegram',
+      login_wait: 'Открой ссылку и нажми «Начать» — я жду подтверждения.',
+      login_ios: 'На iPhone: «Поделиться» → «На экран Домой» — и приложение будет открываться со своего значка, как обычное.',
+      login_mail_sending: 'Отправляю письмо…',
+      login_enter: 'Войти',
+      login_mail_sent: 'Отправил код на %E%. Если письма нет, загляни в «Спам».',
+      login_no_net: 'Нет связи с сервером. Попробуй ещё раз.',
+      login_code_6: 'В коде 6 цифр.',
+      login_checking: 'Проверяю…',
+      login_preparing: 'Готовлю вход…',
+      login_press: 'Нажми кнопку выше, а в Telegram — «Начать». Жду подтверждения…',
+      login_expired: 'Ссылка на вход устарела — она живёт 15 минут. Выбери группу заново.',
+      login_done: 'Готово%N%. Открываю…',
+      login_err_email_bad: 'Это не похоже на адрес почты. Проверь, нет ли опечатки.',
+      login_err_not_linked: 'Эта почта не привязана ни к одному аккаунту. Войди через Telegram или попроси устаза привязать почту.',
+      login_err_too_many: 'Слишком много писем подряд. Попробуй через час.',
+      login_err_mail_off: 'Вход по почте пока не работает. Войди через Telegram.',
+      login_err_send_failed: 'Письмо не ушло. Попробуй ещё раз через минуту.',
+      login_err_wrong: 'Код не подходит. Проверь цифры в последнем письме.',
+      login_err_expired: 'Код больше не действует. Нажми «Прислать код ещё раз».',
+      login_err_tries: 'Слишком много попыток входа подряд. Попробуй через час 🤲',
+      login_err_start: 'Не получилось начать вход. Проверь связь и попробуй ещё раз.',
+      wrongbot_male: 'Ты учишься в мужском джамаате, а это приложение открыто через бот другой половины.',
+      wrongbot_female: 'Ты учишься в женском джамаате, а это приложение открыто через бот другой половины.',
+      wrongbot_other: 'Ты учишься в другом джамаате, а это приложение открыто через бот другой половины.',
+      wrongbot_open: 'Открыть мой YassirApp',
+      wrongbot_note: 'Там твоя группа, сдачи и задания. Здесь я тебя не записываю, чтобы ничего не перепуталось.',
     },
     ky: {
       dash_mushaf: 'Мусхаф',
@@ -5328,6 +5458,134 @@
       pulse_peak: 'эң жыш убакыт — саат %H%:00',
       pulse_best: 'жамааттын рекорду',
       pulse_record: 'рекорд %D% · %N%',
+      // 16.10.2026: настройки, лента, пульс, вход и прочее, что раньше
+      // было зашито по-русски. Черновик Claude.
+      notice_name: 'Атыңды жаз',
+      notice_name_text: 'Жөндөөлөргө кирип, атыңды жаз — аны устаз жана топ көрөт.',
+      learn_cap_rules: 'ЭРЕЖЕЛЕР',
+      day_not_done: 'тапшырылган жок',
+      day_excuse: 'узр',
+      day_lesson: 'онлайн-сабак белгиленди',
+      day_trail: 'ушул күнү колдонмодо',
+      rec_mic_lost: 'Микрофон өчүп калды. %T% жазылды — «Окууну улантуу» баскычын басып, андан ары оку',
+      rec_mic_lost_again: 'Микрофон өчүп калды — «Жазуу» баскычын дагы бир жолу бас',
+      doc_title: 'Мусхаф — Яссир',
+      sett_title: 'Жөндөөлөр',
+      sett_name: 'Аты',
+      sett_name_hint: 'Бул атты устаз отчётторунда, бүт топ рейтингде көрөт.',
+      sett_year: 'Туулган жылы',
+      sett_year_ph: 'мисалы, 1994',
+      sett_place: 'Тапшырмаларды кайдан тапшырасың',
+      sett_optional: 'каалоо боюнча',
+      sett_year_locked: 'устаз көрсөткөн',
+      place_none: 'Көрсөтүлгөн эмес',
+      place_bishkek: 'Бишкек',
+      place_osh_city: 'Ош',
+      place_chui: 'Чүй облусу',
+      place_osh: 'Ош облусу',
+      place_jalal: 'Жалал-Абад облусу',
+      place_issyk: 'Ысык-Көл облусу',
+      place_naryn: 'Нарын облусу',
+      place_talas: 'Талас облусу',
+      place_batken: 'Баткен облусу',
+      place_other: 'Башка өлкө',
+      sett_country_ph: 'Кайсы өлкө?',
+      sett_lang: 'Тил',
+      sett_theme: 'Көрүнүш',
+      sett_theme_day: '☀️ Күндүз',
+      sett_theme_night: '🌙 Түн',
+      sett_layout_madani: 'Медина',
+      sett_layout_dm: 'Дар аль-Маариф (Мисир)',
+      sett_logout: 'Колдонмодон чыгуу',
+      sett_saved: 'Сакталды',
+      sett_save_failed: 'Сакталган жок — байланышты текшер.',
+      sett_err_name_empty: 'Атсыз болбойт — аны устаз көрөт.',
+      sett_err_name_long: 'Ат өтө узун.',
+      sett_err_name_not_name: 'Чыныгы атыңды жаз — ошондо устаз жана топ сени тааныйт.',
+      sett_err_year_bad: 'Туулган жылга окшобойт.',
+      sett_err_year_locked: 'Туулган жылды устаз көрсөткөн.',
+      sett_err_place_long: 'Өтө узун.',
+      pulse_prev: 'бир күн артка',
+      pulse_next: 'бир күн алдыга',
+      pulse_sub_act_one: 'аракети',
+      n_act_one: 'аракет',
+      n_people_one: 'киши',
+      n_min_one: 'мүнөт',
+      n_hour_one: 'саат',
+      n_rec_one: 'жазуу',
+      feed_title: 'Лента',
+      feed_today: 'Бүгүн',
+      feed_yesterday: 'Кечээ',
+      feed_voice: 'үн кабар',
+      feed_photo: 'сүрөт',
+      feed_attach: 'файл',
+      feed_failed_short: 'ачылган жок',
+      feed_empty_html: 'Азырынча бош.<br>Бул жерде тобуңда жана сага жеке жазылгандар чыгат.',
+      feed_loading: 'Жүктөлүүдө…',
+      feed_failed: 'Ачылган жок.',
+      hifz_count_title: 'Кайталоону белгилөө',
+      hifz_listen: 'Угуу',
+      hifz_listen_stop: 'Токтотуу',
+      btn_hifz_title: 'Жаттоо 40+40',
+      btn_revision_title: 'Кайталоону белгилөө',
+      btn_meaning_title: 'Мааниси',
+      btn_bookmark_title: 'Кыстарма',
+      hifz_close_title: 'Режимден чыгуу',
+      hifz_progress_minus: 'бир кайталоону азайтуу',
+      hifz_progress_plus: 'бир кайталоо кошуу',
+      listen_title: 'Угуу',
+      close_title: 'Жабуу',
+      review_comment: '🎙 Эскертүү',
+      review_accept: '✅ Кабыл алынды',
+      review_retake: '↺ Кайра тапшырууга',
+      lesson_date: '%D%-%M%',
+      month_1: 'январь',
+      month_2: 'февраль',
+      month_3: 'март',
+      month_4: 'апрель',
+      month_5: 'май',
+      month_6: 'июнь',
+      month_7: 'июль',
+      month_8: 'август',
+      month_9: 'сентябрь',
+      month_10: 'октябрь',
+      month_11: 'ноябрь',
+      month_12: 'декабрь',
+      login_sub: 'Мусхаф, жаттоо жана Курандын сөздөрү —<br>Яссирде окугандар үчүн.',
+      login_wrong_side: 'Мен сени окуучулардын арасынан тапкан жокмун. Колдонмо Яссирде окуп жаткандарга ачылат 🤲 Telegramда суроома жооп бер — эмнеден баштоону көрсөтөм.',
+      login_tg: 'Telegram аркылуу кирүү',
+      login_mail_open: 'Почта аркылуу кирүү',
+      login_mail_q: 'Аккаунтуңа байланган почта',
+      login_code_q: 'Каттагы код',
+      login_mail_send: 'Код жөнөтүү',
+      login_mail_again: 'Кодду кайра жөнөтүү',
+      login_back: '← Артка',
+      login_open_tg: 'Telegramды ачуу',
+      login_wait: 'Шилтемени ачып, «Start / Начать» баскычын бас — тастыктоону күтүп жатам.',
+      login_ios: 'iPhoneдо: «Поделиться» → «На экран Домой» — ошондо колдонмо кадимки колдонмодой өз белгисинен ачылат.',
+      login_mail_sending: 'Кат жөнөтүлүүдө…',
+      login_enter: 'Кирүү',
+      login_mail_sent: 'Код %E% дарегине жөнөтүлдү. Кат келбесе, «Спам» папкасын кара.',
+      login_no_net: 'Сервер менен байланыш жок. Дагы аракет кыл.',
+      login_code_6: 'Коддо 6 сан бар.',
+      login_checking: 'Текшерилүүдө…',
+      login_preparing: 'Кирүү даярдалууда…',
+      login_press: 'Жогорудагы баскычты бас, Telegramда — «Start / Начать». Тастыктоону күтүп жатам…',
+      login_expired: 'Кирүү шилтемесинин мөөнөтү бүттү — ал 15 мүнөт жашайт. Топту кайра танда.',
+      login_done: 'Даяр%N%. Ачылууда…',
+      login_err_email_bad: 'Бул почта дарегине окшобойт. Ката жоктугун текшер.',
+      login_err_not_linked: 'Бул почта эч бир аккаунтка байланган эмес. Telegram аркылуу кир же устаздан почтаны байлап берүүнү сура.',
+      login_err_mail_off: 'Почта аркылуу кирүү азырынча иштебейт. Telegram аркылуу кир.',
+      login_err_send_failed: 'Кат жөнөтүлгөн жок. Бир мүнөттөн кийин дагы аракет кыл.',
+      login_err_wrong: 'Код туура эмес. Акыркы каттагы сандарды текшер.',
+      login_err_expired: 'Коддун мөөнөтү бүттү. «Кодду кайра жөнөтүү» баскычын бас.',
+      login_err_tries: 'Катары менен өтө көп аракет болду. Бир сааттан кийин аракет кыл 🤲',
+      login_err_start: 'Кирүүнү баштоо болбой калды. Байланышты текшерип, дагы аракет кыл.',
+      wrongbot_male: 'Сен эркектер жамаатында окуйсуң, ал эми бул колдонмо экинчи жарымдын боту аркылуу ачылды.',
+      wrongbot_female: 'Сен аялдар жамаатында окуйсуң, ал эми бул колдонмо экинчи жарымдын боту аркылуу ачылды.',
+      wrongbot_other: 'Сен башка жамаатта окуйсуң, ал эми бул колдонмо экинчи жарымдын боту аркылуу ачылды.',
+      wrongbot_open: 'Өзүмдүн YassirAppты ачуу',
+      wrongbot_note: 'Ал жерде сенин тобуң, тапшырууларың жана тапшырмаларың. Бул жерде сени жазбайм — эч нерсе чаташпашы үчүн.',
     },
     uz: {
       dash_mushaf: 'Мусҳаф',
@@ -5775,6 +6033,134 @@
       pulse_peak: 'энг гавжум вақт — соат %H%:00',
       pulse_best: 'жамоат рекорди',
       pulse_record: 'рекорд %D% · %N%',
+      // 16.10.2026: настройки, лента, пульс, вход и прочее, что раньше
+      // было зашито по-русски. Черновик Claude.
+      notice_name: 'Исмингни ёз',
+      notice_name_text: 'Созламаларга кириб, исмингни ёз — уни устаз ва гуруҳ кўради.',
+      learn_cap_rules: 'ҚОИДАЛАР',
+      day_not_done: 'топширилмаган',
+      day_excuse: 'узр',
+      day_lesson: 'онлайн-дарс белгиланди',
+      day_trail: 'шу куни иловада',
+      rec_mic_lost: 'Микрофон ўчиб қолди. %T% ёзилди — «Ўқишни давом эттириш»ни бос ва ўқишда давом эт',
+      rec_mic_lost_again: 'Микрофон ўчиб қолди — «Ёзиб олиш»ни яна бир марта бос',
+      doc_title: 'Мусҳаф — Яссир',
+      sett_title: 'Созламалар',
+      sett_name: 'Исм',
+      sett_name_hint: 'Бу исмни устаз ҳисоботларда, бутун гуруҳ рейтингда кўради.',
+      sett_year: 'Туғилган йил',
+      sett_year_ph: 'масалан, 1994',
+      sett_place: 'Топшириқларни қаердан топширасан',
+      sett_optional: 'ихтиёрий',
+      sett_year_locked: 'устаз кўрсатган',
+      place_none: 'Кўрсатилмаган',
+      place_bishkek: 'Бишкек',
+      place_osh_city: 'Ўш',
+      place_chui: 'Чуй вилояти',
+      place_osh: 'Ўш вилояти',
+      place_jalal: 'Жалолобод вилояти',
+      place_issyk: 'Иссиқкўл вилояти',
+      place_naryn: 'Норин вилояти',
+      place_talas: 'Талас вилояти',
+      place_batken: 'Боткен вилояти',
+      place_other: 'Бошқа давлат',
+      sett_country_ph: 'Қайси давлат?',
+      sett_lang: 'Тил',
+      sett_theme: 'Кўриниш',
+      sett_theme_day: '☀️ Кундуз',
+      sett_theme_night: '🌙 Тун',
+      sett_layout_madani: 'Мадина',
+      sett_layout_dm: 'Дор ул-Маориф (Миср)',
+      sett_logout: 'Иловадан чиқиш',
+      sett_saved: 'Сақланди',
+      sett_save_failed: 'Сақланмади — алоқани текшир.',
+      sett_err_name_empty: 'Исмсиз бўлмайди — уни устаз кўради.',
+      sett_err_name_long: 'Исм жуда узун.',
+      sett_err_name_not_name: 'Ҳақиқий исмингни ёз — устаз ва гуруҳ сени шундай танийди.',
+      sett_err_year_bad: 'Туғилган йилга ўхшамайди.',
+      sett_err_year_locked: 'Туғилган йилни устаз кўрсатган.',
+      sett_err_place_long: 'Жуда узун.',
+      pulse_prev: 'бир кун орқага',
+      pulse_next: 'бир кун олдинга',
+      pulse_sub_act_one: 'ҳаракати',
+      n_act_one: 'ҳаракат',
+      n_people_one: 'киши',
+      n_min_one: 'дақиқа',
+      n_hour_one: 'соат',
+      n_rec_one: 'ёзув',
+      feed_title: 'Лента',
+      feed_today: 'Бугун',
+      feed_yesterday: 'Кеча',
+      feed_voice: 'овозли хабар',
+      feed_photo: 'расм',
+      feed_attach: 'файл',
+      feed_failed_short: 'очилмади',
+      feed_empty_html: 'Ҳозирча бўш.<br>Бу ерда гуруҳингда ва сенга шахсан ёзилганлар чиқади.',
+      feed_loading: 'Юкланмоқда…',
+      feed_failed: 'Очилмади.',
+      hifz_count_title: 'Такрорни белгилаш',
+      hifz_listen: 'Тинглаш',
+      hifz_listen_stop: 'Тўхтатиш',
+      btn_hifz_title: 'Ёдлаш 40+40',
+      btn_revision_title: 'Такрорлашни белгилаш',
+      btn_meaning_title: 'Маъноси',
+      btn_bookmark_title: 'Хатчўп',
+      hifz_close_title: 'Режимдан чиқиш',
+      hifz_progress_minus: 'битта такрорни камайтириш',
+      hifz_progress_plus: 'битта такрор қўшиш',
+      listen_title: 'Тинглаш',
+      close_title: 'Ёпиш',
+      review_comment: '🎙 Изоҳ',
+      review_accept: '✅ Қабул қилинди',
+      review_retake: '↺ Қайта топширишга',
+      lesson_date: '%D%-%M%',
+      month_1: 'январ',
+      month_2: 'феврал',
+      month_3: 'март',
+      month_4: 'апрел',
+      month_5: 'май',
+      month_6: 'июн',
+      month_7: 'июл',
+      month_8: 'август',
+      month_9: 'сентябр',
+      month_10: 'октябр',
+      month_11: 'ноябр',
+      month_12: 'декабр',
+      login_sub: 'Мусҳаф, ёдлаш ва Қуръон сўзлари —<br>Яссирда ўқиётганлар учун.',
+      login_wrong_side: 'Мен сени ўқувчилар орасидан топмадим. Илова Яссирда ўқиётганлар учун очилади 🤲 Telegramда саволимга жавоб бер — нимадан бошлашни кўрсатаман.',
+      login_tg: 'Telegram орқали кириш',
+      login_mail_open: 'Почта орқали кириш',
+      login_mail_q: 'Аккаунтингга боғланган почта',
+      login_code_q: 'Хатдаги код',
+      login_mail_send: 'Код юбориш',
+      login_mail_again: 'Кодни қайта юбориш',
+      login_back: '← Орқага',
+      login_open_tg: 'Telegramни очиш',
+      login_wait: 'Ҳаволани оч ва «Start / Начать»ни бос — тасдиқни кутяпман.',
+      login_ios: 'iPhoneда: «Поделиться» → «На экран Домой» — шунда илова оддий иловадек ўз белгисидан очилади.',
+      login_mail_sending: 'Хат юборилмоқда…',
+      login_enter: 'Кириш',
+      login_mail_sent: 'Код %E% манзилига юборилди. Хат келмаган бўлса, «Спам»ни текшир.',
+      login_no_net: 'Сервер билан алоқа йўқ. Яна уриниб кўр.',
+      login_code_6: 'Кодда 6 та рақам бор.',
+      login_checking: 'Текширилмоқда…',
+      login_preparing: 'Кириш тайёрланмоқда…',
+      login_press: 'Юқоридаги тугмани бос, Telegramда эса — «Start / Начать». Тасдиқни кутяпман…',
+      login_expired: 'Кириш ҳаволасининг муддати тугади — у 15 дақиқа амал қилади. Гуруҳни қайта танла.',
+      login_done: 'Тайёр%N%. Очилмоқда…',
+      login_err_email_bad: 'Бу почта манзилига ўхшамайди. Хато йўқлигини текшир.',
+      login_err_not_linked: 'Бу почта ҳеч қайси аккаунтга боғланмаган. Telegram орқали кир ёки устаздан почтани боғлаб беришни сўра.',
+      login_err_mail_off: 'Почта орқали кириш ҳозирча ишламайди. Telegram орқали кир.',
+      login_err_send_failed: 'Хат юборилмади. Бир дақиқадан кейин яна уриниб кўр.',
+      login_err_wrong: 'Код тўғри келмади. Охирги хатдаги рақамларни текшир.',
+      login_err_expired: 'Коднинг муддати тугади. «Кодни қайта юбориш»ни бос.',
+      login_err_tries: 'Кетма-кет жуда кўп уриниш бўлди. Бир соатдан кейин уриниб кўр 🤲',
+      login_err_start: 'Киришни бошлаб бўлмади. Алоқани текшириб, яна уриниб кўр.',
+      wrongbot_male: 'Сен эркаклар жамоатида ўқийсан, бу илова эса иккинчи ярмининг боти орқали очилган.',
+      wrongbot_female: 'Сен аёллар жамоатида ўқийсан, бу илова эса иккинчи ярмининг боти орқали очилган.',
+      wrongbot_other: 'Сен бошқа жамоатда ўқийсан, бу илова эса иккинчи ярмининг боти орқали очилган.',
+      wrongbot_open: 'Ўзимнинг YassirAppни очиш',
+      wrongbot_note: 'У ерда сенинг гуруҳинг, топширишларинг ва топшириқларинг. Бу ерда сени ёзмайман — ҳеч нарса аралашиб кетмаслиги учун.',
     },
   };
 
@@ -5882,6 +6268,17 @@
     document.querySelectorAll('[data-i18n-ph]').forEach(function (el) {
       el.placeholder = T(el.getAttribute('data-i18n-ph'));
     });
+    // Подсказка кнопки-значка (16.10.2026): title, а у кого есть - и
+    // aria-label, его читает экранный диктор.
+    document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+      var t = T(el.getAttribute('data-i18n-title'));
+      el.title = t;
+      if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', t);
+    });
+    document.querySelectorAll('[data-i18n-aria]').forEach(function (el) {
+      el.setAttribute('aria-label', T(el.getAttribute('data-i18n-aria')));
+    });
+    document.title = T('doc_title');
     // Экраны, собранные в JS, перерисовываем - иначе язык применится
     // только после следующего действия студента.
     if (document.getElementById('trainer').style.display !== 'none' && trainerState) renderTrainer();
@@ -5929,19 +6326,18 @@
   var settCountry = document.getElementById('sett-country');
   var nameHint = document.getElementById('sett-name-hint');
   var placeHint = document.getElementById('sett-place-hint');
-  var NAME_HINT_DEFAULT = nameHint.textContent;
   var savedProfile = { name: '', birth_year: null, location: '' };
   var profileLoaded = false;
 
   // Коды приходят от update_profile (core/db.py); текст человеку подбираем
   // здесь - сервер не знает, на каком языке он читает.
   var SAVE_ERRORS = {
-    name_empty: 'Без имени нельзя — его видит устаз.',
-    name_too_long: 'Слишком длинное имя.',
-    name_not_name: 'Напиши настоящее имя — так тебя узнают устаз и группа.',
-    birth_year_bad: 'Не похоже на год рождения.',
-    birth_year_locked: 'Год рождения указан устазом.',
-    location_too_long: 'Слишком длинно.'
+    name_empty: 'sett_err_name_empty',
+    name_too_long: 'sett_err_name_long',
+    name_not_name: 'sett_err_name_not_name',
+    birth_year_bad: 'sett_err_year_bad',
+    birth_year_locked: 'sett_err_year_locked',
+    location_too_long: 'sett_err_place_long'
   };
 
   function settSay(el, text, cls, restore) {
@@ -5960,13 +6356,13 @@
     apiCall('/profile', { method: 'POST', body: patch }).then(function (res) {
       if (res.status === 200 && res.data) {
         savedProfile = res.data;
-        settSay(hint, 'Сохранено', 'ok', restore);
+        settSay(hint, T('sett_saved'), 'ok', restore);
         return;
       }
       var code = res.data && res.data.error;
-      settSay(hint, SAVE_ERRORS[code] || 'Не сохранилось — проверь связь.', 'bad');
+      settSay(hint, T(SAVE_ERRORS[code] || 'sett_save_failed'), 'bad');
     }).catch(function () {
-      settSay(hint, 'Не сохранилось — проверь связь.', 'bad');
+      settSay(hint, T('sett_save_failed'), 'bad');
     });
   }
 
@@ -6000,7 +6396,7 @@
       // запись повторения снимается одной цифрой.
       settYear.disabled = !!d.birth_year_locked;
       var yearNote = document.querySelector('label[for="sett-year"] i');
-      if (yearNote) yearNote.textContent = d.birth_year_locked ? 'указан устазом' : 'по желанию';
+      if (yearNote) yearNote.textContent = d.birth_year_locked ? T('sett_year_locked') : T('sett_optional');
       settShowPlace(d.location || '');
     }).catch(function () {});
   }
@@ -6044,7 +6440,7 @@
       return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
     }
     var y = new Date(now.getTime() - 86400000);
-    if (d.toDateString() === y.toDateString()) return 'вчера';
+    if (d.toDateString() === y.toDateString()) return T('ustaz_yesterday');
     return d.getDate() + '.' + ('0' + (d.getMonth() + 1)).slice(-2);
   }
 
@@ -6052,9 +6448,9 @@
     var d = new Date((at || '').replace(' ', 'T') + 'Z');
     if (isNaN(d.getTime())) return '';
     var now = new Date();
-    if (d.toDateString() === now.toDateString()) return 'Сегодня';
+    if (d.toDateString() === now.toDateString()) return T('feed_today');
     var y = new Date(now.getTime() - 86400000);
-    if (d.toDateString() === y.toDateString()) return 'Вчера';
+    if (d.toDateString() === y.toDateString()) return T('feed_yesterday');
     return d.getDate() + '.' + ('0' + (d.getMonth() + 1)).slice(-2);
   }
 
@@ -6126,7 +6522,7 @@
     document.getElementById('brief-who').textContent = it.who;
     document.getElementById('brief-src').textContent = it.source || '';
     var txt = it.text;
-    if (!txt) txt = it.kind === 'voice' ? 'голосовое' : it.kind === 'photo' ? 'фото' : 'вложение';
+    if (!txt) txt = it.kind === 'voice' ? T('feed_voice') : it.kind === 'photo' ? T('feed_photo') : T('feed_attach');
     document.getElementById('brief-txt').textContent = txt;
     var n = document.getElementById('brief-n');
     n.textContent = f.unread || '';
@@ -6170,7 +6566,7 @@
   var feedPlayingId = null;
   function feedPlay(id, btn) {
     if (feedPlayingId === id) {
-      feedAudio.pause(); feedPlayingId = null; btn.textContent = '▶ голосовое';
+      feedAudio.pause(); feedPlayingId = null; btn.textContent = '▶ ' + T('feed_voice');
       return;
     }
     feedAudio.pause();
@@ -6181,11 +6577,11 @@
         feedAudio.src = url;
         feedPlayingId = id;
         btn.disabled = false;
-        btn.textContent = '⏸ голосовое';
+        btn.textContent = '⏸ ' + T('feed_voice');
         return audioPlay(feedAudio, audioReload(feedAudio, path));
       }).catch(function () {
         btn.disabled = false;
-        btn.textContent = 'не открылось';
+        btn.textContent = T('feed_failed_short');
       });
   }
   feedAudio.addEventListener('ended', function () {
@@ -6194,7 +6590,7 @@
   });
   function feedRenderVoiceLabels() {
     Array.prototype.forEach.call(feedScroll.querySelectorAll('.m-voice'), function (b) {
-      b.textContent = '▶ голосовое';
+      b.textContent = '▶ ' + T('feed_voice');
     });
   }
 
@@ -6223,9 +6619,8 @@
       return !feedChat || it.chat_id === feedChat;
     });
     if (!items.length) {
-      feedScroll.innerHTML = '<div class="l-empty">Пока пусто.<br>' +
-        'Здесь появится то, что пишут в твоей группе и лично тебе.</div>';
-      return;
+      feedScroll.innerHTML = '<div class="l-empty">' + T('feed_empty_html') + '</div>';
+        return;
     }
     // Свежие сверху приходят с сервера; на экране читаем как в чате -
     // сверху вниз по дням, самое свежее внизу, и туда же сразу прокручиваем.
@@ -6239,7 +6634,7 @@
       if (it.has_media && it.kind === 'photo') {
         media = '<div class="m-photo" data-photo="' + it.id + '" data-id="' + it.id + '"></div>';
       } else if (it.has_media) {
-        media = '<button class="m-voice" data-voice="' + it.id + '">▶ голосовое</button>';
+        media = '<button class="m-voice" data-voice="' + it.id + '">▶ ' + T('feed_voice') + '</button>';
       }
       // Источник у строки не подписываем: чат выбран чипом выше, и рамка
       // «N-1» у каждого сообщения внутри N-1 - чистый шум.
@@ -6279,11 +6674,11 @@
   function feedOpen(wantChat, focusId) {
     feedFocus = focusId || null;
     feedBox.classList.add('on');
-    feedScroll.innerHTML = '<div class="l-empty">Загружаю…</div>';
+    feedScroll.innerHTML = '<div class="l-empty">' + T('feed_loading') + '</div>';
     document.getElementById('feed-chips').innerHTML = '';
     apiCall('/feed').then(function (res) {
       var d = res && res.data;
-      if (!d || !d.items) { feedScroll.innerHTML = '<div class="l-empty">Не открылось.</div>'; return; }
+      if (!d || !d.items) { feedScroll.innerHTML = '<div class="l-empty">' + T('feed_failed') + '</div>'; return; }
       feedItems = d.items;
       feedChats = d.chats || [];
       var ids = feedChats.map(function (c) { return c.id; });
@@ -6304,7 +6699,7 @@
           .then(function () { sendHeartbeat(); }).catch(function () {});
       }
     }).catch(function () {
-      feedScroll.innerHTML = '<div class="l-empty">Не открылось.</div>';
+      feedScroll.innerHTML = '<div class="l-empty">' + T('feed_failed') + '</div>';
     });
   }
   function feedClose() {
@@ -6349,11 +6744,11 @@
       // Пустым имя не остаётся: возвращаем прежнее, чтобы человек не ушёл
       // с экрана, стерев себя.
       settName.value = savedProfile.name || '';
-      settSay(nameHint, SAVE_ERRORS.name_empty, 'bad', NAME_HINT_DEFAULT);
+      settSay(nameHint, T(SAVE_ERRORS.name_empty), 'bad', T('sett_name_hint'));
       return;
     }
     if (v === savedProfile.name) return;
-    settSave({ name: v }, nameHint, NAME_HINT_DEFAULT);
+    settSave({ name: v }, nameHint, T('sett_name_hint'));
   });
 
   settYear.addEventListener('change', function () {
@@ -6756,8 +7151,10 @@
     var a = Math.abs(n) % 100, b = a % 10;
     return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many;
   }
-  function pulseNum(n, one, few, many) {
-    return n + ' ' + pulsePlural(n, one, few, many);
+  // Слово после числа (16.10.2026): по-русски три формы, в кыргызском и
+  // узбекском после числа слово не меняется - у них одна форма (_one).
+  function TP(n, key) {
+    return T(key + '_' + (UI_LANG === 'ru' ? pulsePlural(n, 'one', 'few', 'many') : 'one'));
   }
   function pulseFit(cv) {
     var dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 320;
@@ -6887,8 +7284,8 @@
     // там подпись единственный источник, и она остаётся.
     document.getElementById('pulse-sum').innerHTML =
       pulse.view === pulse.today ? '' : T('pulse_day_sum', {
-        A: '<b>' + sum + '</b> ' + pulsePlural(sum, 'действие', 'действия', 'действий'),
-        P: pulseNum(row.people || 0, 'человек', 'человека', 'человек')
+        A: '<b>' + sum + '</b> ' + TP(sum, 'n_act'),
+        P: (row.people || 0) + ' ' + TP(row.people || 0, 'n_people')
       });
     document.getElementById('pulse-peak').textContent =
       pulse.view === pulse.best ? T('pulse_best')
@@ -6954,13 +7351,13 @@
     var sub = document.getElementById('pulse-sub');
     if (q != null && q >= 45 && !pulse.queue.length) {
       // В проекте тишина — так и говорим, вместо бодрого счёта ни о чём.
-      var txt = q < 90 ? pulseNum(q, 'минуту', 'минуты', 'минут')
-              : pulseNum(Math.round(q / 60), 'час', 'часа', 'часов');
+      var txt = q < 90 ? q + ' ' + TP(q, 'n_min')
+              : Math.round(q / 60) + ' ' + TP(Math.round(q / 60), 'n_hour');
       sub.textContent = T('pulse_quiet', { T: txt });
     } else {
       var hh = d.hour == null ? '' : (d.hour < 10 ? '0' : '') + d.hour;
       sub.textContent = T('pulse_sub', {
-        A: pulsePlural(pulse.shown, 'действие', 'действия', 'действий'),
+        A: TP(pulse.shown, 'pulse_sub_act'),
         H: hh
       });
     }
@@ -8813,7 +9210,7 @@
     var btns = document.querySelectorAll('.hifz-listen-btn');
     Array.prototype.forEach.call(btns, function (b) {
       b.classList.toggle('on', hifzListening);
-      b.title = hifzListening ? 'Остановить' : 'Прослушать';
+      b.title = hifzListening ? T('hifz_listen_stop') : T('hifz_listen');
     });
   }
 
@@ -11378,7 +11775,7 @@
         ? '–' + ustazTimeOnly(item.sent_last) + ' · ' +
           T('subs_series_n', {
             N: item.series_count + ' ' +
-               pulsePlural(item.series_count, 'запись', 'записи', 'записей')
+               TP(item.series_count, 'n_rec')
           })
         : '') +
       (item.group_title ? ' · ' + ustazEsc(item.group_title) : '') + '</div>';
@@ -12191,6 +12588,19 @@
     } catch (e) { /* приватный режим - галочка просто не запомнится */ }
   }
 
+  // Тексты глав живут в LEARN по-русски; кыргызский и узбекский - в словаре
+  // под ключами learn_<id>_name / _desc / _<шаг>_t / _<шаг>_b (16.10.2026).
+  // Перевода нет - остаётся русский, как у T().
+  function learnT(key, ru) {
+    var d = I18N[UI_LANG];
+    return (d && d[key] != null) ? d[key] : ru;
+  }
+  function learnName(sec) { return learnT('learn_' + sec.id + '_name', sec.name); }
+  function learnStep(sec, k) {
+    var s = sec.steps[k], p = 'learn_' + sec.id + '_' + k;
+    return '<h3>' + learnT(p + '_t', s[1]) + '</h3><p>' + learnT(p + '_b', s[2]) + '</p>';
+  }
+
   function learnPlural(n) {
     return T(n >= 2 && n <= 4 ? 'learn_steps_few' : 'learn_steps', { N: n });
   }
@@ -12243,8 +12653,8 @@
               : (group === 'rules' ? '' : learnPlural(sec.steps.length)));   // правила - страница, не шаги
         out += '<button class="learn-item"' + (empty ? ' disabled style="opacity:.55"' : ' data-sec="' + i + '"') + '>' +
           '<span class="mk">' + sec.mark + '</span>' +
-          '<span><span class="nm">' + sec.name + '</span>' +
-          '<span class="ds">' + sec.desc + '</span></span>' +
+          '<span><span class="nm">' + learnName(sec) + '</span>' +
+          '<span class="ds">' + learnT('learn_' + sec.id + '_desc', sec.desc) + '</span></span>' +
           '<span class="cnt">' + right + '</span></button>';
       });
       return out + '</div>';
@@ -12268,14 +12678,12 @@
     }).catch(function () { lessonsRenderSubjects([]); });
   }
 
-  var LESSON_MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                       'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   // «13 августа» вместо «2026-08-13»: дата урока - это «когда прошли», а не
   // отметка в журнале.
   function lessonDate(at) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(at || '');
     if (!m) return at || '';
-    return parseInt(m[3], 10) + ' ' + LESSON_MONTHS[parseInt(m[2], 10) - 1];
+    return T('lesson_date', { D: parseInt(m[3], 10), M: T('month_' + parseInt(m[2], 10)) });
   }
 
   function lessonsRenderSubjects(subjects) {
@@ -12374,7 +12782,7 @@
       document.getElementById('learn-title').textContent = d.topic;
       document.getElementById('learn-back').textContent = '← '
         + (((lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {}).title
-           || (subject === 'n' ? 'Нахв' : subject === 'j' ? 'Таджвид' : ''));
+           || (subject === 'n' ? T('task_n') : subject === 'j' ? T('task_j') : ''));
       body.innerHTML = '<div class="k-text"><p class="k-chapter">' + feedEsc(d.chapter)
         + (d.parts > 1 ? ' · ' + T('lesson_part_of', { N: d.part, M: d.parts }) : '')
         + '</p>' + lessonArabic(feedEsc(d.content)) + '</div>';
@@ -12390,14 +12798,14 @@
   function learnRenderArticle(si) {
     var sec = LEARN[si];
     learnAt = { section: si, step: 0 };
-    document.getElementById('learn-title').textContent = sec.name;
+    document.getElementById('learn-title').textContent = learnName(sec);
     document.getElementById('learn-back').textContent = T('learn_back_toc');
     var html = '<div id="learn-step" class="text article">';
-    sec.steps.forEach(function (s) {
+    sec.steps.forEach(function (s, k) {
       html += '<section>' +
         (s[0] ? '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
                 '<p class="learn-zoomhint">' + T('learn_zoom') + '</p>' : '') +
-        '<h3>' + s[1] + '</h3><p>' + s[2] + '</p></section>';
+        learnStep(sec, k) + '</section>';
     });
     var body = document.getElementById('learn-body');
     body.innerHTML = html + '</div>';
@@ -12422,7 +12830,7 @@
     learnAt = { section: si, step: step };
     var s = sec.steps[step], last = step === sec.steps.length - 1;
     document.getElementById('learn-title').textContent =
-      sec.name + ' \u00b7 ' + T('learn_of', { N: step + 1, M: sec.steps.length });
+      learnName(sec) + ' \u00b7 ' + T('learn_of', { N: step + 1, M: sec.steps.length });
     document.getElementById('learn-back').textContent = T('learn_back_toc');
     var body = document.getElementById('learn-body');
     // Шаг без снимка (главы «Правила», 07.10.2026): только заголовок и текст.
@@ -12430,7 +12838,7 @@
       '<div id="learn-step"' + (s[0] ? '' : ' class="text"') + '>' +
       (s[0] ? '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
               '<p class="learn-zoomhint">' + T('learn_zoom') + '</p>' : '') +
-      '<h3>' + s[1] + '</h3><p>' + s[2] + '</p></div>';
+      learnStep(sec, step) + '</div>';
     body.scrollTop = 0;
     var dots = '';
     sec.steps.forEach(function (_, i) { dots += '<i' + (i === step ? ' class="on"' : '') + '></i>'; });
