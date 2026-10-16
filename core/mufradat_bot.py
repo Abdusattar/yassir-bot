@@ -268,7 +268,13 @@ async def transcode_to_ogg(audio_bytes):
     # (замерено на сервере 06.09.2026), то есть разница между "работает" и
     # "падает по таймауту". Safari/iOS даёт mp4/aac - там copy не сработает,
     # и мы честно перекодируем вторым заходом.
-    out = await _run_ffmpeg(["-c:a", "copy"], audio_bytes)
+    #
+    # Файлом, а не потоком (16.10.2026): запись iPhone (AAC) в ogg без
+    # перекодировки не ложится, ffmpeg отказывается сразу - и если запись
+    # шла в него трубой, недописанная труба рвалась: BrokenPipeError в
+    # журнале на каждую сдачу с iPhone (645 за неделю), хотя второй заход
+    # всё отправлял. Файлом рваться нечему, результат тот же.
+    out = await _run_ffmpeg(["-c:a", "copy"], audio_bytes, via_file=True)
     if out:
         return out
     # mp4 - через временный файл, не потоком (17.09.2026): оглавление mp4
@@ -499,7 +505,8 @@ async def _run_ffmpeg_on(codec_args, audio_bytes, src):
         proc = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "error",
             "-i", src, *codec_args, "-f", "ogg", "pipe:1",
-            stdin=asyncio.subprocess.PIPE,
+            # Вход файлом - stdin не нужен вовсе (писать в него нечего).
+            stdin=asyncio.subprocess.PIPE if src == "pipe:0" else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -507,7 +514,8 @@ async def _run_ffmpeg_on(codec_args, audio_bytes, src):
         log.error("ffmpeg недоступен: %s: %s", type(e).__name__, e)
         return None
     try:
-        out, err = await asyncio.wait_for(proc.communicate(audio_bytes), timeout=_FFMPEG_TIMEOUT)
+        out, err = await asyncio.wait_for(
+            proc.communicate(audio_bytes if src == "pipe:0" else None), timeout=_FFMPEG_TIMEOUT)
     except asyncio.TimeoutError:
         proc.kill()
         log.error("ffmpeg не уложился в %s сек (%s)", _FFMPEG_TIMEOUT, codec_args)
