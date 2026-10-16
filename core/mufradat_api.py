@@ -2152,7 +2152,7 @@ async def _telegram_audio_response(file_id, request=None):
     С request - iPhone ниже iOS 18.4 (или ?fmt=mp3) получает mp3 вместо
     ogg: см. core/audio_compat.py (28.09.2026, устаз Зейнеб).
 
-    Сначала - недельная копия m4a: её играет любой телефон, и в Telegram
+    Сначала - копия m4a за 5 дней: её играет любой телефон, и в Telegram
     идти не нужно.
 
     ?link=1 (10.10.2026) - не сам звук, а {"url"} подписанного потока той же
@@ -2232,7 +2232,7 @@ async def handle_ustaz_submission(request, user_id):
 # Заголовок авторизации <audio> послать не может, поэтому адрес подписан:
 # имя файла копии + срок, HMAC на ключе от токена бота. Кто знает адрес -
 # слышит запись, поэтому живёт он недолго и выдаётся только тем, кому запись
-# и так отдал бы handle_ustaz_audio. Копии нет (старше недели, не успела) -
+# и так отдал бы handle_ustaz_audio. Копии нет (старше 5 дней, не успела) -
 # url пустой, приложение идёт старым путём.
 _AUDIO_LINK_TTL = 3 * 3600
 _AUDIO_LINK_KEY = hashlib.sha256(("audio-link:" + TELEGRAM_TOKEN).encode()).digest()
