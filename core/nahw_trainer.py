@@ -467,7 +467,11 @@ def _pool_limit(user_id):
         log.error("nahw pool page error: %s: %s", type(e).__name__, e)
     page = min(max(page or MIN_POOL_PAGE, MIN_POOL_PAGE), LAST_PAGE)
     s, a = last_ayah_on_page(page)
-    return corpus().ord["%d:%d" % (s, a)]
+    # Разметка нахва кончается на Юнусе (10:109), а страницы с 15.10.2026
+    # идут до 604 - дальше корпуса пул просто весь корпус (16.10.2026,
+    # Strannik на стр. 604 ловил KeyError, тренажёр висел на загрузке).
+    ords = corpus().ord
+    return ords.get("%d:%d" % (s, a), len(ords) - 1)
 
 
 def _first_try_history(user_id, skill, stage=None, ctype=None, limit=MASTERY_WINDOW):
