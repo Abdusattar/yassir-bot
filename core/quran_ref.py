@@ -10,14 +10,30 @@ core/quran_word_index.json), чтобы отличать реальную оши
 модели без необходимости знать, какой именно аят сдаёт студент.
 """
 
+import functools
 import json
 import os
 import re
 import unicodedata
 
 _INDEX_PATH = os.path.join(os.path.dirname(__file__), "quran_word_index.json")
-with open(_INDEX_PATH, encoding="utf-8") as _f:
-    _QURAN_INDEX = json.load(_f)
+
+
+@functools.lru_cache(maxsize=1)
+def _index():
+    """Индекс и ключи по длине - при первой проверке, а не при импорте
+    (16.10.2026): ~8 МБ в каждом боте ради ИИ-проверки письменного
+    муфрадата в группе, которая с переходом на приложение бывает редко.
+    Загрузка ~60 мс, проверка и так идёт в фоне и ждёт ответа ИИ секунды.
+
+    Ключи по длине - для find_unconfirmed_words (перебор всех ключей на
+    каждое слово студента был бы медленным без этого)."""
+    with open(_INDEX_PATH, encoding="utf-8") as f:
+        index = json.load(f)
+    by_len = {}
+    for k in index:
+        by_len.setdefault(len(k), []).append(k)
+    return index, by_len
 
 # Те же диапазоны, что и в core/handlers.py (_HARAKAT_RE/_ARABIC_TOKEN_RE) -
 # снимаем огласовки, НЕ трогаем хамзу/алиф/та-марбуту/алиф-максуру, это
@@ -35,13 +51,6 @@ with open(_INDEX_PATH, encoding="utf-8") as _f:
 # uthmani-формой из индекса без всякого угадывания.
 _HARAKAT_RE = re.compile(r"[ً-ْـٰ]")
 _ARABIC_TOKEN_RE = re.compile(r"[؀-ۿ]+")
-
-# Индекс ключей по длине - для find_unconfirmed_words (перебор всех 14868
-# ключей на каждое слово студента был бы медленным без этого).
-_KEYS_BY_LEN = {}
-for _k in _QURAN_INDEX:
-    _KEYS_BY_LEN.setdefault(len(_k), []).append(_k)
-
 
 def _normalize(word):
     word = unicodedata.normalize("NFC", word)
@@ -107,7 +116,7 @@ def strip_quran_confirmed_words(verdict, submitted_text):
                         best, best_dist = sn, d
             referenced_norm = best
 
-        if referenced_norm is not None and referenced_norm in _QURAN_INDEX:
+        if referenced_norm is not None and referenced_norm in _index()[0]:
             continue  # слово студента дословно совпадает с Кораном - убираем строку
         keep.append(line)
 
@@ -159,17 +168,18 @@ def find_unconfirmed_words(submitted_text):
     короче _MIN_UNCONFIRMED_LEN и неоднозначные случаи (2+ равнозначных
     кандидата) не трогаем - не гадаем там, где не уверены. Возвращает
     список (исходное_слово, ближайшее_слово_из_Корана)."""
+    index, keys_by_len = _index()
     seen = set()
     findings = []
     for tok in _ARABIC_TOKEN_RE.findall(submitted_text):
         n = _normalize(tok)
-        if len(n) < _MIN_UNCONFIRMED_LEN or n in seen or n in _QURAN_INDEX:
+        if len(n) < _MIN_UNCONFIRMED_LEN or n in seen or n in index:
             continue
         seen.add(n)
 
         candidates = set()
         for length in (len(n) - 1, len(n), len(n) + 1):
-            for key in _KEYS_BY_LEN.get(length, ()):
+            for key in keys_by_len.get(length, ()):
                 if _levenshtein(n, key) == 1:
                     candidates.add(key)
                     if len(candidates) > 1:
@@ -181,6 +191,6 @@ def find_unconfirmed_words(submitted_text):
             match = next(iter(candidates))
             if _is_alif_hamza_only_diff(n, match):
                 continue  # клавиатурное ограничение (алиф-с-хамзой), не ошибка
-            findings.append((tok, _QURAN_INDEX[match][0]))
+            findings.append((tok, index[match][0]))
 
     return findings
