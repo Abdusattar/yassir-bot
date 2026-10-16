@@ -25,13 +25,17 @@
 Навык открыт, когда в ЭТОЙ базе опубликован его урок. Навыки дальше
 (признаки исма, число, معرب/مبني...) добавляются в SKILLS по мере уроков.
 """
-import bisect
+import glob
 import gzip
+import hashlib
 import json
 import logging
 import os
+import pathlib
 import random
+import shutil
 import sqlite3
+import threading
 import unicodedata
 
 from core.db import db, get_date
@@ -55,7 +59,7 @@ MAX_RETRIES_PER_CARD = 2
 # повелительного глагола.
 MIN_POOL_PAGE = 5
 
-CORPUS_PATH = os.path.join(os.path.dirname(__file__), "nahw_corpus.json.gz")
+CORPUS_PATH = os.path.join(os.path.dirname(__file__), "nahw_corpus.db.gz")
 
 # Не спрашиваются в «Видах слова»: местоимения, указательные, относительные,
 # вопросительные и условные слова, наречия места и времени - это исмы, но
@@ -365,41 +369,117 @@ def _stage(ctype):
     return 2 if ctype.startswith("c_") else 1
 
 
-class _Corpus:
-    """Разметка + индекс «тип случая -> слова по порядку мусхафа». Порядковый
-    номер аята нужен, чтобы пул «до закладки» отрезался бисекцией, а не
-    перебором 77 тысяч слов на каждый тап."""
+def build_index(ayat):
+    """Для scripts/build_nahw_corpus.py: порядковые номера аятов и
+    {skill: {ctype: [(ord, item)...]}} по порядку мусхафа - разбор всех
+    слов занимает секунды, на сервере его не делаем."""
+    keys = sorted(ayat, key=lambda k: tuple(int(x) for x in k.split(":")))
+    ords = {k: i for i, k in enumerate(keys)}
+    index = {}
+    for key in keys:
+        ayah = ayat[key]
+        for pos in sorted(ayah, key=int):
+            word = ayah[pos]
+            for idx in range(len(word)):
+                for skill in SKILLS:
+                    ctype = skill["classify"](word, idx, ayah, int(pos))
+                    if ctype:
+                        index.setdefault(skill["id"], {}).setdefault(ctype, []).append(
+                            (ords[key], "%s:%s:%d" % (key, pos, idx)))
+    return ords, index
 
-    def __init__(self, path=CORPUS_PATH):
-        with gzip.open(path, "rt", encoding="utf-8") as f:
-            data = json.load(f)
-        self.terms = data["terms"]
-        self.ayat = data["ayat"]
-        keys = sorted(self.ayat, key=lambda k: tuple(int(x) for x in k.split(":")))
-        self.ord = {k: i for i, k in enumerate(keys)}
-        self.index = {}          # skill -> ctype -> ([ord...], [item...])
-        if data.get("index"):
-            # Собран scripts/build_nahw_corpus.py: разбор всех слов на ходу
-            # занимает секунды, а первый вход после рестарта ждать не должен.
-            self.index = {sk: {t: (o, i) for t, (o, i) in types.items()}
-                          for sk, types in data["index"].items()}
-            return
-        for key in keys:
-            ayah = self.ayat[key]
-            for pos in sorted(ayah, key=int):
-                word = ayah[pos]
-                for idx in range(len(word)):
-                    for skill in SKILLS:
-                        ctype = skill["classify"](word, idx, ayah, int(pos))
-                        if not ctype:
-                            continue
-                        ords, items = self.index.setdefault(skill["id"], {}).setdefault(ctype, ([], []))
-                        ords.append(self.ord[key])
-                        items.append("%s:%s:%d" % (key, pos, idx))
+
+def _unpacked(gz_path):
+    """Распакованная база рядом с .db.gz, имя - по хэшу архива: новый архив
+    после деплоя распаковывается сам, старые копии удаляются. Распаковка
+    потоком - памяти не берёт."""
+    sha = hashlib.sha1()
+    with open(gz_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            sha.update(chunk)
+    tag = sha.hexdigest()[:12]
+    base = gz_path[:-len(".db.gz")]
+    path = "%s-%s.db" % (base, tag)
+    if not os.path.exists(path):
+        tmp = "%s.%d.tmp" % (path, os.getpid())
+        with gzip.open(gz_path, "rb") as src, open(tmp, "wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 20)
+        os.replace(tmp, path)
+        for old in glob.glob(base + "-*.db"):
+            if old != path:
+                try:
+                    os.remove(old)
+                except OSError:
+                    pass
+    return path
+
+
+class _Corpus:
+    """Разметка + индекс «тип случая -> слова по порядку мусхафа» в SQLite на
+    диске (16.10.2026). До того весь корпус жил в памяти каждого бота: на
+    весь Коран ~80 МБ (пик ~100) на бота при 1 ГБ сервера - сервер завис,
+    хотя тренажёром нахва занимается малая часть студентов. Карточке нужно
+    одно слово и его аят - их и берём запросом.
+
+    Порядковый номер аята (ord) - чтобы пул «до закладки» отрезался по
+    индексу: n у слов типа случая идёт по порядку мусхафа, число слов до
+    закладки - это n последнего из них + 1."""
+
+    def __init__(self, path=None):
+        self.path = path or _unpacked(CORPUS_PATH)
+        self._local = threading.local()
+        self.terms = json.loads(self._one("SELECT v FROM meta WHERE k='terms'")[0])
+        self.last_ord = self._one("SELECT max(ord) FROM ayat")[0]
+        self._types = {}
+        for skill, ctype in self._all("SELECT DISTINCT skill, ctype FROM items"):
+            self._types.setdefault(skill, set()).add(ctype)
+
+    def _conn(self):
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(pathlib.Path(self.path).as_uri() + "?mode=ro", uri=True,
+                                   check_same_thread=False)
+            self._local.conn = conn
+        return conn
+
+    def _one(self, sql, args=()):
+        return self._conn().execute(sql, args).fetchone()
+
+    def _all(self, sql, args=()):
+        return self._conn().execute(sql, args).fetchall()
+
+    def skills(self):
+        return set(self._types)
+
+    def ctypes(self, skill):
+        return self._types.get(skill, set())
+
+    def ayah(self, key):
+        row = self._one("SELECT words FROM ayat WHERE key=?", (key,))
+        return json.loads(row[0]) if row else None
+
+    def ord_of(self, key):
+        row = self._one("SELECT ord FROM ayat WHERE key=?", (key,))
+        return row[0] if row else None
+
+    def count(self, skill, ctype, limit):
+        """Сколько слов этого типа в аятах с ord <= limit."""
+        row = self._one("SELECT n FROM items WHERE skill=? AND ctype=? AND ord<=?"
+                        " ORDER BY ord DESC, n DESC LIMIT 1", (skill, ctype, limit))
+        return row[0] + 1 if row else 0
+
+    def item_at(self, skill, ctype, n):
+        return self._one("SELECT item FROM items WHERE skill=? AND ctype=? AND n=?",
+                         (skill, ctype, n))[0]
+
+    def items(self, skill, ctype):
+        """[(ord, item)...] по порядку - для проверок, не для карточек."""
+        return self._all("SELECT ord, item FROM items WHERE skill=? AND ctype=? ORDER BY n",
+                         (skill, ctype))
 
     def word(self, item):
         s, a, pos, idx = item.split(":")
-        ayah = self.ayat["%s:%s" % (s, a)]
+        ayah = self.ayah("%s:%s" % (s, a))
         return ayah, ayah[pos], int(pos), int(idx)
 
 
@@ -470,8 +550,8 @@ def _pool_limit(user_id):
     # С 16.10.2026 разметка на весь Коран. До того кончалась на Юнусе, и
     # Strannik на стр. 604 ловил KeyError - тренажёр висел на загрузке.
     # Страховка остаётся: аят вне корпуса - пул весь корпус.
-    ords = corpus().ord
-    return ords.get("%d:%d" % (s, a), len(ords) - 1)
+    found = corpus().ord_of("%d:%d" % (s, a))
+    return corpus().last_ord if found is None else found
 
 
 def _first_try_history(user_id, skill, stage=None, ctype=None, limit=MASTERY_WINDOW):
@@ -528,15 +608,15 @@ def _recent_items(user_id):
 
 
 def _pick_item(skill, ctype, limit, avoid):
-    ords, items = corpus().index.get(skill, {}).get(ctype, ([], []))
-    n = bisect.bisect_right(ords, limit)
+    c = corpus()
+    n = c.count(skill, ctype, limit)
     if not n:
         return None
     for _ in range(30):
-        item = items[random.randrange(n)]
+        item = c.item_at(skill, ctype, random.randrange(n))
         if item not in avoid:
             return item
-    return items[random.randrange(n)]
+    return c.item_at(skill, ctype, random.randrange(n))
 
 
 def _choose_skill(user_id, skills, passed):
@@ -561,9 +641,9 @@ def _choose_ctype(user_id, skill, stage, limit):
     """Сначала ответ, потом тип случая внутри него - оба выбора взвешены
     слабостью. Без первого шага чаще выпадал бы ответ, у которого просто
     больше типов случаев."""
-    ctypes, index = _SKILL[skill]["ctypes"], corpus().index.get(skill, {})
+    ctypes, c = _SKILL[skill]["ctypes"], corpus()
     open_types = [t for t in ctypes
-                  if _stage(t) <= stage and bisect.bisect_right(index.get(t, ([], []))[0], limit)]
+                  if _stage(t) <= stage and c.count(skill, t, limit)]
     if not open_types:
         return None
     weak = {t: _weakness(user_id, skill, t) for t in open_types}

@@ -56,3 +56,4 @@ media/**/*.mp4
 media/**/*.wav
 media/**/*.mp3
 media/**/*.png
+core/nahw_corpus-*.db

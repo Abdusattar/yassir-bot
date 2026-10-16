@@ -1,4 +1,4 @@
-"""Сборка core/nahw_corpus.json.gz — грамматическая разметка слов Корана для
+"""Сборка core/nahw_corpus.db.gz — грамматическая разметка слов Корана для
 тренажёра нахва (17.09.2026).
 
 Источник: Quranic Arabic Corpus v0.4 (corpus.quran.com, GNU GPL) в арабской
@@ -28,10 +28,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "sources", "quranic_corpus", "quran-morphology.txt")
 TERMS = os.path.join(ROOT, "sources", "quranic_corpus", "morphology-terms-ar.json")
 HADITHS_DB = os.path.join(ROOT, "sources", "hadiths.db")
-OUT = os.path.join(ROOT, "core", "nahw_corpus.json.gz")
+OUT = os.path.join(ROOT, "core", "nahw_corpus.db.gz")
 # Весь Коран (16.10.2026): страницы приложения с 15.10 идут до 604. До того
-# было 10 - пул не выходил за Юнус. Цена - ~80 МБ памяти на бота вместо ~30
-# (пик загрузки ~100), на сервере 1 ГБ это проходит.
+# было 10 - пул не выходил за Юнус. В памяти это стоило ~80 МБ на бота и
+# повесило сервер в тот же день - с тех пор корпус в SQLite на диске.
 MAX_SURAH = 114
 
 
@@ -105,22 +105,45 @@ def main():
     # правила поменялись - пересобрать файл.
     sys.path.insert(0, ROOT)
     from core import nahw_trainer
-    tmp = OUT + ".tmp"
-    with gzip.open(tmp, "wt", encoding="utf-8") as f:
-        json.dump({"terms": {}, "ayat": result}, f, ensure_ascii=False)
-    built = nahw_trainer._Corpus(tmp)
-    os.remove(tmp)
-    index = {sk: {t: [o, i] for t, (o, i) in types.items()} for sk, types in built.index.items()}
-    with gzip.open(OUT, "wt", encoding="utf-8") as f:
-        json.dump({"source": "Quranic Arabic Corpus v0.4, corpus.quran.com (GNU GPL);"
-                             " арабская редакция mustafa0x/quran-morphology",
-                   "terms": json.load(open(TERMS, encoding="utf-8")),
-                   "ayat": result, "index": index}, f, ensure_ascii=False, separators=(",", ":"))
+    ords, index = nahw_trainer.build_index(result)
+    write_db(result, ords, index, json.load(open(TERMS, encoding="utf-8")))
     total = sum(len(v) for v in result.values())
     for sk, types in index.items():
-        print("  %-7s %s" % (sk, ", ".join("%s %d" % (t, len(v[1])) for t, v in types.items())))
+        print("  %-7s %s" % (sk, ", ".join("%s %d" % (t, len(v)) for t, v in types.items())))
     print("аятов: %d, слов: %d, не сошлось по буквам: %d, не разложилось: %d, файл: %.1f МБ"
           % (len(result), total, mismatched, skipped, os.path.getsize(OUT) / 1e6))
+
+
+def write_db(ayat, ords, index, terms):
+    """SQLite, сжатый gzip: на сервере распаковывается на диск и читается
+    запросами (core/nahw_trainer.py, _Corpus) - в память не грузится."""
+    tmp = OUT[:-len(".gz")] + ".tmp"
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    conn = sqlite3.connect(tmp)
+    conn.executescript("""
+        CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT);
+        CREATE TABLE ayat(ord INTEGER PRIMARY KEY, key TEXT NOT NULL UNIQUE, words TEXT NOT NULL);
+        CREATE TABLE items(skill TEXT, ctype TEXT, n INTEGER, ord INTEGER, item TEXT,
+                           PRIMARY KEY(skill, ctype, n)) WITHOUT ROWID;
+        CREATE INDEX idx_items_ord ON items(skill, ctype, ord);
+    """)
+    conn.executemany("INSERT INTO meta VALUES(?,?)", [
+        ("source", "Quranic Arabic Corpus v0.4, corpus.quran.com (GNU GPL);"
+                   " арабская редакция mustafa0x/quran-morphology"),
+        ("terms", json.dumps(terms, ensure_ascii=False))])
+    conn.executemany("INSERT INTO ayat VALUES(?,?,?)",
+                     ((o, k, json.dumps(ayat[k], ensure_ascii=False, separators=(",", ":")))
+                      for k, o in ords.items()))
+    conn.executemany("INSERT INTO items VALUES(?,?,?,?,?)",
+                     ((sk, t, n, o, item) for sk, types in index.items()
+                      for t, rows in types.items() for n, (o, item) in enumerate(rows)))
+    conn.commit()
+    conn.execute("VACUUM")
+    conn.close()
+    with open(tmp, "rb") as src, gzip.open(OUT, "wb", compresslevel=9) as dst:
+        dst.write(src.read())
+    os.remove(tmp)
 
 
 if __name__ == "__main__":

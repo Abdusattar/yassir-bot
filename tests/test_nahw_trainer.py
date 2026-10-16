@@ -29,10 +29,10 @@ def _lesson(topic="أنواع الكلمة (Виды слова)", published=Tru
 def _no_sources(monkeypatch):
     """Текст аятов - из разметки, а не из sources/hadiths.db (в CI её нет)."""
     def fake_words(surah, ayah):
-        a = nt.corpus().ayat["%d:%d" % (surah, ayah)]
+        a = nt.corpus().ayah("%d:%d" % (surah, ayah))
         return [(int(p), "".join(s[0] for s in a[p]), "смысл") for p in sorted(a, key=int)]
     monkeypatch.setattr(nt, "_ayah_words", fake_words)
-    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord["2:29"])
+    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord_of("2:29"))
 
 
 def _current(user_id):
@@ -55,12 +55,12 @@ def _card_id(user_id):
 
 def _item(ref):
     s, a, w = ref.split(":")
-    return nt.corpus().ayat["%s:%s" % (s, a)][w]
+    return nt.corpus().ayah("%s:%s" % (s, a))[w]
 
 
 def _ctype(ref, idx, skill="kinds"):
     s, a, w = ref.split(":")
-    ayah = nt.corpus().ayat["%s:%s" % (s, a)]
+    ayah = nt.corpus().ayah("%s:%s" % (s, a))
     return nt._SKILL[skill]["classify"](ayah[w], idx, ayah, int(w))
 
 
@@ -78,18 +78,20 @@ def test_classification_follows_lesson_signs():
 
 def test_every_indexed_item_has_its_answer_kind():
     kinds = {"ism": "N", "fil": "V", "harf": "P"}
-    for ctype, (ords, items) in nt.corpus().index["kinds"].items():
+    for ctype in nt.corpus().ctypes("kinds"):
+        rows = nt.corpus().items("kinds", ctype)
+        ords = [o for o, _ in rows]
         assert ords == sorted(ords)
-        for item in items[:200]:
+        for _, item in rows[:200]:
             _, word, _, idx = nt.corpus().word(item)
             assert word[idx][1] == kinds[nt._SKILL["kinds"]["ctypes"][ctype][0]], (ctype, item)
 
 
 def test_index_matches_skills_and_every_type_has_explanation():
-    assert set(nt.corpus().index) == {s["id"] for s in nt.SKILLS}
+    assert nt.corpus().skills() == {s["id"] for s in nt.SKILLS}
     for skill in nt.SKILLS:
         keys = {o["key"] for o in skill["options"]}
-        assert set(nt.corpus().index[skill["id"]]) <= set(skill["ctypes"])
+        assert nt.corpus().ctypes(skill["id"]) <= set(skill["ctypes"])
         for ctype, (ans, label) in skill["ctypes"].items():
             assert ans in keys and label
             assert skill["id"] == "kinds" or ctype in nt._EXPLAIN
@@ -115,10 +117,16 @@ def test_name_of_allah_is_never_asked():
     """Проверка по буквам, не по записи с харакатами: 17.09.2026 исключение
     по строке «LEM:اللَّه» молча не срабатывало из-за порядка шадды и фатхи."""
     asked = []
-    for types in nt.corpus().index.values():
-        for _, items in types.values():
-            asked += [i for i in items
-                      if nt._letters(nt.corpus().word(i)[1][nt.corpus().word(i)[3]][0]) in ("الله", "لله", "اللهم")]
+    c, ayat = nt.corpus(), {}
+    for skill in c.skills():
+        for ctype in c.ctypes(skill):
+            for _, i in c.items(skill, ctype):
+                s, a, pos, idx = i.split(":")
+                key = s + ":" + a
+                if key not in ayat:
+                    ayat[key] = c.ayah(key)
+                if nt._letters(ayat[key][pos][int(idx)][0]) in ("الله", "لله", "اللهم"):
+                    asked.append(i)
     assert asked == []
     assert _ctype("2:61:50", 0) is None
 
@@ -144,7 +152,7 @@ def test_nothing_without_published_lesson(test_db, monkeypatch):
 def test_mistake_repeats_with_another_word_of_the_same_type(test_db, monkeypatch):
     _no_sources(monkeypatch)
     # пул пошире: на 29 аятах у редкого типа (фиаль с تْ) другого слова может не быть
-    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord["2:141"])
+    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord_of("2:141"))
     _lesson()
     nt.new_session("777")
     first = _current("777")
@@ -245,7 +253,7 @@ def test_new_skill_is_announced_once(test_db, monkeypatch):
 
 def test_group_that_passed_lectures_gets_skills_at_once(test_db, monkeypatch):
     _no_sources(monkeypatch)
-    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord["2:141"])
+    monkeypatch.setattr(nt, "_pool_limit", lambda user_id: nt.corpus().ord_of("2:141"))
     _lesson()
     g = _group()
     nt.set_group_passed(g["id"], 5)
@@ -350,6 +358,6 @@ def test_hafiz_on_last_page_gets_a_card(test_db, monkeypatch):
     _no_sources(monkeypatch)
     monkeypatch.setattr(nt, "_pool_limit", _REAL_POOL_LIMIT)
     monkeypatch.setattr(mw, "get_hifz_pointer", lambda uid: {"page": 604, "madani_page": 604})
-    assert nt._pool_limit("777") == nt.corpus().ord["114:6"]
+    assert nt._pool_limit("777") == nt.corpus().ord_of("114:6")
     _lesson()
     assert not nt.state("777").get("empty") and _current("777")
