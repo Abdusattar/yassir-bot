@@ -7,6 +7,7 @@ import pytz
 from config import TZ, SUPER_ADMIN_IDS, CURRICULUM_REVIEWER_ID, SCALING_CHAT_ID, SCALING_INVITE_LINK, IS_FEMALE, PROFILE
 from core.db import (
     get_all_groups, get_group_tasks, get_group_lang, hafiz_ids, student_tasks, prior_full_dates,
+    task_since, tasks_on,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
     format_daily_report, format_period_report, get_period_winner, get_period_winner_range,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
@@ -1777,6 +1778,7 @@ async def weekly_report():
                     ).fetchall()
                 roster = {s["id"]: s for s in get_students(group_id)}
                 hafiz = hafiz_ids(group_id)
+                since = task_since(group_id)
                 full_dates_by_student = {}
                 partial_counts = {}
                 for r in rows:
@@ -1784,7 +1786,9 @@ async def weekly_report():
                     if not s:
                         continue
                     subs = set((r["subs"] or "").split(","))
-                    need = set(student_tasks(r["student_id"], group_tasks, hafiz))
+                    # Только задания, обязательные в тот день (включённые
+                    # посреди недели не делают её начало неполным).
+                    need = set(tasks_on(student_tasks(r["student_id"], group_tasks, hafiz), since, r["date"]))
                     r = {"n": len(subs), "student_id": r["student_id"], "date": r["date"]}
                     if need <= subs:   # у хафиза - без заучивания
                         full_dates_by_student.setdefault(r["student_id"], set()).add(r["date"])

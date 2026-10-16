@@ -123,6 +123,16 @@ def init():
                 why         TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_sr_student ON score_removals(student_id, date);
+            -- С какого дня задание обязательно группе (16.10.2026): 15.10
+            -- включение таджвида задним числом сделало прошлые дни неполными,
+            -- серии 40 сестёр и 11 братьев упали в 1. Нет записи - задание
+            -- обязательно всегда (как было до таблицы).
+            CREATE TABLE IF NOT EXISTS group_task_since(
+                group_id INTEGER NOT NULL,
+                task     TEXT NOT NULL,
+                since    TEXT NOT NULL,
+                PRIMARY KEY(group_id, task)
+            );
             CREATE INDEX IF NOT EXISTS idx_se_group_date   ON score_events(group_id, date);
             CREATE TABLE IF NOT EXISTS online_lessons(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1231,8 +1241,33 @@ def get_group_tasks(group):
 
 
 def update_group_tasks(chat_id, tasks):
+    """Новые задания обязательны с сегодняшнего дня - прошлые дни меряются
+    тем, что требовалось тогда (group_task_since)."""
+    today = get_date()
     with db() as c:
+        g = c.execute("SELECT id, tasks FROM groups WHERE chat_id=?", (chat_id,)).fetchone()
         c.execute("UPDATE groups SET tasks=? WHERE chat_id=?", (tasks, chat_id))
+        if not g:
+            return
+        old = set(get_group_tasks(g))
+        new = set(tasks.split(",")) if tasks else {"m", "r", "t"}
+        for k in new - old:
+            c.execute("INSERT OR REPLACE INTO group_task_since(group_id, task, since) VALUES(?,?,?)",
+                      (g["id"], k, today))
+        for k in old - new:
+            c.execute("DELETE FROM group_task_since WHERE group_id=? AND task=?", (g["id"], k))
+
+
+def task_since(group_id):
+    """{задание: с какой даты обязательно}; задания без записи - всегда."""
+    with db() as c:
+        return {r["task"]: r["since"] for r in c.execute(
+            "SELECT task, since FROM group_task_since WHERE group_id=?", (group_id,))}
+
+
+def tasks_on(tasks, since, day):
+    """Задания из tasks, обязательные в день day."""
+    return [k for k in tasks if since.get(k, "") <= day]
 
 
 def update_group_lang(chat_id, lang):
@@ -3071,25 +3106,32 @@ def _full_task_dates(uid, group_id, group_tasks, limit=400, since_date=None):
     "страйк есть страйк, обнуляется если не сдал все 3, даже если узр").
     Отдельно от _active_dates - та по-прежнему "хоть одно событие" для
     других метрик (пропуски, get_days_since_last_report и т.д.), их
-    трогать не нужно. У хафиза - без заучивания (student_tasks)."""
+    трогать не нужно. У хафиза - без заучивания (student_tasks).
+    Каждый день - заданиями, обязательными в тот день (group_task_since)."""
     group_tasks = student_tasks(uid, group_tasks)
     if not group_tasks:
         return set()
+    since = task_since(group_id)
     placeholders = ",".join("?" * len(group_tasks))
     since_clause = " AND date>=?" if since_date else ""
     params = [uid, group_id, *group_tasks]
     if since_date:
         params.append(since_date)
-    params += [len(group_tasks), limit]
     with db() as c:
         rows = c.execute(
-            "SELECT date FROM score_events"
+            "SELECT date, GROUP_CONCAT(DISTINCT subcategory) AS subs FROM score_events"
             " WHERE student_id=? AND group_id=? AND category='task' AND subcategory IN (%s)%s"
-            " GROUP BY date HAVING COUNT(DISTINCT subcategory)=?"
-            " ORDER BY date DESC LIMIT ?" % (placeholders, since_clause),
+            " GROUP BY date ORDER BY date DESC" % (placeholders, since_clause),
             params
         ).fetchall()
-    return {r["date"] for r in rows}
+    out = set()
+    for r in rows:
+        need = tasks_on(group_tasks, since, r["date"])
+        if need and set(need) <= set(r["subs"].split(",")):
+            out.add(r["date"])
+            if len(out) >= limit:
+                break
+    return out
 
 
 def prior_full_dates(uid, group_id):
@@ -3162,12 +3204,25 @@ def get_group_streaks(group_id, group_tasks, for_date=None):
     anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now().date()
     yesterday = anchor - timedelta(days=1)
     placeholders = ",".join("?" * len(group_tasks))
+    # Задание с датой начала (group_task_since) засчитывается и требуется
+    # только с этой даты; без даты - всегда.
+    since = task_since(group_id)
+    always = [k for k in group_tasks if k not in since]
+    dated = [k for k in group_tasks if k in since]
+    counted = (["subcategory IN (%s)" % ",".join("?" * len(always))] if always else []) \
+        + ["(subcategory=? AND date>=?)"] * len(dated)
+    done_sql = "COUNT(DISTINCT CASE WHEN %s THEN subcategory END)" % " OR ".join(counted)
+    need_sql = str(len(always)) + " + (date>=?)" * len(dated)
+    having_params = [*always]
+    for k in dated:
+        having_params += [k, since[k]]
+    having_params += [since[k] for k in dated]
     with db() as c:
         rows = c.execute(
             "WITH full_days AS ("
             "  SELECT student_id, date FROM score_events"
             "  WHERE group_id=? AND category='task' AND subcategory IN (%s)"
-            "  GROUP BY student_id, date HAVING COUNT(DISTINCT subcategory)=?"
+            "  GROUP BY student_id, date HAVING %s = %s"
             "), grouped AS ("
             "  SELECT student_id, date,"
             "         julianday(date) - ROW_NUMBER() OVER (PARTITION BY student_id ORDER BY date) AS grp"
@@ -3177,8 +3232,8 @@ def get_group_streaks(group_id, group_tasks, for_date=None):
             "  FROM grouped GROUP BY student_id, grp"
             ")"
             " SELECT student_id, run_end, run_len FROM runs WHERE run_end IN (?, ?)"
-            % placeholders,
-            (group_id, *group_tasks, len(group_tasks), anchor.isoformat(), yesterday.isoformat())
+            % (placeholders, done_sql, need_sql),
+            (group_id, *group_tasks, *having_params, anchor.isoformat(), yesterday.isoformat())
         ).fetchall()
     by_student = {}
     for r in rows:
