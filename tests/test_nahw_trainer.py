@@ -9,6 +9,8 @@ import core.mufradat_api as api
 import core.nahw_trainer as nt
 import core.tg as tg
 
+_REAL_POOL_LIMIT = nt._pool_limit
+
 
 def _group(chat_id="-100903", title="N-2a", tasks="m,r,t,j,n"):
     db.save_group(chat_id, title, tasks=tasks)
@@ -339,3 +341,15 @@ def test_first_meet_with_case_type_is_flagged_once(test_db, monkeypatch):
             flags.append((ctype in seen, data["feedback"]["first_meet"]))
             seen.add(ctype)
     assert all(met != first for met, first in flags)
+
+
+def test_hafiz_on_last_page_gets_a_card(test_db, monkeypatch):
+    """16.10.2026: Strannik на стр. 604 - корпус кончался на Юнусе,
+    _pool_limit падал KeyError '114:6', тренажёр висел на загрузке."""
+    import core.mushaf_words as mw
+    _no_sources(monkeypatch)
+    monkeypatch.setattr(nt, "_pool_limit", _REAL_POOL_LIMIT)
+    monkeypatch.setattr(mw, "get_hifz_pointer", lambda uid: {"page": 604, "madani_page": 604})
+    assert nt._pool_limit("777") == nt.corpus().ord["114:6"]
+    _lesson()
+    assert not nt.state("777").get("empty") and _current("777")

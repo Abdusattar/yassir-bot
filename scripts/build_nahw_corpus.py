@@ -29,9 +29,10 @@ SRC = os.path.join(ROOT, "sources", "quranic_corpus", "quran-morphology.txt")
 TERMS = os.path.join(ROOT, "sources", "quranic_corpus", "morphology-terms-ar.json")
 HADITHS_DB = os.path.join(ROOT, "sources", "hadiths.db")
 OUT = os.path.join(ROOT, "core", "nahw_corpus.json.gz")
-# Пул тренажёра не выходит за страницы приложения (core/quran_pages.py:
-# суры 2-10, плюс Фатиха) - остальное только занимало бы память бота.
-MAX_SURAH = 10
+# Весь Коран (16.10.2026): страницы приложения с 15.10 идут до 604. До того
+# было 10 - пул не выходил за Юнус. Цена - ~80 МБ памяти на бота вместо ~30
+# (пик загрузки ~100), на сервере 1 ГБ это проходит.
+MAX_SURAH = 114
 
 
 def skel(text):
