@@ -25,6 +25,7 @@ mufradat_words покрывает весь Коран (1-114, синк на пр
 память project_mufradat_local_full_quran_data), так что резолвится
 практически всегда; не нашли - progress_key остаётся NULL, слово просто
 списком для чтения, как и было изначально."""
+import functools
 import json
 import os
 import re
@@ -562,7 +563,7 @@ def set_mushaf_layout(user_id, layout):
     return get_hifz_pointer(user_id)
 
 
-_word_places = {}
+_ayah_pages = {}
 
 
 def _page_json(page_number, layout="madani"):
@@ -575,19 +576,48 @@ def _page_json(page_number, layout="madani"):
         return None
 
 
-def word_place(layout, triple):
-    """(страница, текстовая строка) слова (сура, аят, позиция) в раскладке."""
-    if layout not in _word_places:
-        idx = {}
+def _ayah_first_page(layout, surah, ayah):
+    """Страница раскладки, где начинается аят. Мединская - из quran_pages;
+    у египетской своя таблица ~6 тыс. аятов из page*.json (поле ayahs)."""
+    if layout != "dm":
+        from core.quran_pages import page_for_ayah
+        return page_for_ayah(surah, ayah)
+    key = (_MUSHAF_DATA_DIR, layout)
+    if key not in _ayah_pages:
+        first = {}
         for p in range(1, _HIFZ_LAST_PAGE + 1):
-            data = _page_json(p, layout) or {}
-            text = [l for l in data.get("lines", []) if l.get("type") == "text"]
-            for i, l in enumerate(text):
-                for t in l.get("tokens") or []:
-                    if t.get("type") == "word":
-                        idx[(t["surah"], t["ayah"], t["position"])] = (p, i)
-        _word_places[layout] = idx
-    return _word_places[layout].get(tuple(triple))
+            for a in (_page_json(p, layout) or {}).get("ayahs") or []:
+                first.setdefault((a["surah"], a["ayah"]), p)
+        _ayah_pages[key] = first
+    return _ayah_pages[key].get((surah, ayah))
+
+
+# Строк в мусхафе ~9 тыс. - чаще всего спрашивают первое слово строки;
+# запас на слова строк заучивания. Запись ~200 байт, потолок ~3 МБ.
+@functools.lru_cache(maxsize=16384)
+def _word_place(data_dir, layout, triple):
+    start = _ayah_first_page(layout, triple[0], triple[1])
+    if not start:
+        return None
+    # Аят может перейти на следующий лист (длинные - и через лист).
+    for p in range(start, min(start + 3, _HIFZ_LAST_PAGE + 1)):
+        data = _page_json(p, layout) or {}
+        text = [l for l in data.get("lines", []) if l.get("type") == "text"]
+        for i, l in enumerate(text):
+            for t in l.get("tokens") or []:
+                if t.get("type") == "word" and (t["surah"], t["ayah"], t["position"]) == triple:
+                    return (p, i)
+    return None
+
+
+def word_place(layout, triple):
+    """(страница, текстовая строка) слова (сура, аят, позиция) в раскладке.
+
+    16.10.2026: раньше - карта всех 77 тыс. слов обеих раскладок в памяти
+    каждого бота (~24 МБ) ради редких вопросов (смена раскладки, мединская
+    страница у египетской). Теперь: страница аята по маленькой таблице,
+    слово ищется на 1-2 листах (~мс), ответы - в ограниченном кэше."""
+    return _word_place(_MUSHAF_DATA_DIR, layout, tuple(triple))
 
 
 def madani_page(layout, page, line=0):
