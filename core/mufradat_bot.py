@@ -799,6 +799,12 @@ def _group_leaderboard_for_this_bot():
 LEADERBOARD_TTL = 60
 _lb_lock = threading.Lock()
 _lb = {"at": 0.0, "key": None, "data": None}
+# Самый долгий пересчёт за сутки - для напоминания (core/scheduler.py,
+# leaderboard_slow_alert). Пересчёт перебирает всю историю ответов
+# (mufradat_progress); вырос до секунды - пора вести счётчики точности
+# на студента, а не считать с нуля (wiki/leaderboard.md).
+LEADERBOARD_SLOW_SEC = 1.0
+lb_slowest = {"sec": 0.0}
 
 
 def _compute_leaderboards():
@@ -823,7 +829,9 @@ def _leaderboards():
     key = (str(db_module.DB), str(mufradat_module.HADITHS_DB), get_date())
     with _lb_lock:
         if _lb["key"] != key or time.monotonic() - _lb["at"] > LEADERBOARD_TTL:
+            started = time.monotonic()
             _lb.update(data=_compute_leaderboards(), at=time.monotonic(), key=key)
+            lb_slowest["sec"] = max(lb_slowest["sec"], _lb["at"] - started)
         return _lb["data"]
 
 

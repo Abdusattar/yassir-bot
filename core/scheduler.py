@@ -1978,6 +1978,21 @@ async def _purge_feed_job():
         log.info("Лента: удалено старых сообщений — %d", removed)
 
 
+async def leaderboard_slow_alert():
+    """Раз в сутки (16.10.2026, просьба пользователя «потом если забудем»):
+    пересчёт рейтинга дольше секунды - пишем Абдусаттару, что пора вести
+    счётчики точности на студента (план - wiki/leaderboard.md). Замер
+    обнуляется: каждый день - свежий."""
+    from core import mufradat_bot as mb
+    sec, mb.lb_slowest["sec"] = mb.lb_slowest["sec"], 0.0
+    if sec < mb.LEADERBOARD_SLOW_SEC:
+        return
+    await send_message(
+        _VERIFY_REPORT_ADMIN_ID,
+        "⏱ Рейтинг (%s бот) считается уже %.1f с. Пора включать счётчики точности "
+        "на студента - план в wiki/leaderboard.md." % (PROFILE, sec))
+
+
 async def scheduler():
     """Бесконечный цикл планировщика. Запускается как asyncio Task из bot.py."""
     log.info("Scheduler started")
@@ -2018,6 +2033,7 @@ async def scheduler():
                 await maybe_run("prep_check_morning", check_prep_students)
                 await maybe_run("side_sweep_morning", sweep_misplaced_in_prep)
                 await maybe_run("voice_review_report", voice_review_report)
+                await maybe_run("leaderboard_slow_alert", leaderboard_slow_alert)
                 await maybe_run("profile_survey_intro", profile_survey_intro)
                 await maybe_run("profile_survey_nudge", profile_survey_nudge)
                 if wd in (0, 1):
