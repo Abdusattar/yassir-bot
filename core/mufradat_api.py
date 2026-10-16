@@ -2796,7 +2796,11 @@ async def run_server(port=8081):
     127.0.0.1 - наружу смотрит nginx, проксирующий /api/muf/ (см.
     wiki/infrastructure.md после этой правки)."""
     app = build_app()
-    runner = web.AppRunner(app)
+    # Без строки на каждый запрос (16.10.2026): за ними стоит nginx, его
+    # access.log пишет то же самое, да ещё с настоящим IP (здесь - только
+    # 127.0.0.1), 14 дней. Эти строки были 96% системного журнала - 1,2 ГБ
+    # дубля; ошибки обработчиков aiohttp пишет отдельно и дальше.
+    runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     site = web.TCPSite(runner, "127.0.0.1", port)
     await site.start()
