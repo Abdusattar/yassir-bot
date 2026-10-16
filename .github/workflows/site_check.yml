@@ -1,0 +1,60 @@
+# Проверка снаружи, что приложение отвечает (16.10.2026).
+#
+# monitor.sh живёт на том же сервере и смотрит только «запущен ли сервис».
+# 16.10 зависла вся машина (кончилась память): сервис числился живым, а
+# сайт, SSH и сам монитор молчали час - узнали от студентов. Отсюда, с
+# серверов GitHub, видно и это: адрес не открылся - сообщение в Telegram.
+#
+# Секреты: MONITOR_BOT_TOKEN (тот же бот, что в monitor.sh), MONITOR_CHAT_ID.
+# Расписание GitHub бывает с опозданием на несколько минут - это нормально.
+name: Site check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Прислать проверочное сообщение (проверить, что оповещение доходит)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: site-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Приложение отвечает?
+        env:
+          TOKEN: ${{ secrets.MONITOR_BOT_TOKEN }}
+          CHAT: ${{ secrets.MONITOR_CHAT_ID }}
+        run: |
+          down=""
+          for half in male female; do
+            url="https://yassirilm.com/api/muf/$half/version"
+            ok=""
+            # Три попытки с паузой - одна медленная секунда не тревога.
+            for try in 1 2 3; do
+              if curl -fsS -m 20 -o /dev/null "$url"; then ok=1; break; fi
+              sleep 20
+            done
+            if [ -z "$ok" ]; then
+              name=$([ "$half" = male ] && echo "братья" || echo "сёстры")
+              down="${down:+$down, }$name"
+            fi
+          done
+          if [ "${{ inputs.test }}" = "true" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage"               --data-urlencode "chat_id=${CHAT}"               --data-urlencode "text=✅ Проверка приложения с серверов GitHub работает. Сейчас: ${down:-оба отвечают}." > /dev/null
+          fi
+          if [ -z "$down" ]; then
+            echo "Оба отвечают"
+            exit 0
+          fi
+          text="🔴 Приложение не открывается ($down): yassirilm.com не ответил 3 раза подряд. Проверка с серверов GitHub, $(date -u '+%H:%M') UTC."
+          curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT}" --data-urlencode "text=${text}" > /dev/null
+          exit 1
