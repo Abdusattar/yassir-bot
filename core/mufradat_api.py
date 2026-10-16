@@ -61,6 +61,7 @@ from core.mufradat import (
 from core.mufradat_bot import (
     submit_ustaz_verdict, send_ustaz_comment,
     _credit_task_if_applicable, _leaderboard_for_this_bot, _group_leaderboard_for_this_bot,
+    _leaderboards, with_fresh,
     _split_by_division, _display_name, _group_name, _find_rank, credit_revision_task,
     idle_days, LEADERBOARD_IDLE_DAYS,
     submit_hifz_recording, HIFZ_MAX_UPLOAD_BYTES, _hifz_place, submit_revision_recording,
@@ -474,11 +475,14 @@ async def handle_end(request, user_id):
     result = {"overall_score": end_score}
     if end_score and state and state.get("start_score10") is not None:
         result["delta"] = round(end_score["score10"] - state["start_score10"], 2)
-    mine = next((s for uid, s in _leaderboard_for_this_bot() if uid == user_id), None)
+    # Вне главного потока: пересчёт рейтинга (раз в минуту) и своя свежая
+    # строка - базы, а бот в это время отвечает остальным (16.10.2026).
+    boards = await asyncio.to_thread(_fresh_boards, user_id)
+    mine = next((s for uid, s in boards["full"] if uid == user_id), None)
     if mine:
         result["me"] = _my_row(user_id, mine)
     if end_score:
-        divisions = _split_by_division(_group_leaderboard_for_this_bot())
+        divisions = _split_by_division(boards["group"])
         rank_info = _find_rank(divisions, user_id)
         if rank_info:
             label, rank, total, _score = rank_info
@@ -495,11 +499,16 @@ async def handle_end(request, user_id):
     return web.json_response(result)
 
 
+def _fresh_boards(user_id):
+    return with_fresh(_leaderboards(), user_id)
+
+
 @with_auth
 async def handle_leaderboard(request, user_id):
     """GET - рейтинг: гендер-фильтр и дивизионы из mufradat_bot.py,
     Wilson-формула из core/mufradat.py."""
-    full = _leaderboard_for_this_bot()
+    boards = await asyncio.to_thread(_fresh_boards, user_id)
+    full = boards["full"]
     own = next(((i, s) for i, (uid, s) in enumerate(full, start=1) if uid == user_id), None)
     if not get_learning_group(user_id):
         return web.json_response({
@@ -509,11 +518,13 @@ async def handle_leaderboard(request, user_id):
 
     divisions = []
     me = _my_row(user_id, own[1]) if own else None
-    for i, (label, entries) in enumerate(_split_by_division(_group_leaderboard_for_this_bot()), start=1):
+    names, groups = boards["names"], boards["groups"]
+    for i, (label, entries) in enumerate(_split_by_division(boards["group"]), start=1):
         rows = []
         for place, (uid, score) in enumerate(entries, start=1):
-            rows.append({**_public_score(score), "name": _display_name(uid),
-                         "group": _group_name(uid), "you": uid == user_id})
+            # Имя и группа - из того же пересчёта, не запросом на каждую строку.
+            rows.append({**_public_score(score), "name": names.get(uid) or "Студент %s" % uid[-4:],
+                         "group": groups.get(uid) or "—", "you": uid == user_id})
             if uid == user_id and me is not None:
                 me.update({"place": place, "total": len(entries), "division_no": i})
         divisions.append({"label": label, "division_no": i, "entries": rows})

@@ -1202,7 +1202,7 @@ def _wilson_lower_bound(correct, n):
     return (center - margin) / denom
 
 
-def _accuracy_totals():
+def _accuracy_totals(user_id=None):
     """user_id -> {language: {correct, wrong, n, attempted, page}} - суммарно
     по ВСЕМ словам, что студент когда-либо открывал за всю историю (не только
     текущая закладка - строка в mufradat_progress появляется один раз на
@@ -1221,24 +1221,28 @@ def _accuracy_totals():
     при равном Wilson-счёте (решение пользователя 18.08.2026). page - НЕ
     завязана на язык (закладка одна на студента, get_current_page), берётся
     из отдельного запроса и подставляется в обе языковые ветки одинаково."""
+    # user_id (16.10.2026) - только один студент: своя строка в рейтинге
+    # свежая, хотя общий список берётся из минутного кэша (core/mufradat_bot.py).
+    where, args = (" WHERE user_id=?", (str(user_id),)) if user_id is not None else ("", ())
     with sqlite3.connect(HADITHS_DB) as conn:
         _ensure_progress_schema(conn)
         rows = conn.execute(
             "SELECT p.user_id, w.language, SUM(p.correct_count), SUM(p.wrong_count), COUNT(*) "
-            "FROM mufradat_progress p JOIN mufradat_words w ON w.id = p.word_id "
-            "GROUP BY p.user_id, w.language"
+            "FROM mufradat_progress p JOIN mufradat_words w ON w.id = p.word_id"
+            + where.replace("user_id", "p.user_id") +
+            " GROUP BY p.user_id, w.language", args
         ).fetchall()
         conn.execute(_PAGE_SCHEMA)
-        pages = dict(conn.execute("SELECT user_id, page_number FROM mufradat_page").fetchall())
+        pages = dict(conn.execute("SELECT user_id, page_number FROM mufradat_page" + where, args).fetchall())
         # Место заучивания и раскладка (28.09.2026) - глубина в рейтинге.
         conn.execute(_HIFZ_SCHEMA)
         conn.execute(_LAYOUT_SCHEMA)
         pointers = {uid: (p, line) for uid, p, line in conn.execute(
-            "SELECT user_id, page_number, line_index FROM mushaf_hifz_pointer")}
-        layouts = dict(conn.execute("SELECT user_id, layout FROM mushaf_layout").fetchall())
+            "SELECT user_id, page_number, line_index FROM mushaf_hifz_pointer" + where, args)}
+        layouts = dict(conn.execute("SELECT user_id, layout FROM mushaf_layout" + where, args).fetchall())
         conn.execute(_DAILY_ANSWERED_SCHEMA)
         last = dict(conn.execute(
-            "SELECT user_id, MAX(date) FROM mufradat_daily_answered_words GROUP BY user_id"
+            "SELECT user_id, MAX(date) FROM mufradat_daily_answered_words" + where + " GROUP BY user_id", args
         ).fetchall())
 
     totals = {}
@@ -1320,7 +1324,7 @@ def rating_depth(bookmark, hifz_page, hafiz=False, covered=None):
     return depth
 
 
-def get_leaderboard(hafiz=frozenset()):
+def get_leaderboard(hafiz=frozenset(), user_id=None):
     """Единый общий список (user_id, score_dict), НЕ полки по глубине
     страниц (было так до 18.08.2026) - Wilson-точность сравнима на любой
     глубине пула напрямую (в отличие от score10/mastered, которые зависели
@@ -1378,8 +1382,10 @@ def get_leaderboard(hafiz=frozenset()):
     места заучивания; hafiz - множество user_id хафизов, им закладка), с
     15.10.2026 - ещё и не дальше покрытого словами (covered_page).
     Рядом bookmark, hifz_page и last_date - для подсказки и отбора
-    неактивных (core/mufradat_bot.py)."""
-    totals = _accuracy_totals()
+    неактивных (core/mufradat_bot.py).
+
+    user_id - строка одного студента (тот же расчёт, только его данные)."""
+    totals = _accuracy_totals(user_id)
     entries = []
     for uid, by_lang in totals.items():
         best = None

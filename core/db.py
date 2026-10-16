@@ -1630,6 +1630,27 @@ def get_learning_group(phone, include_prep=False):
         """, (phone, *allowed)).fetchone()
 
 
+def leaderboard_people():
+    """Для рейтинга - разом на всех (16.10.2026): {phone: name} активных
+    (как find_user_by_phone) и {phone: title} учебной группы (как
+    get_learning_group без prep). Раньше - два запроса на КАЖДОГО студента
+    при каждом пересчёте рейтинга, а он считался в главном потоке бота."""
+    with db() as c:
+        names = {}
+        for r in c.execute("SELECT phone, name FROM users WHERE active=1 ORDER BY id"):
+            names.setdefault(str(r["phone"]), r["name"])
+        groups = {}
+        for r in c.execute("""
+                SELECT u.phone, g.title FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                JOIN groups g ON ug.group_id=g.id
+                WHERE ug.role='student' AND ug.active=1
+                  AND (g.group_type IN ('pro', 'relaxed') OR g.group_type IS NULL)
+                ORDER BY ug.rowid"""):
+            groups.setdefault(str(r["phone"]), r["title"])
+    return names, groups
+
+
 def is_active_prep_student(phone):
     """Уже зарегистрирован в подготовительной группе (12.08.2026, фикс: ЛС
     /start у такого студента раньше показывало 'чтобы зарегистрироваться -

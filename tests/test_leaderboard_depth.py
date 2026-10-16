@@ -124,8 +124,8 @@ def test_idle_days_hide_from_public_list(lb_db, monkeypatch):
     today = date(2026, 9, 28)
     monkeypatch.setattr(mb, "get_date", lambda: today.isoformat())
     monkeypatch.setattr(mb, "hafiz_phones", lambda: set())
-    monkeypatch.setattr(mb, "find_user_by_phone", lambda uid: {"phone": uid})
-    monkeypatch.setattr(mb, "get_learning_group", lambda uid: {"id": 1})
+    everyone = {uid: uid for uid in ("fresh", "idle", "never")}
+    monkeypatch.setattr(mb, "leaderboard_people", lambda: (everyone, dict(everyone)))
     _student(lb_db, "fresh", correct=900, wrong=100, words=100, bookmark=20, hifz=20,
              last=(today - timedelta(days=14)).isoformat())
     _student(lb_db, "idle", correct=950, wrong=50, words=100, bookmark=30, hifz=30,
@@ -147,8 +147,10 @@ def _api_board(monkeypatch, me_id, full, public):
     import core.mufradat_api as api
     from aiohttp.test_utils import TestClient, TestServer
     monkeypatch.setattr(api, "validate_init_data", lambda raw, token: {"id": raw})
-    monkeypatch.setattr(api, "_leaderboard_for_this_bot", lambda: full)
-    monkeypatch.setattr(api, "_group_leaderboard_for_this_bot", lambda: public)
+    boards = {"full": full, "group": public,
+              "names": {uid: "Имя " + uid for uid, _ in full},
+              "groups": {uid: "Группа 3" for uid, _ in full}}
+    monkeypatch.setattr(api, "_fresh_boards", lambda uid: boards)
     monkeypatch.setattr(api, "get_learning_group", lambda uid: {"id": 1})
     monkeypatch.setattr(api, "_display_name", lambda uid: "Имя " + uid)
     monkeypatch.setattr(api, "_group_name", lambda uid: "Группа 3")

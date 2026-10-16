@@ -62,6 +62,15 @@ def test_hadiths_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _leaderboard_without_cache(monkeypatch):
+    """Рейтинг на проде держится минуту (core/mufradat_bot.py), а тесты
+    меняют ответы и сразу смотрят места - пересчёт на каждый вызов. Сам
+    кэш проверяет tests/test_leaderboard_cache.py."""
+    import core.mufradat_bot as mb
+    monkeypatch.setattr(mb, "LEADERBOARD_TTL", -1)
+
+
+@pytest.fixture(autouse=True)
 def _no_audio_probe(monkeypatch):
     """Тесты подают ненастоящий звук (b"OGG:...") - длину не меряем, иначе
     проверка «запись дошла не целиком» (17.09.2026) сочтёт его пустым.

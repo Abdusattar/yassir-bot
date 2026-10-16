@@ -11,11 +11,13 @@ core/mufradat.py, HTTP-обвязка - core/mufradat_api.py).
 """
 import asyncio
 import logging
+import threading
+import time
 
 from core.audio_compat import keep_copy
 from core.content import SHORT_TASKS
 from core.db import (
-    hafiz_phones,
+    hafiz_phones, leaderboard_people,
     find_user_by_phone, get_learning_group, get_group_tasks, save_report, get_date,
     get_today_report, save_voice_submission, get_open_retakes, get_submission,
     set_submission_verdict, save_submission_review, get_dm_ok, VERDICT_ACCEPTED,
@@ -776,8 +778,7 @@ def _leaderboard_for_this_bot():
     рейтинг не включать, но ему лично рейтинг отправлять... и показывать
     его место" - место среди ВСЕХ тренирующихся этого бота, не только
     группы."""
-    return [(uid, score) for uid, score in get_leaderboard(hafiz=hafiz_phones())
-            if find_user_by_phone(uid)]
+    return _leaderboards()["full"]
 
 
 def _group_leaderboard_for_this_bot():
@@ -786,8 +787,59 @@ def _group_leaderboard_for_this_bot():
     группе (get_learning_group). Студент без группы тренируется наравне
     со всеми (см. _leaderboard_for_this_bot), но сравнивать его с группой
     в общем топе не имеет смысла - решение пользователя 18.08.2026."""
-    return [(uid, score) for uid, score in _leaderboard_for_this_bot()
-            if get_learning_group(uid) and idle_days(score) <= LEADERBOARD_IDLE_DAYS]
+    return _leaderboards()["group"]
+
+
+# Рейтинг - минутный кэш (16.10.2026, решение пользователя). Считался
+# заново на каждом конце сеанса и каждом открытии рейтинга: ~0,75 с на
+# 129 участниках, в главном потоке - весь бот стоял; с тысячами студентов
+# это секунды. Теперь общий список - не старше минуты, а СВОЯ строка
+# студента всегда свежая (see with_fresh): после тренировки он сразу видит
+# свой результат и место по нему, чужие места отстают не больше минуты.
+LEADERBOARD_TTL = 60
+_lb_lock = threading.Lock()
+_lb = {"at": 0.0, "key": None, "data": None}
+
+
+def _compute_leaderboards():
+    names, groups = leaderboard_people()
+    full = [(uid, score) for uid, score in get_leaderboard(hafiz=hafiz_phones())
+            if uid in names]
+    return {"full": full, "group": _group_only(full, groups),
+            "names": names, "groups": groups}
+
+
+def _group_only(full, groups):
+    return [(uid, score) for uid, score in full
+            if uid in groups and idle_days(score) <= LEADERBOARD_IDLE_DAYS]
+
+
+def _leaderboards():
+    """{"full", "group", "names", "groups"} - из кэша или пересчитанный.
+    Ключ - базы и учебный день: другая база (тесты) или новый день
+    (неактивные выпадают по idle_days) - пересчёт сразу."""
+    import core.db as db_module
+    import core.mufradat as mufradat_module
+    key = (str(db_module.DB), str(mufradat_module.HADITHS_DB), get_date())
+    with _lb_lock:
+        if _lb["key"] != key or time.monotonic() - _lb["at"] > LEADERBOARD_TTL:
+            _lb.update(data=_compute_leaderboards(), at=time.monotonic(), key=key)
+        return _lb["data"]
+
+
+def with_fresh(boards, user_id):
+    """Те же списки, но строка user_id пересчитана сейчас и стоит на своём
+    месте по свежему результату. Кэш не трогаем - копии списков."""
+    user_id = str(user_id)
+    if user_id not in boards["names"]:
+        return boards
+    fresh = get_leaderboard(hafiz=hafiz_phones(), user_id=user_id)
+    full = [(uid, s) for uid, s in boards["full"] if uid != user_id]
+    if fresh:
+        _, score = fresh[0]
+        at = next((i for i, (_, s) in enumerate(full) if s["_sort_key"] < score["_sort_key"]), len(full))
+        full.insert(at, (user_id, score))
+    return {**boards, "full": full, "group": _group_only(full, boards["groups"])}
 
 
 # Кто не тренировался дольше - не в общем списке (28.09.2026, решение
