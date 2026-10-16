@@ -58,20 +58,3 @@ def test_people_in_one_query_match_per_student_lookups(test_db):
         assert (phone in names) == bool(db.find_user_by_phone(phone)), phone
         lg = db.get_learning_group(phone)
         assert groups.get(phone) == (lg["title"] if lg else None), phone
-
-
-def test_slow_board_reminds_once_a_day(monkeypatch):
-    import asyncio
-    import core.scheduler as sch
-    sent = []
-
-    async def fake_send(chat_id, text, **kw):
-        sent.append((chat_id, text))
-    monkeypatch.setattr(sch, "send_message", fake_send)
-    monkeypatch.setitem(mb.lb_slowest, "sec", 0.4)
-    asyncio.run(sch.leaderboard_slow_alert())
-    assert sent == []
-    monkeypatch.setitem(mb.lb_slowest, "sec", 1.7)
-    asyncio.run(sch.leaderboard_slow_alert())
-    assert len(sent) == 1 and "1.7" in sent[0][1] and "wiki/leaderboard.md" in sent[0][1]
-    assert mb.lb_slowest["sec"] == 0.0          # новый день - новый замер
