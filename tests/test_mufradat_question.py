@@ -69,17 +69,45 @@ def test_starred_target_still_wins_when_available():
         assert q["word"]["id"] == 99
 
 
-def test_none_only_when_main_pool_is_exhausted():
-    """None остаётся сигналом "двигай страницу" - но ровно тогда, когда
-    выучен сам основной пул, а не звёздная выборка."""
-    words = _pool()
+def test_all_mastered_asks_oldest_learned_instead_of_dead_end():
+    """19.10.2026, Динара (стр. 12): закреплены все годные слова до её
+    страницы - раньше None и «сдвинь страницу дальше». Теперь вопрос из
+    отдыхающих слов, только из самых давно спрошенных, с пометкой review."""
+    words = _pool(40)
     progress = {}
     for w in words:
-        progress.update(_mastered(w["progress_key"]))
+        k = w["progress_key"]
+        progress.update(_mastered(k, "2026-10-%02d" % (19 - k % 10)))
     starred = [_word(99, "مرصود", "звёздный")]
     progress.update(_mastered(99))
 
-    assert generate_question(words, progress, starred_words=starred) is None
+    oldest = {k for k, row in progress.items() if row["last_correct_date"] <= "2026-10-12"}
+    for _ in range(50):
+        q = generate_question(words, progress, starred_words=starred)
+        assert q is not None and q["review"] is True
+        assert q["word"]["progress_key"] in oldest or len(oldest) < mufradat.REVIEW_OLDEST
+
+
+def test_review_takes_oldest_first():
+    words = _pool(mufradat.REVIEW_OLDEST + 10)
+    progress = {}
+    for w in words:
+        k = w["progress_key"]
+        # 10 самых свежих - сентябрь→октябрь по номеру, старшие - меньшие номера
+        progress.update(_mastered(k, "2026-09-%02d" % min(28, k) if k <= 28 else "2026-10-%02d" % (k - 28)))
+    picked = {k["progress_key"] for k in mufradat._review_candidates(words, progress, None, mufradat._stale_cutoff())}
+    assert picked == set(range(1, mufradat.REVIEW_OLDEST + 1))
+
+
+def test_not_review_when_new_words_left():
+    words = _pool()
+    progress = _mastered(1)
+    q = generate_question(words, progress)
+    assert q["review"] is False
+
+
+def test_none_only_when_pool_is_empty():
+    assert generate_question([], {}) is None
 
 
 # ── Три корзины выбора цели (04.09.2026, см. CONSOLIDATION_SHARE) ──────────
@@ -187,3 +215,26 @@ def test_вопрос_несёт_точное_место_слова(monkeypatch)
     assert (p["word_surah"], p["word_ayah"], p["word_pos"], p["word_page"]) == (2, 10, 3, 3)
     del state["position"]
     assert api._question_payload(1, state, None)["word_pos"] is None
+
+
+def test_review_reaches_forty_distinct_words_in_a_day():
+    """Задание «Слова» - 40 разных за день: повтор не должен крутиться на 30."""
+    words = _pool(100)
+    progress = {}
+    for w in words:
+        progress.update(_mastered(w["progress_key"], "2026-10-%02d" % (1 + w["progress_key"] % 18)))
+    today = set()
+    for _ in range(40):
+        q = generate_question(words, progress, exclude_keys=today)
+        assert q["review"] is True
+        today.add(q["word"]["progress_key"])
+    assert len(today) == 40
+
+
+def test_review_all_done_today_still_asks():
+    words = _pool(12)
+    progress = {}
+    for w in words:
+        progress.update(_mastered(w["progress_key"], "2026-10-10"))
+    q = generate_question(words, progress, exclude_keys={w["progress_key"] for w in words})
+    assert q is not None and q["review"] is True

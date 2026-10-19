@@ -606,7 +606,38 @@ def pool_progress_keys(words):
     return _slice_info(words)["keys"]
 
 
-def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_keys=None):
+# Повтор выученного раньше срока (19.10.2026, решение пользователя). Динара
+# (стр. 12) закрепила все 937 годных слов до своей страницы - все на отдыхе
+# RECHECK_AFTER_DAYS, и тренажёр показывал тупик «сдвинь страницу дальше»:
+# отличницу гнали вперёд, иначе задание «Слова» не закрыть. Теперь, когда
+# спросить больше нечего, спрашиваются отдыхающие слова - сначала те, что
+# дольше всех не спрашивались. Закреплённость не сбрасывается: верно - слово
+# снова отдыхает от сегодня, ошибка - как при обычной проверке через 60 дней.
+REVIEW_OLDEST = 30
+
+
+def _review_candidates(words, progress_by_id, min_repeat_exclude, cutoff, exclude_keys=None):
+    # Сегодняшние верные отсекаются ДО выбора самых давних: иначе после 30
+    # ответов круг замкнулся бы на тех же словах, а задание просит 40 разных.
+    static = _slice_info(words, min_repeat_exclude)["static"]
+    resting = {key: row["last_correct_date"] or "" for key, row in progress_by_id.items()
+               if is_mastered(row) and not _is_stale(row, cutoff)
+               and not (exclude_keys and key in exclude_keys)}
+    seen, review = set(), []
+    for w in static:
+        if w["progress_key"] in resting and w["progress_key"] not in seen:
+            seen.add(w["progress_key"])
+            review.append(w)
+    review.sort(key=lambda w: resting[w["progress_key"]])
+    return review[:REVIEW_OLDEST]
+
+
+def is_early_review(progress_row, cutoff=None):
+    """Слово спрашивается раньше конца отдыха (см. _review_candidates)."""
+    return is_mastered(progress_row) and not _is_stale(progress_row, cutoff)
+
+
+def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_keys=None, review=True):
     """words - результат get_words_in_range. Целью вопроса не может быть
     слово с пояснением в скобках (не проверяет знание слова, угадывается
     по форме ответа), слово с часто повторяющимся переводом (см. модульный
@@ -633,6 +664,9 @@ def pick_question_word(words, progress_by_id, min_repeat_exclude=None, exclude_k
     лучше повтор, чем тупик «слова закончились»."""
     cutoff = _stale_cutoff()
     candidates = _question_candidates(words, progress_by_id, min_repeat_exclude, cutoff)
+    if not candidates and review:
+        candidates = (_review_candidates(words, progress_by_id, min_repeat_exclude, cutoff, exclude_keys)
+                      or _review_candidates(words, progress_by_id, min_repeat_exclude, cutoff))
     if exclude_keys:
         fresh = [w for w in candidates if w["progress_key"] not in exclude_keys]
         if fresh:
@@ -684,7 +718,9 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None, ex
     ровно одно: пуст сам ОСНОВНОЙ пул - только тогда транспортам можно
     показывать "Сдвинь страницу дальше"."""
     target = (
-        pick_question_word(starred_words, progress_by_id, exclude_keys=exclude_keys)
+        # Повтор выученного - только из основного пула: квота «Моих слов» без
+        # годной цели уступает очередь новому слову, а не закреплённому.
+        pick_question_word(starred_words, progress_by_id, exclude_keys=exclude_keys, review=False)
         if starred_words else None
     )
     if target is None:
@@ -732,7 +768,8 @@ def generate_question(words, progress_by_id, n_options=8, starred_words=None, ex
     options = [target["translation"]] + [d["translation"] for d in distractors]
     random.shuffle(options)
 
-    return {"word": target, "options": options}
+    return {"word": target, "options": options,
+            "review": is_early_review(progress_by_id.get(target["progress_key"]))}
 
 
 def _today():

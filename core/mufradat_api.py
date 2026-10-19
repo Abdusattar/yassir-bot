@@ -260,6 +260,8 @@ def _question_payload(user_id, state, overall_score, feedback=None, status=None)
         # без позиции, тогда фронт покажет одно слово, как раньше.
         "word_surah": state["surah"], "word_ayah": state["ayah"],
         "word_pos": state.get("position"),
+        # Повтор выученного раньше срока (19.10.2026) - фронт пишет об этом строкой.
+        "review": bool(state.get("review")),
         **_daily_fields(user_id, status),
     }
     if feedback is not None:
@@ -286,11 +288,15 @@ def _new_question(user_id, start_score10):
     )
     if q is None:
         _active.pop(user_id, None)
+        # Тупик «сдвинь страницу» (19.10.2026): после повтора выученного он
+        # должен быть редкостью - если случился, видно, почему.
+        log.info("mufradat empty: user=%s page=%s pool=%d progress=%d",
+                 user_id, get_current_page(user_id), len(pool), len(progress))
         return None, overall_score
     state = {
         "word_id": q["word"]["progress_key"], "target": q["word"]["translation"], "options": q["options"],
         "arabic": q["word"]["arabic_text"], "surah": q["word"]["surah_number"], "ayah": q["word"]["ayah_number"],
-        "position": q["word"]["position"],
+        "position": q["word"]["position"], "review": q.get("review", False),
         "start_score10": start_score10 if start_score10 is not None else (
             overall_score["score10"] if overall_score else None
         ),
