@@ -727,9 +727,18 @@ def main():
                         help="только поднять стенд (открывать /frame?scene=...)")
     parser.add_argument("--only", default="",
                         help="снять только эти сцены через запятую")
+    # 19.10.2026: глянуть «Знания» и экраны на кыргызском/узбекском.
+    # Язык приложение берёт с сервера (mufradat_lang) - ставим его в базе стенда.
+    parser.add_argument("--lang", default="ru", choices=["ru", "ky", "uz"],
+                        help="язык интерфейса студента и устаза на стенде")
     args = parser.parse_args()
+    if args.lang != "ru" and not args.serve:
+        # Снимки пока одни, русские: съёмка на ky/uz затёрла бы их.
+        raise SystemExit("--lang пока только вместе с --serve")
 
     app = build_app()
+    for uid in (STUDENT, USTAZ):
+        _mufradat.set_current_lang(uid, args.lang)
     if args.serve:
         print("стенд: http://127.0.0.1:%d/frame?w=390&h=844&scene=dash" % PORT)
         web.run_app(app, host="127.0.0.1", port=PORT, print=None)

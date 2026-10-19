@@ -17,8 +17,20 @@
 Запуск (нужен OPENROUTER_API_KEY в .env):
     python scripts/i18n_review.py ky
 Результат - i18n/ky_review.json: [{key, ru, draft, suggestion, severity, reason}].
+
+Второй заход (19.10.2026, решение пользователя - «группами достаточными без
+падения качества»): набор строк - третьим аргументом.
+    python scripts/i18n_review.py ky learn    - главы «Знаний» (i18n/learn_*)
+    python scripts/i18n_review.py ky recheck  - 126 строк коммита 0c8d29e (16.10),
+                                                их проверки не было
+Пачка - не по числу строк, а по объёму русского текста (BUDGET знаков):
+в «Знаниях» абзацы по 300-500 знаков, сто таких - уже неровная проверка.
+Раздел «Знаний» в пачку идёт целиком (i18n/learn_sections.json) - модель
+видит связный текст, а не обрывки. Словарь - весь живой словарь приложения
+этого языка (i18n/<lang>_live_glossary.json) без проверяемых строк.
 """
 import json
+import os
 import re
 import sys
 import time
@@ -30,6 +42,8 @@ from config import OR_API_KEY, OR_URL
 
 MODEL = "google/gemini-3.1-pro-preview"
 BATCH = 100
+BUDGET = 3000          # знаков русского текста на пачку (наборы learn/recheck)
+MAX_ITEMS = 60         # и не больше строк: короткие подписи тоже не валим сотней
 MAX_TOKENS = 32000
 
 LANGS = {
@@ -40,6 +54,26 @@ LANGS = {
     "uz": {"name": "Uzbek", "draft": "i18n/uz_draft.json", "existing": "i18n/uz_existing.json",
            "missing": "i18n/ru_missing_uz.json", "out": "i18n/uz_review.json"},
 }
+
+SETS = {
+    "learn": {"missing": "i18n/learn_ru.json", "draft": "i18n/learn_{lang}_draft.json",
+              "existing": "i18n/{lang}_live_glossary.json", "sections": "i18n/learn_sections.json",
+              "out": "i18n/learn_{lang}_review.json"},
+    "recheck": {"missing": "i18n/recheck_ru_{lang}.json", "draft": "i18n/recheck_{lang}_draft.json",
+                "existing": "i18n/{lang}_live_glossary.json", "sections": None,
+                "out": "i18n/recheck_{lang}_review.json"},
+}
+
+# Для глав «Знаний»: это не кнопки, а абзацы объяснений; подписи кнопок
+# в «ёлочках» должны дословно совпадать с тем, что человек видит на экране.
+LEARN_RULES = """
+EXTRA RULES for these items (they are paragraphs of the in-app guide, not buttons):
+- Rule 5 about short buttons applies only to *_name, *_desc and *_t (titles); *_b are paragraphs - natural flowing prose.
+- Any button/label/status quoted in «» must be written EXACTLY as the same label in the APPROVED GLOSSARY
+  (it is what the student sees on screen). If the glossary has two variants, say so in "reason".
+- The guide speaks as the bot in first person singular ("я") to the student ("сен"/"сен" in Uzbek); keep that.
+- Numbers, rules and conditions (points, limits, days, hours) must stay exactly as in Russian.
+"""
 
 PROMPT = """You are a native {lang} editor reviewing the user-interface texts of a Quran-learning
 mobile app used by Muslim students in Kyrgyzstan (memorization of the Quran, revision,
@@ -95,23 +129,57 @@ def ask(prompt):
     raise SystemExit("Gemini не ответил трижды - остановлено, прошлые пачки в файле")
 
 
+def batches(ru, sections):
+    """Пачки по BUDGET знаков русского текста; раздел (если есть) не рвётся."""
+    groups = [ks for ks in (sections or {}).values()]
+    seen = {k for ks in groups for k in ks}
+    groups += [[k] for k in ru if k not in seen]
+    out, cur, size = [], [], 0
+    for ks in groups:
+        ks = [k for k in ks if k in ru]
+        n = sum(len(ru[k]) for k in ks)
+        if cur and (size + n > BUDGET or len(cur) + len(ks) > MAX_ITEMS):
+            out.append(cur)
+            cur, size = [], 0
+        cur, size = cur + ks, size + n
+    if cur:
+        out.append(cur)
+    return out
+
+
 def main():
     lang = sys.argv[1] if len(sys.argv) > 1 else "ky"
-    cfg = LANGS[lang]
+    kind = sys.argv[2] if len(sys.argv) > 2 else None
+    cfg = LANGS[lang] if kind is None else {k: v and v.format(lang=lang) for k, v in SETS[kind].items()}
     ru = json.load(open(cfg["missing"], encoding="utf-8"))
     draft = json.load(open(cfg["draft"], encoding="utf-8"))
     existing = json.load(open(cfg["existing"], encoding="utf-8"))
     glossary = "\n".join(f"- {v['ru']} -> {v[lang]}" for v in existing.values())
+    template = PROMPT + (LEARN_RULES if kind == "learn" else "")
 
-    keys = list(ru)
-    out, total = [], 0.0
-    for n in range(0, len(keys), BATCH):
-        part = keys[n:n + BATCH]
+    if kind is None:
+        keys = list(ru)
+        parts = [keys[n:n + BATCH] for n in range(0, len(keys), BATCH)]
+    else:
+        sections = json.load(open(cfg["sections"], encoding="utf-8")) if cfg.get("sections") else None
+        parts = batches(ru, sections)
+    # Продолжение после обрыва (19.10.2026: кончились деньги на OpenRouter
+    # посреди прогона): ключи готовых пачек - в <out>.done, их не шлём снова.
+    done_path = cfg["out"] + ".done"
+    out, total, done = [], 0.0, set()
+    if kind is not None and os.path.exists(done_path):
+        done = set(json.load(open(done_path, encoding="utf-8")))
+        out = json.load(open(cfg["out"], encoding="utf-8"))
+    for i, part in enumerate(parts):
+        if set(part) <= done:
+            print(f"пачка {i + 1}/{len(parts)}: уже проверена", flush=True)
+            continue
         items = [{"key": k, "ru": ru[k], lang: draft[k][lang],
                   **({"note": draft[k]["note"]} if draft[k].get("note") else {})} for k in part]
-        prompt = PROMPT.format(lang=cfg_name(lang), glossary=glossary,
-                               items=json.dumps(items, ensure_ascii=False, indent=1))
-        print(f"пачка {n // BATCH + 1}: строки {n + 1}-{n + len(part)}…", flush=True)
+        prompt = template.format(lang=cfg_name(lang), glossary=glossary,
+                                 items=json.dumps(items, ensure_ascii=False, indent=1))
+        print(f"пачка {i + 1}/{len(parts)}: {len(part)} строк, "
+              f"{sum(len(ru[k]) for k in part)} знаков…", flush=True)
         answer, cost = ask(prompt)
         total += cost
         got = 0
@@ -128,6 +196,8 @@ def main():
             got += 1
         print(f"  замечаний: {got}, стоимость ${cost:.4f}", flush=True)
         json.dump(out, open(cfg["out"], "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        done |= set(part)
+        json.dump(sorted(done), open(done_path, "w", encoding="utf-8"))
 
     by = {}
     for it in out:
