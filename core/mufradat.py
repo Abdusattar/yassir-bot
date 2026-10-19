@@ -1381,6 +1381,8 @@ def get_leaderboard(hafiz=frozenset(), user_id=None):
     С 28.09.2026 page - не закладка, а rating_depth (меньшее из закладки и
     места заучивания; hafiz - множество user_id хафизов, им закладка), с
     15.10.2026 - ещё и не дальше покрытого словами (covered_page).
+    С 19.10.2026 это ограничение только в depth (ключ сортировки), а page -
+    снова меньшее из закладки и места заучивания: то, что человек видит.
     Рядом bookmark, hifz_page и last_date - для подсказки и отбора
     неактивных (core/mufradat_bot.py).
 
@@ -1392,12 +1394,18 @@ def get_leaderboard(hafiz=frozenset(), user_id=None):
         for lang, t in by_lang.items():
             wilson = _wilson_lower_bound(t["correct"], t["n"])
             accuracy = round(100 * t["correct"] / t["n"], 1) if t["n"] else 0.0
-            page = rating_depth(t["bookmark"], t["hifz_page"], uid in hafiz, t["covered"])
-            sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + page)
+            # 19.10.2026 (решение пользователя): на экране и в дивизионе -
+            # настоящая страница (закладка/заучивание), покрытие словами
+            # только в ключе сортировки. Иначе почти у всех стояло на 1-2
+            # меньше (тренажёр ещё не спросил каждое слово пула): «на 16
+            # учу, в рейтинге 15».
+            page = rating_depth(t["bookmark"], t["hifz_page"], uid in hafiz)
+            depth = rating_depth(t["bookmark"], t["hifz_page"], uid in hafiz, t["covered"])
+            sort_key = wilson * math.log10(1 + t["attempted"]) * math.log10(1 + depth)
             candidate = {
                 "wilson": wilson, "accuracy": accuracy,
                 "correct": t["correct"], "wrong": t["wrong"], "n": t["n"],
-                "attempted": t["attempted"], "page": page, "_sort_key": sort_key,
+                "attempted": t["attempted"], "page": page, "depth": depth, "_sort_key": sort_key,
                 "language": lang, "bookmark": t["bookmark"], "hifz_page": t["hifz_page"],
                 "last_date": t["last_date"],
             }

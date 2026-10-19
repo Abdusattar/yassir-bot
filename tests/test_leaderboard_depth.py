@@ -98,11 +98,24 @@ def test_bookmark_ahead_no_longer_lifts_rank(lb_db):
 
 
 def test_hafiz_bookmark_capped_by_coverage(lb_db):
-    """Хафизу - закладка, но не глубже покрытого словами."""
+    """Хафизу - закладка, но в сортировке не глубже покрытого словами."""
     _student(lb_db, "h", correct=9 * 1400, wrong=1400, words=1400, bookmark=90, hifz=18)
     covered = mufradat.covered_page(1400, mufradat._pool_sizes("ru"))
     assert 18 < covered < 90
-    assert dict(mufradat.get_leaderboard(hafiz={"h"}))["h"]["page"] == covered
+    h = dict(mufradat.get_leaderboard(hafiz={"h"}))["h"]
+    assert h["depth"] == covered and h["page"] == 90
+
+
+def test_page_shown_is_real_page_not_coverage(lb_db):
+    """19.10.2026, жалоба пользователя: «учу на 16, в рейтинге 15». Открыто
+    чуть меньше слов, чем в пуле до стр. 16, - на экране всё равно 16, а
+    место считается по покрытому."""
+    sizes = mufradat._pool_sizes("ru")
+    words = sizes[15]               # покрыто ровно до 15-й
+    _student(lb_db, "satar", correct=9 * words, wrong=words, words=words, bookmark=16, hifz=16)
+    s = dict(mufradat.get_leaderboard())["satar"]
+    assert s["page"] == 16
+    assert s["depth"] == 15
 
 
 def test_few_words_deep_bookmark_below_volume(lb_db):
@@ -112,7 +125,7 @@ def test_few_words_deep_bookmark_below_volume(lb_db):
     _student(lb_db, "worker", correct=19 * 1400, wrong=1400, words=1400, bookmark=19, hifz=19)
     board = mufradat.get_leaderboard(hafiz={"hafiz"})
     assert [uid for uid, _ in board] == ["worker", "hafiz"]
-    assert dict(board)["hafiz"]["page"] < 5
+    assert dict(board)["hafiz"]["depth"] < 5
 
 
 def test_last_date_in_score(lb_db):
