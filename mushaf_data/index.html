@@ -3378,6 +3378,49 @@
      приглушённых нет - всё на экране своё, и сплошные полосы только шумят.
      Выделенным остаётся переход. */
   #app.land.hifz:not(.hifz-pick) .mushaf-line.hifz-lit { background: none; box-shadow: none; }
+  /* Перевод под словом лёжа (19.10.2026, просьба пользователя: заучивая
+     строку, попутно запоминать слова). Подпись - второй голос строки:
+     мелко, цветом полей мусхафа, под своим словом, не шире пары слов.
+     Абсолютная позиция - ширина строки и подгонка кегля не меняются;
+     место под подписи даёт нижний отступ строки. Переключатель - .gloss
+     на #app (кнопка «ب/а» в колонке). */
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit,
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail,
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail {
+    padding-bottom: calc(clamp(10.5px, .25em, 13px) * 2.7);
+  }
+  /* Переходное слово читают на каждом повторе - перевод и ему (решение
+     пользователя), бледнее: это уже следующая строка. */
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit > span[data-gl],
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl],
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl] { position: relative; }
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl]::after,
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after { opacity: .7; }
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit > span[data-gl]::after,
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl]::after,
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after {
+    content: attr(data-gl);
+    position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    width: max(100%, 5.2em); max-width: 8.5em;
+    font: 400 clamp(10.5px, .25em, 13px)/1.18 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-palette: normal; direction: ltr; unicode-bidi: isolate;
+    text-align: center; color: var(--muted); letter-spacing: .01em;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    pointer-events: none;
+  }
+  #hifz-gloss-btn { display: none; }
+  #app.land.hifz:not(.hifz-pick) #hifz-gloss-btn { display: flex; }
+  #app.land.hifz #hifz-foot #hifz-gloss-btn {
+    width: 44px; height: 44px; align-self: center; padding: 0 !important;
+    border-radius: 50%; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1; color: var(--muted);
+  }
+  #hifz-gloss-btn .g-ar { font: 20px/0.9 'Scheherazade New', serif; }
+  #hifz-gloss-btn .g-tr { font: 600 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin-top: 1px; }
+  #app.gloss #hifz-gloss-btn {
+    background: var(--accent-soft) !important; border-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
+    color: var(--accent);
+  }
   #app.land.hifz #hifz-rec { right: var(--rail-w); }
   #app.land.hifz #hifz-rec .card { border-radius: 12px 12px 0 0; }
 </style>
@@ -3818,6 +3861,9 @@
          живёт и в «Крупно» (#hifz-big-listen-btn) — состояние общее,
          один <audio> на оба места, там же где студент делает 40
          повторов открывать заново не нужно. -->
+    <!-- Перевод под словами лёжа - вкл/выкл (19.10.2026). Значок - то, что
+         он делает: арабская буква, под ней буква перевода. -->
+    <button id="hifz-gloss-btn" title="Перевод под словами" data-i18n-title="hifz_gloss" aria-pressed="false"><span class="g-ar">ب</span><span class="g-tr" id="hifz-gloss-tr">а</span></button>
     <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen">🔊</button>
     <!-- Счётчик 40+40 (11.09.2026). Стоит у 🔊 по просьбе пользователя: низ
          удобнее тапать, рука и так там, а Хусари включают ровно перед
@@ -4946,6 +4992,7 @@
       feed_failed: 'Не открылось.',
       hifz_count_title: 'Отметить повтор',
       hifz_listen: 'Прослушать',
+      hifz_gloss: 'Перевод под словами',
       hifz_listen_stop: 'Остановить',
       btn_hifz_title: 'Заучивание 40+40',
       btn_revision_title: 'Отметить повторение',
@@ -5525,6 +5572,7 @@
       feed_failed: 'Ачылган жок.',
       hifz_count_title: 'Кайталоону белгилөө',
       hifz_listen: 'Угуу',
+      hifz_gloss: 'Сөздөрдүн астында котормо',
       hifz_listen_stop: 'Токтотуу',
       btn_hifz_title: 'Жаттоо 40+40',
       btn_revision_title: 'Кайталоону белгилөө',
@@ -6218,6 +6266,7 @@
       feed_failed: 'Очилмади.',
       hifz_count_title: 'Такрорни белгилаш',
       hifz_listen: 'Тинглаш',
+      hifz_gloss: 'Сўзлар остида таржима',
       hifz_listen_stop: 'Тўхтатиш',
       btn_hifz_title: 'Ёдлаш 40+40',
       btn_revision_title: 'Такрорлашни белгилаш',
@@ -8506,7 +8555,12 @@
             // data-head - см. mushafPairs.
             var wkey = t.surah + ':' + t.ayah + ':' + t.position;
             var head = !t.translation && pairs[wkey];
+            // data-gl - подпись под словом лёжа в заучивании (19.10.2026):
+            // только у головы пары (хвост делит её перевод) и без скобок -
+            // в скобках пояснение переводчика, а подпись - дословно.
+            var gl = t.translation ? glossText(t.translation) : '';
             var tr = (t.translation || head) ? ' data-tr="' + escapeAttr(t.translation || head.translation) + '"' +
+              (gl ? ' data-gl="' + escapeAttr(gl) + '"' : '') +
               ' data-surah="' + t.surah + '" data-ayah="' + t.ayah + '" data-pos="' + t.position + '"' +
               ' data-arabic="' + escapeAttr(t.html) + '" data-w="' + wkey + '"' +
               (head ? ' data-head="' + head.surah + ':' + head.ayah + ':' + head.position + '"' : '') : '';
@@ -8628,6 +8682,10 @@
      показывает общий перевод, двойной тап кладёт в «Мои слова» голову
      (сервер сам приклеит арабский хвоста - _merge_tail_arabic). Хвост на
      следующем листе остаётся без перевода, как раньше. */
+  function glossText(s) {
+    return s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/[«»"]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
   function mushafPairs(lines) {
     var tails = {}, head = null, lastPos = null;
     lines.forEach(function (line) {
@@ -9228,7 +9286,8 @@
           // «Мои слова» (обработчик #ayah-text их и ждёт).
           var tr = tk.translation ? ' data-tr="' + escapeAttr(tk.translation) + '"' +
             ' data-surah="' + tk.surah + '" data-ayah="' + tk.ayah + '" data-pos="' + tk.position + '"' +
-            ' data-arabic="' + escapeAttr(tk.html) + '"' : '';
+            ' data-arabic="' + escapeAttr(tk.html) + '"' +
+            ' data-gl="' + escapeAttr(glossText(tk.translation)) + '"' : '';
           xh += '<span class="tail-plain"' + tr + '>' + tk.html + '</span>';
         }
         x.innerHTML = xh;
@@ -9481,6 +9540,25 @@
   }
   document.getElementById('hifz-listen-btn').addEventListener('click', hifzListenToggle);
   document.getElementById('hifz-big-listen-btn').addEventListener('click', hifzListenToggle);
+
+  // Перевод под словами лёжа (19.10.2026): по умолчанию включён - ради него
+  // и сделан; выбор помнит телефон.
+  var GLOSS_KEY = 'yassir_hifz_gloss';
+  function glossApply(on) {
+    document.getElementById('app').classList.toggle('gloss', on);
+    document.getElementById('hifz-gloss-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  (function () {
+    var v = null;
+    try { v = localStorage.getItem(GLOSS_KEY); } catch (e) {}
+    glossApply(v !== '0');
+  })();
+  document.getElementById('hifz-gloss-btn').addEventListener('click', function () {
+    var on = !document.getElementById('app').classList.contains('gloss');
+    glossApply(on);
+    try { localStorage.setItem(GLOSS_KEY, on ? '1' : '0'); } catch (e) {}
+    trail('gloss', { on: on ? 1 : 0 });
+  });
 
   function hifzExit() {
     // Проверка сдачи закрывается своей дорогой - обратно в кабинет устаза,
