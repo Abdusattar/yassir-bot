@@ -416,6 +416,29 @@ async def remove_message_keyboard(chat_id, message_id):
     })
 
 
+# Кнопка приложения в личке (20.10.2026). Кнопка по умолчанию у бота стоит
+# (bot.py), но телефон её иногда не подтягивает: Али (жен., группа 4) удалил
+# чат, открыл заново - кнопки нет, хотя getChatMenuButton отдаёт default.
+# Кнопка, поставленная лично в чат, приходит на телефон обновлением сама.
+# Раз на человека за жизнь процесса: деплой перезапускает - значит, ставится
+# заново после каждого выпуска, этого достаточно.
+APP_BUTTON = True
+_app_button_set = set()
+
+
+async def ensure_app_button(chat_id):
+    from config import MUSHAF_URL, PROFILE
+    cid = str(chat_id or "")
+    if not APP_BUTTON or not cid.isdigit() or cid in _app_button_set:
+        return
+    _app_button_set.add(cid)
+    await tg_call("setChatMenuButton", {
+        "chat_id": int(cid),
+        "menu_button": {"type": "web_app", "text": "YassirApp",
+                        "web_app": {"url": f"{MUSHAF_URL}?bot={PROFILE}"}},
+    })
+
+
 async def get_dm_start_link():
     """Ссылка-приглашение в личку с ботом (https://t.me/<username>?start=go).
     Юзернейм берётся через getMe каждый раз — на случай разных ботов (муж/жен)."""

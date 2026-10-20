@@ -103,6 +103,15 @@ def _no_pacing(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_app_button(monkeypatch):
+    """Кнопка приложения в личку (core/tg.py: ensure_app_button) - настоящий
+    вызов Telegram из каждого сообщения в личку. Тесты лички её не ждут;
+    саму кнопку проверяет tests/test_app_button.py."""
+    import core.tg as tg_module
+    monkeypatch.setattr(tg_module, "APP_BUTTON", False)
+
+
+@pytest.fixture(autouse=True)
 def _audio_cache_in_tmp(monkeypatch, tmp_path):
     """Недельные копии записей (core/audio_compat.py) в тестах - во временной
     папке: сдачи из тестов не должны ложиться в настоящий ~/.cache."""

@@ -11,7 +11,7 @@ from core.content import (
     TASK_KEYS, DEFAULT_TASKS, SHORT_TASKS, EXCUSE_WORDS, PROGRAM_INFO, PROG_SECTIONS
 )
 from core.i18n import T, get_group_lang, LANG_NAMES, task_name, help_student, help_admin, lang_instruction
-from core.tg import send_message, get_dm_start_link
+from core.tg import send_message, get_dm_start_link, ensure_app_button
 import core.ai as ai
 from core.db import (
     get_group, save_group, written_closed, get_group_tasks, update_group_tasks, update_group_lang,
@@ -1009,6 +1009,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
 
         # «Позвать друга» (20.09.2026): ссылки на ботов берут здесь, в
         # рассылке их больше нет. Кому угодно - ссылка на бота безопасна.
+        # Кнопка приложения лично в этот чат (20.10.2026, core/tg.py) - фоном,
+        # ответ человеку не ждёт.
+        asyncio.create_task(ensure_app_button(chat_id))
+
         if text.lower() in ("/invite", "/позвать"):
             await send_invite_menu(chat_id)
             return
