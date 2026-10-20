@@ -224,6 +224,67 @@ def take_session_for_code(code, user_agent=""):
     return _create_session(user_id, user_agent), user_id
 
 
+# ── Ссылка для входа от супер-админа (20.10.2026) ─────────────────────────────
+# Для тех, кого Telegram не пускает (просит Premium) и кому неудобна почта:
+# супер-админ знает человека лично, делает ссылку scripts/login_link.py и
+# шлёт её сам (WhatsApp). Держится на том же, на чём привязка почты, - на
+# личном знакомстве. Ссылка одноразовая и живёт сутки: пересланная дальше
+# после первого нажатия уже ничего не открывает. В базе - только sha256.
+# Общая база, как у кодов: ссылка открывается мужским процессом, а сессию
+# выдаёт половина человека.
+
+LOGIN_LINK_TTL_HOURS = 24
+
+
+class _links(_codes):
+    def __enter__(self):
+        c = super().__enter__()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS web_login_links(
+                code_hash TEXT PRIMARY KEY,
+                user_id TEXT,
+                profile TEXT,
+                created_at TEXT,
+                expires_at TEXT,
+                used_at TEXT
+            )
+        """)
+        return c
+
+
+def new_login_link(user_id, profile, hours=LOGIN_LINK_TTL_HOURS):
+    """Секрет для ссылки yassirilm.com/#login=<секрет>. Наружу - один раз."""
+    code = secrets.token_urlsafe(24)
+    now = _now_iso()
+    with _links() as c:
+        c.execute(
+            "INSERT INTO web_login_links(code_hash, user_id, profile, created_at, expires_at)"
+            " VALUES(?,?,?,?,datetime(?, ?))",
+            (_hash(code), str(user_id), profile, now, now, f"+{int(hours)} hours"))
+        c.execute("DELETE FROM web_login_links WHERE expires_at < datetime(?, '-30 days')", (now,))
+    return code
+
+
+def take_session_for_link(code, user_agent=""):
+    """(token, user_id) - ссылка живая и для этой половины, и она гасится.
+    ('other', profile) - ссылка для соседа, не тратим: вкладка спросит его.
+    None - нет такой, истекла или уже использована."""
+    if not code:
+        return None
+    with _links() as c:
+        row = c.execute(
+            "SELECT user_id, profile FROM web_login_links"
+            " WHERE code_hash=? AND used_at IS NULL AND expires_at > ?",
+            (_hash(code), _now_iso())).fetchone()
+        if row is None:
+            return None
+        if row["profile"] != config.PROFILE:
+            return "other", row["profile"]
+        c.execute("UPDATE web_login_links SET used_at=? WHERE code_hash=?", (_now_iso(), _hash(code)))
+        user_id = row["user_id"]
+    return _create_session(user_id, user_agent), user_id
+
+
 # ── Сессии ────────────────────────────────────────────────────────────────────
 
 def _create_session(user_id, user_agent=""):

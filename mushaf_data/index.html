@@ -4201,6 +4201,33 @@
   // скрипта. Объявления функций хойстятся целиком, поэтому showLogin()
   // ниже по файлу здесь уже доступна (та же особенность, на которой
   // однажды погорел apiBase - см. комментарий у него).
+  // Ссылка для входа от супер-админа (20.10.2026, scripts/login_link.py):
+  // yassirilm.com/#login=<секрет>. Хэш, а не ?параметр: хэш не уходит на
+  // сервер и не оседает в журналах nginx. Сначала спрашиваем мужской
+  // процесс (как вход по почте); ссылка сестры не тратится, он отвечает её
+  // профилем - спрашиваем женский. Секрет из адреса убираем сразу.
+  var linkCode = (window.location.hash.match(/(?:^#|&)login=([\w-]+)/) || [])[1];
+  if (linkCode && !(tg && tg.initData)) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    var useLink = function (profile, hop) {
+      fetch('/api/muf/' + profile + '/auth/link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: linkCode })
+      }).then(function (r) { return r.json(); }).catch(function () { return {}; })
+        .then(function (d) {
+          d = d || {};
+          if (d.profile && d.profile !== profile && !hop) { useLink(d.profile, true); return; }
+          if (d.token) saveAuth({ token: d.token, profile: profile, name: d.name || '' });
+          else {
+            try { sessionStorage.setItem('yassir_link_bad', '1'); } catch (e) {}
+          }
+          location.reload();
+        });
+    };
+    useLink('male', false);
+    return;
+  }
+
   if (!(tg && tg.initData) && !(webAuth && webAuth.token)) {
     showLogin();
     return;
@@ -4266,6 +4293,12 @@
       status.textContent = text;
       status.className = 'login-status' + (bad ? ' bad' : '');
     }
+
+    // Ссылка для входа не сработала (см. #login= выше) - говорим, почему
+    // человек снова на экране входа.
+    var linkBad = false;
+    try { linkBad = sessionStorage.getItem('yassir_link_bad') === '1'; sessionStorage.removeItem('yassir_link_bad'); } catch (e) {}
+    if (linkBad) say(T('login_link_bad'), true);
 
     // ── Вход по почте (07.10.2026, core/email_login.py) ──
     // Письмо шлёт мужской процесс (как и ссылка в Telegram ведёт в мужской
@@ -5049,6 +5082,7 @@
       login_err_send_failed: 'Письмо не ушло. Попробуй ещё раз через минуту.',
       login_err_wrong: 'Код не подходит. Проверь цифры в последнем письме.',
       login_err_expired: 'Код больше не действует. Нажми «Прислать код ещё раз».',
+      login_link_bad: 'Ссылка для входа уже использована или устарела. Попроси новую или войди здесь.',
       login_err_tries: 'Слишком много попыток входа подряд. Попробуй через час 🤲',
       login_err_start: 'Не получилось начать вход. Проверь связь и попробуй ещё раз.',
       wrongbot_male: 'Ты учишься в мужском джамаате, а это приложение открыто через бот другой половины.',
@@ -5629,6 +5663,7 @@
       login_err_send_failed: 'Кат жөнөтүлгөн жок. Бир мүнөттөн кийин дагы аракет кыл.',
       login_err_wrong: 'Код туура эмес. Акыркы каттагы сандарды текшер.',
       login_err_expired: 'Коддун мөөнөтү бүттү. «Кодду кайра жөнөтүү» баскычын бас.',
+      login_link_bad: 'Кирүү шилтемеси колдонулуп бүткөн же мөөнөтү өткөн. Жаңысын сура же ушул жерден кир.',
       login_err_tries: 'Катары менен өтө көп аракет болду. Бир сааттан кийин аракет кыл 🤲',
       login_err_start: 'Кирүүнү баштоо болбой калды. Байланышты текшерип, дагы аракет кыл.',
       wrongbot_male: 'Сен эркектер жамаатында окуйсуң, ал эми бул колдонмо экинчи жарымдын боту аркылуу ачылды.',
@@ -6324,6 +6359,7 @@
       login_err_send_failed: 'Хат юборилмади. Бир дақиқадан кейин яна уриниб кўр.',
       login_err_wrong: 'Код тўғри келмади. Охирги хатдаги рақамларни текшир.',
       login_err_expired: 'Коднинг муддати тугади. «Кодни қайта юбориш»ни бос.',
+      login_link_bad: 'Кириш ҳаволаси ишлатилган ёки муддати ўтган. Янгисини сўра ёки шу ердан кир.',
       login_err_tries: 'Кетма-кет жуда кўп уриниш бўлди. Бир соатдан кейин уриниб кўр 🤲',
       login_err_start: 'Киришни бошлаб бўлмади. Алоқани текшириб, яна уриниб кўр.',
       wrongbot_male: 'Сен эркаклар жамоатида ўқийсан, бу илова эса иккинчи ярмининг боти орқали очилган.',

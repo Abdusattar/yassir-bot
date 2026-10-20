@@ -81,7 +81,7 @@ from core.prep import prep_progress
 from core.tg import get_bot_username
 from core.web_auth import (
     new_login_code, take_session_for_code, poll_login_code, login_code_profile,
-    resolve_session, revoke_session, LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
+    take_session_for_link, resolve_session, revoke_session, LOGIN_START_PREFIX, LOGIN_CODE_TTL_MINUTES,
 )
 from core import email_login
 from core.mailer import mail_configured, send_mail
@@ -2621,6 +2621,24 @@ async def handle_auth_email_verify(request):
     return web.json_response({"code": login_code, "profile": profile})
 
 
+async def handle_auth_link(request):
+    """POST {code} - ссылка для входа от супер-админа (20.10.2026,
+    scripts/login_link.py, core/web_auth.py). Ссылка соседа не тратится:
+    отвечаем его профилем, вкладка переспросит его процесс. Перебор не
+    страшен (192 бита), заслон тот же, что у /auth/start - от мусора."""
+    if not _login_rate_ok(_client_ip(request)):
+        return web.json_response({"error": "too_many"}, status=429)
+    code = str((await _json_body(request)).get("code", ""))
+    taken = take_session_for_link(code, request.headers.get("User-Agent", ""))
+    if not taken:
+        return web.json_response({"error": "link_bad"}, status=400)
+    if taken[0] == "other":
+        return web.json_response({"profile": taken[1]})
+    token, user_id = taken
+    user = find_user_by_phone(user_id)
+    return web.json_response({"token": token, "name": (user["name"] if user else "") or ""})
+
+
 @with_auth
 async def handle_auth_logout(request, user_id):
     """POST - выйти на ЭТОМ устройстве. Токен гасим по нему самому, а не по
@@ -2728,6 +2746,7 @@ def build_app():
     app.router.add_get("/api/muf/auth/poll", handle_auth_poll)
     app.router.add_post("/api/muf/auth/email/start", handle_auth_email_start)
     app.router.add_post("/api/muf/auth/email/verify", handle_auth_email_verify)
+    app.router.add_post("/api/muf/auth/link", handle_auth_link)
     app.router.add_post("/api/muf/auth/logout", handle_auth_logout)
     app.router.add_get("/api/muf/state", handle_state)
     app.router.add_post("/api/muf/page", handle_page)

@@ -203,3 +203,18 @@ Cloudflare сознательно не ставили: от блокировки
 
 ## Сжатие nginx (11.10.2026)
 `/etc/nginx/nginx.conf`: `gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml; gzip_comp_level 5; gzip_min_length 1024;` (раньше `gzip_types` был закомментирован — сжимался только HTML). page*.json 47 КБ → ~6 КБ. Бэкап: `/etc/nginx/nginx.conf.bak-20261011`. Мусхаф заранее грузит соседние листы n+1, n+2, n+3 и n−1 (JSON + шрифт V4, `mushafPrefetch` в index.html).
+
+## Вход без Telegram: почта и ссылка от супер-админа
+
+Для тех, кого Telegram не пускает (новый телефон, просит Premium).
+- **Почта** (07.10.2026): `scripts/link_email.py --profile <half> --user-id <users.id> --email <почта>`,
+  дальше человек сам: yassirilm.com → «Войти по почте» → код из письма.
+- **Ссылка** (20.10.2026): `scripts/login_link.py --profile <half> --user-id <users.id> [--hours 24]`
+  печатает `https://yassirilm.com/#login=<секрет>`. Одноразовая, сутки; в общей
+  `sources/hadiths.db` (`web_login_links`) только sha256. Приложение меняет её на
+  сессию через `POST /api/muf/<half>/auth/link`: мужской процесс ссылку сестры не
+  тратит, а отвечает `{"profile": "female"}`. Секрет в хэше адреса - в журналы nginx
+  не попадает. Не сработала - на экране входа строка `login_link_bad`.
+- Оба скрипта пишут в базы: на сервере с ключа claude-access так:
+  `ssh -i ~/.ssh/claude_gcp claude-access@34.51.213.67 "cd /home/stursunkul/yassir-bot && sudo -u stursunkul venv/bin/python scripts/<скрипт> ..."`
+  (ключ `stursunkul@` не пускает).
