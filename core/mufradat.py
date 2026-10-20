@@ -204,7 +204,9 @@ _SCAFFOLD_RE = re.compile(r"[()]")
 # попасть под _is_junk, если все его "настоящие" буквы - именно из этого
 # набора. re.IGNORECASE распространяется на них так же, как и на а-яё
 # (Python 3 str-паттерны Unicode-aware по умолчанию).
-_HAS_LETTER_RE = re.compile(r"[a-zа-яёқғўҳ]", re.IGNORECASE)
+# Иероглифы (20.10.2026): без них каждый китайский перевод был «без букв», и
+# тренажёр на zh выходил пустым. Заодно кыргызские ң/ө/ү.
+_HAS_LETTER_RE = re.compile(r"[a-zа-яёқғўҳңөү㐀-鿿]", re.IGNORECASE)
 
 
 @functools.lru_cache(maxsize=None)
