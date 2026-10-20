@@ -413,7 +413,19 @@ def test_app_button_only_for_app_channel(mode, monkeypatch, no_app_api):
     no_app_api.clear()
     monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: False)
     asyncio.run(app_bot.note_contact("5061"))
-    assert not [m for m, _ in no_app_api if m == "setChatMenuButton"], "старому кнопку не ставим"
+    assert not [m for m, _ in no_app_api if m == "setChatMenuButton"], "чужому кнопку не ставим"
+
+
+def test_app_button_for_registered(mode, monkeypatch, no_app_api):
+    """20.10.2026: старый студент или устаз любой половины, написавший
+    YassirApp, тоже получает кнопку (Али, жен. группа 4)."""
+    mode("new")
+    monkeypatch.setattr(app_bot, "is_newcomer", lambda uid: False)
+    monkeypatch.setattr(app_bot, "studies_in", lambda uid: "female")
+    asyncio.run(app_bot.note_contact("5062"))
+    buttons = [p for m, p in no_app_api if m == "setChatMenuButton"]
+    assert buttons and buttons[0]["chat_id"] == 5062
+    assert buttons[0]["menu_button"]["web_app"]["url"].endswith("?bot=app")
 
 
 def _signed(token, uid):

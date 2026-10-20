@@ -230,15 +230,19 @@ async def note_contact(uid):
         side = studies_in(uid)
         if side:
             app_inbox.enqueue(side, "started", uid)
-    if app_route.via_app(uid):
+    # Кроме новичков - и всем, кто числится в любой половине (20.10.2026,
+    # решение пользователя): старые студенты и устазы приходят сюда через
+    # вход на сайт и «позвать друга» и не находили кнопку. Канал сообщений
+    # от этого не меняется - только кнопка в чате, который он сам открыл.
+    if app_route.via_app(uid) or studies_in(uid):
         await set_app_button(uid)
 
 
 async def set_app_button(uid):
-    """Кнопка приложения в ЕГО чате с YassirApp (01.10.2026). Только тем, чей
-    канал - YassirApp: старые студенты ничего нового не видят. Приложение по
-    ?bot=app само узнаёт половину (mufradat_api /whoami). Повторный вызов
-    безвреден - Telegram просто ставит ту же кнопку."""
+    """Кнопка приложения в ЕГО чате с YassirApp (01.10.2026). Новичкам с
+    каналом YassirApp и, с 20.10.2026, всем зарегистрированным (note_contact).
+    Приложение по ?bot=app само узнаёт половину (mufradat_api /whoami).
+    Повторный вызов безвреден - Telegram просто ставит ту же кнопку."""
     await call("setChatMenuButton", {
         "chat_id": int(uid),
         "menu_button": {"type": "web_app", "text": "YassirApp",
