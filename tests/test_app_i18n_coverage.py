@@ -1,4 +1,5 @@
-"""В приложении на кыргызском и узбекском нет русских дыр (19.10.2026).
+"""В приложении на кыргызском, узбекском и китайском нет русских дыр (19.10.2026,
+китайский - 20.10.2026).
 
 15.10 пользователь заметил: узбекский интерфейс «не везде». 16.10 недостающие
 ключи словаря закрыты, 19.10 переведены главы «Знаний» (онбординг и
@@ -52,21 +53,21 @@ def _learn_keys(learn):
             yield "learn_%s_%d_b" % (sec["id"], k)
 
 
-@pytest.mark.parametrize("lang", ["ky", "uz"])
+@pytest.mark.parametrize("lang", ["ky", "uz", "zh"])
 def test_dictionary_has_every_russian_key(app, lang):
     ru, other = app["I18N"]["ru"], app["I18N"][lang]
     missing = [k for k in ru if k not in other and not RU_ONLY.search(k)]
     assert missing == []
 
 
-@pytest.mark.parametrize("lang", ["ky", "uz"])
+@pytest.mark.parametrize("lang", ["ky", "uz", "zh"])
 def test_learn_chapters_translated(app, lang):
     other = app["I18N"][lang]
     missing = [k for k in _learn_keys(app["LEARN"]) if k not in other]
     assert missing == []
 
 
-@pytest.mark.parametrize("lang", ["ky", "uz"])
+@pytest.mark.parametrize("lang", ["ky", "uz", "zh"])
 def test_placeholders_match_russian(app, lang):
     ru, other = app["I18N"]["ru"], app["I18N"][lang]
     bad = [k for k in other if k in ru

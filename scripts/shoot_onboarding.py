@@ -729,7 +729,7 @@ def main():
                         help="снять только эти сцены через запятую")
     # 19.10.2026: глянуть «Знания» и экраны на кыргызском/узбекском.
     # Язык приложение берёт с сервера (mufradat_lang) - ставим его в базе стенда.
-    parser.add_argument("--lang", default="ru", choices=["ru", "ky", "uz"],
+    parser.add_argument("--lang", default="ru", choices=["ru", "ky", "uz", "zh"],
                         help="язык интерфейса студента и устаза на стенде")
     args = parser.parse_args()
     if args.lang != "ru" and not args.serve:

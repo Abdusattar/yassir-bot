@@ -30,6 +30,7 @@ scripts/add_ayah_meaning.py) и со шрифтом/вёрсткой QUL: точ
 Запускать вручную:
     python scripts/fetch_meaning_quranenc.py ky
     python scripts/fetch_meaning_quranenc.py uz
+    python scripts/fetch_meaning_quranenc.py zh
 """
 import json
 import os
@@ -46,6 +47,9 @@ LAST_SURAH = 114
 TRANSLATION_KEYS = {
     "ky": "kyrgyz_hakimov",
     "uz": "uzbek_rwwad",
+    # 20.10.2026: Мухаммад Макин, редакция Мухаммада Сулеймана (Rowwad),
+    # путунхуа, упрощённые иероглифы - выбор пользователя.
+    "zh": "chinese_suliman",
 }
 
 # Ссылки на сноски вида "[1]" идут ВНУТРИ текста перевода, а сами сноски -

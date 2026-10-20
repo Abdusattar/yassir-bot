@@ -14,7 +14,7 @@
 своей мединской страницы - это поле `fp` у токена (решение пользователя:
 «их раскладка, наши цветные буквы»).
 
-Выход: mushaf_data/dm/page{N}.json (+ _ky/_uz, где у исходных слов есть
+Выход: mushaf_data/dm/page{N}.json (+ _ky/_uz/_zh, где у исходных слов есть
 перевод). Формат тот же, что у page{N}.json, плюс `fp` у токена, если его
 страница шрифта отличается от `font_page` листа.
 
@@ -40,7 +40,7 @@ A.CACHE_DIR = os.path.join(SCRIPT_DIR, "..", "sources", "qul_layout15_cache")
 DATA_DIR = os.path.join(SCRIPT_DIR, "..", "mushaf_data")
 OUT_DIR = os.path.join(DATA_DIR, "dm")
 FONT_URL = "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p{}.woff2"
-LANGS = ("ky", "uz")
+LANGS = ("ky", "uz", "zh")
 V4_FONTS = os.path.join(SCRIPT_DIR, "..", "sources", "v4_fonts")   # p{N}.ttf, как на CDN
 
 # Ужимка длинных строк (23.09.2026, просьба пользователя «шрифт не должен
