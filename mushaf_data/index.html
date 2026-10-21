@@ -3386,19 +3386,22 @@
      на #app (кнопка «ب/а» в колонке). */
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit,
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail,
-  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail {
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail,
+  #app.land.gloss:not(.hifz) .mushaf-line {
     padding-bottom: calc(clamp(10.5px, .25em, 13px) * 2.7);
   }
   /* Переходное слово читают на каждом повторе - перевод и ему (решение
      пользователя), бледнее: это уже следующая строка. */
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit > span[data-gl],
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl],
-  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl] { position: relative; }
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl],
+  #app.land.gloss:not(.hifz) .mushaf-line > span[data-gl] { position: relative; }
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl]::after,
   #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after { opacity: .7; }
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit > span[data-gl]::after,
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl]::after,
-  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after {
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after,
+  #app.land.gloss:not(.hifz) .mushaf-line > span[data-gl]::after {
     content: attr(data-gl);
     position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
     width: max(100%, 5.2em); max-width: 8.5em;
@@ -3408,6 +3411,13 @@
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     pointer-events: none;
   }
+  /* Крайние слова строки (21.10.2026): подпись шире слова вылезала за край
+     строки, подгонка кегля (clampFontToFit, mushafWorstOverflowRatio)
+     принимала это за переполнение и ужимала весь лист - на SE лёжа на
+     треть. Подпись крайнего слова прижата к краю строки, а не по центру.
+     Строка rtl: первое слово - справа. */
+  #app.land.gloss .mushaf-line > span[data-gl]:first-child::after { left: auto; right: 0; transform: none; }
+  #app.land.gloss .mushaf-line > span[data-gl]:last-child::after { left: 0; transform: none; }
   #hifz-gloss-btn { display: none; }
   #app.land.hifz:not(.hifz-pick) #hifz-gloss-btn { display: flex; }
   #app.land.hifz #hifz-foot #hifz-gloss-btn {
@@ -3415,8 +3425,21 @@
     border-radius: 50%; flex-direction: column; align-items: center; justify-content: center;
     line-height: 1; color: var(--muted);
   }
-  #hifz-gloss-btn .g-ar { font: 20px/0.9 'Scheherazade New', serif; }
-  #hifz-gloss-btn .g-tr { font: 600 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin-top: 1px; }
+  /* Чтение лёжа (21.10.2026, просьба пользователя: повторяя, заодно
+     смотреть переводы) - подписи под всеми строками листа. Лист остаётся
+     чистым текстом: та же «ب/а» живёт в шапке, которая сама уезжает и
+     возвращается касанием. Настройка одна на чтение и заучивание. */
+  #read-gloss-btn { display: none; }
+  #app.land #read-gloss-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0; border-radius: 50%; cursor: pointer;
+    background: none; border: 1px solid transparent; line-height: 1; color: var(--muted);
+  }
+  #hifz-gloss-btn .g-ar, #read-gloss-btn .g-ar { font: 20px/0.9 'Scheherazade New', serif; }
+  #hifz-gloss-btn .g-tr, #read-gloss-btn .g-tr { font: 600 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin-top: 1px; }
+  #read-gloss-btn .g-ar { font-size: 16px; }
+  #read-gloss-btn .g-tr { font-size: 9px; }
+  #app.gloss #read-gloss-btn,
   #app.gloss #hifz-gloss-btn {
     background: var(--accent-soft) !important; border-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
     color: var(--accent);
@@ -3737,6 +3760,7 @@
       <button id="btn-revision" title="Отметить повторение" data-i18n-title="btn_revision_title">🔁</button>
       <!-- 📜 «Смысл» наверху (22.09.2026): нижнего меню больше нет. -->
       <button id="btn-meaning" title="Смысл" data-i18n-title="btn_meaning_title">📜</button>
+      <button id="read-gloss-btn" title="Перевод под словами" data-i18n-title="hifz_gloss" aria-pressed="false"><span class="g-ar">ب</span><span class="g-tr">а</span></button>
       <span id="ayah-range"></span>
     </div>
   </div>
@@ -5591,7 +5615,7 @@
       sett_err_place_long: 'Өтө узун.',
       pulse_prev: 'бир күн артка',
       pulse_next: 'бир күн алдыга',
-      pulse_sub_act_one: 'аракети',
+      pulse_sub_act_one: 'аракет',
       n_act_one: 'аракет',
       n_people_one: 'киши',
       n_min_one: 'мүнөт',
@@ -5637,7 +5661,7 @@
       month_11: 'ноябрь',
       month_12: 'декабрь',
       login_sub: 'Мусхаф, жаттоо жана Курандын сөздөрү —<br>Яссирде окугандар үчүн.',
-      login_wrong_side: 'Мен сени окуучулардын арасынан тапкан жокмун. Колдонмо Яссирде окуп жаткандарга ачылат 🤲 Telegramда суроома жооп бер — эмнеден баштоону көрсөтөм.',
+      login_wrong_side: 'Мен сени окуучулардын арасынан тапкан жокмун. Колдонмо Яссирде окуп жаткандарга ачылат 🤲 Telegramда суроомо жооп бер — эмнеден баштоону көрсөтөм.',
       login_tg: 'Telegram аркылуу кирүү',
       login_mail_open: 'Почта аркылуу кирүү',
       login_mail_q: 'Аккаунтуңа байланган почта',
@@ -5652,26 +5676,26 @@
       login_enter: 'Кирүү',
       login_mail_sent: 'Код %E% дарегине жөнөтүлдү. Кат келбесе, «Спам» папкасын кара.',
       login_no_net: 'Сервер менен байланыш жок. Дагы аракет кыл.',
-      login_code_6: 'Коддо 6 сан бар.',
+      login_code_6: 'Коддо 6 цифра бар.',
       login_checking: 'Текшерилүүдө…',
       login_preparing: 'Кирүү даярдалууда…',
-      login_press: 'Жогорудагы баскычты бас, Telegramда — «Start / Начать». Тастыктоону күтүп жатам…',
+      login_press: 'Жогорудагы баскычты бас, ал эми Telegramда — «Start / Начать». Тастыктоону күтүп жатам…',
       login_expired: 'Кирүү шилтемесинин мөөнөтү бүттү — ал 15 мүнөт жашайт. Топту кайра танда.',
       login_done: 'Даяр%N%. Ачылууда…',
       login_err_email_bad: 'Бул почта дарегине окшобойт. Ката жоктугун текшер.',
       login_err_not_linked: 'Бул почта эч бир аккаунтка байланган эмес. Telegram аркылуу кир же устаздан почтаны байлап берүүнү сура.',
       login_err_mail_off: 'Почта аркылуу кирүү азырынча иштебейт. Telegram аркылуу кир.',
       login_err_send_failed: 'Кат жөнөтүлгөн жок. Бир мүнөттөн кийин дагы аракет кыл.',
-      login_err_wrong: 'Код туура эмес. Акыркы каттагы сандарды текшер.',
+      login_err_wrong: 'Код туура эмес. Акыркы каттагы цифраларды текшер.',
       login_err_expired: 'Коддун мөөнөтү бүттү. «Кодду кайра жөнөтүү» баскычын бас.',
       login_link_bad: 'Кирүү шилтемеси колдонулуп бүткөн же мөөнөтү өткөн. Жаңысын сура же ушул жерден кир.',
       login_err_tries: 'Катары менен өтө көп аракет болду. Бир сааттан кийин аракет кыл 🤲',
-      login_err_start: 'Кирүүнү баштоо болбой калды. Байланышты текшерип, дагы аракет кыл.',
-      wrongbot_male: 'Сен эркектер жамаатында окуйсуң, ал эми бул колдонмо экинчи жарымдын боту аркылуу ачылды.',
-      wrongbot_female: 'Сен аялдар жамаатында окуйсуң, ал эми бул колдонмо экинчи жарымдын боту аркылуу ачылды.',
-      wrongbot_other: 'Сен башка жамаатта окуйсуң, ал эми бул колдонмо экинчи жарымдын боту аркылуу ачылды.',
-      wrongbot_open: 'Өзүмдүн YassirAppты ачуу',
-      wrongbot_note: 'Ал жерде сенин тобуң, тапшырууларың жана тапшырмаларың. Бул жерде сени жазбайм — эч нерсе чаташпашы үчүн.',
+      login_err_start: 'Кирүү мүмкүн болбоду. Байланышты текшерип, дагы аракет кыл.',
+      wrongbot_male: 'Сен эркектер жамаатында окуйсуң, ал эми бул колдонмо башка бөлүктүн боту аркылуу ачылды.',
+      wrongbot_female: 'Сен аялдар жамаатында окуйсуң, ал эми бул колдонмо башка бөлүктүн боту аркылуу ачылды.',
+      wrongbot_other: 'Сен башка жамаатта окуйсуң, ал эми бул колдонмо башка бөлүктүн боту аркылуу ачылды.',
+      wrongbot_open: 'Менин YassirApp\'ымды ачуу',
+      wrongbot_note: 'Ал жерде сенин тобуң, тапшырууларың жана тапшырмаларың. Бул жерде сени каттабайм — эч нерсе чаташып кетпеси үчүн.',
       // Главы «Знаний» (19.10.2026): черновик Claude, проверка Gemini (i18n/learn_*).
       learn_hifz_name: 'Жаттоо',
       learn_hifz_desc: 'Мусхафтан 40+40 кантип тапшырылат',
@@ -6287,7 +6311,7 @@
       sett_err_place_long: 'Жуда узун.',
       pulse_prev: 'бир кун орқага',
       pulse_next: 'бир кун олдинга',
-      pulse_sub_act_one: 'ҳаракати',
+      pulse_sub_act_one: 'ҳаракат',
       n_act_one: 'ҳаракат',
       n_people_one: 'киши',
       n_min_one: 'дақиқа',
@@ -6300,7 +6324,7 @@
       feed_photo: 'расм',
       feed_attach: 'файл',
       feed_failed_short: 'очилмади',
-      feed_empty_html: 'Ҳозирча бўш.<br>Бу ерда гуруҳингда ва сенга шахсан ёзилганлар чиқади.',
+      feed_empty_html: 'Ҳозирча бўш.<br>Бу ерда гуруҳингда ва сенга шахсан ёзилганлар пайдо бўлади.',
       feed_loading: 'Юкланмоқда…',
       feed_failed: 'Очилмади.',
       hifz_count_title: 'Такрорни белгилаш',
@@ -6319,21 +6343,21 @@
       review_comment: '🎙 Изоҳ',
       review_accept: '✅ Қабул қилинди',
       review_retake: '↺ Қайта топширишга',
-      lesson_date: '%D%-%M%',
-      month_1: 'январ',
-      month_2: 'феврал',
+      lesson_date: '%D% %M%',
+      month_1: 'январь',
+      month_2: 'февраль',
       month_3: 'март',
-      month_4: 'апрел',
+      month_4: 'апрель',
       month_5: 'май',
-      month_6: 'июн',
-      month_7: 'июл',
+      month_6: 'июнь',
+      month_7: 'июль',
       month_8: 'август',
-      month_9: 'сентябр',
-      month_10: 'октябр',
-      month_11: 'ноябр',
-      month_12: 'декабр',
+      month_9: 'сентябрь',
+      month_10: 'октябрь',
+      month_11: 'ноябрь',
+      month_12: 'декабрь',
       login_sub: 'Мусҳаф, ёдлаш ва Қуръон сўзлари —<br>Яссирда ўқиётганлар учун.',
-      login_wrong_side: 'Мен сени ўқувчилар орасидан топмадим. Илова Яссирда ўқиётганлар учун очилади 🤲 Telegramда саволимга жавоб бер — нимадан бошлашни кўрсатаман.',
+      login_wrong_side: 'Мен сени ўқувчилар орасидан топмадим. Илова Яссирда ўқиётганлар учун очилади 🤲 Telegram\'да саволимга жавоб бер — нимадан бошлашни кўрсатаман.',
       login_tg: 'Telegram орқали кириш',
       login_mail_open: 'Почта орқали кириш',
       login_mail_q: 'Аккаунтингга боғланган почта',
@@ -6341,9 +6365,9 @@
       login_mail_send: 'Код юбориш',
       login_mail_again: 'Кодни қайта юбориш',
       login_back: '← Орқага',
-      login_open_tg: 'Telegramни очиш',
+      login_open_tg: 'Telegram\'ни очиш',
       login_wait: 'Ҳаволани оч ва «Start / Начать»ни бос — тасдиқни кутяпман.',
-      login_ios: 'iPhoneда: «Поделиться» → «На экран Домой» — шунда илова оддий иловадек ўз белгисидан очилади.',
+      login_ios: 'iPhone\'да: «Поделиться» → «На экран Домой» — шунда илова оддий иловадек ўз белгисидан очилади.',
       login_mail_sending: 'Хат юборилмоқда…',
       login_enter: 'Кириш',
       login_mail_sent: 'Код %E% манзилига юборилди. Хат келмаган бўлса, «Спам»ни текшир.',
@@ -6351,7 +6375,7 @@
       login_code_6: 'Кодда 6 та рақам бор.',
       login_checking: 'Текширилмоқда…',
       login_preparing: 'Кириш тайёрланмоқда…',
-      login_press: 'Юқоридаги тугмани бос, Telegramда эса — «Start / Начать». Тасдиқни кутяпман…',
+      login_press: 'Юқоридаги тугмани бос, Telegram\'да эса — «Start / Начать»ни. Тасдиқни кутяпман…',
       login_expired: 'Кириш ҳаволасининг муддати тугади — у 15 дақиқа амал қилади. Гуруҳни қайта танла.',
       login_done: 'Тайёр%N%. Очилмоқда…',
       login_err_email_bad: 'Бу почта манзилига ўхшамайди. Хато йўқлигини текшир.',
@@ -6362,12 +6386,12 @@
       login_err_expired: 'Коднинг муддати тугади. «Кодни қайта юбориш»ни бос.',
       login_link_bad: 'Кириш ҳаволаси ишлатилган ёки муддати ўтган. Янгисини сўра ёки шу ердан кир.',
       login_err_tries: 'Кетма-кет жуда кўп уриниш бўлди. Бир соатдан кейин уриниб кўр 🤲',
-      login_err_start: 'Киришни бошлаб бўлмади. Алоқани текшириб, яна уриниб кўр.',
-      wrongbot_male: 'Сен эркаклар жамоатида ўқийсан, бу илова эса иккинчи ярмининг боти орқали очилган.',
-      wrongbot_female: 'Сен аёллар жамоатида ўқийсан, бу илова эса иккинчи ярмининг боти орқали очилган.',
-      wrongbot_other: 'Сен бошқа жамоатда ўқийсан, бу илова эса иккинчи ярмининг боти орқали очилган.',
-      wrongbot_open: 'Ўзимнинг YassirAppни очиш',
-      wrongbot_note: 'У ерда сенинг гуруҳинг, топширишларинг ва топшириқларинг. Бу ерда сени ёзмайман — ҳеч нарса аралашиб кетмаслиги учун.',
+      login_err_start: 'Киришни бошлаб бўлмади. Алоқани текшир ва яна уриниб кўр.',
+      wrongbot_male: 'Сен эркаклар жамоатида ўқийсан, бу илова эса бошқа бўлим боти орқали очилган.',
+      wrongbot_female: 'Сен аёллар жамоатида ўқийсан, бу илова эса бошқа бўлим боти орқали очилган.',
+      wrongbot_other: 'Сен бошқа жамоатда ўқийсан, бу илова эса бошқа бўлим боти орқали очилган.',
+      wrongbot_open: 'Менинг YassirApp\'имни очиш',
+      wrongbot_note: 'У ерда сенинг гуруҳинг, топшириш ва топшириқларинг бор. Ҳеч нарса чалкашиб кетмаслиги учун бу ерда сени қайд қилмайман.',
       // Главы «Знаний» (19.10.2026): черновик Claude, проверка Gemini (i18n/learn_*).
       learn_hifz_name: 'Ёдлаш',
       learn_hifz_desc: 'Мусҳафдан 40+40 қандай топширилади',
@@ -9653,6 +9677,7 @@
        отсюда — есть ещё разбор устаза и пересдача. */
     document.getElementById('btn-hifz').style.display = name === 'page' ? '' : 'none';
     document.getElementById('btn-meaning').style.display = name === 'page' ? '' : 'none';
+    document.getElementById('read-gloss-btn').style.visibility = name === 'page' ? '' : 'hidden';
     if (name === 'page') mushafFitSchedule();
     if (name === 'mywords') loadMyWords();
   }
@@ -10279,18 +10304,22 @@
   var GLOSS_KEY = 'yassir_hifz_gloss';
   function glossApply(on) {
     document.getElementById('app').classList.toggle('gloss', on);
-    document.getElementById('hifz-gloss-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+    ['hifz-gloss-btn', 'read-gloss-btn'].forEach(function (id) {
+      document.getElementById(id).setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
   }
   (function () {
     var v = null;
     try { v = localStorage.getItem(GLOSS_KEY); } catch (e) {}
     glossApply(v !== '0');
   })();
-  document.getElementById('hifz-gloss-btn').addEventListener('click', function () {
-    var on = !document.getElementById('app').classList.contains('gloss');
-    glossApply(on);
-    try { localStorage.setItem(GLOSS_KEY, on ? '1' : '0'); } catch (e) {}
-    trail('gloss', { on: on ? 1 : 0 });
+  ['hifz-gloss-btn', 'read-gloss-btn'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      var on = !document.getElementById('app').classList.contains('gloss');
+      glossApply(on);
+      try { localStorage.setItem(GLOSS_KEY, on ? '1' : '0'); } catch (e) {}
+      trail('gloss', { on: on ? 1 : 0, where: id === 'read-gloss-btn' ? 'read' : 'hifz' });
+    });
   });
 
   function hifzExit() {
