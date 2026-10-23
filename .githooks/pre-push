@@ -1,0 +1,14 @@
+#!/bin/sh
+echo "→ Syntax check..."
+find . -name "*.py" -not -path "./venv/*" -not -path "./.git/*" | xargs python -m py_compile
+if [ $? -ne 0 ]; then
+  echo "✗ Синтаксическая ошибка — пуш отменён"
+  exit 1
+fi
+echo "→ Tests..."
+python -m pytest tests/ -q
+if [ $? -ne 0 ]; then
+  echo "✗ Тесты не прошли — пуш отменён"
+  exit 1
+fi
+echo "✓ Всё ОК"
