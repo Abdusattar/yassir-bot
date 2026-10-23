@@ -4391,32 +4391,73 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None, submi
     return "\n".join(lines)
 
 
-def get_period_winner(group_id, days):
+# ── Места в рейтингах (23.10.2026, решение пользователя) ─────────────────────
+# Одинаковые баллы - одно место, имена через запятую; следующий балл -
+# следующее место (1, 1, 2). Раньше место давал порядок строк из базы, и при
+# равных баллах одной доставалось 🥇, другой 🥈 (Мохинур и Aisha, по 37), а
+# топ-10 недели резал шестерых с 42 баллами на пятерых - по случайности.
+
+MEDALS = ["🥇", "🥈", "🥉"]
+
+
+def places_by_score(items, score):
+    """[(место, баллы, [items])] по убыванию баллов, место плотное (1, 1, 2)."""
+    out = []
+    for it in sorted(items, key=lambda x: -score(x)):
+        s = score(it)
+        if out and out[-1][1] == s:
+            out[-1][2].append(it)
+        else:
+            out.append((len(out) + 1, s, [it]))
+    return out
+
+
+def place_mark(place):
+    return MEDALS[place - 1] if place <= len(MEDALS) else str(place) + "."
+
+
+def place_of(items, score, match):
+    """Место элемента, для которого match(item) истинно; None - нет такого."""
+    for place, _s, group in places_by_score(items, score):
+        if any(match(it) for it in group):
+            return place
+    return None
+
+
+def _period_winners(rows):
+    """Все, кто делит первое место (ничья - тоже победа)."""
+    if not rows:
+        return []
+    top = max(r["points"] for r in rows)
+    return [{"name": r["name"], "points": r["points"]} for r in rows if r["points"] == top]
+
+
+def get_period_winners(group_id, days):
     start = (datetime.now(pytz.timezone(TZ)).date() - timedelta(days=days - 1)).isoformat()
     with db() as c:
-        return c.execute("""
+        return _period_winners(c.execute("""
             SELECT u.name, COALESCE(SUM(e.points),0) as points
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
             LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-            GROUP BY u.id ORDER BY points DESC LIMIT 1
-        """, (group_id, start, group_id)).fetchone()
+            GROUP BY u.id
+        """, (group_id, start, group_id)).fetchall())
 
 
-def get_period_winner_range(group_id, start, end):
-    """Лидер за закрытый календарный период (квартал/полугодие/год) -
-    в отличие от get_period_winner (скользящее окно "N дней назад по
+def get_period_winners_range(group_id, start, end):
+    """Лидеры за закрытый календарный период (квартал/полугодие/год) -
+    в отличие от get_period_winners (скользящее окно "N дней назад по
     сегодня"), тут границы фиксированные с обеих сторон (07.08.2026)."""
     with db() as c:
-        return c.execute("""
+        return _period_winners(c.execute("""
             SELECT u.name, COALESCE(SUM(e.points),0) as points
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
             LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=? AND e.date<=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-            GROUP BY u.id ORDER BY points DESC LIMIT 1
-        """, (group_id, start, end, group_id)).fetchone()
+            GROUP BY u.id
+        """, (group_id, start, end, group_id)).fetchall())
 
 
 def format_period_report(group_id, group_title, group_tasks, days=None, start=None, end=None, label=None):
@@ -4461,20 +4502,21 @@ def format_period_report(group_id, group_title, group_tasks, days=None, start=No
         task_pts, days_done = task_map.get(sid, (0, 0))
         bonus = bonus_map.get(sid, 0)
         results.append((s["name"], task_pts + bonus, days_done, bonus))
-    results.sort(key=lambda x: -x[1])
-
-    medals = ["🥇", "🥈", "🥉"]
 
     def day_word(n):
         return "день" if n == 1 else ("дня" if 2 <= n <= 4 else "дней")
 
+    def who(name, days_done, bonus):
+        extra = str(days_done) + " " + day_word(days_done)
+        if bonus > 0:
+            extra += ", +{} бонус".format(bonus)
+        return name + " (" + extra + ")"
+
     lines = ["📊 Отчёт за " + label + " — " + group_title + ":\n"]
-    for i, (name, total, days_done, bonus) in enumerate(results):
-        medal = medals[i] if i < 3 else str(i + 1) + "."
-        bonus_str = " (+{} бонус)".format(bonus) if bonus > 0 else ""
+    for place, total, same in places_by_score(results, lambda x: x[1]):
         lines.append(
-            medal + " " + name + " — 💎 " + str(total) + " очков"
-            + " (" + str(days_done) + " " + day_word(days_done) + ")" + bonus_str
+            place_mark(place) + " " + ", ".join(who(n, d, b) for n, _t, d, b in same)
+            + " — 💎 " + str(total) + " очков"
         )
     with db() as c:
         lessons = c.execute(

@@ -9,7 +9,8 @@ from core.db import (
     get_all_groups, get_group_tasks, get_group_lang, hafiz_ids, student_tasks, prior_full_dates,
     task_since, tasks_on,
     get_students, get_today_report, get_consecutive_skips, get_skip_count_month,
-    format_daily_report, format_period_report, get_period_winner, get_period_winner_range,
+    format_daily_report, format_period_report, get_period_winners, get_period_winners_range,
+    places_by_score,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
     get_setting, set_setting, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
@@ -508,7 +509,11 @@ def _group_task_diff_lines(cur_group_tasks, prev_group_tasks):
 def _top_students_by_points(start, end, limit=10):
     """Топ студентов по сумме баллов (задания+бонусы+посещаемость) за период,
     без участия только в Тадаббуре и без устаза (его личная просьба, как в
-    _full_week_students/_streak_leaders)."""
+    _full_week_students/_streak_leaders).
+
+    Возвращает места: [(место, баллы, [(имя, группа), ...])]. Место, на
+    котором набирается limit человек, входит целиком - равных баллов не
+    режем (23.10.2026: Мохинур с 42 выпала, пятеро с 42 вошли)."""
     my_id = SUPER_ADMIN_IDS[0] if SUPER_ADMIN_IDS else None
     with db() as c:
         rows = c.execute("""
@@ -520,19 +525,39 @@ def _top_students_by_points(start, end, limit=10):
               AND (g.group_type IS NULL OR g.group_type NOT IN ('tadabbur','staff'))
             GROUP BY e.student_id
             HAVING total_points > 0
-            ORDER BY total_points DESC
-            LIMIT ?
-        """, (start, end, limit + 5)).fetchall()
-    result = []
-    for r in rows:
-        if my_id and r["phone"] == my_id:
-            continue
-        group = get_learning_group(r["phone"])
-        group_title = group["title"] if group else "Тадаббур"
-        result.append((r["name"], r["total_points"], group_title))
-        if len(result) >= limit:
+        """, (start, end)).fetchall()
+    rows = [r for r in rows if not (my_id and r["phone"] == my_id)]
+    result, shown = [], 0
+    for place, points, same in places_by_score(rows, lambda r: r["total_points"]):
+        if shown >= limit:
             break
+        people = []
+        for r in same:
+            group = get_learning_group(r["phone"])
+            people.append((r["name"], group["title"] if group else "Тадаббур"))
+        result.append((place, points, people))
+        shown += len(people)
     return result
+
+
+def _top_lines(top_students):
+    return [
+        str(place) + ". " + ", ".join(n + " (" + g + ")" for n, g in people) + " — " + str(p) + " баллов"
+        for place, p, people in top_students
+    ]
+
+
+async def _praise_winners(chat_id, winners, label, glang, hadith, ayah):
+    """Похвала всем, кто делит первое место (23.10.2026). Каждому своя: тексты
+    банка - на одного человека. Больше трёх - без похвалы, строка с местом
+    в отчёте уже назвала всех."""
+    winners = [w for w in winners if w["points"] > 0]
+    if not winners or len(winners) > 3:
+        return
+    for w in winners:
+        praise = await ai.winner_praise(w["name"], label, w["points"], glang, hadith=hadith, ayah=ayah)
+        if praise:
+            await send_message(chat_id, praise)
 
 
 def _day_word(n):
@@ -780,12 +805,16 @@ def _full_period_students(period_start, period_end):
         for r in rows:
             per_student.setdefault(r["student_id"], {}).setdefault(r["date"], set()).add(r["subcategory"])
         hafiz = hafiz_ids(group["id"])
+        since = task_since(group["id"])
         for s in get_students(group["id"]):
             if my_id and s["phone"] == my_id:
                 continue
             day_sets = per_student.get(s["id"], {})
             need = student_tasks(s["id"], group_tasks, hafiz)   # у хафиза - без заучивания
-            if all(set(need) <= day_sets.get(d, set()) for d in days):
+            # Каждый день - заданиями, обязательными В ТОТ день (23.10.2026:
+            # хадис у группы Мохидил открылся 15.10, и за 12-14.10 «не сдала
+            # всё» вся группа - в «Примеры недели» не попал никто).
+            if all(set(tasks_on(need, since, d)) <= day_sets.get(d, set()) for d in days):
                 names.append((s["name"], group["title"] or str(group["chat_id"])))
     return names
 
@@ -877,10 +906,7 @@ async def weekly_tadabbur_summary():
             if top_students:
                 lines.append("")
                 lines.append("🏆 Топ-10 недели:")
-                lines.extend(
-                    str(i + 1) + ". " + n + " (" + g + ") — " + str(p) + " баллов"
-                    for i, (n, p, g) in enumerate(top_students)
-                )
+                lines.extend(_top_lines(top_students))
 
             verse = await _closing_verse()
             if verse:
@@ -944,10 +970,7 @@ async def monthly_tadabbur_summary():
             if top_students:
                 lines.append("")
                 lines.append("🏆 Топ-10 месяца:")
-                lines.extend(
-                    str(i + 1) + ". " + n + " (" + g + ") — " + str(p) + " баллов"
-                    for i, (n, p, g) in enumerate(top_students)
-                )
+                lines.extend(_top_lines(top_students))
 
             verse = await _closing_verse()
             if verse:
@@ -1826,11 +1849,8 @@ async def weekly_report():
                     lines.append("• " + name)
                 await send_message(chat_id, "\n".join(lines))
 
-            winner = get_period_winner_range(group_id, start, end)
-            if winner and winner["points"] > 0:
-                praise = await ai.winner_praise(winner["name"], "неделю", winner["points"], glang, hadith=hadith, ayah=ayah)
-                if praise:
-                    await send_message(chat_id, praise)
+            await _praise_winners(chat_id, get_period_winners_range(group_id, start, end),
+                                  "неделю", glang, hadith, ayah)
 
             # ── Частичная сдача (не 0, но и не всё) - только pro/relaxed ────
             # prep не участвует (решение пользователя 12.08.2026): там свой
@@ -1870,11 +1890,8 @@ async def monthly_report():
             report = format_period_report(group["id"], group["title"] or chat_id, group_tasks, 30)
             await send_message(chat_id, report)
 
-            winner = get_period_winner(group["id"], 30)
-            if winner and winner["points"] > 0:
-                praise = await ai.winner_praise(winner["name"], "месяц", winner["points"], glang, hadith=hadith, ayah=ayah)
-                if praise:
-                    await send_message(chat_id, praise)
+            await _praise_winners(chat_id, get_period_winners(group["id"], 30),
+                                  "месяц", glang, hadith, ayah)
             await pace(1)
         except Exception as e:
             log.error("monthly_report error in %s: %s", chat_id, e)
@@ -1958,11 +1975,8 @@ async def quarterly_leaders_report():
                     start=start.isoformat(), end=end.isoformat(), label=label
                 )
                 await send_message(chat_id, report)
-                winner = get_period_winner_range(group["id"], start.isoformat(), end.isoformat())
-                if winner and winner["points"] > 0:
-                    praise = await ai.winner_praise(winner["name"], label, winner["points"], glang, hadith=hadith, ayah=ayah)
-                    if praise:
-                        await send_message(chat_id, praise)
+                await _praise_winners(chat_id, get_period_winners_range(group["id"], start.isoformat(), end.isoformat()),
+                                      label, glang, hadith, ayah)
                 await pace(1)
         except Exception as e:
             log.error("quarterly_leaders_report error in %s: %s", chat_id, e)

@@ -31,7 +31,7 @@ from core.db import (
     find_unlinked_by_name, lookup_by_name_in_chat, find_user_by_phone, find_known_user_by_phone,
     set_user_name_if_empty, track_unregistered, remove_unregistered, bot_leads_group,
     get_now,
-    format_daily_report, format_period_report, get_period_winner,
+    format_daily_report, format_period_report, places_by_score, place_mark, place_of,
     get_missing_students, get_date, in_night_tail, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
     looks_like_plain_name,
@@ -214,14 +214,17 @@ async def _send_rating_to(target_chat_id, group, group_id, glang):
             GROUP BY u.id ORDER BY total DESC
         """, (group_id, week_start.isoformat(), today.isoformat(), group_id)).fetchall()
     streaks = get_group_streaks(group_id, group_tasks)
-    medals = ["🥇", "🥈", "🥉"]
     lines = [T("rating_header", glang, title=group["title"] or group["chat_id"],
                start=week_start.strftime("%d.%m"), end=today.strftime("%d.%m"))]
-    for i, r in enumerate(rows):
-        medal = medals[i] if i < 3 else str(i + 1) + "."
-        streak = streaks.get(r["id"], 0)
-        lines.append(medal + " " + r["name"] + " — " + str(r["total"]) + " " + T("rating_points", glang) +
-                     " · 🔥 " + str(streak) + " " + T("rating_streak", glang))
+    # Равные баллы - одно место, имена через запятую (23.10.2026).
+    for place, total, same in places_by_score(rows, lambda r: r["total"]):
+        if len(same) == 1:
+            r = same[0]
+            lines.append(place_mark(place) + " " + r["name"] + " — " + str(total) + " " + T("rating_points", glang) +
+                         " · 🔥 " + str(streaks.get(r["id"], 0)) + " " + T("rating_streak", glang))
+        else:
+            who = ", ".join(r["name"] + " 🔥" + str(streaks.get(r["id"], 0)) for r in same)
+            lines.append(place_mark(place) + " " + who + " — " + str(total) + " " + T("rating_points", glang))
     lines.append(T("rating_footer", glang))
     await send_message(target_chat_id, "\n".join(lines))
 
@@ -245,11 +248,11 @@ async def _send_mystats_to(target_chat_id, s_check, group, group_id, group_tasks
             JOIN user_groups ug ON u.id=ug.user_id
             LEFT JOIN score_events e ON e.student_id=u.id AND e.group_id=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
-            GROUP BY u.id ORDER BY grand DESC
+            GROUP BY u.id
         """, (group_id, group_id)).fetchall()
     total_score = total_row["total"] or 0
     prev_score = prev_row["total"] or 0
-    rank = next((i + 1 for i, r in enumerate(rank_rows) if r["id"] == s_check["id"]), "?")
+    rank = place_of(rank_rows, lambda r: r["grand"], lambda r: r["id"] == s_check["id"]) or "?"
     today_rep = get_today_report(s_check["id"], group_id)
     today_done = sum(1 for k in group_tasks if today_rep and today_rep[k]) if today_rep else 0
     gtype = group["group_type"] or "relaxed"
