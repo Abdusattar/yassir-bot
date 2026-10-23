@@ -40,6 +40,7 @@ from core.db import (
     deactivate_student, get_groups_by_type, find_by_phone,
     get_dm_ok_by_phone, remove_unregistered, other_bot_member, other_bot_prep_only,
     get_prep_students_active, get_group, is_any_group_admin,
+    last_learning_join, other_bot_last_learning_join,
 )
 from config import SUPER_ADMIN_IDS
 from core.i18n import T
@@ -104,11 +105,21 @@ def claimed_by_neighbour(uid):
     соседа только подготовительная - никем не проверенная запись, - а сам
     человек ответил НАШУ половину. Тогда он наш: разворачивать его назад
     было бы пинг-понгом, а снять его у соседа может только сосед (см.
-    sweep_misplaced_in_prep)."""
+    sweep_misplaced_in_prep).
+
+    Второе исключение (23.10.2026, Ася): человек учился в обеих половинах и
+    сейчас нигде не активен - его половина та, где он учился ПОСЛЕДНИМ. Один
+    Telegram-аккаунт: в июне, до подготовительной, с него вошли в мужскую
+    G-11 «Абдулазизом», в сентябре-октябре на нём училась сестра у Мохидил.
+    Без этого правила оба бота отсылали её друг к другу."""
     if not (other_bot_member(uid) or other_bot_known(uid)):
         return False
     if other_bot_prep_only(uid) and answered_side(uid) == config.PROFILE:
         return False
+    if not other_bot_member(uid):
+        ours, theirs = last_learning_join(uid), other_bot_last_learning_join(uid)
+        if ours and theirs and ours > theirs:
+            return False
     return True
 
 

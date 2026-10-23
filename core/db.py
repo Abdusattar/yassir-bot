@@ -1595,6 +1595,41 @@ def ever_learning_student(phone):
     return row is not None
 
 
+def last_learning_join(phone):
+    """Дата последнего входа в учебную группу (pro/relaxed) ЭТОЙ базы, активна
+    запись или нет. None - не учился (23.10.2026, см. side.claimed_by_neighbour)."""
+    with db() as c:
+        row = c.execute("""
+            SELECT MAX(ug.joined_date) AS d FROM user_groups ug
+            JOIN users u ON u.id=ug.user_id
+            JOIN groups g ON g.id=ug.group_id
+            WHERE u.phone=? AND ug.role='student' AND g.group_type IN ('pro','relaxed')
+        """, (str(phone),)).fetchone()
+    return row["d"] if row else None
+
+
+def other_bot_last_learning_join(phone):
+    """То же по базе соседа, только чтение. None - не учился или базу не
+    прочитать: тогда сравнивать не с чем, и решает старое правило."""
+    path = _other_bot_db_path()
+    if not path:
+        return None
+    try:
+        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            row = c.execute("""
+                SELECT MAX(ug.joined_date) FROM users u
+                JOIN user_groups ug ON u.id=ug.user_id
+                JOIN groups g ON ug.group_id=g.id
+                WHERE u.phone=? AND ug.role='student' AND g.group_type IN ('pro','relaxed')
+            """, (str(phone),)).fetchone()
+        finally:
+            c.close()
+        return row[0] if row else None
+    except sqlite3.Error:
+        return None
+
+
 def get_learning_group(phone, include_prep=False):
     """Возвращает учебную группу (pro/relaxed) в которой студент уже состоит, или None.
 

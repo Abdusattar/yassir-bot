@@ -383,6 +383,33 @@ def test_verified_at_neighbour_stays_theirs_even_with_own_answer(test_db, world)
     assert side.claimed_by_neighbour(SISTER_ACTIVE) is True
 
 
+# ── Учился в обеих половинах: решает последняя учёба (Ася, 23.10.2026) ─────
+
+def _both_halves(world, own_joined, their_joined):
+    """Аккаунт SISTER_PENALTY: relaxed у сестёр (неактивна) и N-1 у нас (выбыл)."""
+    with sqlite3.connect(world["female_db"]) as c:
+        c.execute("ALTER TABLE user_groups ADD COLUMN joined_date TEXT")
+        c.execute("UPDATE user_groups SET joined_date=? WHERE user_id=2", (their_joined,))
+    n1 = db.get_group(N1_CHAT)["id"]
+    db.add_student("Абдулазиз", n1, phone=SISTER_PENALTY)
+    s = db.find_by_phone(SISTER_PENALTY, n1)
+    db.deactivate_student(s["id"], n1)
+    with db.db() as c:
+        c.execute("UPDATE user_groups SET joined_date=? WHERE user_id=?", (own_joined, s["id"]))
+
+
+def test_both_halves_later_learning_here_makes_them_ours(test_db, world, wire):
+    _both_halves(world, own_joined="2026-09-03", their_joined="2026-06-24")
+    assert side.claimed_by_neighbour(SISTER_PENALTY) is False
+    _dm(SISTER_PENALTY, "/start")
+    assert all("женском джамаате" not in t for _, t, _ in wire["sent"])
+
+
+def test_both_halves_later_learning_at_neighbour_stays_theirs(test_db, world):
+    _both_halves(world, own_joined="2026-06-24", their_joined="2026-09-03")
+    assert side.claimed_by_neighbour(SISTER_PENALTY) is True
+
+
 def test_sweep_removes_from_our_prep_those_who_answered_the_other_half(test_db, world, wire):
     side.remember_side(MISPLACED, "female")
     asyncio.run(side.sweep_misplaced_in_prep())
