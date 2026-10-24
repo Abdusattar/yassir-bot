@@ -10894,8 +10894,29 @@
       on && rec.ms ? lookFmt(rec.ms / 1000) : '0:00';
   }
 
+  /* Слушать себя на iPhone (24.10.2026, Александра из группы Муслима: «не
+     могу прослушать, очень тихо», а после отправки - громко). Пока микрофон
+     открыт (держим его всю панель, см. hifzRecStream), iOS ведёт звук в
+     разговорный динамик, тот, что у уха. На ▶ отпускаем микрофон - звук идёт
+     в обычный; дослушал или поставил паузу - сразу берём обратно в фоне,
+     чтобы «Перезаписать» стартовало без задержки. Запись и так начинается
+     только когда микрофон реально выдан (красный таймер, hifzRecStart). */
+  var REC_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  function hifzRecPanelOpen() {
+    return document.getElementById('hifz-rec').classList.contains('visible');
+  }
+
   document.getElementById('hifz-rec-play').addEventListener('click', function () {
-    if (recAudio.paused) { recAudio.play().catch(function () {}); }
+    if (recAudio.paused) {
+      if (REC_IOS && rec.stream) {
+        hifzRecRelease();
+        rec.micBack = true;
+        trail('rec', { n: 'mic off for play' });
+      }
+      recAudio.play().catch(function () {});
+    }
     else { recAudio.pause(); }
   });
   recAudio.addEventListener('play', function () {
@@ -10904,6 +10925,11 @@
   ['pause', 'ended'].forEach(function (ev) {
     recAudio.addEventListener(ev, function () {
       document.getElementById('hifz-rec-play').textContent = '▶';
+      if (!rec.micBack || !hifzRecPanelOpen()) return;
+      rec.micBack = false;
+      hifzRecStream().then(function () {
+        if (!hifzRecPanelOpen()) hifzRecRelease();   // закрыли, пока ждали
+      }).catch(function () {});
     });
   });
   recAudio.addEventListener('timeupdate', function () {
@@ -10962,6 +10988,7 @@
   }
 
   function hifzRecClose() {
+    rec.micBack = false;   // закрываем - микрофон после прослушивания не возвращать
     hifzRecReset();
     rec.mode = null;
     hifzRecRelease();   // панель закрыта - микрофон отпущен, индикатор гаснет
@@ -11156,12 +11183,18 @@
     // до правки, Бехзод после неё - ни разу, телефон сам мерил файл в 0 с.
     var plain = /SamsungBrowser/.test(navigator.userAgent);
     try { plain = plain || localStorage.getItem('hifz_mic_plain') === '1'; } catch (e) {}
-    return navigator.mediaDevices.getUserMedia({ audio: plain ? true : {
+    // Одна выдача за раз (24.10.2026): прогрев после прослушивания (см.
+    // recAudio ниже) и «Перезаписать» могут попросить микрофон одновременно -
+    // второй поток никто бы не закрыл, и телефон показывал бы, что мы слушаем.
+    if (rec.streamWait) return rec.streamWait;
+    rec.streamWait = navigator.mediaDevices.getUserMedia({ audio: plain ? true : {
       noiseSuppression: false, echoCancellation: false, autoGainControl: false
     } }).then(function (stream) {
+      rec.streamWait = null;
       rec.stream = stream;
       return stream;
-    });
+    }, function (e) { rec.streamWait = null; throw e; });
+    return rec.streamWait;
   }
 
   function hifzRecStart() {
