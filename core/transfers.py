@@ -634,6 +634,22 @@ async def handle_member_left(chat_id, uid):
     log.info("Student %s left group %s on their own/admin action - deactivated", student["name"], group["id"])
 
 
+async def lift_prep_ban(chat_id, uid):
+    """В подготовительной вечного бана не бывает (решение пользователя
+    24.10.2026): пробовать можно сколько угодно раз. Ручное «Удалить
+    участника» в супергруппе оставляет бан навсегда, и человек потом видит
+    «ссылка недействительна» (Ася 22.10, Бурулсун 26.09) - снимаем его
+    сразу. Из группы человек всё равно убран; вход обратно - через заявку,
+    её решает бот. Свой ban+unban бот тоже сюда приводит - повторный
+    unban с only_if_banned безвреден."""
+    group = get_group(chat_id)
+    if not group or group["group_type"] != "prep":
+        return False
+    await unban_member(chat_id, uid)
+    log.info("prep ban lifted: uid=%s chat=%s", uid, chat_id)
+    return True
+
+
 async def _finalize_upgrade_arrival(offer_id, existing_user, old_group, new_group, phone):
     """Студент реально вступил в предложенную pro-группу — теперь и только
     теперь деактивируем и физически кикаем его из старой relaxed-группы

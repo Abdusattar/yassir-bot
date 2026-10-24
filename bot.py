@@ -31,7 +31,7 @@ from core.prep import handle_juz_answer, handle_juz_confirm, handle_prep_onboard
 from core.transfers import (
     handle_other_bot_member_in_group, greet_new_member, first_join_event,
     handle_known_user_group_join, handle_upgrade_answer, handle_member_left,
-    send_new_student_prep_redirect,
+    send_new_student_prep_redirect, lift_prep_ban,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -269,6 +269,14 @@ async def main():
                         and new_m.get("status") in ("left", "kicked")
                         and not user.get("is_bot")
                     )
+                    # Бан в подготовительной снимаем сразу (24.10.2026) -
+                    # и после «member», и если забанили уже вышедшего.
+                    if new_m.get("status") == "kicked" and not user.get("is_bot"):
+                        try:
+                            await lift_prep_ban(str(cm.get("chat", {}).get("id", "")),
+                                                str(user.get("id", "")))
+                        except Exception as e:
+                            log.warning("lift_prep_ban failed: %s", e)
                     if left:
                         uid = str(user.get("id", ""))
                         chat_id = str(cm.get("chat", {}).get("id", ""))
