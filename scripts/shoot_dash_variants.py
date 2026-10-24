@@ -837,7 +837,162 @@ COUNTER_CSS = """
 """
 
 
+# Вариант Б из разбора прототипа брата (24.10.2026): блок «Сегодня» на
+# настоящем дашборде. По данным 7 дней в 71% заходов первым делом идут в
+# заучивание - поэтому сверху место и одна главная кнопка, под ней остальные
+# задания группы с отметкой. Двери ужаты в строку, пульс - в одну строку,
+# строка устаза (#dash-brief) остаётся как есть. Мини-страница слева -
+# строки листа мусхафа: видно, где ты на странице, без слов.
+# Тексты - из ключей index.html (btn_hifz_title, hifz_line_of, dash_words_today,
+# revision_rec_*, subs_done, pulse_sub); новые только «Учить и сдать» и
+# спокойный статус «на проверке — ждёт устаза».
+TODAY_CSS = """
+#my-day, #dash-grad, #dash-board, #dash-pulse { display: none !important; }
+#dash-head { align-items: center; }
+#t-head { flex: 1; display: flex; align-items: baseline; gap: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+#t-head b { font-size: 24px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); }
+#t-head span { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#t-head span.all { color: var(--accent); font-weight: 600; }
+
+#t-card { background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 22px; box-shadow: var(--shadow-sm); overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; direction: ltr; }
+#t-hero { display: grid; grid-template-columns: 58px 1fr; gap: 16px; padding: 16px 16px 14px; }
+#t-hero.noleaf { grid-template-columns: 1fr; }
+.t-leaf { width: 58px; height: 80px; border-radius: 7px; padding: 7px 6px;
+  box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;
+  background: linear-gradient(var(--mushaf-bg-start), var(--mushaf-bg-end));
+  border: 1px solid color-mix(in srgb, var(--marker-color) 35%, transparent); }
+.t-leaf i { display: block; height: 2px; border-radius: 1px;
+  background: color-mix(in srgb, var(--ink) 13%, transparent); }
+.t-leaf i.half { background: color-mix(in srgb, var(--ink) 26%, transparent); }
+.t-leaf i.done { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.t-leaf i.now { height: 4px; margin: -1px -3px; border-radius: 2px; background: var(--accent); }
+.t-leaf i.next { height: 4px; margin: -1px -3px; border-radius: 2px;
+  background: color-mix(in srgb, var(--marker-color) 70%, transparent); }
+.t-what { font-size: 13px; color: var(--muted); }
+.t-place { font-size: 21px; font-weight: 700; letter-spacing: -.02em; color: var(--ink);
+  line-height: 1.2; margin-top: 3px; }
+.t-place small { display: block; font-size: 15px; font-weight: 500; color: var(--ink);
+  letter-spacing: -.01em; margin-top: 1px; }
+.t-hint { font-size: 13px; color: var(--muted); line-height: 1.35; margin-top: 6px; }
+.t-go { grid-column: 1 / -1; height: 50px; border: 0; border-radius: 15px;
+  background: var(--accent); color: #fff;
+  font: 600 17px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: -.01em; }
+.t-go.quiet { background: var(--accent-soft); color: var(--accent); }
+
+.t-list { border-top: 1px solid var(--card-border); }
+.t-row { display: grid; grid-template-columns: 22px 1fr 12px; align-items: center; gap: 12px;
+  padding: 11px 16px; }
+.t-row + .t-row { border-top: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent); }
+.t-row b { display: block; font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+.t-row em { display: block; font-style: normal; font-size: 12.5px; color: var(--muted);
+  margin-top: 2px; line-height: 1.3; }
+.t-row .go { color: var(--muted); font-size: 18px; }
+.t-row.ok b { color: var(--muted); font-weight: 500; }
+.t-dot { width: 20px; height: 20px; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.t-row.ok .t-dot { border: 0; background: var(--accent); color: #fff; }
+.t-row.wait .t-dot { border-color: var(--warn); color: var(--warn); font-size: 11px; }
+.t-row.wait em { color: var(--warn-ink); }
+
+#dash-doors { grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+#dash-doors .dash-row { min-height: 0; padding: 12px 4px 10px; border-radius: 16px; gap: 7px;
+  align-items: center; justify-content: flex-start; text-align: center; }
+#dash-doors .dash-row .mark { width: 34px; height: 34px; border-radius: 11px; font-size: 18px; }
+#dash-doors .dash-row .sub { display: none; }
+#dash-doors .dash-row .label { font-size: 12px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; }
+#dash-doors .dash-row .badge { top: 5px; right: 8px; min-width: 18px; height: 18px;
+  font-size: 11px; padding: 0 5px; }
+#dash-doors .dash-row#dash-learn { grid-column: auto !important; flex-direction: column !important;
+  min-height: 0 !important; }
+
+#t-pulse { display: flex; align-items: center; gap: 9px; direction: ltr; padding: 12px 16px;
+  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+  font: 13.5px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--muted); }
+#t-pulse i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+#t-pulse b { color: var(--ink); font-weight: 600; }
+#t-pulse .go { margin-left: auto; font-size: 18px; }
+"""
+
+TODAY_JS = r"""
+<script>
+window.__TSCENE = 'SCENE';
+window.addEventListener('load', function () { setTimeout(function () {
+  var S = window.__TSCENE;
+  // Страница 7, первая половина - строчки 1-8 (этап 1, «строчка 3 из 8»).
+  function leaf(now, mark) {
+    var h = '';
+    for (var i = 1; i <= 15; i++) {
+      var c = i === now ? mark : (i < now ? 'done' : (i <= 8 ? 'half' : ''));
+      h += '<i class="' + c + '"></i>';
+    }
+    return '<div class="t-leaf" aria-hidden="true">' + h + '</div>';
+  }
+  var hifzHero = '<div id="t-hero">' + leaf(3, 'now')
+    + '<div><div class="t-what">Заучивание 40+40</div>'
+    + '<div class="t-place">Стр. 7<small>строчка 3 из 8</small></div></div>'
+    + '<button class="t-go">Учить и сдать</button></div>';
+  var revHero = '<div id="t-hero" class="noleaf"><div>'
+    + '<div class="t-what">Повторение</div>'
+    + '<div class="t-place">Повторение записью</div>'
+    + '<div class="t-hint">Начни с нужной страницы, одной записью до своего места, листать можно</div></div>'
+    + '<button class="t-go">Записать всё повторение</button></div>';
+  var doneHero = '<div id="t-hero">' + leaf(4, 'next')
+    + '<div><div class="t-what">Всё сдано на сегодня</div>'
+    + '<div class="t-place">Завтра: стр. 7<small>строчка 4 из 8</small></div></div>'
+    + '<button class="t-go quiet">Открыть мусхаф</button></div>';
+
+  function row(st, name, sub) {
+    var dot = st === 'ok' ? '✓' : (st === 'wait' ? '◴' : '');
+    return '<div class="t-row ' + st + '" role="button"><span class="t-dot">' + dot + '</span>'
+      + '<span><b>' + name + '</b><em>' + sub + '</em></span><span class="go">›</span></div>';
+  }
+  var WAIT = row('wait', 'Заучивание', 'на проверке — ждёт устаза, от тебя ничего не нужно');
+  var sc = {
+    morning: { n: '0 из 4', hero: hifzHero, rows: [
+      row('', 'Повторение', 'Повторение записью'),
+      row('', 'Слова', '0 из 40 слов сегодня'),
+      row('', 'Хадис', '0 из 5')] },
+    half: { n: '2 из 4', hero: revHero, rows: [
+      WAIT,
+      row('ok', 'Слова', '40 из 40 слов сегодня'),
+      row('', 'Хадис', '0 из 5')] },
+    done: { n: '4 из 4', all: true, hero: doneHero, rows: [
+      WAIT,
+      row('ok', 'Повторение', 'засчитано'),
+      row('ok', 'Слова', '40 из 40 слов сегодня'),
+      row('ok', 'Хадис', '5 из 5')] }
+  }[S];
+
+  var head = document.getElementById('dash-head');
+  var t = document.createElement('div');
+  t.id = 't-head';
+  t.innerHTML = '<b>Сегодня</b><span class="' + (sc.all ? 'all' : '') + '">' + sc.n + '</span>';
+  head.insertBefore(t, head.firstChild);
+
+  var card = document.createElement('div');
+  card.id = 't-card';
+  card.innerHTML = sc.hero + '<div class="t-list">' + sc.rows.join('') + '</div>';
+  head.parentNode.insertBefore(card, head.nextSibling);
+
+  var p = document.createElement('div');
+  p.id = 't-pulse';
+  p.innerHTML = '<i></i><span><b>23 действия</b> джамаата сегодня · к 14:00</span><span class="go">›</span>';
+  var doors = document.getElementById('dash-doors');
+  doors.parentNode.insertBefore(p, doors.nextSibling);
+}, 2000); });
+</script>
+"""
+
+
 VARIANTS = {
+    "today_morning": TODAY_CSS,
+    "today_half": TODAY_CSS,
+    "today_done": TODAY_CSS,
     "count_wide": COUNTER_CSS + BAR_CSS + WIDE_CSS,
     "count_bar": COUNTER_CSS + BAR_CSS,
     "count_bar_page": COUNTER_CSS + BAR_CSS,
@@ -983,6 +1138,9 @@ def page(variant):
         if variant == "brief2":
             pre = "<script>window.__BRIEF2=1;</script>"
         return html + pre + BRIEF_JS + "<style>%s</style>" % css
+    if variant.startswith("today_"):
+        return (html + TODAY_JS.replace("SCENE", variant[6:])
+                + "<style>%s</style>" % css)
     if variant == "feed_open":
         return html + FEED_SCREEN_HTML + "<style>%s</style>" % css
     body = ADD_FEED.replace("SKIP", skip).replace("MYDAY_TOP", top)
