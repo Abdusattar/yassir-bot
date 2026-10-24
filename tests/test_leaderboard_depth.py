@@ -135,7 +135,7 @@ def test_last_date_in_score(lb_db):
 
 def test_idle_days_hide_from_public_list(lb_db, monkeypatch):
     today = date(2026, 9, 28)
-    monkeypatch.setattr(mb, "get_date", lambda: today.isoformat())
+    monkeypatch.setattr(mb, "get_date", lambda *_a: today.isoformat())
     monkeypatch.setattr(mb, "hafiz_phones", lambda: set())
     everyone = {uid: uid for uid in ("fresh", "idle", "never")}
     monkeypatch.setattr(mb, "leaderboard_people", lambda: (everyone, dict(everyone)))
@@ -167,7 +167,7 @@ def _api_board(monkeypatch, me_id, full, public):
     monkeypatch.setattr(api, "get_learning_group", lambda uid: {"id": 1})
     monkeypatch.setattr(api, "_display_name", lambda uid: "Имя " + uid)
     monkeypatch.setattr(api, "_group_name", lambda uid: "Группа 3")
-    monkeypatch.setattr(mb, "get_date", lambda: "2026-09-28")
+    monkeypatch.setattr(mb, "get_date", lambda *_a: "2026-09-28")
 
     async def run():
         client = TestClient(TestServer(api.build_app()))

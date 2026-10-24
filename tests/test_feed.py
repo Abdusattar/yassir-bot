@@ -397,16 +397,16 @@ def test_объявление_висит_до_даты_а_после_прочт�
     import core.db as cdb
     from core.feed import important, mark_notice_seen
     _setup()
-    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-17")
+    monkeypatch.setattr(cdb, "get_date", lambda *_a: "2026-09-17")
     with important("announce", until="2026-09-19"):
         _out(MY_CHAT, "📣 переход 19.09")
     with important("kick"):
         _out(ME, "⚠️ пропуски")
     mark_notice_seen(ME, feed_id=[n for n in _board(ME) if n["type"] == "announce"][0]["id"])
     assert [(n["type"], n["read"]) for n in _board(ME)] == [("kick", False), ("announce", True)]
-    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-19")
+    monkeypatch.setattr(cdb, "get_date", lambda *_a: "2026-09-19")
     assert "announce" in [n["type"] for n in _board(ME)]   # день события - ещё висит
-    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-20")
+    monkeypatch.setattr(cdb, "get_date", lambda *_a: "2026-09-20")
     assert "announce" not in [n["type"] for n in _board(ME)]
 
 
@@ -414,12 +414,12 @@ def test_объявление_без_даты_висит_два_дня(test_db, 
     import core.db as cdb
     from core.feed import important
     _setup()
-    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-17")
+    monkeypatch.setattr(cdb, "get_date", lambda *_a: "2026-09-17")
     with important("task"):
         _out(MY_CHAT, "🆕 со следующего четверга - таджвид")
-    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-19")
+    monkeypatch.setattr(cdb, "get_date", lambda *_a: "2026-09-19")
     assert _board(ME)
-    monkeypatch.setattr(cdb, "get_date", lambda: "2026-09-20")
+    monkeypatch.setattr(cdb, "get_date", lambda *_a: "2026-09-20")
     assert _board(ME) == []
 
 

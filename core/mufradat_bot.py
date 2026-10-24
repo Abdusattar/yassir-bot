@@ -63,7 +63,7 @@ async def _credit_task_if_applicable(user_id, chat_id):
     already = get_today_report(user["id"], group["id"]) or {}
     if already.get("t"):
         return
-    save_report(user["id"], group["id"], get_date(), {"t": True})
+    save_report(user["id"], group["id"], get_date(user["id"]), {"t": True})
     # Норма своя у маленькой закладки (стр. 2 - 32 слова, daily_word_target).
     st = get_daily_words_status(user_id)
     await send_message(
@@ -114,7 +114,7 @@ async def credit_revision_task(user_id):
     already = get_today_report(user["id"], group["id"]) or {}
     if already.get("r"):
         return False
-    save_report(user["id"], group["id"], get_date(), {"r": True})
+    save_report(user["id"], group["id"], get_date(user["id"]), {"r": True})
     if group["chat_id"]:
         # "(через YassirApp, Мусхаф)" - решение пользователя 30.08.2026,
         # тот же принцип, что у _credit_task_if_applicable выше ("через
@@ -196,10 +196,10 @@ async def submit_revision_recording(user_id, audio_bytes, client_ms=None, page_t
     keep_copy(voice_obj.get("file_id"), parts, ogg)
     duration = voice_obj.get("duration") or sec or None
     rec_id = save_revision_recording(
-        user["id"], group["id"], group["chat_id"], res["result"]["message_id"], get_date(),
+        user["id"], group["id"], group["chat_id"], res["result"]["message_id"], get_date(user["id"]),
         voice_obj.get("file_id"), duration, page_to, page_from=page_from or None)
     if credited:
-        save_report(user["id"], group["id"], get_date(), {"r": True})
+        save_report(user["id"], group["id"], get_date(user["id"]), {"r": True})
     return {"ok": True, "credited": credited, "id": rec_id, "page_to": page_to,
             "page_from": page_from or None}
 
@@ -654,12 +654,12 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     # Место сдачи кладём в саму запись (04.09.2026): кабинету устаза нужно
     # показать, ЧТО именно проверять, а из подписи в Telegram это не достать.
     save_voice_submission(user["id"], group["id"], group["chat_id"],
-                          voice_msg_id, get_date(), file_id,
+                          voice_msg_id, get_date(user["id"]), file_id,
                           hifz_page=page, hifz_line=line, hifz_stage=stage,
                           photo_message_id=photo_msg_id, duration=duration,
                           hifz_layout=my_layout)
     if credited:
-        save_report(user["id"], group["id"], get_date(), {"m": True})
+        save_report(user["id"], group["id"], get_date(user["id"]), {"m": True})
     return {"ok": True, "credited": credited, "place": place}
 
 

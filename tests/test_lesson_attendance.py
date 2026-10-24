@@ -17,7 +17,8 @@ def _group(chat_id="-100901", title="N-1", tasks="m,r,t"):
 
 
 def _today(monkeypatch, day):
-    monkeypatch.setattr(db, "get_date", lambda: day)
+    monkeypatch.setattr(db, "get_date", lambda *_a: day)
+    monkeypatch.setattr(db, "group_date", lambda: day)   # уроки - день группы
 
 
 def _age_marks(hours):

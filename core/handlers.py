@@ -32,7 +32,7 @@ from core.db import (
     set_user_name_if_empty, track_unregistered, remove_unregistered, bot_leads_group,
     get_now,
     format_daily_report, format_period_report, places_by_score, place_mark, place_of,
-    get_missing_students, get_date, in_night_tail, db, get_setting, get_prep_group,
+    get_missing_students, get_date, group_date, in_night_tail, db, get_setting, get_prep_group,
     has_any_group_history, save_dm_registration_name, looks_like_greeting,
     looks_like_plain_name,
     save_voice_submission, has_app_submissions, mark_voice_reviewed, save_submission_review,
@@ -1164,7 +1164,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 return
             st, g = matched
             td = {k: True for k in get_group_tasks(g)}
-            save_report(st["id"], g["id"], get_date(), td)
+            save_report(st["id"], g["id"], get_date(st["id"]), td)
             await send_message(chat_id, "✅ Отчёт засчитан: " + st["name"])
             return
 
@@ -1616,7 +1616,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     td = check_text(saved)
                     sc = sum(1 for k in group_tasks if td.get(k))
                     if sc > 0:
-                        save_report(sid, group_id, get_date(), td)
+                        save_report(sid, group_id, get_date(sid), td)
                         done_list = [task_name(k, glang) for k in group_tasks if td.get(k)]
                         await send_message(chat_id, "📖 Засчитан отчёт из первого сообщения:\n" + "\n".join("✅ " + n for n in done_list))
                 return
@@ -1798,7 +1798,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not st:
             await send_message(chat_id, "❌ Студент «" + _m_name + "» не найден в этой группе")
             return
-        today = get_date()
+        today = get_date(st["id"])
         cancelled, not_found = [], []
         with db() as c:
             for code in _m_codes:
@@ -1987,7 +1987,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # без бонусных баллов, только факт для еженедельного отчёта (scheduler._week_ops_stats).
             ustaz = find_user_by_phone(phone)
             if ustaz:
-                add_bonus(ustaz["id"], group_id, get_date(), 0, "attendance", "ustaz")
+                add_bonus(ustaz["id"], group_id, group_date(), 0, "attendance", "ustaz")
                 await send_message(chat_id, T("lesson_marked", glang))
         return
 
@@ -2014,7 +2014,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, T("app_only_refuse", glang, name=s["name"]))
         return
     if is_voice and message_id:
-        save_voice_submission(s["id"], group_id, chat_id, message_id, get_date(), voice_file_id,
+        save_voice_submission(s["id"], group_id, chat_id, message_id, get_date(s["id"]), voice_file_id,
                               duration=voice_duration)
         # Указатель 40+40 двигают ОБА канала сдачи (решение пользователя
         # 02.09.2026, было заложено ещё в макете 01.09): иначе студент,
@@ -2037,7 +2037,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             already_excuse = c.execute(
                 "SELECT 1 FROM score_events"
                 " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
-                (s["id"], group_id, get_date())
+                (s["id"], group_id, get_date(s["id"]))
             ).fetchone()
         if already_excuse:
             await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
@@ -2049,7 +2049,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             # Узр без балла (30.09.2026, решение пользователя: «не хочу давать
             # балл за узр, но штрафовать не будем»). Событие остаётся - по нему
             # день не пропуск и считается месячный лимит узров.
-            add_bonus(s["id"], group_id, get_date(), 0, "excuse", note=reason or None)
+            add_bonus(s["id"], group_id, get_date(s["id"]), 0, "excuse", note=reason or None)
             await send_message(chat_id,
                 "✅ " + s["name"] + ", уважительная причина принята, день не считается пропуском. Берегите себя! 🤲")
         return
@@ -2131,7 +2131,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                 already_excuse = c.execute(
                     "SELECT 1 FROM score_events"
                     " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
-                    (s["id"], group_id, get_date())
+                    (s["id"], group_id, get_date(s["id"]))
                 ).fetchone()
             if already_excuse:
                 await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
@@ -2140,7 +2140,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
                     "⚠️ " + s["name"] + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
                     ") уже исчерпан. Этот день будет считаться пропуском.")
             else:
-                add_bonus(s["id"], group_id, get_date(), 0, "excuse")   # без балла, см. выше
+                add_bonus(s["id"], group_id, get_date(s["id"]), 0, "excuse")   # без балла, см. выше
                 await send_message(chat_id,
                     "✅ " + s["name"] + ", уважительная причина принята, день не считается пропуском. Берегите себя! 🤲")
             return
@@ -2186,7 +2186,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         for key in group_tasks:
             if prev[key]:
                 tasks_done[key] = True
-    save_report(s["id"], group_id, get_date(), tasks_done)
+    save_report(s["id"], group_id, get_date(s["id"]), tasks_done)
 
     now_done = {k for k in group_tasks if tasks_done.get(k)}
     new_tasks = now_done - prev_done
@@ -2220,7 +2220,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     # кончается в три ночи - см. get_date). Говорим об этом сразу: иначе
     # человек, сдавший в 00:30, увидит «осталось» по вчерашнему дню и не
     # поймёт, про какой день речь.
-    if in_night_tail():
+    if in_night_tail(s["id"]):
         reply += "\n" + T("night_tail_note", glang)
     await send_message(chat_id, reply)
 

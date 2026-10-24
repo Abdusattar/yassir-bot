@@ -14,14 +14,14 @@ def test_board_is_reused_within_a_minute(monkeypatch):
     calls = []
     monkeypatch.setattr(mb, "LEADERBOARD_TTL", 60)
     monkeypatch.setattr(mb, "_lb", {"at": 0.0, "key": None, "data": None})
-    monkeypatch.setattr(mb, "get_date", lambda: "2026-10-16")
+    monkeypatch.setattr(mb, "get_date", lambda *_a: "2026-10-16")
     monkeypatch.setattr(mb, "_compute_leaderboards",
                         lambda: calls.append(1) or {"full": [], "group": [], "names": {}, "groups": {}})
     mb._leaderboards()
     mb._leaderboards()
     assert len(calls) == 1
     # новый учебный день - сразу пересчёт (неактивные выпадают по дням)
-    monkeypatch.setattr(mb, "get_date", lambda: "2026-10-17")
+    monkeypatch.setattr(mb, "get_date", lambda *_a: "2026-10-17")
     mb._leaderboards()
     assert len(calls) == 2
 
@@ -32,7 +32,7 @@ def test_own_row_is_fresh_and_on_its_new_place(monkeypatch):
     boards = {"full": full, "group": list(full),
               "names": {"a": "А", "b": "Б", "me": "Я"}, "groups": {"a": "G", "b": "G", "me": "G"}}
     monkeypatch.setattr(mb, "hafiz_phones", lambda: set())
-    monkeypatch.setattr(mb, "get_date", lambda: "2026-10-16")
+    monkeypatch.setattr(mb, "get_date", lambda *_a: "2026-10-16")
     monkeypatch.setattr(mb, "get_leaderboard", lambda hafiz, user_id: [("me", _score(2.5))])
     out = mb.with_fresh(boards, "me")
     assert [u for u, _ in out["full"]] == ["a", "me", "b"]

@@ -19,7 +19,7 @@ from core import app_inbox
 from core import tadabbur_mirror
 from core import mufradat_api
 from core.tg import tg_call, send_message, answer_callback_query, remove_message_keyboard, set_bot_username
-from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member, other_bot_known
+from core.db import init, get_all_groups, get_group_tasks, db, get_group, get_group_lang, set_pending_name, cache_username, cache_member_name, get_group_admins, find_user_by_phone, find_known_user_by_phone, is_observer, is_any_group_admin, joins_as_student, update_group_chat_id, bot_leads_group, other_bot_member, other_bot_known, day_of
 from core.side import handle_side_answer, handle_invite_pick, claimed_by_neighbour, handle_join_request
 from core.bots import register_self
 from config import SUPER_ADMIN_IDS
@@ -54,13 +54,21 @@ async def queued_process_message(chat_id, sender, text, sender_name, is_media=Fa
         app_route.answering_in(chat_id)
     async with lock:
         try:
-            await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id, voice_file_id, voice_duration)
+            # «Сегодня» - по поясу того, кто пишет (24.10.2026, db.day_of).
+            with day_of(sender):
+                await process_message(chat_id, sender, text, sender_name, is_media, reply_to_id, message_id, reply_to_text, is_voice, reply_to_message_id, voice_file_id, voice_duration)
         except Exception as e:
             log.error("process_message error chat=%s sender=%s: %s", chat_id, sender, e)
         await asyncio.sleep(0.3)
 
 
 async def handle_callback(cq_uid, cq_data, cq_chat_id, cq_message_id, own_chat=False):
+    """Нажатие инлайн-кнопки - «сегодня» по поясу нажавшего (db.day_of)."""
+    with day_of(cq_uid):
+        await _handle_callback(cq_uid, cq_data, cq_chat_id, cq_message_id, own_chat)
+
+
+async def _handle_callback(cq_uid, cq_data, cq_chat_id, cq_message_id, own_chat=False):
     """Нажатие инлайн-кнопки. Зовут двое: цикл getUpdates (нажатие в чате
     этого бота, own_chat=True) и очередь лички YassirApp (core/app_inbox.py,
     нажатие в чате YassirApp - ответ туда же сам уйдёт его токеном)."""

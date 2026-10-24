@@ -12,7 +12,7 @@ import core.mufradat as muf
 def _at(monkeypatch, hh, mm):
     tz = pytz.timezone(db.TZ)
     now = tz.localize(datetime(2026, 10, 11, hh, mm))
-    monkeypatch.setattr(db, "_study_now", lambda: now - timedelta(hours=db.STUDY_DAY_END_HOUR))
+    monkeypatch.setattr(db, "_study_now", lambda *_a: now - timedelta(hours=db.STUDY_DAY_END_HOUR))
 
 
 def test_after_midnight_still_yesterday(monkeypatch):

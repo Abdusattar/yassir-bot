@@ -18,7 +18,7 @@ def _group(chat_id="-100901", title="N-1", tasks="m,r,t"):
 def test_partial_day_names_missing_task_and_times(test_db, test_hadiths_db, monkeypatch):
     g = _group()
     sid = db.add_student("Сумая", g["id"], phone="777")
-    monkeypatch.setattr(db, "get_date", lambda: "2026-10-06")
+    monkeypatch.setattr(db, "get_date", lambda *_a: "2026-10-06")
     db.save_report(sid, g["id"], "2026-10-06", {"m": True, "t": True})
     db.save_voice_submission(sid, g["id"], g["chat_id"], 5, "2026-10-06", file_id="f",
                              hifz_page=10, hifz_line=9, hifz_stage=1)

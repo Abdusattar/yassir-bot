@@ -57,7 +57,7 @@ def test_each_group_gets_its_own_next_lecture(test_db, monkeypatch):
     _parts()
     cur.backfill()
     cur.announce_start(new["id"], "j", today="2026-10-01")          # старт 08.10
-    monkeypatch.setattr(cur, "get_date", lambda: "2026-10-08")
+    monkeypatch.setattr(cur, "get_date", lambda *_a: "2026-10-08")
     sent = _capture(monkeypatch)
 
     asyncio.run(sched.publish_curriculum_parts())
@@ -75,7 +75,7 @@ def test_group_not_yet_started_gets_nothing(test_db, monkeypatch):
     _parts()
     cur.backfill()
     cur.announce_start(new["id"], "j", today="2026-10-01")
-    monkeypatch.setattr(cur, "get_date", lambda: "2026-10-02")      # неделя ещё не прошла
+    monkeypatch.setattr(cur, "get_date", lambda *_a: "2026-10-02")      # неделя ещё не прошла
     sent = _capture(monkeypatch)
     asyncio.run(sched.publish_curriculum_parts())
     assert NEW not in [chat for chat, _ in sent]
@@ -86,7 +86,7 @@ def test_task_turns_on_with_first_lecture_that_has_letters(test_db, monkeypatch)
     _parts()
     cur.backfill()
     cur.announce_start(new["id"], "j", today="2026-10-01")
-    monkeypatch.setattr(cur, "get_date", lambda: "2026-10-08")
+    monkeypatch.setattr(cur, "get_date", lambda *_a: "2026-10-08")
     sent = _capture(monkeypatch)
     for _ in range(3):                                    # Введение, Сколько..., Горло
         asyncio.run(sched.publish_curriculum_parts())
@@ -126,11 +126,11 @@ def test_readiness_counts_all_students_and_waits_for_the_date(test_db, monkeypat
     assert cur.is_ready(stats, "j") and not cur.is_ready(stats, "n")
 
     sent = _capture(monkeypatch)
-    monkeypatch.setattr(sched, "get_date", lambda: "2026-09-20")    # до AUTO_OPEN_FROM - тишина
+    monkeypatch.setattr(sched, "get_date", lambda *_a: "2026-09-20")    # до AUTO_OPEN_FROM - тишина
     asyncio.run(sched.subject_readiness_check())
     assert sent == []
 
-    monkeypatch.setattr(sched, "get_date", lambda: "2026-10-01")    # четверг
+    monkeypatch.setattr(sched, "get_date", lambda *_a: "2026-10-01")    # четверг
     asyncio.run(sched.subject_readiness_check())
     to_group = [t for c, t in sent if c == NEW]
     assert len(to_group) == 1 and "08.10" in to_group[0] and "таджвид" in to_group[0]
@@ -163,18 +163,18 @@ def test_hadith_announced_three_days_ahead_then_task_turns_on(test_db, monkeypat
     assert cur.is_ready(stats, "h") and not cur.is_ready(stats, "n")
 
     sent = _capture(monkeypatch)
-    monkeypatch.setattr(sched, "get_date", lambda: "2026-10-01")
+    monkeypatch.setattr(sched, "get_date", lambda *_a: "2026-10-01")
     asyncio.run(sched.subject_readiness_check())
     soon = [t for c, t in sent if c == NEW and "хадис" in t]
     assert len(soon) == 1 and "04.10" in soon[0]
     assert cur.subject_start(new["id"], "h")["start_date"] == "2026-10-04"
     assert "h" not in db.get_group_tasks(db.get_group(NEW))
 
-    monkeypatch.setattr(sched, "get_date", lambda: "2026-10-03")    # ещё рано
+    monkeypatch.setattr(sched, "get_date", lambda *_a: "2026-10-03")    # ещё рано
     asyncio.run(sched.subject_readiness_check())
     assert "h" not in db.get_group_tasks(db.get_group(NEW))
 
-    monkeypatch.setattr(sched, "get_date", lambda: "2026-10-04")
+    monkeypatch.setattr(sched, "get_date", lambda *_a: "2026-10-04")
     asyncio.run(sched.subject_readiness_check())
     assert "h" in db.get_group_tasks(db.get_group(NEW))
     on = [t for c, t in sent if c == NEW and "в заданиях группы — хадис" in t]

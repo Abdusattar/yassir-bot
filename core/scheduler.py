@@ -12,7 +12,7 @@ from core.db import (
     format_daily_report, format_period_report, get_period_winners, get_period_winners_range,
     places_by_score,
     get_missing_students, get_date, get_tadabbur_group, get_students_not_in_tadabbur,
-    get_setting, set_setting, add_student, get_streak_days, add_bonus, db,
+    get_setting, set_setting, all_days_closed, group_date, add_student, get_streak_days, add_bonus, db,
     get_days_since_last_report, get_daily_task_counts, get_voice_review_stats,
     get_group_admins, get_dm_ok, get_learning_group,
     get_next_part_for_review, count_pending_curriculum_review, set_curriculum_review_message,
@@ -150,6 +150,11 @@ async def morning_tadabbur_report():
     if not tadabbur:
         return
     yesterday = (datetime.now(pytz.timezone(TZ)) - timedelta(days=1)).strftime("%Y-%m-%d")
+    # Один раз за день: запуск теперь ждёт конца дня у всех и может прийти
+    # в любой час - рестарт не должен слать отчёт второй раз (24.10.2026).
+    if get_setting("tadabbur_morning_day") == yesterday:
+        return
+    set_setting("tadabbur_morning_day", yesterday)
     date_str = datetime.strptime(yesterday, "%Y-%m-%d").strftime("%d.%m.%Y")
 
     if random.random() < 0.5:
@@ -2017,8 +2022,22 @@ async def scheduler():
 
             h, m, wd, d = slot
 
-            if h == 7 and m == 0:
+            # Итоги прошедшего дня, недели, месяца - не раньше 07:00 и только
+            # когда этот день кончился у ВСЕХ студентов, по самому западному
+            # поясу (24.10.2026, решение пользователя; db.all_days_closed).
+            # Ждём по часам, а не до минуты: повтор после рестарта держит
+            # отметка в settings у каждой из этих задач.
+            if m == 0 and h >= 7 and all_days_closed(
+                    (date.fromisoformat(group_date()) - timedelta(days=1)).isoformat()):
                 await maybe_run("morning_tadabbur_report", morning_tadabbur_report)
+                if wd in (0, 1):
+                    await maybe_run("weekly_ops_report", weekly_ops_report)
+                    await maybe_run("weekly_report", weekly_report)
+                if d in (1, 2):
+                    await maybe_run("monthly_ops_report", monthly_ops_report)
+                    await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
+
+            if h == 7 and m == 0:
                 await maybe_run("streak_bonuses", streak_bonuses)
                 # Раз в 2 недели, не каждый день (02.08.2026: спамило тех, кто
                 # ещё не вступил в Тадаббур - понедельник по чётным ISO-неделям).
@@ -2034,12 +2053,6 @@ async def scheduler():
                 await maybe_run("voice_review_report", voice_review_report)
                 await maybe_run("profile_survey_intro", profile_survey_intro)
                 await maybe_run("profile_survey_nudge", profile_survey_nudge)
-                if wd in (0, 1):
-                    await maybe_run("weekly_ops_report", weekly_ops_report)
-                    await maybe_run("weekly_report", weekly_report)
-                if d in (1, 2):
-                    await maybe_run("monthly_ops_report", monthly_ops_report)
-                    await maybe_run("monthly_tadabbur_summary", monthly_tadabbur_summary)
             elif h == 6 and m == 0:
                 await maybe_run("app_switch_reminder", app_switch_reminder)
                 await maybe_run("app_only_countdown_morning", app_only_countdown)

@@ -20,7 +20,7 @@ import core.mufradat as mufradat
 from config import TZ
 from core.db import (
     db, get_group_by_id, get_group_tasks, student_tasks, hafiz_ids,
-    STUDY_DAY_END_HOUR,
+    STUDY_DAY_END_HOUR, user_tz,
 )
 
 TASK_RU = {"m": "заучивание", "r": "повторение", "t": "слова",
@@ -36,7 +36,7 @@ _TRAIL_RU = {
 _TRAIL_MAX = 14
 
 
-def _local_hhmm(ts):
+def _local_hhmm(ts, tz=TZ):
     """'2026-10-07 00:31:59' (UTC, score_events) или ISO с зоной (sent_at,
     app_trail) -> 'ЧЧ:ММ' по TZ. Непонятное - пусто."""
     if not ts:
@@ -50,12 +50,13 @@ def _local_hhmm(ts):
             return ""
     if t.tzinfo is None:
         t = pytz.utc.localize(t)
-    return t.astimezone(pytz.timezone(TZ)).strftime("%H:%M")
+    return t.astimezone(pytz.timezone(tz)).strftime("%H:%M")
 
 
-def study_day_bounds_utc(date_str):
-    """Учебный день D - с 03:00 D по 03:00 D+1 местного времени, в UTC ISO."""
-    tz = pytz.timezone(TZ)
+def study_day_bounds_utc(date_str, tz=TZ):
+    """Учебный день D - с 03:00 D по 03:00 D+1 местного времени, в UTC ISO.
+    Местное - пояс студента (24.10.2026), без него Бишкек."""
+    tz = pytz.timezone(tz)
     start = tz.localize(datetime.strptime(date_str, "%Y-%m-%d") + timedelta(hours=STUDY_DAY_END_HOUR))
     end = start + timedelta(days=1)
     return start.astimezone(pytz.utc).isoformat(), end.astimezone(pytz.utc).isoformat()
@@ -97,6 +98,8 @@ def day_report(student_id, group_id, date_str, phone=None):
     group = get_group_by_id(group_id)
     if not group:
         return None
+    # Время и границы дня - по поясу студента, как и сам его день (24.10.2026).
+    tz = user_tz(uid=student_id) or TZ
     keys = student_tasks(student_id, get_group_tasks(group), hafiz_ids(group_id))
     with db() as c:
         events = c.execute(
@@ -117,7 +120,7 @@ def day_report(student_id, group_id, date_str, phone=None):
     lesson = False
     for e in events:
         if e["category"] == "task":
-            done_at.setdefault(e["subcategory"], _local_hhmm(e["created_at"]))
+            done_at.setdefault(e["subcategory"], _local_hhmm(e["created_at"], tz))
         elif e["category"] == "excuse":
             excuse = e["note"] or ""
         elif e["category"] == "attendance" and e["subcategory"] == "online":
@@ -144,12 +147,12 @@ def day_report(student_id, group_id, date_str, phone=None):
 
     trail = []
     if phone:
-        since, until = study_day_bounds_utc(date_str)
+        since, until = study_day_bounds_utc(date_str, tz)
         for ev in app_trail.get_trail_between(phone, since, until):
             label = _TRAIL_RU.get(ev["event"])
             if not label:
                 continue
-            bits = [_local_hhmm(ev["ts"]), label]
+            bits = [_local_hhmm(ev["ts"], tz), label]
             if ev["event"] in ("submit", "retake") and ev.get("page"):
                 bits.append(_place({"hifz_page": ev["page"], "hifz_line": ev.get("line"),
                                     "hifz_stage": ev.get("stage")}))

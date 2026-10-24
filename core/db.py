@@ -1,3 +1,5 @@
+import contextlib
+import contextvars
 import json
 import re
 import sqlite3
@@ -756,25 +758,95 @@ def _migrate_to_score_events(c):
 # день - он терял дни просто потому, что учится ночью.
 STUDY_DAY_END_HOUR = 3
 
+# Три ночи - по месту студента (24.10.2026, решение пользователя). Ханума
+# из Эр-Рияда садится за задания к своей полуночи, а три ночи Бишкека - это
+# её полночь: сдача то успевала, то уезжала в «завтра», вечером приложение
+# говорило «всё сдано», а прошедший день оставался пропуском. Пояс телефона
+# приложение присылает с 21.09 (users.tz, NULL - Бишкек).
+#
+# Чей день - решается так: явный uid (users.id) -> пояс этого студента;
+# иначе пояс того, кто сейчас пишет боту или открыл приложение (контекст
+# ставят bot.py и with_auth); иначе Бишкек - групповое и расписание.
+_day_tz = contextvars.ContextVar("study_day_tz", default=None)
 
-def _study_now():
+
+def _valid_tz(name):
+    return name if name and name in pytz.all_timezones_set else None
+
+
+def user_tz(uid=None, phone=None):
+    """Пояс студента по users.id или Telegram ID; None - не знаем."""
+    if uid is None and phone is None:
+        return None
+    with db() as c:
+        if uid is not None:
+            row = c.execute("SELECT tz FROM users WHERE id=?", (uid,)).fetchone()
+        else:
+            row = c.execute("SELECT tz FROM users WHERE phone=? AND tz IS NOT NULL",
+                            (str(phone),)).fetchone()
+    return _valid_tz(row["tz"]) if row else None
+
+
+@contextlib.contextmanager
+def day_of(phone):
+    """Всё внутри считает «сегодня» по поясу этого человека."""
+    token = _day_tz.set(user_tz(phone=phone))
+    try:
+        yield
+    finally:
+        _day_tz.reset(token)
+
+
+def _zone(uid=None):
+    name = (user_tz(uid=uid) if uid is not None else None) or _day_tz.get() or TZ
+    return pytz.timezone(name)
+
+
+def _study_now(uid=None):
     """«Сейчас» по учебным суткам - то же время минус хвост до трёх ночи.
 
     От него берутся ВСЕ окна этого модуля: пропуски, стрики, месяцы. Иначе
     расходится само с собой - зачёт уже лёг на вчерашний день, а окно считает
     от календарного сегодня, и ещё идущий день выглядит пропущенным
     (поймано 20.09.2026, в тот же день, что и сам сдвиг)."""
-    return datetime.now(pytz.timezone(TZ)) - timedelta(hours=STUDY_DAY_END_HOUR)
+    return datetime.now(_zone(uid)) - timedelta(hours=STUDY_DAY_END_HOUR)
 
 
-def get_date():
+def get_date(uid=None):
     """Учебная дата: то, к какому дню относится действие студента.
 
     До трёх ночи идёт ещё вчерашний день. Это ЕДИНСТВЕННАЯ точка отсчёта для
     всего, что про день студента - зачёты, счёт пропусков, стрик, дневной
     отчёт, «сегодня» в приложении. Календарь как таковой - get_calendar_date.
+    uid - чей день (см. выше).
     """
-    return _study_now().date().isoformat()
+    return _study_now(uid).date().isoformat()
+
+
+def _group_now():
+    """Учебное «сейчас» группы - всегда по Бишкеку, чей бы запрос ни шёл:
+    уроки, отчёты группы, её месяц. Иначе урок, открытый устазом из Москвы,
+    лёг бы на другую дату, чем отметка студента из Бишкека."""
+    return datetime.now(pytz.timezone(TZ)) - timedelta(hours=STUDY_DAY_END_HOUR)
+
+
+def group_date():
+    return _group_now().date().isoformat()
+
+
+def all_days_closed(day):
+    """Закончился ли учебный день day у ВСЕХ студентов - по самому западному
+    поясу из тех, где они реально живут (24.10.2026, решение пользователя).
+    Итоги дня, недели, месяца подводим только после этого, иначе тот, у кого
+    ещё вечер, выпадает из рейтинга со своей честной сдачей."""
+    with db() as c:
+        zones = {r["tz"] for r in c.execute(
+            "SELECT DISTINCT u.tz FROM users u JOIN user_groups ug ON ug.user_id=u.id"
+            " WHERE ug.active=1 AND u.tz IS NOT NULL")}
+    zones = {z for z in zones if _valid_tz(z)} | {TZ}
+    nxt = datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1, hours=STUDY_DAY_END_HOUR)
+    now = datetime.now(pytz.utc)
+    return all(now >= pytz.timezone(z).localize(nxt) for z in zones)
 
 
 def get_calendar_date():
@@ -783,11 +855,11 @@ def get_calendar_date():
     return datetime.now(pytz.timezone(TZ)).date().isoformat()
 
 
-def in_night_tail():
+def in_night_tail(uid=None):
     """Сейчас тот самый хвост суток, когда идёт ещё вчерашний учебный день.
     Нужно, чтобы бот сказал об этом словами, а не ставил человека перед
-    молчаливым «сегодня уже всё сдано»."""
-    return get_date() != get_calendar_date()
+    молчаливым «сегодня уже всё сдано». Календарь - в поясе того же человека."""
+    return get_date(uid) != datetime.now(_zone(uid)).date().isoformat()
 
 
 def get_now():
@@ -1243,7 +1315,7 @@ def get_group_tasks(group):
 def update_group_tasks(chat_id, tasks):
     """Новые задания обязательны с сегодняшнего дня - прошлые дни меряются
     тем, что требовалось тогда (group_task_since)."""
-    today = get_date()
+    today = group_date()
     with db() as c:
         g = c.execute("SELECT id, tasks FROM groups WHERE chat_id=?", (chat_id,)).fetchone()
         c.execute("UPDATE groups SET tasks=? WHERE chat_id=?", (tasks, chat_id))
@@ -1937,7 +2009,7 @@ def remove_scores(c, where, params, by=None, why=None):
 
 
 def cancel_task(student_id, group_id, task_code, by=None, why=None):
-    today = get_date()
+    today = get_date(student_id)
     with db() as c:
         remove_scores(c, "student_id=? AND group_id=? AND date=? AND category='task' AND subcategory=?",
                       (student_id, group_id, today, task_code), by, why)
@@ -1958,7 +2030,7 @@ def group_app_only_active(group, today=None):
         since = group["app_only_from"]
     except (KeyError, IndexError, TypeError):
         since = None
-    return bool(since) and (today or get_date()) >= since
+    return bool(since) and (today or group_date()) >= since
 
 
 def groups_with_app_only_date():
@@ -2006,7 +2078,7 @@ def student_ids_with_tasks_since(date_str):
 
 
 def get_today_report(uid, group_id=None):
-    today = get_date()
+    today = get_date(uid)
     with db() as c:
         if group_id is not None:
             rows = c.execute(
@@ -2869,7 +2941,7 @@ def get_days_since_last_report(uid, group_id=None):
         joined = _group_joined_date(uid, group_id)
         if joined and (not added or joined > added):
             added = joined
-    today = _study_now().date()
+    today = _study_now(uid).date()
     missed = 0
     for i in range(400):
         day = (today - timedelta(days=i)).isoformat()
@@ -2890,7 +2962,7 @@ def get_consecutive_skips(uid):
     tz = pytz.timezone(TZ)
     skips = 0
     for i in range(1, 31):
-        day = (_study_now().date() - timedelta(days=i)).isoformat()
+        day = (_study_now(uid).date() - timedelta(days=i)).isoformat()
         if day < user["added_date"]:
             break
         if day not in dates:
@@ -2953,7 +3025,7 @@ def get_group_month_progress(group_id, month=None):
 
     month - 'YYYY-MM', по умолчанию текущий."""
     tz = pytz.timezone(TZ)
-    today = _study_now().date()
+    today = _group_now().date()
     month = month or today.strftime("%Y-%m")
     month_start = month + "-01"
     # Конец месяца: первое число следующего - граница выборки (не включая).
@@ -3004,7 +3076,7 @@ def get_student_month_days(student_id, group_id, month=None):
     Тот же экран потом показывается и самому студенту - одна картина у обоих
     (условие макета)."""
     tz = pytz.timezone(TZ)
-    month = month or _study_now().date().strftime("%Y-%m")
+    month = month or _study_now(student_id).date().strftime("%Y-%m")
     y, m = int(month[:4]), int(month[5:7])
     nxt = f"{y + 1}-01-01" if m == 12 else f"{y}-{m + 1:02d}-01"
     with db() as c:
@@ -3024,8 +3096,8 @@ def get_skip_count_month_detail(uid, group_id=None):
     """Детали окна подсчёта пропусков текущего месяца: начало/конец окна,
     сколько дней сдано, сколько всего дней в окне, сколько пропущено."""
     tz = pytz.timezone(TZ)
-    month_start = _study_now().replace(day=1).date().isoformat()
-    today = _study_now().date()
+    month_start = _study_now(uid).replace(day=1).date().isoformat()
+    today = _study_now(uid).date()
     with db() as c:
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
@@ -3063,7 +3135,7 @@ def get_excuse_count_month(uid, group_id):
     в этой группе (12.08.2026, решение пользователя: лимит 3/месяц, дальше
     день считается обычным пропуском - EXCUSE_MONTHLY_LIMIT в handlers.py)."""
     tz = pytz.timezone(TZ)
-    month_start = _study_now().replace(day=1).date().isoformat()
+    month_start = _study_now(uid).replace(day=1).date().isoformat()
     with db() as c:
         row = c.execute(
             "SELECT COUNT(*) as cnt FROM score_events"
@@ -3075,7 +3147,7 @@ def get_excuse_count_month(uid, group_id):
 
 def get_miss_count_last_30_days(uid, group_id=None):
     tz = pytz.timezone(TZ)
-    today = _study_now().date()
+    today = _study_now(uid).date()
     with db() as c:
         user = c.execute("SELECT added_date FROM users WHERE id=?", (uid,)).fetchone()
         if not user:
@@ -3233,7 +3305,7 @@ def get_streak_days(uid, group_id, group_tasks, for_date=None):
     там день уже закончился по определению."""
     tz = pytz.timezone(TZ)
     dates = _full_task_dates(uid, group_id, group_tasks) | prior_full_dates(uid, group_id)
-    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now().date()
+    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now(uid).date()
     if for_date is None and anchor.isoformat() not in dates:
         anchor -= timedelta(days=1)
     streak = 0
@@ -3257,7 +3329,7 @@ def get_group_streaks(group_id, group_tasks, for_date=None):
     if not group_tasks:
         return {}
     tz = pytz.timezone(TZ)
-    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now().date()
+    anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _group_now().date()
     yesterday = anchor - timedelta(days=1)
     placeholders = ",".join("?" * len(group_tasks))
     # Задание с датой начала (group_task_since) засчитывается и требуется
@@ -3338,7 +3410,7 @@ def check_no_skip_week(uid):
         if not user:
             return False
     dates = _active_dates(uid, limit=7)
-    today = _study_now().date()
+    today = _study_now(uid).date()
     for i in range(7):
         day = (today - timedelta(days=i)).isoformat()
         if day < user["added_date"]:
@@ -3350,7 +3422,7 @@ def check_no_skip_week(uid):
 
 def get_lesson_skip_count_month(uid, group_id):
     tz = pytz.timezone(TZ)
-    month_start = _study_now().replace(day=1).date().isoformat()
+    month_start = _study_now(uid).replace(day=1).date().isoformat()
     with db() as c:
         lessons = c.execute(
             "SELECT id FROM online_lessons WHERE group_id=? AND date>=?",
@@ -3390,7 +3462,7 @@ def resolve_pending_juz_answer(uid, group_id, date, subcategory, note):
 
 def get_missing_students(group_id, group_tasks, date=None):
     students = get_students(group_id)
-    check_date = date or get_date()
+    check_date = date or group_date()
     hafiz = hafiz_ids(group_id)
     result = []
     with db() as c:
@@ -3497,7 +3569,7 @@ def count_report_days_since(uid, group_id, since_date):
 
 def get_today_avg(group_id, for_date=None):
     if for_date is None:
-        for_date = get_date()
+        for_date = group_date()
     with db() as c:
         result = c.execute("""
             SELECT ROUND(AVG(daily_score), 2) as avg FROM (
@@ -3553,7 +3625,7 @@ _LESSON_KEY = "lesson_active:"
 
 def open_lesson(group_id):
     """Устаз открывает урок: создаёт запись и активирует флаг."""
-    today = get_date()
+    today = group_date()
     with db() as c:
         c.execute(
             "INSERT OR IGNORE INTO online_lessons(group_id,date) VALUES(?,?)",
@@ -3580,7 +3652,7 @@ def get_open_lesson(group_id):
         lesson = c.execute(
             "SELECT * FROM online_lessons WHERE id=?", (int(lesson_id),)
         ).fetchone()
-    if not lesson or lesson["date"] != get_date():
+    if not lesson or lesson["date"] != group_date():
         delete_setting(_LESSON_KEY + str(group_id))
         return None
     return lesson
@@ -3636,7 +3708,7 @@ def _month_range(month):
 def lesson_attendance_status(uid, group_id):
     """Можно ли сейчас отметить онлайн-урок - одно правило для «у» в Telegram
     и для кнопки в приложении."""
-    today = get_date()
+    today = group_date()
     d = datetime.strptime(today, "%Y-%m-%d").date()
     week_start = (d - timedelta(days=d.weekday())).isoformat()
     with db() as c:
@@ -3678,14 +3750,14 @@ def credit_lesson_attendance(uid, group_id):
             "INSERT OR IGNORE INTO score_events"
             "(student_id,group_id,date,category,subcategory,points)"
             " VALUES(?,?,?,?,?,?)",
-            (uid, group_id, get_date(), "attendance", "online", 5)
+            (uid, group_id, group_date(), "attendance", "online", 5)
         )
         return cur.rowcount > 0
 
 
 def get_lesson_dates(uid, group_id, month=None):
     """Даты отметок онлайн-урока за месяц - точки в календаре."""
-    start, nxt = _month_range(month or get_date()[:7])
+    start, nxt = _month_range(month or group_date()[:7])
     with db() as c:
         rows = c.execute(
             "SELECT DISTINCT date FROM score_events WHERE student_id=? AND group_id=?"
@@ -3698,7 +3770,7 @@ def get_lesson_dates(uid, group_id, month=None):
 
 def get_group_lesson_dates(group_id, month=None):
     """{student_id: [даты]} - точки под полосой в списке «Студенты»."""
-    start, nxt = _month_range(month or get_date()[:7])
+    start, nxt = _month_range(month or group_date()[:7])
     with db() as c:
         rows = c.execute(
             "SELECT student_id, date FROM score_events WHERE group_id=?"
@@ -4317,7 +4389,7 @@ def save_dm_registration_name(phone, name):
 def format_daily_report(group_id, group_title, group_tasks, for_date=None, submitted_only=False):
     from core.content import DEFAULT_TASKS
     if for_date is None:
-        for_date = get_date()
+        for_date = group_date()
     date_str = datetime.strptime(for_date, "%Y-%m-%d").strftime("%d.%m.%Y")
     with db() as c:
         students = c.execute("""
@@ -4465,7 +4537,7 @@ def format_period_report(group_id, group_title, group_tasks, days=None, start=No
     handlers.py). Либо явные календарные start/end/label (квартал/полугодие/
     год - quarterly_leaders_report, 07.08.2026) - тогда days не нужен."""
     tz = pytz.timezone(TZ)
-    today = _study_now().date()
+    today = _group_now().date()
     if start is None:
         start = (today - timedelta(days=days - 1)).isoformat()
     if end is None:

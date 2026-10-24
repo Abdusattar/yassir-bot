@@ -113,7 +113,7 @@ def test_new_letters_before_repeats(test_db):
 
 
 def _day(monkeypatch, date):
-    monkeypatch.setattr(tt, "get_date", lambda: date)
+    monkeypatch.setattr(tt, "get_date", lambda *_a: date)
 
 
 def _row(card):

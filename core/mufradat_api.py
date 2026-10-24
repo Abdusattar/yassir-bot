@@ -37,7 +37,7 @@ from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy, local_c
 import core.audio_compat as audio_compat
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
-    count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, in_night_tail, get_all_groups,
+    count_pending_voice_reviews, USTAZ_WINDOW_DAYS, get_date, in_night_tail, day_of, get_all_groups,
     get_student_submissions, get_submission_audio, find_user_by_phone,
     get_open_retakes, has_submission_for_unit,
     get_submission, VERDICT_ACCEPTED, VERDICT_RETAKE,
@@ -155,7 +155,9 @@ def with_auth(handler):
             # идти, своими текстами.
             if not is_app_member(uid) and other_bot_member(uid):
                 return web.json_response(_wrong_bot_payload(), status=403)
-            return await handler(request, uid)
+            # «Сегодня» - по поясу того, кто открыл (24.10.2026, db.day_of).
+            with day_of(uid):
+                return await handler(request, uid)
         token = _bearer_token(request)
         user_id = resolve_session(token) if token else None
         # Право спрашивается КАЖДЫЙ раз, а не только при выдаче токена.
@@ -165,7 +167,8 @@ def with_auth(handler):
         # дешёвый и по индексу (10.09.2026).
         if not user_id or not is_app_member(user_id):
             return web.json_response({"error": "unauthorized"}, status=401)
-        return await handler(request, user_id)
+        with day_of(user_id):
+            return await handler(request, user_id)
     return wrapped
 
 
@@ -1326,7 +1329,7 @@ async def _credit_tajweed_task(user_id):
         return False
     if (get_today_report(user["id"], group["id"]) or {}).get("j"):
         return False
-    save_report(user["id"], group["id"], get_date(), {"j": True})
+    save_report(user["id"], group["id"], get_date(user["id"]), {"j": True})
     if group["chat_id"]:
         from core.tg import send_message
         try:
@@ -1450,7 +1453,7 @@ async def _credit_nahw_task(user_id):
         return False
     if (get_today_report(user["id"], group["id"]) or {}).get("n"):
         return False
-    save_report(user["id"], group["id"], get_date(), {"n": True})
+    save_report(user["id"], group["id"], get_date(user["id"]), {"n": True})
     if group["chat_id"]:
         from core.tg import send_message
         try:
@@ -1536,7 +1539,7 @@ async def _credit_hadith_task(user_id):
         return False
     if (get_today_report(user["id"], group["id"]) or {}).get("h"):
         return False
-    save_report(user["id"], group["id"], get_date(), {"h": True})
+    save_report(user["id"], group["id"], get_date(user["id"]), {"h": True})
     if group["chat_id"]:
         from core.tg import send_message
         try:

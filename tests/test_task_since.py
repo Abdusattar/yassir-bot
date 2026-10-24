@@ -23,7 +23,8 @@ def _group_with_history(today, days=10):
 
 
 def _enable_j(g, on_day, monkeypatch):
-    monkeypatch.setattr(db, "get_date", lambda: _day(on_day))
+    monkeypatch.setattr(db, "get_date", lambda *_a: _day(on_day))
+    monkeypatch.setattr(db, "group_date", lambda: _day(on_day))
     db.update_group_tasks(g["chat_id"], "m,r,t,j")
     return db.get_group(g["chat_id"])
 
