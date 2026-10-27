@@ -197,6 +197,12 @@ async def _resolve_dm_target(phone, group_chat_id, glang):
     return None
 
 
+# Явный узр первым словом, дальше причина. 请假 - для китайцев (27.10.2026):
+# кириллицу они не наберут. Без \b: иероглифы - буквы для re, и в
+# «请假生病了» границы слова нет.
+UZR_RE = re.compile(r"^(?:(?:узр|uzr)\b|请假)[:：，,\s]*(.*)", re.IGNORECASE | re.DOTALL)
+
+
 def _rating_rows(group_id, start, end):
     with db() as c:
         return c.execute("""
@@ -2058,10 +2064,10 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         if not has_app_submissions(s["id"]):
             advance_hifz_pointer(phone)
 
-    # ── Явный узр: слово "узр"/"uzr" первым в сообщении, дальше причина ──────
-    uzr_match = re.match(r"^(узр|uzr)\b[:\s]*(.*)", text.strip(), re.IGNORECASE | re.DOTALL)
+    # ── Явный узр: слово "узр"/"uzr"/"请假" первым в сообщении, дальше причина ──
+    uzr_match = UZR_RE.match(text.strip())
     if uzr_match:
-        reason = uzr_match.group(2).strip()
+        reason = uzr_match.group(1).strip()
         with db() as c:
             already_excuse = c.execute(
                 "SELECT 1 FROM score_events"
