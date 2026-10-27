@@ -6653,6 +6653,8 @@
       learn_cap_lessons: '课程',
       learn_lessons_note: '每周四更新一课',
       learn_open_of: '%N% / %M%',
+      subj_j_sub: '发音部位、字母属性',
+      subj_n_sub: '词、数、词尾变化',
       lesson_locked: '尚未开放',
       lesson_locked_soon: '周四开放',
       lesson_part_of: '第%N%部分（共%M%部分）',
@@ -7155,7 +7157,7 @@
       learn_review_7_t: '「学生」— 学习进展如何',
       learn_review_7_b: '名字下面的条是按天显示的本月：柱子越浅，那天交得越少。旁边是缺交次数。点一个学生可以打开他的卡片：他什么时候交了什么。',
       learn_r_day_name: '学习日',
-      learn_r_day_desc: '三项任务，截至凌晨三点，узр',
+      learn_r_day_desc: '三项任务，截至凌晨三点，узр（请假）',
       learn_r_day_0_t: '每天三项任务',
       learn_r_day_0_b: '背记 40+40、复习和词汇。有些小组还会加上泰吉威德、语法或圣训 — 你的小组有哪些，主屏幕上能看到。哈菲兹不交背记：他的任务是复习和词汇。所有任务都在应用里交。',
       learn_r_day_1_t: '一天到凌晨三点结束',
@@ -13795,6 +13797,10 @@
     return T('lesson_date', { D: parseInt(m[3], 10), M: T('month_' + parseInt(m[2], 10)) });
   }
 
+  // Название и подпись предмета приходят с сервера по-русски (core/lessons.py);
+  // на языке интерфейса - из словаря, иначе как пришло (27.10.2026, скрин zh).
+  var SUBJ_TITLE_KEY = { j: 'tajweed_title', n: 'nahw_title' };
+
   function lessonsRenderSubjects(subjects) {
     var box = document.getElementById('k-subjects');
     if (!box) return;                      // ушли с оглавления, пока грузилось
@@ -13808,8 +13814,8 @@
     box.innerHTML = subjects.map(function (s) {
       return '<button class="k-tile" data-subj="' + s.id + '">'
         + '<span class="t-mk">' + s.mark + '</span>'
-        + '<span class="t-nm">' + s.title + '</span>'
-        + '<span class="t-ds">' + s.sub + '</span>'
+        + '<span class="t-nm">' + (T(SUBJ_TITLE_KEY[s.id]) || s.title) + '</span>'
+        + '<span class="t-ds">' + (T('subj_' + s.id + '_sub') || s.sub) + '</span>'
         + '<span class="t-cnt">' + T('learn_open_of', { N: s.open, M: s.total }) + '</span>'
         + '</button>';
     }).join('');
