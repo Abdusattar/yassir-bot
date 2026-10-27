@@ -198,10 +198,10 @@ async def _resolve_dm_target(phone, group_chat_id, glang):
 
 
 async def _send_rating_to(target_chat_id, group, group_id, glang):
-    import pytz
-    from datetime import datetime as _dt, timedelta
-    from config import TZ
-    today = _dt.now(pytz.timezone(TZ)).date()
+    from datetime import date as _date, timedelta
+    # Учебный день группы, а не календарь (27.10.2026): с полуночи до трёх
+    # окно уезжало на завтра - сдачи этих часов лежат ещё на вчерашнем дне.
+    today = _date.fromisoformat(group_date())
     week_start = today - timedelta(days=6)
     group_tasks = get_group_tasks(group)
     with db() as c:
