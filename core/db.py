@@ -4584,7 +4584,11 @@ def format_period_report(group_id, group_title, group_tasks, days=None, start=No
             extra += ", +{} бонус".format(bonus)
         return name + " (" + extra + ")"
 
-    lines = ["📊 Отчёт за " + label + " — " + group_title + ":\n"]
+    # Даты в шапке (27.10.2026): без них «за неделю» читалось как «за
+    # последние 7 дней», а это прошлая неделя пн-вс.
+    from datetime import date
+    span = date.fromisoformat(start).strftime("%d.%m") + "–" + date.fromisoformat(end).strftime("%d.%m")
+    lines = ["📊 Отчёт за " + label + " (" + span + ") — " + group_title + ":\n"]
     for place, total, same in places_by_score(results, lambda x: x[1]):
         lines.append(
             place_mark(place) + " " + ", ".join(who(n, d, b) for n, _t, d, b in same)

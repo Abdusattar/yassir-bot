@@ -98,7 +98,7 @@ _SECTION_GRP_ADMIN = (
     "/rename Имя | Новое имя — переименовать\n"
     "/students — список студентов\n\n"
     "/report — отчёт за сегодня\n"
-    "/week — за 7 дней\n"
+    "/week — прошлая неделя (пн–вс)\n"
     "/month — за 30 дней\n"
     "/year — за год\n"
     "/rating — рейтинг\n\n"
@@ -197,34 +197,72 @@ async def _resolve_dm_target(phone, group_chat_id, glang):
     return None
 
 
-async def _send_rating_to(target_chat_id, group, group_id, glang):
-    from datetime import date as _date, timedelta
-    # Учебный день группы, а не календарь (27.10.2026): с полуночи до трёх
-    # окно уезжало на завтра - сдачи этих часов лежат ещё на вчерашнем дне.
-    today = _date.fromisoformat(group_date())
-    week_start = today - timedelta(days=6)
-    group_tasks = get_group_tasks(group)
+def _rating_rows(group_id, start, end):
     with db() as c:
-        rows = c.execute("""
+        return c.execute("""
             SELECT u.id, u.name, COALESCE(SUM(e.points),0) as total
             FROM users u
             JOIN user_groups ug ON u.id=ug.user_id
             LEFT JOIN score_events e ON u.id=e.student_id AND e.group_id=? AND e.date>=? AND e.date<=?
             WHERE ug.group_id=? AND ug.role='student' AND ug.active=1
             GROUP BY u.id ORDER BY total DESC
-        """, (group_id, week_start.isoformat(), today.isoformat(), group_id)).fetchall()
-    streaks = get_group_streaks(group_id, group_tasks)
-    lines = [T("rating_header", glang, title=group["title"] or group["chat_id"],
-               start=week_start.strftime("%d.%m"), end=today.strftime("%d.%m"))]
+        """, (group_id, start.isoformat(), end.isoformat(), group_id)).fetchall()
+
+
+def _rating_place_lines(rows, glang, streaks=None):
     # Равные баллы - одно место, имена через запятую (23.10.2026).
+    lines = []
     for place, total, same in places_by_score(rows, lambda r: r["total"]):
-        if len(same) == 1:
+        pts = str(total) + " " + T("rating_points", glang)
+        if streaks is None:
+            lines.append(place_mark(place) + " " + ", ".join(r["name"] for r in same) + " — " + pts)
+        elif len(same) == 1:
             r = same[0]
-            lines.append(place_mark(place) + " " + r["name"] + " — " + str(total) + " " + T("rating_points", glang) +
+            lines.append(place_mark(place) + " " + r["name"] + " — " + pts +
                          " · 🔥 " + str(streaks.get(r["id"], 0)) + " " + T("rating_streak", glang))
         else:
             who = ", ".join(r["name"] + " 🔥" + str(streaks.get(r["id"], 0)) for r in same)
-            lines.append(place_mark(place) + " " + who + " — " + str(total) + " " + T("rating_points", glang))
+            lines.append(place_mark(place) + " " + who + " — " + pts)
+    return lines
+
+
+def _period_report(cmd, group_id, title, group_tasks):
+    """/week - прошлая неделя пн-вс, та же, что в недельном отчёте и в
+    верхнем блоке /rating (27.10.2026); /month и /year - скользящие."""
+    if cmd == "/week":
+        from datetime import date as _date, timedelta
+        monday = _date.fromisoformat(group_date())
+        monday -= timedelta(days=monday.weekday())
+        return format_period_report(group_id, title, group_tasks,
+                                    start=(monday - timedelta(days=7)).isoformat(),
+                                    end=(monday - timedelta(days=1)).isoformat(), label="неделю")
+    return format_period_report(group_id, title, group_tasks, {"/month": 30, "/year": 365}[cmd])
+
+
+async def _send_rating_to(target_chat_id, group, group_id, glang):
+    """Две недели одним ответом (27.10.2026, Aisha: в /rating первая, в
+    недельном отчёте вторая - окна были разные, скользящие 7 дней против
+    пн-вс). Сверху прошлая неделя пн-вс - ровно та, что в недельном отчёте;
+    снизу текущая неделя с понедельника, пока идёт.
+
+    Дни - учебные дни группы (group_date), не календарь: с полуночи до трёх
+    сдачи лежат ещё на вчерашнем дне."""
+    from datetime import date as _date, timedelta
+    today = _date.fromisoformat(group_date())
+    monday = today - timedelta(days=today.weekday())
+    last_monday = monday - timedelta(days=7)
+    last_sunday = monday - timedelta(days=1)
+    group_tasks = get_group_tasks(group)
+    title = group["title"] or group["chat_id"]
+    lines = [T("rating_last_week", glang, title=title,
+               start=last_monday.strftime("%d.%m"), end=last_sunday.strftime("%d.%m"))]
+    lines += _rating_place_lines(_rating_rows(group_id, last_monday, last_sunday), glang)
+    lines.append(T("rating_this_week", glang, start=monday.strftime("%d.%m")))
+    now_rows = _rating_rows(group_id, monday, today)
+    if any(r["total"] for r in now_rows):
+        lines += _rating_place_lines(now_rows, glang, get_group_streaks(group_id, group_tasks))
+    else:
+        lines.append(T("rating_this_week_empty", glang))
     lines.append(T("rating_footer", glang))
     await send_message(target_chat_id, "\n".join(lines))
 
@@ -1330,10 +1368,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
             elif text in ("/week", "/month", "/year"):
                 # Подвал /rating зовёт сюда - в личке отвечало приветствие
                 # (30.09.2026, Сальмина написала /week 29.09).
-                days = {"/week": 7, "/month": 30, "/year": 365}[text]
-                await send_message(chat_id, format_period_report(
-                    student_group["id"], student_group["title"] or student_group["chat_id"],
-                    get_group_tasks(student_group), days))
+                await send_message(chat_id, _period_report(
+                    text, student_group["id"], student_group["title"] or student_group["chat_id"],
+                    get_group_tasks(student_group)))
             elif text == "/mystats":
                 await _send_mystats_to(chat_id, s_dm, student_group, student_group["id"], get_group_tasks(student_group), glang_dm)
             else:
@@ -1910,16 +1947,8 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         await send_message(chat_id, format_daily_report(group_id, group["title"] or chat_id, group_tasks))
         return
 
-    if text == "/week":
-        await send_message(chat_id, format_period_report(group_id, group["title"] or chat_id, group_tasks, 7))
-        return
-
-    if text == "/month":
-        await send_message(chat_id, format_period_report(group_id, group["title"] or chat_id, group_tasks, 30))
-        return
-
-    if text == "/year":
-        await send_message(chat_id, format_period_report(group_id, group["title"] or chat_id, group_tasks, 365))
+    if text in ("/week", "/month", "/year"):
+        await send_message(chat_id, _period_report(text, group_id, group["title"] or chat_id, group_tasks))
         return
 
     if text == "/rating":
