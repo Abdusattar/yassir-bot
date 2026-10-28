@@ -221,6 +221,18 @@ RU_PHRASE_TYPOS = {
 }
 
 
+# Где нечёткое сопоставление ошиблось (28.10.2026, найдено при переводе на
+# китайский). Буквы ячейки PDF побиты так, что одинаково похожи на два слова:
+# (хадис, буквы PDF) -> верные буквы. «إلا — кроме» в 29-м ушло в «قال».
+PDF_LETTERS_FIX = {
+    (29, "اال|لاا"): "الا|الا",
+}
+# Хадис, где слова иснада перебивают матн: «لا» и «ضرر» в 32-м сопоставились
+# с «مالك» и «رضي» из цепочки. Таблица PDF - только матн, поэтому для такого
+# хадиса фразы до матна в сопоставлении не участвуют. Хадис -> № фразы матна.
+MATN_PHRASE = {32: 5}
+
+
 def fix_phrase(n, ru):
     return RU_PHRASE_TYPOS.get((n, ru), ru)
 
@@ -312,7 +324,9 @@ def main():
     out, report, total, missed = [], [], 0, 0
     for n in sorted(arru):
         h = arru[n]
-        words, _ = align(rows.get(n, []), arru_words(h))
+        pdf = [(PDF_LETTERS_FIX.get((n, lt), lt), ru) for lt, ru in rows.get(n, [])]
+        src = [w for w in arru_words(h) if w[2] >= MATN_PHRASE.get(n, 0)]
+        words, _ = align(pdf, src)
         words = tidy(words, backup.get(n, {}))
         for w in words:
             w["ru"] = fix_ru(n, w)
