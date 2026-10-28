@@ -217,3 +217,12 @@ def test_only_the_first_source_counts(test_db, world, wire):
 def test_student_from_a_media_link_is_still_sent_to_his_own_bot(test_db, world, wire):
     _dm(BROTHER, "/start ig")
     assert "мужском джамаате" in wire[0][1]
+
+
+def test_student_with_chinese_app_gets_chinese_reply(test_db, world, wire, monkeypatch):
+    """Общий бот говорит на языке, выбранном в приложении (28.10.2026, zh)."""
+    monkeypatch.setattr(app_bot, "get_current_lang", lambda uid: "zh" if uid == BROTHER else "ru")
+    _dm(BROTHER, "/start go")
+    from core.i18n import T
+    assert wire[0][1].startswith(T("app_member", "zh", jamaat="", link="")[:6])
+    assert "мужском джамаате" not in wire[0][1]

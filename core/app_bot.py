@@ -34,6 +34,7 @@ from core import app_inbox, app_route
 from core.bots import other_bot, other_profile, JAMAAT_IN, register_app
 from core.db import is_app_member, other_bot_member
 from core.i18n import T
+from core.mufradat import get_current_lang
 from core.db import other_bot_prep_link
 from core.side import known_side, remember_side, _leave_own_prep, side_buttons, SIDES, own_prep_link
 from core.tg import get_bot_username
@@ -127,6 +128,15 @@ def _app_link(profile):
 
 # ── Разговор ─────────────────────────────────────────────────────────────────
 
+def _lang(uid):
+    """Язык, выбранный человеком в приложении (28.10.2026, zh): общий бот
+    отвечает на нём. Новичок язык ещё не выбирал - ru, как и было."""
+    try:
+        return get_current_lang(str(uid))
+    except Exception:
+        return "ru"
+
+
 # Метки ссылок из роликов (05.10.2026, «Яссир Медиа», media/strategy.md §9):
 # t.me/YassirAppBot?start=ig - профиль Instagram, wa/tg/shorts - остальные двери.
 MEDIA_SOURCES = ("ig", "wa", "tg", "shorts")
@@ -151,7 +161,7 @@ async def handle_text(uid, text):
         # Не учится нигде - вкладка сразу говорит об этом сама, а здесь
         # вместо тупика дорога внутрь.
         refuse_login_code(code)
-        await send(uid, T("app_login_not_yet"))
+        await send(uid, T("app_login_not_yet", _lang(uid)))
     await way_in(uid)
 
 
@@ -161,10 +171,10 @@ async def way_in(uid, from_media=False):
         # Его канал - YassirApp (01.10.2026): не гоняем к боту половины,
         # всё личное и так приходит сюда.
         if app_route.via_app(uid):
-            await send(uid, T("app_member_here", link=_app_link(side)))
+            await send(uid, T("app_member_here", _lang(uid), link=_app_link(side)))
             return
         chat_link, _ = _bot_links(side)
-        await send(uid, T("app_member", jamaat=JAMAAT_IN[side], link=chat_link or "—"))
+        await send(uid, T("app_member", _lang(uid), jamaat=JAMAAT_IN[side], link=chat_link or "—"))
         return
     # Не учится сейчас, но половина известна: ответил раньше или проходил
     # через устаза (штрафник) - его бот знает, куда вести дальше.
@@ -174,7 +184,7 @@ async def way_in(uid, from_media=False):
         return
     # Пришедшему из роликов - приветствие, которое продолжает их мысль, а не
     # сразу «проект заучивания»: его тронул смысл аята (05.10.2026).
-    await send(uid, T("side_question_media" if from_media else "side_question"), side_buttons(uid))
+    await send(uid, T("side_question_media" if from_media else "side_question", _lang(uid)), side_buttons(uid))
 
 
 def _prep_link(side):
@@ -188,14 +198,14 @@ async def send_to_side(uid, side):
     if app_route.via_app(uid):
         link = _prep_link(side)
         if link:
-            await send(uid, T("app_side_prep_link", jamaat=JAMAAT_IN[side], link=link))
+            await send(uid, T("app_side_prep_link", _lang(uid), jamaat=JAMAAT_IN[side], link=link))
             return
         log.error("app_bot: у подготовительной %s нет ссылки - веду по-старому, через бота", side)
     _, start_link = _bot_links(side)
     if start_link:
-        await send(uid, T("app_side_link", jamaat=JAMAAT_IN[side], link=start_link))
+        await send(uid, T("app_side_link", _lang(uid), jamaat=JAMAAT_IN[side], link=start_link))
     else:
-        await send(uid, T("app_side_nolink", jamaat=JAMAAT_IN[side]))
+        await send(uid, T("app_side_nolink", _lang(uid), jamaat=JAMAAT_IN[side]))
 
 
 async def handle_side_answer(uid, side):
