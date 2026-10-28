@@ -190,3 +190,39 @@ def test_summary_lists_each_word_once(test_db):
         st, _ = _answer_right("1")
     keys = [r["key"] for r in st["finished"]["results"]]
     assert len(keys) == len(set(keys))
+
+
+# ── Китайский (28.10.2026) ────────────────────────────────────────────────────
+
+def test_zh_has_gloss_for_every_word_and_hadeethenc_text():
+    z = ht.zh()
+    assert sorted(z) == list(range(1, 43))
+    for n, h in ht.data().items():
+        assert all(w.get("zh") for w in h["words"]), n
+        assert z[n]["text"] and z[n]["attribution"], n
+
+
+def test_zh_student_sees_chinese_glosses_options_and_full_text(test_db, monkeypatch):
+    monkeypatch.setattr(ht, "user_lang", lambda uid: "zh")
+    ht.set_start("1", 1, 0)
+    w = ht.state("1")["new_word"]
+    assert w["ru"] == "确实" and w["full"]["tr"].startswith("“一切行为")
+    assert w["full"]["source"] and all(p["ru"] == "" for p in w["full"]["phrases"])
+    st = ht.learn("1")
+    for _ in range(4):
+        c = st.get("card")
+        if not c:
+            break
+        texts = [o["text"] for o in c["options"]]
+        assert len(set(texts)) == 4
+        if c["dir"] == "ar2ru":
+            assert not any(any("а" <= ch.lower() <= "я" for ch in t) for t in texts), texts
+        else:
+            assert c["ru"] == "确实"
+        st, _ = _answer_right("1")
+
+
+def test_ru_student_unchanged(test_db):
+    ht.set_start("1", 1, 0)
+    w = ht.state("1")["new_word"]
+    assert w["ru"] == "Поистине" and "tr" not in w["full"]

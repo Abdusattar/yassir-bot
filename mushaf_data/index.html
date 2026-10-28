@@ -15948,7 +15948,8 @@
       (n ? '<div class="hd-full-title">' + T('hadith_full_title', { N: n }) + '</div>' : '') +
       (full.isnad ? '<div class="hd-full-isnad">' + nahwEsc(full.isnad) + '</div>' : '') +
       '<div class="hd-full-ar">' + part('ar') + '</div>' +
-      '<div class="hd-full-ru">' + part('ru') +
+      // tr - перевод целиком, когда пофразового нет (zh, HadeethEnc, 28.10.2026).
+      '<div class="hd-full-ru">' + (full.tr ? nahwEsc(full.tr) : part('ru')) +
       (full.source ? '<div class="hd-full-src">' + nahwEsc(full.source) + '</div>' : '') +
       '</div></div>';
   }

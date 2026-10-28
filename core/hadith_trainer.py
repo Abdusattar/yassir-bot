@@ -27,6 +27,14 @@
 Ответы не генерируются: слова и переводы — core/arbain.json.gz
 (scripts/build_arbain.py: пословная таблица из PDF пользователя + текст с
 огласовками из архива ar-ru.ru).
+
+**Китайский** (28.10.2026, решение пользователя «все переводи на китайский»):
+core/arbain_zh.json. Пословные подписи перевёл Claude — осознанное
+исключение из правила «не выдумывать переводы», как wbw_zh 20.10. Смысл
+хадиса целиком, цепочка и источник — HadeethEnc (реальный перевод;
+scripts/fetch_arbain_hadeethenc.py). Пофразового китайского нет, поэтому
+под арабским — весь перевод одним абзацем, подсветка фразы только в
+арабском. Язык — тот же, что у интерфейса (get_current_lang).
 """
 import gzip
 import json
@@ -40,6 +48,7 @@ from core.db import db, get_date
 log = logging.getLogger(__name__)
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "arbain.json.gz")
+ZH_PATH = os.path.join(os.path.dirname(__file__), "arbain_zh.json")
 DAILY_TARGET = 5
 # Одно новое слово в день - правило методики (пользователь 23.09: «ещё одно
 # слово» его ломает). Повторять выученное можно сколько угодно - «Ещё заход».
@@ -95,8 +104,47 @@ def data():
     global _data
     if _data is None:
         with gzip.open(DATA_PATH, "rt", encoding="utf-8") as f:
-            _data = {h["n"]: h for h in json.load(f)}
+            d = {h["n"]: h for h in json.load(f)}
+        # Китайская подпись - прямо в слово (w["zh"]): варианты ответа
+        # подбираются без знания языка студента и должны различаться в обоих.
+        for n, h in d.items():
+            zw = zh().get(n, {}).get("words") or []
+            if len(zw) == len(h["words"]):
+                for w, g in zip(h["words"], zw):
+                    w["zh"] = g
+        _data = d
     return _data
+
+
+_zh = None
+
+
+def zh():
+    global _zh
+    if _zh is None:
+        try:
+            with open(ZH_PATH, encoding="utf-8") as f:
+                _zh = {int(n): h for n, h in json.load(f)["hadiths"].items()}
+        except (OSError, ValueError) as e:
+            log.error("arbain_zh load error: %s: %s", type(e).__name__, e)
+            _zh = {}
+    return _zh
+
+
+def user_lang(user_id):
+    """Язык интерфейса студента; свой перевод есть только у zh, прочие - ru."""
+    try:
+        from core.mufradat import get_current_lang
+        return "zh" if get_current_lang(user_id) == "zh" else "ru"
+    except Exception as e:
+        log.error("hadith lang error: %s: %s", type(e).__name__, e)
+        return "ru"
+
+
+def gloss(n, i, lang="ru"):
+    """Подпись слова на языке студента."""
+    w = _word(n, i)
+    return (w.get("zh") or w["ru"]) if lang == "zh" else w["ru"]
 
 
 def letters(s):
@@ -251,15 +299,18 @@ def _options(n, i, direction, rnd):
     """Четыре варианта: верный + три других слова, лучше из того же хадиса."""
     right = _word(n, i)
     key = (lambda w: _norm_ru(w["ru"])) if direction == "ar2ru" else (lambda w: letters(w["ar"]))
-    taken, pool = {key(right)}, []
+    # Варианты различимы и по-русски, и по-китайски: два разных русских
+    # перевода могут совпасть в китайском - тогда кнопки были бы одинаковые.
+    zk = (lambda w: w.get("zh", "")) if direction == "ar2ru" else (lambda w: "")
+    taken, pool = {key(right), zk(right)} - {""}, []
     for h in [n] + [x for x in sorted(data()) if x != n]:
         ws = data()[h]["words"]
         cand = list(range(len(ws)))
         rnd.shuffle(cand)
         for j in cand:
-            k = key(ws[j])
-            if k and k not in taken:
-                taken.add(k)
+            k, z = key(ws[j]), zk(ws[j])
+            if k and k not in taken and z not in taken:
+                taken.update({k, z} - {""})
                 pool.append(ws[j])
             if len(pool) >= N_OPTIONS - 1:
                 break
@@ -267,7 +318,8 @@ def _options(n, i, direction, rnd):
             break
     opts = [right] + pool
     rnd.shuffle(opts)
-    return [{"key": key(w), "text": w["ru"] if direction == "ar2ru" else w["ar"]} for w in opts], key(right)
+    return [{"key": key(w), "text": w["ru"] if direction == "ar2ru" else w["ar"], "zh": w.get("zh", "")}
+            for w in opts], key(right)
 
 
 def _phrase_of(n, i):
@@ -282,7 +334,7 @@ def _phrase_of(n, i):
     return ph
 
 
-def full_text(n, i):
+def full_text(n, i, lang="ru"):
     """Весь хадис по фразам - арабский и смысловой перевод (24.09.2026,
     решение пользователя: пока сдаёт тренажёр, человек видит текст целиком и
     запоминает его). Фразы и перевод - из архива ar-ru.ru, как у «Смысла
@@ -302,11 +354,18 @@ def full_text(n, i):
     for k in ("ar", "ru"):
         matn[0][k] = matn[0][k].lstrip(_EDGE)
         matn[-1][k] = matn[-1][k].rstrip(_EDGE)
-    return {"n": n,
-            "isnad": _tidy(" ".join(p["ru"] for p in P[:lo])),
-            "phrases": matn,
-            "source": _tidy(" ".join(p["ru"] for p in P[hi + 1:])).strip("() ."),
-            "cur": cur - lo if cur is not None and lo <= cur <= hi else None}
+    out = {"n": n,
+           "isnad": _tidy(" ".join(p["ru"] for p in P[:lo])),
+           "phrases": matn,
+           "source": _tidy(" ".join(p["ru"] for p in P[hi + 1:])).strip("() ."),
+           "cur": cur - lo if cur is not None and lo <= cur <= hi else None}
+    he = zh().get(n) if lang == "zh" else None
+    if he and he.get("text"):
+        # Пофразового китайского нет: перевод целиком (tr), русские фразы
+        # убираем, чтобы не мешались. Арабский и его подсветка - как были.
+        out.update(isnad=he.get("intro", ""), source=he.get("attribution", ""), tr=he["text"],
+                   phrases=[{"ar": p["ar"], "ru": ""} for p in matn])
+    return out
 
 
 _EDGE = "\"'«»“”„ .:"
@@ -402,14 +461,15 @@ def _next_card(session, rnd=None):
     session["asked"] += 1
 
 
-def _word_view(n, i):
+def _word_view(n, i, lang="ru"):
     w = _word(n, i)
     h = data()[n]
-    return {"hadith": n, "pos": i + 1, "total": len(h["words"]), "ar": w["ar"], "ru": w["ru"],
-            "context": context(n, i), "full": full_text(n, i)}
+    return {"hadith": n, "pos": i + 1, "total": len(h["words"]), "ar": w["ar"], "ru": gloss(n, i, lang),
+            "context": context(n, i), "full": full_text(n, i, lang)}
 
 
 def state(user_id, feedback=None):
+    lang = user_lang(user_id)
     out = {"daily_count": daily_count(user_id), "daily_target": daily_target(user_id),
            "new_today": new_today(user_id), "new_max": NEW_PER_DAY_MAX, "feedback": feedback}
     p = progress(user_id)
@@ -423,7 +483,7 @@ def state(user_id, feedback=None):
     if session is None:
         nw = next_word(user_id)
         if nw and new_today(user_id) == 0:
-            out["new_word"] = _word_view(*nw)
+            out["new_word"] = _word_view(*nw, lang=lang)
             return out
         if not learned(user_id):
             out["empty"] = True
@@ -433,21 +493,31 @@ def state(user_id, feedback=None):
     if cur is None:
         nw = next_word(user_id)
         out["finished"] = {"correct": session["correct"], "size": session["size"],
-                           "results": session["results"],
+                           "results": [dict(r, ru=_result_gloss(r, lang)) for r in session["results"]],
                            "more": bool(nw) and new_today(user_id) < NEW_PER_DAY_MAX}
         return out
     w = _word(cur["n"], cur["i"])
     card = {"id": cur["id"], "dir": cur["dir"], "retry": bool(cur["retry"]),
             "pos": min(session["asked"], session["size"]), "size": session["size"],
-            "options": cur["options"]}
+            "options": [dict(o, text=o.get("zh") or o["text"]) if lang == "zh" and cur["dir"] == "ar2ru" else o
+                        for o in cur["options"]]}
     if cur["dir"] == "ar2ru":
         card["context"] = context(cur["n"], cur["i"])
         card["ar"] = w["ar"]
     else:
-        card["ru"] = w["ru"]
-    card["full"] = full_text(cur["n"], cur["i"])
+        card["ru"] = gloss(cur["n"], cur["i"], lang)
+    card["full"] = full_text(cur["n"], cur["i"], lang)
     out["card"] = card
     return out
+
+
+def _result_gloss(r, lang):
+    """Строка итога захода хранится по-русски; подпись - на языке студента."""
+    try:
+        n, i = (int(x) for x in r["key"].split(":"))
+        return gloss(n, i, lang)
+    except (KeyError, ValueError, IndexError):
+        return r.get("ru", "")
 
 
 def learn(user_id):
@@ -476,7 +546,7 @@ def more(user_id):
     out = {"daily_count": daily_count(user_id), "daily_target": daily_target(user_id),
            "new_today": new_today(user_id), "new_max": NEW_PER_DAY_MAX,
            "where": {"hadith": nw[0], "pos": nw[1], "total": len(data()[nw[0]]["words"])},
-           "new_word": _word_view(*nw)}
+           "new_word": _word_view(*nw, lang=user_lang(user_id))}
     return out
 
 
@@ -506,7 +576,8 @@ def answer(user_id, card_id, choice):
     elif not correct:
         mine["ok"] = False
     reached = before < daily_target(user_id) <= before + int(correct)
-    feedback = {"correct": correct, "answer": cur["right"], "ar": w["ar"], "ru": w["ru"]}
+    feedback = {"correct": correct, "answer": cur["right"], "ar": w["ar"],
+                "ru": gloss(cur["n"], cur["i"], user_lang(user_id))}
     _next_card(session)
     _save_session(user_id, session)
     return state(user_id, feedback), reached
