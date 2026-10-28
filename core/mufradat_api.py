@@ -1254,7 +1254,8 @@ async def handle_lessons(request, user_id):
             return web.json_response({"error": "bad_subject"}, status=400)
         if keys is not None and subject not in keys:
             return web.json_response({"items": []})
-        return web.json_response({"items": lessons_of(subject, _lesson_group_id(user_id))})
+        return web.json_response({"items": lessons_of(subject, _lesson_group_id(user_id),
+                                                      lang=get_current_lang(user_id))})
     return web.json_response({"subjects": subjects_overview(keys, _lesson_group_id(user_id))})
 
 
@@ -1624,7 +1625,7 @@ async def handle_lesson(request, user_id):
         part_id = int(request.query.get("id", ""))
     except ValueError:
         return web.json_response({"error": "bad_id"}, status=400)
-    item = lesson(part_id, _lesson_group_id(user_id))
+    item = lesson(part_id, _lesson_group_id(user_id), lang=get_current_lang(user_id))
     if not item:
         return web.json_response({"error": "not_open"}, status=404)
     # Предмета нет в заданиях группы - как закрытый (14.09.2026): список и

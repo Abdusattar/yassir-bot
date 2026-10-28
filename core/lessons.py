@@ -24,7 +24,10 @@ Telegram, и через неделю-две она уходила вверх п�
 11.09.2026 по таджвиду открыто 9 частей из 12 у мужчин и 4 из 12 у женщин).
 Каждый процесс читает свою базу, поэтому ничего сводить не нужно.
 """
+import hashlib
+import json
 import logging
+import os
 
 from core.db import db
 
@@ -36,6 +39,38 @@ SUBJECTS = (
     {"id": "j", "title": "Таджвид", "sub": "Махаридж, сифаты", "mark": "📘"},
     {"id": "n", "title": "Нахв", "sub": "Слово, число, и‘раб", "mark": "📗"},
 )
+
+
+# Китайский перевод (28.10.2026, scripts/build_lessons_zh.py). Текст ищется по
+# хэшу русского: поправили урок - покажем русский, а не устаревший перевод.
+_ZH_PATH = os.path.join(os.path.dirname(__file__), "lessons_zh.json")
+_zh = None
+
+
+def _zh_data():
+    global _zh
+    if _zh is None:
+        try:
+            with open(_ZH_PATH, encoding="utf-8") as f:
+                _zh = json.load(f)
+        except (OSError, ValueError) as e:
+            log.error("lessons_zh load error: %s: %s", type(e).__name__, e)
+            _zh = {}
+    return _zh
+
+
+def _tr(kind, ru, lang):
+    """Глава/тема на языке студента; нет перевода - русский."""
+    if lang != "zh" or not ru:
+        return ru
+    return _zh_data().get(kind, {}).get(ru, ru)
+
+
+def _tr_content(ru, lang):
+    if lang != "zh" or not ru:
+        return ru
+    key = hashlib.sha1(ru.strip().encode("utf-8")).hexdigest()[:16]
+    return _zh_data().get("content", {}).get(key, ru)
 
 
 def _opened(subject, group_id):
@@ -76,7 +111,7 @@ def subjects_overview(keys=None, group_id=None):
     return out
 
 
-def lessons_of(subject, group_id=None):
+def lessons_of(subject, group_id=None, lang="ru"):
     """Части предмета по порядку: глава, тема, открыт ли и когда открылся.
 
     Содержимое здесь НЕ отдаём даже для открытых — список может быть длинным,
@@ -97,8 +132,8 @@ def lessons_of(subject, group_id=None):
 
     return [{
         "id": r["id"],
-        "chapter": r["chapter"],
-        "topic": r["topic"],
+        "chapter": _tr("chapters", r["chapter"], lang),
+        "topic": _tr("topics", r["topic"], lang),
         "part": r["part_number"],
         "parts": r["part_total"],
         "open": bool(at(r)),
@@ -106,7 +141,7 @@ def lessons_of(subject, group_id=None):
     } for r in rows]
 
 
-def lesson(part_id, group_id=None):
+def lesson(part_id, group_id=None, lang="ru"):
     """Один урок с текстом — только если он уже открыт.
 
     Закрытый возвращает None, а не текст с пометкой: программа вперёд не
@@ -130,10 +165,10 @@ def lesson(part_id, group_id=None):
     return {
         "id": r["id"],
         "subject": r["subject"],
-        "chapter": r["chapter"],
-        "topic": r["topic"],
+        "chapter": _tr("chapters", r["chapter"], lang),
+        "topic": _tr("topics", r["topic"], lang),
         "part": r["part_number"],
         "parts": r["part_total"],
-        "content": r["content"],
+        "content": _tr_content(r["content"], lang),
         "at": (opened or "")[:10],
     }

@@ -181,3 +181,26 @@ def test_hadith_announced_three_days_ahead_then_task_turns_on(test_db, monkeypat
     assert len(on) == 1
     asyncio.run(sched.subject_readiness_check())                    # второй раз не пишем
     assert len([t for c, t in sent if c == NEW and "в заданиях группы — хадис" in t]) == 1
+
+
+def test_lesson_in_chinese_by_text_hash_falls_back_to_russian(test_db, monkeypatch):
+    """28.10.2026: zh-перевод ищется по хэшу русского текста; правка русского
+    - и показывается русский, а не устаревший перевод."""
+    import core.lessons as L
+    monkeypatch.setattr(L, "_zh", {"chapters": {"Глава": "章"}, "topics": {"Горло": "喉咙"},
+                                   "content": {L.hashlib.sha1("текст Горло".encode()).hexdigest()[:16]: "喉咙课文"}})
+    _parts(topics=("Горло", "Губы"), published=2)
+    with db.db() as c:
+        ids = [r["id"] for r in c.execute("SELECT id FROM curriculum_parts ORDER BY order_index")]
+    zh = L.lesson(ids[0], None, lang="zh")
+    assert (zh["chapter"], zh["topic"], zh["content"]) == ("章", "喉咙", "喉咙课文")
+    assert L.lesson(ids[0], None)["content"] == "текст Горло"
+    assert L.lesson(ids[1], None, lang="zh")["content"] == "текст Губы"      # нет перевода
+    assert [x["topic"] for x in L.lessons_of("j", None, lang="zh")] == ["喉咙", "Губы"]
+
+
+def test_lessons_zh_file_covers_its_topics():
+    import core.lessons as L
+    d = L._zh_data()
+    assert len(d["content"]) >= 29 and len(d["topics"]) >= 29
+    assert not any(any("а" <= ch.lower() <= "я" for ch in t) for t in d["content"].values())
