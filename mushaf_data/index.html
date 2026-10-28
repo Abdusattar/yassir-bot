@@ -13935,6 +13935,17 @@
      читают как справку, а не проходят как путь: все пункты подряд, со
      снимком там, где он есть, внизу одна кнопка «Готово». Шаги-снимки
      онбординга остаются по одному на экран - там важно довести до конца. */
+  /* Снимок экрана к шагу - на языке интерфейса (28.10.2026, аудит zh: под
+     китайским текстом стояли русские экраны). Снимает scripts/
+     shoot_onboarding.py --lang; нет снимка своего языка - берём русский. */
+  var LEARN_SHOT_LANGS = ['ky', 'uz', 'zh'];
+  function learnShotImg(name) {
+    var ru = 'onboarding/' + name + '.jpg';
+    if (LEARN_SHOT_LANGS.indexOf(UI_LANG) < 0) return '<img alt="" src="' + ru + '">';
+    return '<img alt="" src="onboarding/' + UI_LANG + '/' + name + '.jpg"'
+      + ' onerror="this.onerror=null;this.src=\'' + ru + '\'">';
+  }
+
   function learnRenderArticle(si) {
     var sec = LEARN[si];
     learnAt = { section: si, step: 0 };
@@ -13943,7 +13954,7 @@
     var html = '<div id="learn-step" class="text article">';
     sec.steps.forEach(function (s, k) {
       html += '<section>' +
-        (s[0] ? '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
+        (s[0] ? '<div class="shot">' + learnShotImg(s[0]) + '</div>' +
                 '<p class="learn-zoomhint">' + T('learn_zoom') + '</p>' : '') +
         learnStep(sec, k) + '</section>';
     });
@@ -13976,7 +13987,7 @@
     // Шаг без снимка (главы «Правила», 07.10.2026): только заголовок и текст.
     body.innerHTML =
       '<div id="learn-step"' + (s[0] ? '' : ' class="text"') + '>' +
-      (s[0] ? '<div class="shot"><img alt="" src="onboarding/' + s[0] + '.jpg"></div>' +
+      (s[0] ? '<div class="shot">' + learnShotImg(s[0]) + '</div>' +
               '<p class="learn-zoomhint">' + T('learn_zoom') + '</p>' : '') +
       learnStep(sec, step) + '</div>';
     body.scrollTop = 0;
@@ -13989,7 +14000,7 @@
     // Мелкий шрифт на снимке не прочитать - по тапу показываем его целиком.
     if (s[0]) body.querySelector('.shot').addEventListener('click', function () {
       var zoom = document.getElementById('learn-zoom');
-      zoom.querySelector('img').src = 'onboarding/' + s[0] + '.jpg';
+      zoom.querySelector('img').src = body.querySelector('.shot img').src;
       zoom.classList.add('visible');
     });
     if (last) learnMarkDone(sec.id);

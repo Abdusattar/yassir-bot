@@ -693,10 +693,14 @@ def build_app():
 # Сцены, которые снимаются телефоном лёжа (22.09.2026: «Крупно» - это поворот).
 LANDSCAPE_SCENES = {"big": (844, 390)}
 
-def shoot(chrome, out_dir, only=None):
+def shoot(chrome, out_dir, only=None, lang="ru"):
     from PIL import Image
 
-    SHOTS.mkdir(exist_ok=True)
+    # Снимки на ky/uz/zh лежат в onboarding/<язык>/ (28.10.2026, аудит zh:
+    # под китайским текстом стояли русские экраны). Приложение берёт свой
+    # язык, а если снимка нет - русский (learnShot в index.html).
+    shots = SHOTS if lang == "ru" else SHOTS / lang
+    shots.mkdir(parents=True, exist_ok=True)
     total = 0
     for scene in SCENES:
         if only and scene not in only:
@@ -714,11 +718,11 @@ def shoot(chrome, out_dir, only=None):
             raise SystemExit("сцена %s не снялась" % scene)
         im = Image.open(png).convert("RGB")
         im = im.resize((SHOT_WIDTH, int(im.height * SHOT_WIDTH / im.width)), Image.LANCZOS)
-        jpg = SHOTS / ("%s.jpg" % scene)
+        jpg = shots / ("%s.jpg" % scene)
         im.save(jpg, "JPEG", quality=SHOT_QUALITY, optimize=True, progressive=True)
         total += jpg.stat().st_size
         print("  %-9s %4d КБ" % (scene, jpg.stat().st_size // 1024))
-    print("итого %d КБ в %s" % (total // 1024, SHOTS))
+    print("итого %d КБ в %s" % (total // 1024, shots))
 
 
 def main():
@@ -732,9 +736,6 @@ def main():
     parser.add_argument("--lang", default="ru", choices=["ru", "ky", "uz", "zh"],
                         help="язык интерфейса студента и устаза на стенде")
     args = parser.parse_args()
-    if args.lang != "ru" and not args.serve:
-        # Снимки пока одни, русские: съёмка на ky/uz затёрла бы их.
-        raise SystemExit("--lang пока только вместе с --serve")
 
     app = build_app()
     for uid in (STUDENT, USTAZ):
@@ -756,7 +757,7 @@ def main():
     if unknown:
         raise SystemExit("нет таких сцен: %s" % ", ".join(unknown))
     with tempfile.TemporaryDirectory() as tmp:
-        shoot(chrome, pathlib.Path(tmp), only)
+        shoot(chrome, pathlib.Path(tmp), only, args.lang)
 
 
 if __name__ == "__main__":
