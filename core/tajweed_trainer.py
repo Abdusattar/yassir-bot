@@ -168,6 +168,7 @@ def _sifa_answer(pair, letter):
 
 CARDS = CARDS + tuple(
     {"id": "sf_%s_%d" % (p["id"], i), "glyph": ch, "note": _NOTE.get(ch, ""),
+     "note_id": {"و": "waw", "ي": "ya"}.get(ch),
      "kind": p["id"], "answer": _sifa_answer(p, ch), "lesson": p["lesson"]}
     for p in SIFAT for i, ch in enumerate(SIFA_LETTERS))
 _CARD = {c["id"]: c for c in CARDS}
@@ -354,6 +355,11 @@ def state(user_id, feedback=None):
     card = _CARD[cur["card"]]
     out["card"] = {
         "id": card["id"], "glyph": card["glyph"], "note": card["note"],
+        # id подписей рядом с русским текстом (28.10.2026, аудит zh):
+        # приложение на другом языке берёт перевод из словаря по ключу,
+        # русский текст остаётся запасным.
+        "kind": card["kind"],
+        "note_id": card.get("note_id") or (card["id"] if card["note"] else None),
         "retry": session["retry_now"],
         # Точки показывают ход ДНЯ, а не порции: порция - внутреннее дело
         # подбора, человеку про неё знать незачем. Норма закрыта - точки
@@ -364,6 +370,7 @@ def state(user_id, feedback=None):
     out["card"]["question"] = (_SIFA[card["kind"]]["question"]
                                if card["kind"] != "makhraj" else None)
     out["options"] = [_label(card, m) for m in cur["options"]]
+    out["option_ids"] = list(cur["options"])
     return out
 
 
@@ -398,7 +405,7 @@ def answer(user_id, card_id, slot):
         session["missed"].discard(card_id)
     reached = before < DAILY_TARGET <= daily_count(user_id)
     feedback = {"correct": correct, "glyph": card["glyph"], "note": card["note"],
-                "answer": _label(card, card["answer"])}
+                "answer": _label(card, card["answer"]), "answer_id": card["answer"]}
     _next(session, user_id)
     return state(user_id, feedback), reached
 

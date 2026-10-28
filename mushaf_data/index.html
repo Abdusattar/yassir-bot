@@ -7021,6 +7021,45 @@
       feed_yesterday: '昨天',
       feed_voice: '语音',
       feed_common: '公共',
+      // Тренажёр таджвида (28.10.2026): места выхода, сифаты, вопросы, пометки.
+      tjo_halq_aqsa: '喉咙深处（靠近胸部）',
+      tjo_halq_wasat: '喉咙中部',
+      tjo_halq_adna: '喉咙上部（靠近口腔）',
+      tjo_lisan_qaf: '舌根（靠近咽喉）+ 软腭',
+      tjo_lisan_kaf: '舌根（靠近口腔）+ 软腭',
+      tjo_lisan_wasat: '舌中 + 硬腭',
+      tjo_lisan_hafa: '舌侧（左或右）+ 上臼齿',
+      tjo_lisan_lam: '舌缘至舌尖 + 上门牙的牙龈',
+      tjo_lisan_nun: '舌尖 + 上牙上方的牙龈（在拉姆之下）',
+      tjo_lisan_ra: '与努恩相近，但舌背向内收',
+      tjo_lisan_nit: '舌尖 + 上门牙内侧根部',
+      tjo_lisan_safir: '舌尖在下门牙边缘上方，带哨音',
+      tjo_lisan_lithawi: '舌尖在两齿之间 + 上门牙边缘',
+      tjo_shafa_fa: '下唇 + 上门牙尖',
+      tjo_shafatan: '双唇',
+      tjo_jawf: '口腔和喉咙的空腔',
+      tjo_khayshum: '鼻腔（海舒姆）',
+      tjo_hams: '耳语 — الهمس',
+      tjo_jahr: '响亮 — الجهر',
+      tjo_shidda: '爆发 — الشدة',
+      tjo_tawassut: '居中 — التوسط',
+      tjo_rakhawa: '柔和 — الرخاوة',
+      tjo_istila: '上扬 — الاستعلاء',
+      tjo_istifal: '下沉 — الاستفال',
+      tjo_itbaq: '贴合 — الإطباق',
+      tjo_infitah: '张开 — الانفتاح',
+      tjo_idhlaq: '轻快 — الإذلاق',
+      tjo_ismat: '持重 — الإصمات',
+      tjq_hams: '耳语还是响亮？',
+      tjq_shidda: '声音是中断还是延续？',
+      tjq_istila: '舌根抬起还是放下？',
+      tjq_itbaq: '舌头是否贴住上腭？',
+      tjq_idhlaq: '轻快还是持重？',
+      tjn_waw: '辅音，如 وَلَد 中',
+      tjn_ya: '辅音，如 يَد 中',
+      tjn_alif_madd: '长音（马德），如 قَالَ',
+      tjn_waw_madd: '长音（马德），如 يَقُولُ',
+      tjn_ya_madd: '长音（马德），如 قِيلَ',
       feed_photo: '照片',
       feed_attach: '附件',
       feed_failed_short: '打不开',
@@ -15668,13 +15707,19 @@
     if (c.retry) dots += '<span>' + T('tajweed_retry') + '</span>';
     else if (c.day_done) dots += '<span class="tj-day-done">' + T('tajweed_day_done') + '</span>';
     var html = '<div class="tj-dots">' + dots + '</div>';
+    // Подписи сервер шлёт по-русски и с id; на другом языке - из словаря
+    // (28.10.2026, аудит zh), нет перевода - русская.
+    var note = c.note && (T('tjn_' + c.note_id) || c.note);
+    var question = c.question && (T('tjq_' + c.kind) || c.question);
     html += '<div class="trainer-word-card"><div class="tj-glyph">' + c.glyph + '</div>' +
-      (c.note ? '<div class="tj-note">' + tajweedArabic(c.note) + '</div>' : '') + '</div>';
+      (note ? '<div class="tj-note">' + tajweedArabic(note) + '</div>' : '') + '</div>';
     // Сифаты (24.09.2026) спрашивают своё - вопрос приходит с карточкой.
-    html += '<div class="tj-q">' + (c.question ? tajweedArabic(c.question) : T('tajweed_question')) + '</div>';
+    html += '<div class="tj-q">' + (question ? tajweedArabic(question) : T('tajweed_question')) + '</div>';
     html += '<div class="trainer-options">';
     d.options.forEach(function (opt, i) {
-      html += '<button class="trainer-opt tj-opt" data-slot="' + i + '">' + opt + '</button>';
+      var oid = (d.option_ids || [])[i] || '';
+      html += '<button class="trainer-opt tj-opt" data-slot="' + i + '" data-oid="' + oid + '">'
+        + (T('tjo_' + oid) || opt) + '</button>';
     });
     html += '</div><div id="tj-after"></div>';
     body.innerHTML = html;
@@ -15691,7 +15736,8 @@
           if (!fb) { renderTajweed(next); return; }
           // Итог на тех же кнопках: верная - зелёная всегда, нажатая мимо - красная.
           Array.prototype.forEach.call(buttons, function (b) {
-            if (b.textContent === fb.answer) b.classList.add('ok');
+            if (fb.answer_id ? b.getAttribute('data-oid') === fb.answer_id
+                             : b.textContent === fb.answer) b.classList.add('ok');
           });
           if (!fb.correct) btn.classList.add('no');
           if (fb.correct) { setTimeout(function () { renderTajweed(next); }, 900); return; }
