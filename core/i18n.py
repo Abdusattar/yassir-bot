@@ -1109,6 +1109,26 @@ def _apply_gender(text):
     return text
 
 
+# Китайский (28.10.2026): переводы лежат отдельным файлом, чтобы не раздувать
+# TR; правят их в i18n/bot_zh/*.json. Готовый zh в TR важнее файла.
+def _load_zh():
+    import json
+    import os
+    path = os.path.join(os.path.dirname(__file__), "i18n_zh.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            full = json.load(f)
+    except (OSError, ValueError):
+        return
+    for key, text in full.get("tr", {}).items():
+        if key in TR:
+            TR[key].setdefault("zh", text)
+    if full.get("help_student"):
+        _HELP_STUDENT.setdefault("zh", full["help_student"])
+    if full.get("help_admin"):
+        _HELP_ADMIN.setdefault("zh", full["help_admin"])
+
+
 def T(key, lang="ru", **kwargs):
     """Перевод сообщения для студента на язык группы."""
     table = TR.get(key, {})
@@ -1127,12 +1147,12 @@ def T(key, lang="ru", **kwargs):
 # ── Названия заданий (для help, легенд, отчётов) ──────────────────────────────
 
 TASK_NAMES_I18N = {
-    "m": {"ru": "Заучивание (или 40+40)", "ky": "Жаттоо (же 40+40)", "uz": "Yodlash (yoki 40+40)", "kk": "Жаттау (немесе 40+40)", "en": "Memorization (or 40+40)"},
-    "r": {"ru": "Повторение",             "ky": "Кайталоо",           "uz": "Takrorlash",          "kk": "Қайталау",              "en": "Revision"},
-    "t": {"ru": "Слова (или Перевод)",    "ky": "Сөздөр (же Котормо)","uz": "So'zlar (yoki Tarjima)","kk": "Сөздер (немесе Аударма)","en": "Words (or Translation)"},
-    "j": {"ru": "Таджвид",               "ky": "Таджвид",            "uz": "Tajvid",              "kk": "Тәжуид",                "en": "Tajweed"},
-    "n": {"ru": "Грамматика (или Нахв)", "ky": "Грамматика (же Нахв)","uz": "Grammatika (yoki Nahv)","kk": "Грамматика (немесе Нахв)","en": "Grammar (or Nahw)"},
-    "h": {"ru": "Хадис",                 "ky": "Хадис",              "uz": "Hadis",               "kk": "Хадис",                 "en": "Hadith"},
+    "m": {"ru": "Заучивание (или 40+40)", "ky": "Жаттоо (же 40+40)", "uz": "Yodlash (yoki 40+40)", "kk": "Жаттау (немесе 40+40)", "en": "Memorization (or 40+40)", "zh": "背记（或40+40）"},
+    "r": {"ru": "Повторение",             "ky": "Кайталоо",           "uz": "Takrorlash",          "kk": "Қайталау",              "en": "Revision", "zh": "复习"},
+    "t": {"ru": "Слова (или Перевод)",    "ky": "Сөздөр (же Котормо)","uz": "So'zlar (yoki Tarjima)","kk": "Сөздер (немесе Аударма)","en": "Words (or Translation)", "zh": "词汇（或翻译）"},
+    "j": {"ru": "Таджвид",               "ky": "Таджвид",            "uz": "Tajvid",              "kk": "Тәжуид",                "en": "Tajweed", "zh": "泰吉威德"},
+    "n": {"ru": "Грамматика (или Нахв)", "ky": "Грамматика (же Нахв)","uz": "Grammatika (yoki Nahv)","kk": "Грамматика (немесе Нахв)","en": "Grammar (or Nahw)", "zh": "语法"},
+    "h": {"ru": "Хадис",                 "ky": "Хадис",              "uz": "Hadis",               "kk": "Хадис",                 "en": "Hadith", "zh": "圣训"},
 }
 
 def task_name(key, lang="ru"):
@@ -1315,3 +1335,6 @@ def get_group_lang(group):
 def lang_instruction(lang):
     name = LANG_NAMES.get(lang, "Russian")
     return "IMPORTANT: write the ENTIRE response in " + name + " language (code: " + lang + "). Do not mix languages."
+
+
+_load_zh()
