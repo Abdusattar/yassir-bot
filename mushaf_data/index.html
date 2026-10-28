@@ -4726,6 +4726,24 @@
       day_excuse: 'узр',
       day_lesson: 'онлайн-урок отмечен',
       day_trail: 'в приложении в этот день',
+      // Подробности мини-отчёта из сырых полей (core/day_report.py, 28.10.2026).
+      day_place_line: 'стр. %P%, строка %L%',
+      day_place_half: 'стр. %P%, половина от строки %L%',
+      day_place_sheet: 'стр. %P%, лист',
+      day_v_accepted: 'принято',
+      day_v_retake: 'на пересдачу',
+      day_v_pending: 'на проверке',
+      day_rec_min: 'запись %N% мин',
+      day_words: '%N% слов, %K% верно',
+      dtr_open: 'открыл приложение',
+      dtr_rec: 'запись',
+      dtr_submit: 'отправил сдачу',
+      dtr_retake: 'пересдача',
+      dtr_rev_open: 'открыл запись повторения',
+      dtr_rev_broken: 'запись повторения прервалась',
+      dtr_rev_submit: 'отправил повторение',
+      dtr_enter: 'вошёл в заучивание',
+      dtr_audio: 'слушал запись',
       ustaz_students_empty: 'В этой группе пока нет активных студентов',
       ustaz_misses: 'пропусков %N% из %M%',
       ustaz_misses_no_limit: 'пропусков %N%',
@@ -6970,6 +6988,23 @@
       day_excuse: '请假',
       day_lesson: '已签到线上课',
       day_trail: '这一天在应用里',
+      day_place_line: '第%P%页，第%L%行',
+      day_place_half: '第%P%页，从第%L%行起半页',
+      day_place_sheet: '第%P%页，整页',
+      day_v_accepted: '已通过',
+      day_v_retake: '需重交',
+      day_v_pending: '待审',
+      day_rec_min: '录音 %N% 分钟',
+      day_words: '%N% 个词，答对 %K% 个',
+      dtr_open: '打开了应用',
+      dtr_rec: '录音',
+      dtr_submit: '提交了背记',
+      dtr_retake: '重交',
+      dtr_rev_open: '打开了复习录音',
+      dtr_rev_broken: '复习录音中断了',
+      dtr_rev_submit: '提交了复习',
+      dtr_enter: '进入了背记',
+      dtr_audio: '听了录音',
       rec_mic_lost: '麦克风断开了。已录 %T% — 点「继续诵读」接着读',
       rec_mic_lost_again: '麦克风断开了 — 请再点一次「录音」',
       doc_title: '古兰经 — Yassir',
@@ -13302,12 +13337,39 @@
     return tasks.length > 0 && tasks.length < total;
   }
 
+  // Место сдачи из сырых полей - как _place в core/day_report.py.
+  function dayPlace(page, line, stage) {
+    var v = { P: page, L: (line || 0) + 1 };
+    return T(stage === 3 ? 'day_place_sheet' : stage === 2 ? 'day_place_half' : 'day_place_line', v);
+  }
+
+  // Подробности задания и след на языке интерфейса. Сервер шлёт и готовую
+  // русскую строку, и сырые поля (28.10.2026, zh); нет полей - строка как есть.
+  function dayDetail(t) {
+    if (t.subs) return t.subs.map(function (x) {
+      var v = x.verdict === 'accepted' || x.verdict === 'retake' ? x.verdict : 'pending';
+      return dayPlace(x.page, x.line, x.stage) + ' · ' + T('day_v_' + v);
+    }).join('; ');
+    if (t.rec_min) return t.rec_min.map(function (n) { return T('day_rec_min', { N: n }); }).join('; ');
+    if (t.words) return T('day_words', { N: t.words[0], K: t.words[1] });
+    return t.detail;
+  }
+
+  function dayTrailLine(e) {
+    var bits = [e.at, T('dtr_' + e.ev) || e.ev];
+    if (e.page != null) bits.push(dayPlace(e.page, e.line, e.stage));
+    else if (e.note) bits.push(e.note);
+    return bits.filter(Boolean).join(' · ');
+  }
+
   function dayReportHTML(r) {
     var out = '<div class="stu-day-head">' + lessonDate(r.date) + '</div>';
+    if (r.trail_ev) r.trail = r.trail_ev.map(dayTrailLine);
     (r.tasks || []).forEach(function (t) {
       // Имя задания приходит по-русски (core/day_report.py); на другом
       // языке интерфейса - из словаря (28.10.2026, аудит zh).
       if (UI_LANG !== 'ru' && T('task_' + t.key)) t.name = T('task_' + t.key);
+      t.detail = dayDetail(t);
       out += t.done
         ? '<div class="ok">✓ ' + t.name + (t.at ? ' ' + t.at : '') + (t.detail ? ' · ' + ustazEsc(t.detail) : '') + '</div>'
         : '<div class="no">✗ ' + t.name + ' — ' + T('day_not_done') + '</div>';

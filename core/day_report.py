@@ -132,20 +132,26 @@ def day_report(student_id, group_id, date_str, phone=None):
                 "at": done_at.get(k), "detail": None}
         if k == "m" and subs:
             parts = []
+            # Сырые поля рядом с русской строкой - фронт соберёт подпись на
+            # языке интерфейса (28.10.2026, zh): строка остаётся для ru.
+            item["subs"] = [{"page": s["hifz_page"], "line": s["hifz_line"],
+                             "stage": s["hifz_stage"], "verdict": s["verdict"]} for s in subs]
             for s in subs:
                 verdict = _VERDICT_RU.get(s["verdict"], "на проверке")
                 parts.append("%s · %s" % (_place(s), verdict))
             item["detail"] = "; ".join(parts)
         elif k == "r" and revs:
+            item["rec_min"] = [max(1, round((r["duration"] or 0) / 60)) for r in revs]
             item["detail"] = "; ".join(
                 "запись %d мин" % max(1, round((r["duration"] or 0) / 60)) for r in revs)
         elif k == "t" and phone and item["done"]:
             n, ok = _words_today(phone, date_str)
             if n:
                 item["detail"] = "%d слов, %d верно" % (n, ok)
+                item["words"] = [n, ok]
         tasks.append(item)
 
-    trail = []
+    trail, trail_ev = [], []
     if phone:
         since, until = study_day_bounds_utc(date_str, tz)
         for ev in app_trail.get_trail_between(phone, since, until):
@@ -153,15 +159,21 @@ def day_report(student_id, group_id, date_str, phone=None):
             if not label:
                 continue
             bits = [_local_hhmm(ev["ts"], tz), label]
+            raw = {"at": bits[0], "ev": ev["event"]}
             if ev["event"] in ("submit", "retake") and ev.get("page"):
                 bits.append(_place({"hifz_page": ev["page"], "hifz_line": ev.get("line"),
                                     "hifz_stage": ev.get("stage")}))
+                raw.update(page=ev["page"], line=ev.get("line"), stage=ev.get("stage"))
             elif ev["event"] == "open" and ev.get("note"):
                 bits.append(str(ev["note"]).split(" · ")[0])
             elif ev["event"] in ("rev_broken", "rec") and ev.get("note"):
                 bits.append(str(ev["note"]))
+            if len(bits) > 2 and "page" not in raw:
+                raw["note"] = bits[2]
             trail.append(" · ".join(b for b in bits if b))
+            trail_ev.append(raw)
             if len(trail) >= _TRAIL_MAX:
                 break
 
-    return {"date": date_str, "tasks": tasks, "excuse": excuse, "lesson": lesson, "trail": trail}
+    return {"date": date_str, "tasks": tasks, "excuse": excuse, "lesson": lesson, "trail": trail,
+            "trail_ev": trail_ev}

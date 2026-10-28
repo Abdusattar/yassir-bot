@@ -29,6 +29,8 @@ def test_partial_day_names_missing_task_and_times(test_db, test_hadiths_db, monk
     assert by["m"]["at"] and len(by["m"]["at"]) == 5          # ЧЧ:ММ по местному
     assert "стр. 10, строка 10" in by["m"]["detail"] and "на проверке" in by["m"]["detail"]
     assert r["excuse"] is None and r["lesson"] is False
+    # Сырые поля для подписи на языке интерфейса (28.10.2026, zh).
+    assert by["m"]["subs"] == [{"page": 10, "line": 9, "stage": 1, "verdict": None}]
 
 
 def test_excuse_lesson_and_trail(test_db, test_hadiths_db, monkeypatch):
@@ -50,6 +52,7 @@ def test_excuse_lesson_and_trail(test_db, test_hadiths_db, monkeypatch):
     # Навигация по листам (page) не показывается; устройство - из User-Agent,
     # в тесте его нет ("other").
     assert len(r["trail"]) == 1 and r["trail"][0].startswith("07:05 · открыл приложение")
+    assert r["trail_ev"][0]["at"] == "07:05" and r["trail_ev"][0]["ev"] == "open"
 
 
 def _call(path, user_id):
