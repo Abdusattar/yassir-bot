@@ -5043,6 +5043,7 @@
       feed_today: 'Сегодня',
       feed_yesterday: 'Вчера',
       feed_voice: 'голосовое',
+      feed_common: 'Общая',
       feed_photo: 'фото',
       feed_attach: 'вложение',
       feed_failed_short: 'не открылось',
@@ -5625,6 +5626,7 @@
       feed_today: 'Бүгүн',
       feed_yesterday: 'Кечээ',
       feed_voice: 'үн билдирүү',
+      feed_common: 'Жалпы',
       feed_photo: 'сүрөт',
       feed_attach: 'тиркеме',
       feed_failed_short: 'ачылган жок',
@@ -6321,6 +6323,7 @@
       feed_today: 'Бугун',
       feed_yesterday: 'Кеча',
       feed_voice: 'овозли хабар',
+      feed_common: 'Умумий',
       feed_photo: 'расм',
       feed_attach: 'файл',
       feed_failed_short: 'очилмади',
@@ -7017,6 +7020,7 @@
       feed_today: '今天',
       feed_yesterday: '昨天',
       feed_voice: '语音',
+      feed_common: '公共',
       feed_photo: '照片',
       feed_attach: '附件',
       feed_failed_short: '打不开',
@@ -7564,7 +7568,7 @@
     briefChat = it.chat_id;
     document.getElementById('brief-ava').textContent = feedInitial(it.who);
     document.getElementById('brief-who').textContent = it.who;
-    document.getElementById('brief-src').textContent = it.source || '';
+    document.getElementById('brief-src').textContent = feedTitle(it.source);
     var txt = it.text;
     if (!txt) txt = it.kind === 'voice' ? T('feed_voice') : it.kind === 'photo' ? T('feed_photo') : T('feed_attach');
     document.getElementById('brief-txt').textContent = txt;
@@ -7638,13 +7642,17 @@
     });
   }
 
+  // Тадаббур сервер подписывает «Общая» (core/feed.py) - на языке
+  // интерфейса это слово из словаря (28.10.2026, аудит zh).
+  function feedTitle(t) { return t === 'Общая' ? T('feed_common') : (t || ''); }
+
   function feedRenderChips() {
     var box = document.getElementById('feed-chips');
     if (feedChats.length < 2) { box.innerHTML = ''; return; }
     box.innerHTML = feedChats.map(function (c) {
       return '<button data-chat="' + feedEsc(c.id) + '"'
         + (c.id === feedChat ? ' class="on"' : '') + '>'
-        + '<span class="t">' + feedEsc(c.title) + '</span>'
+        + '<span class="t">' + feedEsc(feedTitle(c.title)) + '</span>'
         + (c.unread ? '<i>' + c.unread + '</i>' : '')
         + '</button>';
     }).join('');
@@ -13258,6 +13266,9 @@
   function dayReportHTML(r) {
     var out = '<div class="stu-day-head">' + lessonDate(r.date) + '</div>';
     (r.tasks || []).forEach(function (t) {
+      // Имя задания приходит по-русски (core/day_report.py); на другом
+      // языке интерфейса - из словаря (28.10.2026, аудит zh).
+      if (UI_LANG !== 'ru' && T('task_' + t.key)) t.name = T('task_' + t.key);
       out += t.done
         ? '<div class="ok">✓ ' + t.name + (t.at ? ' ' + t.at : '') + (t.detail ? ' · ' + ustazEsc(t.detail) : '') + '</div>'
         : '<div class="no">✗ ' + t.name + ' — ' + T('day_not_done') + '</div>';
@@ -13845,7 +13856,7 @@
   function lessonsRenderList(subject) {
     var meta = (lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {};
     learnAt = { lessons: subject };
-    document.getElementById('learn-title').textContent = meta.title || '';
+    document.getElementById('learn-title').textContent = T(SUBJ_TITLE_KEY[subject]) || meta.title || '';
     document.getElementById('learn-back').textContent = T('learn_back_toc');
     document.getElementById('learn-foot').style.display = 'none';
     var body = document.getElementById('learn-body');
@@ -13909,8 +13920,9 @@
       learnAt = { lesson: subject };
       document.getElementById('learn-title').textContent = d.topic;
       document.getElementById('learn-back').textContent = '← '
-        + (((lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {}).title
-           || (subject === 'n' ? T('task_n') : subject === 'j' ? T('task_j') : ''));
+        + (T(SUBJ_TITLE_KEY[subject])
+           || ((lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {}).title
+           || '');
       body.innerHTML = '<div class="k-text"><p class="k-chapter">' + feedEsc(d.chapter)
         + (d.parts > 1 ? ' · ' + T('lesson_part_of', { N: d.part, M: d.parts }) : '')
         + '</p>' + lessonArabic(feedEsc(d.content)) + '</div>';
