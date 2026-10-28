@@ -574,8 +574,18 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
         return {"ok": False, "error": "no_user"}
     # Место прислано в раскладке, которой у студента уже нет (сменил на
     # другом устройстве) - номера строк были бы чужими.
+    #
+    # Исключение - пересдача долга, разобранного в прежней раскладке
+    # (28.10.2026, Айкол): её читают на листе самого долга, там же лежат
+    # пометки устаза, и сдача должна лечь его номерами. Раньше приложение
+    # подписывало её раскладкой из настроек, и семь пересдач мадинской
+    # строки ушли египетскими номерами - долг висел неделю.
     my_layout = get_mushaf_layout(user_id)
-    if layout and layout != my_layout:
+    layout = layout or my_layout
+    retakes = get_open_retakes(user["id"], group["id"])
+    if layout != my_layout and not any(
+            (r["hifz_page"], r["hifz_line"], r["hifz_stage"], r.get("hifz_layout") or "madani")
+            == (page, line, stage, layout) for r in retakes):
         return {"ok": False, "error": "layout_mismatch", "layout": my_layout}
 
     # Гейт пересдачи. 13.09.2026, решение пользователя: стена переехала с
@@ -591,7 +601,6 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     #
     # Проверяем ЗДЕСЬ, а не только в интерфейсе: локальное состояние можно
     # перезагрузить, сдачу - нет.
-    retakes = get_open_retakes(user["id"], group["id"])
     if retakes:
         pointer = get_hifz_pointer(user_id) or {}
         on_pointer = (pointer.get("page"), pointer.get("stage")) == (page, stage)
@@ -616,7 +625,7 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
     if sec is not None and sec < HIFZ_MIN_SEC.get(stage, 0):
         return {"ok": False, "error": "too_short", "min_sec": HIFZ_MIN_SEC[stage]}
 
-    place = _hifz_place(page, line, stage, page_lines, my_layout)
+    place = _hifz_place(page, line, stage, page_lines, layout)
     photo_msg_id = None
     if image_bytes:
         res = await send_photo_bytes(
@@ -657,7 +666,7 @@ async def submit_hifz_recording(user_id, audio_bytes, image_bytes, page, line, s
                           voice_msg_id, get_date(user["id"]), file_id,
                           hifz_page=page, hifz_line=line, hifz_stage=stage,
                           photo_message_id=photo_msg_id, duration=duration,
-                          hifz_layout=my_layout)
+                          hifz_layout=layout)
     if credited:
         save_report(user["id"], group["id"], get_date(user["id"]), {"m": True})
     return {"ok": True, "credited": credited, "place": place}

@@ -412,3 +412,40 @@ def test_retake_closed_by_same_line_in_other_layout(test_db):
                              hifz_page=300, hifz_line=9, hifz_stage=1, hifz_layout="dm")
     assert db.get_open_retakes(sid, group["id"]) == []
     assert db.is_retake_answered(db.get_submission(sub_id))
+
+
+def test_retake_in_debt_layout_after_switch(test_db, monkeypatch):
+    """28.10.2026, Айкол (женская, группа 1): долг пришёл по мадинской строке,
+    потом она перешла на Дар аль-Маариф. Пересдачу приложение открывает на
+    листе долга, в его раскладке, и сдача должна лечь его номерами - иначе
+    (как было) семь пересдач ушли египетскими номерами и долга не закрыли.
+    Чужая раскладка принимается ТОЛЬКО для самого долга."""
+    group = _group()
+    sid = db.add_student("Айкол", group["id"], phone="777001")
+    sub_id = _submission(sid, group, 1, 6, 7, 1)
+    _with_comment(sid, 1)
+    db.set_submission_verdict(sub_id, db.VERDICT_RETAKE, "888002")
+
+    mushaf_words.set_mushaf_layout("777001", "dm")
+    mushaf_words.set_hifz_pointer("777001", 6, 8, 1)
+
+    async def fake_transcode(audio):
+        return b"ogg"
+
+    async def fake_send_voice(chat_id, ogg, caption=None, reply_to_message_id=None):
+        return {"ok": True, "result": {"message_id": 99, "voice": {"file_id": "x"}}}
+
+    monkeypatch.setattr(bot, "transcode_to_ogg", fake_transcode)
+    monkeypatch.setattr(bot, "send_voice_bytes", fake_send_voice)
+
+    # Мадинская строка, которая НЕ долг, - чужая раскладка, отказ.
+    other = asyncio.run(bot.submit_hifz_recording(
+        "777001", b"audio", None, page=6, line=8, stage=1, layout="madani"))
+    assert other["error"] == "layout_mismatch"
+
+    # Сам долг на его листе - принят и закрывает его.
+    same = asyncio.run(bot.submit_hifz_recording(
+        "777001", b"audio", None, page=6, line=7, stage=1, layout="madani"))
+    assert same["ok"] is True
+    assert db.get_open_retakes(sid, group["id"]) == []
+    assert db.is_retake_answered(db.get_submission(sub_id))

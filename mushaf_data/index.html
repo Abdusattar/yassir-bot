@@ -10337,11 +10337,15 @@
     // пересдачи - иначе следующая ОБЫЧНАЯ сдача не сдвинула бы указатель.
     if (hifzRetakeMode) {
       hifzRetakeMode = false;
+      var backPage = hifzRetakeSaved && hifzRetakeSaved.page;
       if (hifzRetakeSaved) {
         hifz.line = hifzRetakeSaved.line;
         hifz.stage = hifzRetakeSaved.stage;
         hifzRetakeSaved = null;
       }
+      // Пересдача шла на листе долга в его раскладке (28.10.2026) - выйдя,
+      // студент читает дальше в своей.
+      if (dropViewLayout()) loadPage(backPage || currentPage);
     }
     // Вышел ✕ посреди выбора места - место осталось прежним, и об этом надо
     // сказать (13.09.2026, Муслим из Н-1): молчаливый выход читался как
@@ -11401,8 +11405,10 @@
       // Строк на листе не всегда 15 — сервер по этому же числу считает,
       // какая половина (та же формула, что hifzHalf выше).
       fd.append('lines', String(hifzTextLines().length));
-      // Раскладка, в которой считаны страница и строка (23.09.2026).
-      fd.append('layout', MUSHAF_LAYOUT);
+      // Раскладка, в которой считаны страница и строка (23.09.2026). Та,
+      // что на экране: пересдача долга из прежней раскладки идёт на его
+      // листе (28.10.2026, Айкол - см. subsRetake).
+      fd.append('layout', pageLayout());
       // Свой замер длины: Telegram для части файлов отдаёт 0 (16.09.2026).
       fd.append('ms', String(rec.ms || 0));
       return fetch(apiBase() + '/hifz/submit', {
@@ -13173,7 +13179,12 @@
     hifz.line = item.hifz_line || 0;
     document.getElementById('subs').style.display = 'none';
     openMushaf('page');
-    if (currentPage !== item.hifz_page) {
+    /* Долг читается на ЕГО листе (28.10.2026, Айкол): разобран в мадинской,
+       а студентка перешла на Дар аль-Маариф - те же номера там другой текст,
+       и пометки устаза легли бы на чужие слова. Семь её пересдач ушли
+       египетскими номерами и долга не закрыли. Вид вернёт hifzRetakeFinish. */
+    var relayout = useViewLayout(item.hifz_layout);
+    if (relayout || currentPage !== item.hifz_page) {
       loadPage(item.hifz_page);   // renderPage сама вызовет hifzApply/hifzHead
     } else {
       hifzApply();
@@ -13214,6 +13225,7 @@
     lookFreeAudio();
     look.item = null;
     applyErrorMarks([]);
+    var relayout = dropViewLayout();   // лист долга был в его раскладке
     if (hifzRetakeSaved) {
       var back = hifzRetakeSaved;
       hifz.line = back.line;
@@ -13223,11 +13235,12 @@
       // Долг закрыт самим фактом отправки - стена снимается сразу, ждать
       // приёма устаза не надо (см. get_open_retakes).
       hifzDebtRefresh();
-      if (back.page && back.page !== currentPage) {
+      if (back.page && (relayout || back.page !== currentPage)) {
         loadPage(back.page);   // renderPage сама позовёт hifzApply/hifzHead
         return;
       }
     }
+    if (relayout) { loadPage(currentPage); return; }
     hifzApply();
     hifzHead();
   }
