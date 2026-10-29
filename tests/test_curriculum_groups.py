@@ -143,8 +143,18 @@ def test_share_below_threshold_does_not_open(test_db, monkeypatch):
     old, new = _groups()
     for i in range(10):
         db.add_student("С%d" % i, new["id"], phone="57%04d" % i)
-    _pointers(monkeypatch, {"57%04d" % i: 30 for i in range(6)})    # 60%
+    _pointers(monkeypatch, {"57%04d" % i: 30 for i in range(4)})    # 40%
     assert not cur.is_ready(cur.readiness(new["id"]), "j")
+
+
+def test_half_of_group_opens(test_db, monkeypatch):
+    """29.10.2026: порог 50% (было 70%) - G-9, 4 из 7 на стр. 7+."""
+    old, new = _groups()
+    for i in range(10):
+        db.add_student("С%d" % i, new["id"], phone="59%04d" % i)
+    _pointers(monkeypatch, {"59%04d" % i: 7 for i in range(5)})     # ровно 50%
+    stats = cur.readiness(new["id"])
+    assert cur.is_ready(stats, "j") and not cur.is_ready(stats, "h")
 
 
 def test_first_lesson_is_thursday_at_least_a_week_away():
@@ -153,7 +163,7 @@ def test_first_lesson_is_thursday_at_least_a_week_away():
 
 
 def test_hadith_announced_three_days_ahead_then_task_turns_on(test_db, monkeypatch):
-    """Хадис (23.09.2026): 70% на стр. 15 - объявление, через 3 дня задание
+    """Хадис (23.09.2026): доля READY_SHARE на стр. 15 - объявление, через 3 дня задание
     «h» включается само (лекций у хадиса нет)."""
     old, new = _groups()
     for i in range(10):
