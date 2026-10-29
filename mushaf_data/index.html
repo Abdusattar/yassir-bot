@@ -3414,14 +3414,18 @@
   /* Крайние слова строки (21.10.2026): подпись шире слова вылезала за край
      строки, подгонка кегля (clampFontToFit, mushafWorstOverflowRatio)
      принимала это за переполнение и ужимала весь лист - на SE лёжа на
-     треть. Подпись крайнего слова прижата к краю строки, а не по центру.
-     Строка rtl: первое слово - справа. */
-  #app.land.gloss .mushaf-line > span[data-gl]:first-child::after { left: auto; right: 0; transform: none; }
-  #app.land.gloss .mushaf-line > span[data-gl]:last-child::after { left: 0; transform: none; }
+     треть. Было правило :first-child/:last-child; в заучивании оно
+     проигрывало правилам .hifz наполовину - right:0 при left:50%, а в rtl
+     такой спор решается в пользу right, и подпись уезжала со своего слова
+     (29.10.2026). Теперь край решает glossStagger() - классы gl-edge-* ниже. */
   /* Лесенка (29.10.2026, пользователь: у коротких слов подписи наезжали
      друг на друга - подпись шире слова). Наехавшую подпись glossStagger()
      опускает на --gl-down строк ниже; место под строкой - --gl-extra. */
   #app.land.gloss span[data-gl].gl-low::after { top: calc(100% + 1.18em * var(--gl-down, 1)) !important; }
+  /* Крайние подписи (29.10.2026): по центру слова не помещается в строку -
+     прижата к её краю (SE этап 3 заучивания: кегль 22.5px -> ~34). */
+  #app.land.gloss span[data-gl].gl-edge-r::after { left: auto !important; right: 0 !important; transform: none !important; }
+  #app.land.gloss span[data-gl].gl-edge-l::after { left: 0 !important; right: auto !important; transform: none !important; }
   #hifz-gloss-btn { display: none; }
   #app.land.hifz:not(.hifz-pick) #hifz-gloss-btn { display: flex; }
   #app.land.hifz #hifz-foot #hifz-gloss-btn {
@@ -10447,9 +10451,9 @@
   // Лесенка подписей (29.10.2026, пользователь: «слова наезжают друг на
   // друга»). Подпись не уже 5.2em (иначе рвётся по буквам), а у коротких
   // слов (وَ, مِنْ, لَا) это вдвое-втрое шире слова - соседние подписи ложились
-  // одна на другую. Подпись - ::after: рамку берём из вычисленного стиля,
-  // ширину текста в ней меряем на canvas (текст по центру рамки, длиннее
-  // рамки - переносится во вторую строку). Идём по строке справа налево
+  // одна на другую. Подпись - ::after: ширину рамки берём из вычисленного
+  // стиля, ширину текста в ней меряем на canvas (текст по центру рамки,
+  // длиннее рамки - переносится во вторую строку). Идём по строке справа налево
   // (rtl - порядок в DOM): подпись, задевшая уже уложенную, опускается под
   // неё (подпись бывает в две строки), пока не найдёт свободное место.
   // Под строкой - ровно столько места, сколько заняли подписи.
@@ -10464,19 +10468,22 @@
   function glossStaggerRow(row, on) {
     var spans = row.querySelectorAll(':scope > span[data-gl]');
     var placed = [], extra = 0;   // {left, down, lines} уложенных подписей строки
+    var rr = row.getBoundingClientRect();
     for (var i = 0; i < spans.length; i++) {
-      var sp = spans[i], down = 0;
+      var sp = spans[i], down = 0, edge = '';
       var cs = on ? getComputedStyle(sp, '::after') : null;
       var r = cs && cs.content !== 'none' ? sp.getBoundingClientRect() : null;
       if (r && r.width) {
         var fs = parseFloat(cs.fontSize);
-        // Рамку подписи браузер уже посчитал (left/width/translate) - берём
-        // её: в заучивании и при чтении крайние подписи стоят по-разному.
-        var W = parseFloat(cs.width), L = parseFloat(cs.left), tx = 0;
+        // Ширину рамки браузер уже посчитал (max(слово, 5.2em) до 8.5em).
+        var W = parseFloat(cs.width);
         if (!(W > 0)) W = Math.min(Math.max(r.width, 5.2 * fs), 8.5 * fs);
-        var m = /matrix\(([^)]+)\)/.exec(cs.transform || '');
-        if (m) tx = parseFloat(m[1].split(',')[4]) || 0;
-        var c = isNaN(L) ? r.left + r.width / 2 : r.left + L + tx + W / 2;
+        // Рамка - по центру слова; вылезает за строку - прижата к краю
+        // (gl-edge-*). Решаем по рамке «по центру», а не по нынешней: иначе
+        // прижатая подпись помещалась бы, класс снимался, и так по кругу.
+        var mid = r.left + r.width / 2, c = mid;
+        if (mid + W / 2 > rr.right + 0.5) { edge = 'gl-edge-r'; c = r.right - W / 2; }
+        else if (mid - W / 2 < rr.left - 0.5) { edge = 'gl-edge-l'; c = r.left + W / 2; }
         var t = glossInk(sp.getAttribute('data-gl'), cs, fs);
         var ink = Math.min(t, W), lines = t > W ? 2 : 1;
         var right = c + ink / 2;
@@ -10493,6 +10500,8 @@
       }
       var v = down ? String(down) : '';
       if (sp.classList.contains('gl-low') !== !!down) sp.classList.toggle('gl-low');
+      if (sp.classList.contains('gl-edge-l') !== (edge === 'gl-edge-l')) sp.classList.toggle('gl-edge-l');
+      if (sp.classList.contains('gl-edge-r') !== (edge === 'gl-edge-r')) sp.classList.toggle('gl-edge-r');
       if (sp.style.getPropertyValue('--gl-down') !== v) {
         if (v) sp.style.setProperty('--gl-down', v); else sp.style.removeProperty('--gl-down');
       }
@@ -10516,7 +10525,7 @@
   }
   // Перерисовка листа, смена строки заучивания, подгонка кегля (style),
   // поворот, кнопка «ب/а» - всё это видно как мутация или resize. Свои
-  // правки (gl-low, --gl-down, --gl-extra) тоже будят наблюдателя, но второй проход
+  // правки (gl-low, gl-edge-*, --gl-down, --gl-extra) тоже будят наблюдателя, но второй проход
   // ничего не меняет, и круг замыкается.
   if (window.MutationObserver) {
     var glossMo = new MutationObserver(glossStaggerSoon);
