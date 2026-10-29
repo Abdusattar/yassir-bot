@@ -3388,7 +3388,7 @@
   #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail,
   #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail,
   #app.land.gloss:not(.hifz) .mushaf-line {
-    padding-bottom: calc(clamp(10.5px, .25em, 13px) * 2.7);
+    padding-bottom: calc(clamp(10.5px, .25em, 13px) * (2.7 + 1.18 * var(--gl-extra, 0)));
   }
   /* Переходное слово читают на каждом повторе - перевод и ему (решение
      пользователя), бледнее: это уже следующая строка. */
@@ -3418,6 +3418,10 @@
      Строка rtl: первое слово - справа. */
   #app.land.gloss .mushaf-line > span[data-gl]:first-child::after { left: auto; right: 0; transform: none; }
   #app.land.gloss .mushaf-line > span[data-gl]:last-child::after { left: 0; transform: none; }
+  /* Лесенка (29.10.2026, пользователь: у коротких слов подписи наезжали
+     друг на друга - подпись шире слова). Наехавшую подпись glossStagger()
+     опускает на --gl-down строк ниже; место под строкой - --gl-extra. */
+  #app.land.gloss span[data-gl].gl-low::after { top: calc(100% + 1.18em * var(--gl-down, 1)) !important; }
   #hifz-gloss-btn { display: none; }
   #app.land.hifz:not(.hifz-pick) #hifz-gloss-btn { display: flex; }
   #app.land.hifz #hifz-foot #hifz-gloss-btn {
@@ -10439,6 +10443,89 @@
       trail('gloss', { on: on ? 1 : 0, where: id === 'read-gloss-btn' ? 'read' : 'hifz' });
     });
   });
+
+  // Лесенка подписей (29.10.2026, пользователь: «слова наезжают друг на
+  // друга»). Подпись не уже 5.2em (иначе рвётся по буквам), а у коротких
+  // слов (وَ, مِنْ, لَا) это вдвое-втрое шире слова - соседние подписи ложились
+  // одна на другую. Подпись - ::after: рамку берём из вычисленного стиля,
+  // ширину текста в ней меряем на canvas (текст по центру рамки, длиннее
+  // рамки - переносится во вторую строку). Идём по строке справа налево
+  // (rtl - порядок в DOM): подпись, задевшая уже уложенную, опускается под
+  // неё (подпись бывает в две строки), пока не найдёт свободное место.
+  // Под строкой - ровно столько места, сколько заняли подписи.
+  var GLOSS_GAP = 4;
+  var glossCtx = null, glossQueued = false;
+  function glossInk(text, cs, fs) {
+    if (!glossCtx) glossCtx = document.createElement('canvas').getContext('2d');
+    glossCtx.font = cs.fontWeight + ' ' + fs + 'px ' + cs.fontFamily;
+    var ls = parseFloat(cs.letterSpacing) || 0;
+    return glossCtx.measureText(text).width + ls * text.length;
+  }
+  function glossStaggerRow(row, on) {
+    var spans = row.querySelectorAll(':scope > span[data-gl]');
+    var placed = [], extra = 0;   // {left, down, lines} уложенных подписей строки
+    for (var i = 0; i < spans.length; i++) {
+      var sp = spans[i], down = 0;
+      var cs = on ? getComputedStyle(sp, '::after') : null;
+      var r = cs && cs.content !== 'none' ? sp.getBoundingClientRect() : null;
+      if (r && r.width) {
+        var fs = parseFloat(cs.fontSize);
+        // Рамку подписи браузер уже посчитал (left/width/translate) - берём
+        // её: в заучивании и при чтении крайние подписи стоят по-разному.
+        var W = parseFloat(cs.width), L = parseFloat(cs.left), tx = 0;
+        if (!(W > 0)) W = Math.min(Math.max(r.width, 5.2 * fs), 8.5 * fs);
+        var m = /matrix\(([^)]+)\)/.exec(cs.transform || '');
+        if (m) tx = parseFloat(m[1].split(',')[4]) || 0;
+        var c = isNaN(L) ? r.left + r.width / 2 : r.left + L + tx + W / 2;
+        var t = glossInk(sp.getAttribute('data-gl'), cs, fs);
+        var ink = Math.min(t, W), lines = t > W ? 2 : 1;
+        var right = c + ink / 2;
+        // Опускаемся под каждую уже уложенную подпись, которую задеваем.
+        for (var j = 0; j < placed.length; j++) {
+          var p = placed[j];
+          if (right + GLOSS_GAP > p.left && down < p.down + p.lines && p.down < down + lines) {
+            down = p.down + p.lines;
+            j = -1;
+          }
+        }
+        placed.push({ left: c - ink / 2, down: down, lines: lines });
+        extra = Math.max(extra, down + lines - 2);   // две строки подписи - в обычном отступе
+      }
+      var v = down ? String(down) : '';
+      if (sp.classList.contains('gl-low') !== !!down) sp.classList.toggle('gl-low');
+      if (sp.style.getPropertyValue('--gl-down') !== v) {
+        if (v) sp.style.setProperty('--gl-down', v); else sp.style.removeProperty('--gl-down');
+      }
+    }
+    var e = extra > 0 ? String(extra) : '';
+    if (row.style.getPropertyValue('--gl-extra') !== e) {
+      if (e) row.style.setProperty('--gl-extra', e); else row.style.removeProperty('--gl-extra');
+    }
+  }
+  function glossStagger() {
+    glossQueued = false;
+    var app = document.getElementById('app');
+    var on = app.classList.contains('gloss') && app.classList.contains('land');
+    var rows = document.querySelectorAll('#ayah-text .mushaf-line, #ayah-text .hifz-xtail');
+    for (var i = 0; i < rows.length; i++) glossStaggerRow(rows[i], on);
+  }
+  function glossStaggerSoon() {
+    if (glossQueued) return;
+    glossQueued = true;
+    requestAnimationFrame(glossStagger);
+  }
+  // Перерисовка листа, смена строки заучивания, подгонка кегля (style),
+  // поворот, кнопка «ب/а» - всё это видно как мутация или resize. Свои
+  // правки (gl-low, --gl-down, --gl-extra) тоже будят наблюдателя, но второй проход
+  // ничего не меняет, и круг замыкается.
+  if (window.MutationObserver) {
+    var glossMo = new MutationObserver(glossStaggerSoon);
+    glossMo.observe(document.getElementById('ayah-text'), { childList: true, subtree: true,
+      attributes: true, attributeFilter: ['class', 'style'] });
+    glossMo.observe(document.getElementById('app'), { attributes: true, attributeFilter: ['class'] });
+  }
+  window.addEventListener('resize', glossStaggerSoon);
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', glossStaggerSoon);
 
   function hifzExit() {
     // Проверка сдачи закрывается своей дорогой - обратно в кабинет устаза,
