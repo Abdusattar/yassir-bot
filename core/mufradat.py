@@ -1158,11 +1158,18 @@ def compute_overall_score(user_id, words=None, progress=None):
 
     # Слово без строки прогресса даёт 0 и туда, и туда - суммируем только по
     # строкам студента, что лежат в пуле (15.10.2026, скорость на весь Коран).
-    pair_keys = _slice_info(words)["keys"]
+    # Знаменатель - только слова, которые тренажёр может спросить ("static":
+    # без пояснений в скобках и частых переводов). Раньше считался весь пул,
+    # и потолок был ниже 10: Толкун (жен., стр. 22) закрепила все 1696 годных
+    # слов из 1872 и стояла на 9,06 (29.10.2026, решение пользователя; вес 10
+    # обязан быть достижим - см. MASTERY_STREAK).
+    pair_keys = {w["progress_key"] for w in _slice_info(words)["static"]}
     touched = [row for pk, row in progress.items() if pk in pair_keys]
     mastered = sum(1 for row in touched if is_mastered(row))
     stimulus_sum = sum(word_stimulus_credit(row) for row in touched)
     total = len(pair_keys)
+    if not total:
+        return None
     return {
         "total": total, "mastered": mastered, "remaining": total - mastered,
         "score10": round(10 * stimulus_sum / total, 2),

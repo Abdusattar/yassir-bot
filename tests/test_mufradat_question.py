@@ -238,3 +238,14 @@ def test_review_all_done_today_still_asks():
         progress.update(_mastered(w["progress_key"], "2026-10-10"))
     q = generate_question(words, progress, exclude_keys={w["progress_key"] for w in words})
     assert q is not None and q["review"] is True
+
+
+def test_overall_score_reaches_10_when_all_askable_words_mastered():
+    """29.10.2026, Толкун: слова с пояснением в скобках тренажёр не спрашивает,
+    поэтому и в знаменатель веса они не входят - иначе потолок ниже 10."""
+    words = _pool(4) + [_word(5, "إياك", "(Только) Тебе")]
+    progress = {}
+    for w in _pool(4):
+        progress.update(_mastered(w["progress_key"]))
+    score = mufradat.compute_overall_score("u", words=words, progress=progress)
+    assert score["total"] == 4 and score["score10"] == 10
