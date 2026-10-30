@@ -27,8 +27,8 @@ RU_ONLY = re.compile(r"^(n|pulse_sub)_[a-z]+_(few|many)$")
 
 
 def _block(src, start, end):
-    """Литерал после «var X = » до закрывающей скобки на два пробела."""
-    a = src.index(start) + start.index("=") + 2
+    """Литерал с последней скобки маркера до закрывающей скобки на два пробела."""
+    a = src.index(start) + len(start) - 1
     return src[a:src.index(end, a) + len(end)]
 
 
@@ -36,8 +36,10 @@ def _block(src, start, end):
 def app():
     with open(HTML, encoding="utf-8") as f:
         src = f.read()
+    # С 30.10.2026 таблица - в i18nTable(): экран входа сайта зовёт T() раньше,
+    # чем скрипт доходит до неё (см. index.html).
     js = ("var I18N = %s; var LEARN = %s; console.log(JSON.stringify({I18N: I18N, LEARN: LEARN}));"
-          % (_block(src, "var I18N = {", "\n  };"), _block(src, "var LEARN = [", "\n  ];")))
+          % (_block(src, "function i18nTable() { return {", "\n  };"), _block(src, "var LEARN = [", "\n  ];")))
     # Через stdin: словарь не влезает в командную строку Windows.
     out = subprocess.run(["node"], input=js, capture_output=True, text=True, encoding="utf-8")
     assert out.returncode == 0, out.stderr
