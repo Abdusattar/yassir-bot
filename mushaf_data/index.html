@@ -3224,6 +3224,7 @@
     cursor: pointer; padding: 6px 10px;
   }
   #dash-logout:hover { color: var(--ink); }
+  #dash-logout.sure { color: var(--no); font-weight: 600; }
 
   /* Атрибут hidden гасится браузерным правилом [hidden]{display:none}, а у
      него специфичность класса - любое наше правило по id её перебивает, и
@@ -4502,7 +4503,23 @@
   if (webAuth && webAuth.token) {
     var logoutBtn = document.getElementById('dash-logout');
     logoutBtn.hidden = false;
+    // Выход - со второго нажатия (30.10.2026): Муслим случайно вышел с
+    // иконки на экране, а войти заново тогда не мог (см. i18nTable).
+    // Первое нажатие спрашивает, через 4 с кнопка возвращается сама.
+    var logoutSure = null;
     logoutBtn.addEventListener('click', function () {
+      if (!logoutSure) {
+        logoutBtn.textContent = T('sett_logout_sure');
+        logoutBtn.classList.add('sure');
+        logoutSure = setTimeout(function () {
+          logoutSure = null;
+          logoutBtn.textContent = T('sett_logout');
+          logoutBtn.classList.remove('sure');
+        }, 4000);
+        return;
+      }
+      clearTimeout(logoutSure);
+      logoutBtn.disabled = true;
       var done = function () { saveAuth(null); location.reload(); };
       fetch(apiBase() + '/auth/logout', { method: 'POST', headers: authHeaders() })
         .then(done, done);
@@ -5045,6 +5062,7 @@
       sett_layout_madani: 'Мединский',
       sett_layout_dm: 'Дар аль-Маариф (египетский)',
       sett_logout: 'Выйти из приложения',
+      sett_logout_sure: 'Точно выйти? Нажми ещё раз',
       sett_saved: 'Сохранено',
       sett_save_failed: 'Не сохранилось — проверь связь.',
       sett_err_name_empty: 'Без имени нельзя — его видит устаз.',
@@ -5657,6 +5675,7 @@
       sett_layout_madani: 'Медина',
       sett_layout_dm: 'Дар аль-Маариф (Мисир)',
       sett_logout: 'Колдонмодон чыгуу',
+      sett_logout_sure: 'Чын эле чыгасыңбы? Дагы бир бас',
       sett_saved: 'Сакталды',
       sett_save_failed: 'Сакталган жок — байланышты текшер.',
       sett_err_name_empty: 'Атсыз болбойт — аны устаз көрөт.',
@@ -6371,6 +6390,7 @@
       sett_layout_madani: 'Мадина',
       sett_layout_dm: 'Дор ул-Маориф (Миср)',
       sett_logout: 'Иловадан чиқиш',
+      sett_logout_sure: 'Ростдан чиқасанми? Яна бир бос',
       sett_saved: 'Сақланди',
       sett_save_failed: 'Сақланмади — алоқани текшир.',
       sett_err_name_empty: 'Исмсиз бўлмайди — уни устоз кўради.',
@@ -7085,6 +7105,7 @@
       sett_layout_madani: '麦地那版',
       sett_layout_dm: 'Dar al-Maarif（埃及版）',
       sett_logout: '退出应用',
+      sett_logout_sure: '确定退出？再按一次',
       sett_saved: '已保存',
       sett_save_failed: '没有保存成功 — 请检查网络。',
       sett_err_name_empty: '不能没有名字 — 老师要看到它。',
