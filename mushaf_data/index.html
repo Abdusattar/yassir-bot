@@ -3403,12 +3403,13 @@
   #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after,
   #app.land.gloss:not(.hifz) .mushaf-line > span[data-gl]::after {
     content: attr(data-gl);
-    position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-    width: max(100%, 5.2em); max-width: 8.5em;
+    position: absolute; top: 100%; left: calc(50% + var(--gl-x, 0px)); transform: translateX(-50%);
+    width: var(--gl-w, max(100%, 5.2em)); max-width: 8.5em;
     font: 400 clamp(10.5px, .25em, 13px)/1.18 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-palette: normal; direction: ltr; unicode-bidi: isolate;
     text-align: center; color: var(--muted); letter-spacing: .01em;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    display: block;
+    -webkit-hyphens: manual; hyphens: manual; overflow-wrap: anywhere;
     pointer-events: none;
   }
   /* Крайние слова строки (21.10.2026): подпись шире слова вылезала за край
@@ -3417,15 +3418,14 @@
      треть. Было правило :first-child/:last-child; в заучивании оно
      проигрывало правилам .hifz наполовину - right:0 при left:50%, а в rtl
      такой спор решается в пользу right, и подпись уезжала со своего слова
-     (29.10.2026). Теперь край решает glossStagger() - классы gl-edge-* ниже. */
-  /* Лесенка (29.10.2026, пользователь: у коротких слов подписи наезжали
-     друг на друга - подпись шире слова). Наехавшую подпись glossStagger()
-     опускает на --gl-down строк ниже; место под строкой - --gl-extra. */
-  #app.land.gloss span[data-gl].gl-low::after { top: calc(100% + 1.18em * var(--gl-down, 1)) !important; }
-  /* Крайние подписи (29.10.2026): по центру слова не помещается в строку -
-     прижата к её краю (SE этап 3 заучивания: кегль 22.5px -> ~34). */
-  #app.land.gloss span[data-gl].gl-edge-r::after { left: auto !important; right: 0 !important; transform: none !important; }
-  #app.land.gloss span[data-gl].gl-edge-l::after { left: 0 !important; right: auto !important; transform: none !important; }
+     (29.10.2026). Теперь край и ширину решает glossFit(): --gl-w, --gl-x.
+     Подписи - одним рядом (30.10.2026): тесно - уже и в несколько строк, без обрезки
+     с переносом по слогам (мягкие переносы ставит glossText). */
+  /* Замер кегля (clampFontToFit, .measuring и самопроверка, .gl-off) - по
+     одним словам: подпись с рамкой от прошлого кегля раздувала scrollWidth
+     строки, и лист ужимался (стр. 600 на SE: 39 -> 27px). */
+  #app.land.gloss #ayah-text.measuring span[data-gl]::after,
+  #app.land.gloss #ayah-text.gl-off span[data-gl]::after { display: none !important; }
   #hifz-gloss-btn { display: none; }
   #app.land.hifz:not(.hifz-pick) #hifz-gloss-btn { display: flex; }
   #app.land.hifz #hifz-foot #hifz-gloss-btn {
@@ -9147,7 +9147,10 @@
 
   // Худшее отношение "нужно / есть" среди строк. <= 1 - всё влезло.
   function mushafWorstOverflowRatio(lines) {
-    var worst = 1;
+    var worst = 1, box = document.getElementById('ayah-text');
+    // Подписи лёжа не в счёт (30.10.2026): сразу после смены кегля у них
+    // ещё рамки от прошлого (glossFit - в следующем кадре).
+    box.classList.add('gl-off');
     for (var i = 0; i < lines.length; i++) {
       var w = lines[i].clientWidth;
       if (!w) continue;
@@ -9156,6 +9159,7 @@
         if (ratio > worst) worst = ratio;
       }
     }
+    box.classList.remove('gl-off');
     return worst;
   }
 
@@ -9566,7 +9570,25 @@
      (сервер сам приклеит арабский хвоста - _merge_tail_arabic). Хвост на
      следующем листе остаётся без перевода, как раньше. */
   function glossText(s) {
-    return s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/[«»"]/g, '').replace(/\s+/g, ' ').trim();
+    s = s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/[«»"]/g, '').replace(/\s+/g, ' ').trim();
+    return s.replace(/[A-Za-zА-Яа-яЁёӨөҮүҢң]{5,}/g, glossHyph);
+  }
+  // Мягкие переносы в подписи (30.10.2026): в тесном ряду подпись сужается,
+  // и длинное слово переносится через дефис. Свои, а не hyphens:auto - тому
+  // нужен lang (у листа он ar) и словарь, которого для ky/uz нет. Правило
+  // простое: разрыв перед согласной, за которой гласная (ми-ло-сер-дный
+  // примерно так), слева и справа не меньше двух букв и есть гласная.
+  var GL_VOW = /[аеёиоуыэюяөүaeiouАЕЁИОУЫЭЮЯӨҮAEIOU]/;
+  function glossHyph(w) {
+    var out = w.charAt(0), vow = GL_VOW.test(w.charAt(0));
+    for (var i = 1; i < w.length; i++) {
+      var ch = w.charAt(i);
+      if (vow && i >= 2 && i <= w.length - 2 && !GL_VOW.test(ch) && !/[ьъйЬЪЙ]/.test(ch) &&
+          GL_VOW.test(w.charAt(i + 1))) out += '­';
+      out += ch;
+      if (GL_VOW.test(ch)) vow = true;
+    }
+    return out;
   }
 
   function mushafPairs(lines) {
@@ -10448,75 +10470,78 @@
     });
   });
 
-  // Лесенка подписей (29.10.2026, пользователь: «слова наезжают друг на
-  // друга»). Подпись не уже 5.2em (иначе рвётся по буквам), а у коротких
-  // слов (وَ, مِنْ, لَا) это вдвое-втрое шире слова - соседние подписи ложились
-  // одна на другую. Подпись - ::after: ширину рамки берём из вычисленного
-  // стиля, ширину текста в ней меряем на canvas (текст по центру рамки,
-  // длиннее рамки - переносится во вторую строку). Идём по строке справа налево
-  // (rtl - порядок в DOM): подпись, задевшая уже уложенную, опускается под
-  // неё (подпись бывает в две строки), пока не найдёт свободное место.
-  // Под строкой - ровно столько места, сколько заняли подписи.
+  // Подписи одним рядом (30.10.2026, пользователь: «переводы пошли вниз
+  // строк» - лесенка 29.10 опускала наехавшую подпись ниже, читать было
+  // трудно). Теперь каждая подпись остаётся под своим словом: рамка - по
+  // ширине текста (не уже слова, не шире 8.5em); если соседям тесно, место
+  // между ними делится - кому нужно меньше, берёт своё, другому остаток, -
+  // и подпись сужается, переносясь (мягкие переносы - glossText) на
+  // сколько нужно строк - без обрезки (пользователь: «обрезов не должно быть»). Подпись по центру слова; у края строки - прижата к краю.
+  // Под строкой - столько места, сколько строк у самой высокой подписи.
   var GLOSS_GAP = 4;
   var glossCtx = null, glossQueued = false;
   function glossInk(text, cs, fs) {
     if (!glossCtx) glossCtx = document.createElement('canvas').getContext('2d');
     glossCtx.font = cs.fontWeight + ' ' + fs + 'px ' + cs.fontFamily;
+    text = text.replace(/­/g, '');
     var ls = parseFloat(cs.letterSpacing) || 0;
     return glossCtx.measureText(text).width + ls * text.length;
   }
-  function glossStaggerRow(row, on) {
+  function glossSet(el, name, v) {
+    if (el.style.getPropertyValue(name) !== v) {
+      if (v) el.style.setProperty(name, v); else el.style.removeProperty(name);
+    }
+  }
+  function glossFitRow(row, on) {
     var spans = row.querySelectorAll(':scope > span[data-gl]');
-    var placed = [], extra = 0;   // {left, down, lines} уложенных подписей строки
-    var rr = row.getBoundingClientRect();
+    var rr = row.getBoundingClientRect(), g = [];
     for (var i = 0; i < spans.length; i++) {
-      var sp = spans[i], down = 0, edge = '';
+      var sp = spans[i];
       var cs = on ? getComputedStyle(sp, '::after') : null;
       var r = cs && cs.content !== 'none' ? sp.getBoundingClientRect() : null;
-      if (r && r.width) {
-        var fs = parseFloat(cs.fontSize);
-        // Ширину рамки браузер уже посчитал (max(слово, 5.2em) до 8.5em).
-        var W = parseFloat(cs.width);
-        if (!(W > 0)) W = Math.min(Math.max(r.width, 5.2 * fs), 8.5 * fs);
-        // Рамка - по центру слова; вылезает за строку - прижата к краю
-        // (gl-edge-*). Решаем по рамке «по центру», а не по нынешней: иначе
-        // прижатая подпись помещалась бы, класс снимался, и так по кругу.
-        var mid = r.left + r.width / 2, c = mid;
-        if (mid + W / 2 > rr.right + 0.5) { edge = 'gl-edge-r'; c = r.right - W / 2; }
-        else if (mid - W / 2 < rr.left - 0.5) { edge = 'gl-edge-l'; c = r.left + W / 2; }
-        var t = glossInk(sp.getAttribute('data-gl'), cs, fs);
-        var ink = Math.min(t, W), lines = t > W ? 2 : 1;
-        var right = c + ink / 2;
-        // Опускаемся под каждую уже уложенную подпись, которую задеваем.
-        for (var j = 0; j < placed.length; j++) {
-          var p = placed[j];
-          if (right + GLOSS_GAP > p.left && down < p.down + p.lines && p.down < down + lines) {
-            down = p.down + p.lines;
-            j = -1;
-          }
-        }
-        placed.push({ left: c - ink / 2, down: down, lines: lines });
-        extra = Math.max(extra, down + lines - 2);   // две строки подписи - в обычном отступе
-      }
-      var v = down ? String(down) : '';
-      if (sp.classList.contains('gl-low') !== !!down) sp.classList.toggle('gl-low');
-      if (sp.classList.contains('gl-edge-l') !== (edge === 'gl-edge-l')) sp.classList.toggle('gl-edge-l');
-      if (sp.classList.contains('gl-edge-r') !== (edge === 'gl-edge-r')) sp.classList.toggle('gl-edge-r');
-      if (sp.style.getPropertyValue('--gl-down') !== v) {
-        if (v) sp.style.setProperty('--gl-down', v); else sp.style.removeProperty('--gl-down');
-      }
+      if (!(r && r.width)) { glossSet(sp, '--gl-w', ''); glossSet(sp, '--gl-x', ''); continue; }
+      var fs = parseFloat(cs.fontSize), t = glossInk(sp.getAttribute('data-gl'), cs, fs);
+      var want = Math.min(Math.max(t + 1, r.width), 8.5 * fs);
+      var mid = r.left + r.width / 2;
+      // У края строки рамка прижата к краю - считаем от её центра.
+      var c = Math.max(rr.left + want / 2, Math.min(mid, rr.right - want / 2));
+      g.push({ sp: sp, mid: mid, c: c, h: want / 2, lo: rr.left, hi: rr.right, fs: fs, cs: cs, t: t });
     }
-    var e = extra > 0 ? String(extra) : '';
-    if (row.style.getPropertyValue('--gl-extra') !== e) {
-      if (e) row.style.setProperty('--gl-extra', e); else row.style.removeProperty('--gl-extra');
+    g.sort(function (x, y) { return x.c - y.c; });
+    // Граница между соседями: тесно - кому нужно меньше, берёт своё.
+    for (var j = 1; j < g.length; j++) {
+      var a = g[j - 1], b = g[j], d = b.c - a.c - GLOSS_GAP;
+      if (a.h + b.h <= d) continue;
+      var pa = a.h <= d / 2 ? a.h : b.h <= d / 2 ? d - b.h : d / 2;
+      a.hi = Math.min(a.hi, a.c + pa);
+      b.lo = Math.max(b.lo, a.c + pa + GLOSS_GAP);
     }
+    var lines = 0;
+    for (var k = 0; k < g.length; k++) {
+      var q = g[k], first = k === 0, last = k === g.length - 1;
+      // По центру: ширина - вдвое меньшее из расстояний до границ. Крайней
+      // подписи всё место до края строки - её: рамка сдвинется к краю.
+      var w = first || last ? Math.min(2 * q.h, q.hi - q.lo) :
+        Math.min(2 * q.h, 2 * (q.c - q.lo), 2 * (q.hi - q.c));
+      w = Math.max(w, 2.4 * q.fs);
+      var c2 = Math.max(q.lo + w / 2, Math.min(q.mid, q.hi - w / 2));
+      c2 = Math.max(rr.left + w / 2, Math.min(c2, rr.right - w / 2));
+      glossSet(q.sp, '--gl-w', w.toFixed(1) + 'px');
+      glossSet(q.sp, '--gl-x', Math.abs(c2 - q.mid) > 0.5 ? (c2 - q.mid).toFixed(1) + 'px' : '');
+      // Строк подписи: рамка уже такой ширины - высота от браузера (точно),
+      // иначе прикидка; поменяли ширину - наблюдатель позовёт ещё раз.
+      var lh = parseFloat(q.cs.lineHeight) || 1.18 * q.fs, H = parseFloat(q.cs.height);
+      lines = Math.max(lines, Math.abs(parseFloat(q.cs.width) - w) < 1 && H > 0 ?
+        Math.round(H / lh) : Math.ceil(q.t / (w * 0.9)));
+    }
+    glossSet(row, '--gl-extra', lines > 2 ? String(lines - 2) : '');
   }
   function glossStagger() {
     glossQueued = false;
     var app = document.getElementById('app');
     var on = app.classList.contains('gloss') && app.classList.contains('land');
     var rows = document.querySelectorAll('#ayah-text .mushaf-line, #ayah-text .hifz-xtail');
-    for (var i = 0; i < rows.length; i++) glossStaggerRow(rows[i], on);
+    for (var i = 0; i < rows.length; i++) glossFitRow(rows[i], on);
   }
   function glossStaggerSoon() {
     if (glossQueued) return;
@@ -10525,7 +10550,7 @@
   }
   // Перерисовка листа, смена строки заучивания, подгонка кегля (style),
   // поворот, кнопка «ب/а» - всё это видно как мутация или resize. Свои
-  // правки (gl-low, gl-edge-*, --gl-down, --gl-extra) тоже будят наблюдателя, но второй проход
+  // правки (--gl-w, --gl-x, --gl-extra) тоже будят наблюдателя, но второй проход
   // ничего не меняет, и круг замыкается.
   if (window.MutationObserver) {
     var glossMo = new MutationObserver(glossStaggerSoon);
