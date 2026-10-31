@@ -11,6 +11,8 @@
 Функция чистая (в БД не ходит), поэтому фикстуры баз здесь не нужны.
 """
 
+from datetime import date, timedelta
+
 import core.mufradat as mufradat
 from core.mufradat import (
     COVERAGE_WAVE_SHARE, MASTERY_STREAK, generate_question, pick_question_word,
@@ -32,9 +34,18 @@ def _pool(n=12):
     return [_word(i, "كلمة%d" % i, "перевод%d" % i) for i in range(1, n + 1)]
 
 
-def _mastered(progress_key, today="2026-09-04"):
+def _days_ago(n):
+    """Дата n дней назад: тестам повтора нужны слова внутри окна отдыха
+    (RECHECK_AFTER_DAYS), а календарные даты со временем из него выпадают."""
+    return (date.fromisoformat(mufradat._today()) - timedelta(days=n)).isoformat()
+
+
+def _mastered(progress_key, today=None):
     """Слово "выучено" и ещё не ушло на перепроверку (RECHECK_AFTER_DAYS) -
-    pick_question_word выбрасывает такое из кандидатов совсем."""
+    pick_question_word выбрасывает такое из кандидатов совсем. По умолчанию
+    ответ вчерашний (было 04.09 календарно - 03.11 слово бы отдохнуло)."""
+    if today is None:
+        today = _days_ago(1)
     return {progress_key: {
         "correct_streak": MASTERY_STREAK,
         "wrong_count": 0,
@@ -75,13 +86,17 @@ def test_all_mastered_asks_oldest_learned_instead_of_dead_end():
     отдыхающих слов, только из самых давно спрошенных, с пометкой review."""
     words = _pool(40)
     progress = {}
+    # Даты от сегодняшнего дня (было 10-19.10 календарно - к декабрю слова
+    # отдохнули бы 60 дней и тест упал бы, как соседний 31.10).
+    today = date.fromisoformat(mufradat._today())
     for w in words:
         k = w["progress_key"]
-        progress.update(_mastered(k, "2026-10-%02d" % (19 - k % 10)))
+        progress.update(_mastered(k, (today - timedelta(days=k % 10)).isoformat()))
     starred = [_word(99, "مرصود", "звёздный")]
     progress.update(_mastered(99))
 
-    oldest = {k for k, row in progress.items() if row["last_correct_date"] <= "2026-10-12"}
+    week_ago = (today - timedelta(days=7)).isoformat()
+    oldest = {k for k, row in progress.items() if row["last_correct_date"] <= week_ago}
     for _ in range(50):
         q = generate_question(words, progress, starred_words=starred)
         assert q is not None and q["review"] is True
@@ -91,10 +106,13 @@ def test_all_mastered_asks_oldest_learned_instead_of_dead_end():
 def test_review_takes_oldest_first():
     words = _pool(mufradat.REVIEW_OLDEST + 10)
     progress = {}
+    # Даты от сегодняшнего дня, а не календарные (31.10.2026 упал: слово от
+    # 01.09 отдохнуло 60 дней и выпало из повтора). Чем меньше номер, тем
+    # давнее ответ; все 40 - внутри окна отдыха.
+    today = date.fromisoformat(mufradat._today())
     for w in words:
         k = w["progress_key"]
-        # 10 самых свежих - сентябрь→октябрь по номеру, старшие - меньшие номера
-        progress.update(_mastered(k, "2026-09-%02d" % min(28, k) if k <= 28 else "2026-10-%02d" % (k - 28)))
+        progress.update(_mastered(k, (today - timedelta(days=50 - k)).isoformat()))
     picked = {k["progress_key"] for k in mufradat._review_candidates(words, progress, None, mufradat._stale_cutoff())}
     assert picked == set(range(1, mufradat.REVIEW_OLDEST + 1))
 
@@ -222,7 +240,7 @@ def test_review_reaches_forty_distinct_words_in_a_day():
     words = _pool(100)
     progress = {}
     for w in words:
-        progress.update(_mastered(w["progress_key"], "2026-10-%02d" % (1 + w["progress_key"] % 18)))
+        progress.update(_mastered(w["progress_key"], _days_ago(1 + w["progress_key"] % 18)))
     today = set()
     for _ in range(40):
         q = generate_question(words, progress, exclude_keys=today)
@@ -235,7 +253,7 @@ def test_review_all_done_today_still_asks():
     words = _pool(12)
     progress = {}
     for w in words:
-        progress.update(_mastered(w["progress_key"], "2026-10-10"))
+        progress.update(_mastered(w["progress_key"], _days_ago(20)))
     q = generate_question(words, progress, exclude_keys={w["progress_key"] for w in words})
     assert q is not None and q["review"] is True
 
