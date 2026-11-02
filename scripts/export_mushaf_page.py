@@ -81,7 +81,12 @@ def get_code_v4(surah, ayah, position):
 def font_url_for_page(page_number, fmt="woff2"):
     """Хотлинк на CDN QUL (static-cdn.tarteel.ai), НЕ самохостинг - так и
     задокументировано в их же примере @font-face на странице ресурса.
-    Убирает вопрос переразмещения 604 файлов и синхронизации с CI."""
+    Убирает вопрос переразмещения 604 файлов и синхронизации с CI.
+
+    02.11.2026: у tarteel пропал p328.woff2 (404, ttf/woff на месте).
+    Приложение само берёт пропавший шрифт с зеркала quran.foundation
+    (v4MirrorUrl в index.html), адрес здесь менять не нужно. Проверка
+    всех 604 на обоих CDN: scripts/check_v4_fonts.py."""
     return f"https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/{fmt}/p{page_number}.{fmt}"
 
 # Типографские маркеры мусхафа, не являющиеся словами - при разбивке на

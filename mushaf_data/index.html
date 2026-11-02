@@ -9156,6 +9156,7 @@
   function mushafFitPredict() {
     var el = document.getElementById('ayah-text');
     var page = parseInt(el.getAttribute('data-page'), 10);
+    if (el.hasAttribute('data-plain')) return null;   // таблица - для глифов V4
     var table = pageLayout() === 'dm' ? MUSHAF_FIT_W_DM : MUSHAF_FIT_W;
     var w = table && table[page];
     if (!w) return null;
@@ -9378,15 +9379,46 @@
   // быстро, шрифт прошлого листа докачался позже нового - он не ставится,
   // иначе глифы листа нарисовались бы буквами соседнего (гонка, пойманная
   // в тренажёре слов, см. trainerV4Want).
-  var currentV4Face = null, wantV4Url = null;
+  /* Зеркало шрифтов V4 (02.11.2026, Умар устаз: стр. 328 = стр. 327). У
+     tarteel пропал p328.woff2 (404) - шрифт листа не грузился, на экране
+     оставался шрифт прошлого листа, и коды стр. 328 рисовались словами
+     стр. 327 (коды слов на всех листах одни и те же: U+FC41...). Те же
+     файлы лежат на CDN quran.com - побайтно (сверено на p1/327/329/604,
+     p328 сверен по кодам с sources/v4_fonts/p328.ttf). Основной адрес не
+     ответил - пробуем зеркало. Проверка всех 604: scripts/check_v4_fonts.py. */
+  var V4_CDN_MAIN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/';
+  var V4_CDN_MIRROR = 'https://verses.quran.foundation/fonts/quran/hafs/v4/colrv1/woff2/';
+  function v4MirrorUrl(url) {
+    return url && url.indexOf(V4_CDN_MAIN) === 0 ? V4_CDN_MIRROR + url.slice(V4_CDN_MAIN.length) : null;
+  }
+  function loadV4Face(family, url) {
+    return new FontFace(family, "url('" + url + "')").load().catch(function (err) {
+      var alt = v4MirrorUrl(url);
+      if (!alt) throw err;
+      return new FontFace(family, "url('" + alt + "')").load();
+    });
+  }
+
+  // v4Req (02.11.2026) - номер запроса шрифта листа. Опоздавший ответ
+  // сверяется по нему, а не по адресу: адрес может смениться на зеркало.
+  var currentV4Face = null, wantV4Url = null, v4Req = 0;
   function loadV4Font(url) {
     wantV4Url = url;
-    var face = new FontFace('mushaf-v4', "url('" + url + "')");
-    return face.load().then(function (loaded) {
-      if (wantV4Url !== url) return;
+    var req = ++v4Req;
+    return loadV4Face('mushaf-v4', url).then(function (loaded) {
+      if (req !== v4Req) return;
       if (currentV4Face) { try { document.fonts.delete(currentV4Face); } catch (e) {} }
       document.fonts.add(loaded);
       currentV4Face = loaded;
+    }, function (err) {
+      // Ни основной адрес, ни зеркало. Шрифт прошлого листа снимаем: с ним
+      // коды этого листа нарисовались бы ЧУЖИМИ словами. Лист покажется
+      // обычным текстом (reveal, plain).
+      if (req === v4Req && currentV4Face) {
+        try { document.fonts.delete(currentV4Face); } catch (e) {}
+        currentV4Face = null;
+      }
+      throw err;
     });
   }
 
@@ -9406,16 +9438,21 @@
   }
   function loadV4Fonts(data) {
     var main = loadV4Font(data.font_url);
+    var req = v4Req;
     var fp = pageExtraFontPage(data);
     if (!fp || fp === currentV4FaceBPage) return main;
-    var face = new FontFace('mushaf-v4-b', "url('" + v4FontUrl(fp) + "')");
-    var want = data.font_url;
-    var extra = face.load().then(function (loaded) {
-      if (wantV4Url !== want) return;
+    var extra = loadV4Face('mushaf-v4-b', v4FontUrl(fp)).then(function (loaded) {
+      if (req !== v4Req) return;
       if (currentV4FaceB) { try { document.fonts.delete(currentV4FaceB); } catch (e) {} }
       document.fonts.add(loaded);
       currentV4FaceB = loaded;
       currentV4FaceBPage = fp;
+    }, function (err) {
+      if (req === v4Req && currentV4FaceB) {
+        try { document.fonts.delete(currentV4FaceB); } catch (e) {}
+        currentV4FaceB = null; currentV4FaceBPage = null;
+      }
+      throw err;
     });
     return Promise.all([main, extra]);
   }
@@ -9447,9 +9484,14 @@
     // каждая строка мусхафа - свой <div>, а не единый абзац с переносом
     // по ширине браузера. surah_name_ar - реальное арабское имя суры
     // (quran_transcript), не наша русская транслитерация из SURAH_NAMES.
+    // plain (02.11.2026) - шрифт листа не загрузился ни с одного адреса:
+    // слова обычным текстом из данных, без красок V4. Некрасиво, но слова
+    // верные; глифы без своего шрифта - чужие слова или квадратики.
+    var pairs = mushafPairs(data.lines || []);
+    var pageHtml = function (plain) {
     var html = '';
     var textLineNo = 0;
-    var pairs = mushafPairs(data.lines || []);
+    var bare = function (s) { return String(s || '').replace(/<[^>]*>/g, ''); };
     (data.lines || []).forEach(function (line) {
       if (line.type === 'header') {
         html += '<div class="surah-banner">سُورَةُ ' + line.surah_name_ar + '</div>';
@@ -9481,25 +9523,32 @@
               ' data-surah="' + t.surah + '" data-ayah="' + t.ayah + '" data-pos="' + t.position + '"' +
               ' data-arabic="' + escapeAttr(t.html) + '" data-w="' + wkey + '"' +
               (head ? ' data-head="' + head.surah + ':' + head.ayah + ':' + head.position + '"' : '') : '';
-            if (t.code_v4) {
+            if (t.code_v4 && !plain) {
               html += '<span class="' + v4Cls(t) + '"' + tr + '>' + t.code_v4 + '</span>';
             } else {
-              html += '<span' + tr + '>' + t.html + '</span>';
+              // Без меток <tajweed>: Safari на iOS рвёт слово на границе метки.
+              html += '<span' + tr + '>' + (plain ? bare(t.html) : t.html) + '</span>';
             }
           } else if (t.type === 'marker') {
             html += '<span class="marker">' + t.html + '</span>';
           } else if (t.type === 'ayah_end') {
-            if (t.code_v4) {
+            if (t.code_v4 && !plain) {
               html += '<span class="' + v4Cls(t) + '">' + t.code_v4 + '</span>';
             } else {
-              html += '<span class="ayah-end">﴾' + t.html + '﴿</span>';
+              html += '<span class="ayah-end">﴾' + bare(t.html) + '﴿</span>';
             }
           }
         });
         html += '</div>';
       }
     });
-    var reveal = function () {
+    return html;
+    };
+    var reveal = function (plain) {
+      // Опоздавший лист (02.11.2026): листали быстро, шрифт прошлого листа
+      // докачался позже - его текст не ложится поверх нового листа.
+      if (currentPageData !== data) return;
+      var html = pageHtml(plain);
       // Новый лист - с начала (21.09.2026). Стоя лист почти всегда влезает
       // целиком, и прокрутка не сбрасывалась никогда; лёжа дочитал до строки
       // страниц внизу, нажал «›» - и следующий лист открывался сразу в конце.
@@ -9509,6 +9558,10 @@
       document.getElementById('ayah-text').innerHTML = html;
       // Номер листа на самом тексте - по нему mushafFitPredict берёт ширину.
       document.getElementById('ayah-text').setAttribute('data-page', data.page);
+      // Обычный текст шире глифов V4 - кегль по таблице MUSHAF_FIT_W не
+      // годится, mushafFitPredict его пропускает, и кегль меряется.
+      if (plain) document.getElementById('ayah-text').setAttribute('data-plain', '1');
+      else document.getElementById('ayah-text').removeAttribute('data-plain');
       if (typeof hifzApply === 'function') hifzApply();
       // Пометки слов рисуем ЗДЕСЬ, когда страница реально отрисована, а не
       // по таймеру после loadPage: страница приходит с сервера, и угадывать
@@ -9530,7 +9583,7 @@
     // висим бесконечно; PUA-глифы без своего шрифта покажутся "тофу"-
     // прямоугольниками в запасном шрифте - хуже, чем пустая страница, но
     // студент хотя бы поймёт, что что-то не так, а не решит, что бот завис.
-    loadV4Fonts(data).then(reveal, reveal);
+    loadV4Fonts(data).then(function () { reveal(false); }, function () { reveal(true); });
 
     document.getElementById('btn-prev').disabled = data.page >= LAST_PAGE;
     document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
@@ -16667,8 +16720,9 @@
     trainerV4Want = url;
     if (!url || typeof FontFace === 'undefined') return Promise.resolve(false);
     if (url === trainerV4Url) return Promise.resolve(true);
-    var face = new FontFace('trainer-v4', "url('" + url + "')");
-    return face.load().then(function (loaded) {
+    // loadV4Face - с зеркалом (02.11.2026, у tarteel пропал p328). Сверка
+    // опоздания - по исходному адресу url, зеркало её не сбивает.
+    return loadV4Face('trainer-v4', url).then(function (loaded) {
       if (trainerV4Want !== url) return false;
       if (trainerV4Face) { try { document.fonts.delete(trainerV4Face); } catch (e) {} }
       document.fonts.add(loaded);

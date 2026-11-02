@@ -109,12 +109,19 @@ self.addEventListener('fetch', (e) => {
   if (isFont(url)) {
     e.respondWith(
       caches.open(FONTS).then((cache) =>
-        cache.match(req).then((hit) => hit || fetch(req).then((res) => {
-          // Шрифты приходят с чужого домена: ответ непрозрачный (opaque),
-          // прочитать его нельзя, но положить в кэш и потом отдать — можно.
-          if (res) cache.put(req, res.clone());
-          return res;
-        }))
+        cache.match(req).then((hit) => {
+          // Только удачный ответ (02.11.2026): раньше в кэш ложилось всё,
+          // и 404 пропавшего у CDN p328.woff2 застревал на телефоне
+          // навсегда. Шрифт грузит FontFace - это CORS-запрос, у ответа
+          // виден статус. Уже застрявшая ошибка не отдаётся, а качается
+          // заново - без смены VERSION и перекачки всех 604 шрифтов.
+          if (hit && hit.ok) return hit;
+          return fetch(req).then((res) => {
+            if (res && res.ok) cache.put(req, res.clone());
+            else if (hit) cache.delete(req);
+            return res;
+          });
+        })
       )
     );
     return;
