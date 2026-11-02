@@ -35,7 +35,10 @@ TRAIL_EVENTS = {"open", "page", "enter", "exit", "fix", "unit", "pick",
                 "rev_open", "rev_broken", "rev_submit",
                 # audio - звук сдачи у устаза (07.10.2026): got/fail fetch/fail play
                 # с размером и именем ошибки телефона.
-                "audio"}
+                "audio",
+                # смысловой перевод (02.11.2026): mhold - удержание на аяте,
+                # mread - открыл отдельное чтение, mtr - сменил переводчика.
+                "mhold", "mread", "mtr"}
 
 _SCHEMA = """
     CREATE TABLE IF NOT EXISTS app_trail (

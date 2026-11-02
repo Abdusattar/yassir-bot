@@ -1245,6 +1245,144 @@
     color: var(--ink);
   }
 
+  /* ── Смысловой перевод (02.11.2026, прогнано через frontend-design) ──
+     Два места: панель аята по удержанию (#ayah-sheet) и отдельное чтение
+     (#mreader) со своей закладкой, не связанной с заучиванием. Текст
+     перевода - книжным шрифтом с засечками из системы телефона (ничего не
+     качаем: Georgia есть на iOS, Noto Serif - на Android): это чтение на
+     15-20 минут, а не подпись. Остальное - токены мусхафа, новых красок нет,
+     чтобы не спорить с таджвидной раскраской. Русский текст - ltr внутри
+     rtl-листа (иначе точка уезжает в начало строки). */
+  .mr-serif { font-family: Georgia, 'Noto Serif', 'Times New Roman', serif; }
+  .mr-seg {
+    display: inline-flex; flex: none; padding: 2px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    background: var(--card-bg);
+  }
+  .mr-seg[hidden] { display: none; }
+  .mr-seg button {
+    font: inherit; font-size: 13px; font-weight: 500; line-height: 1.2;
+    padding: 6px 11px; border: 0; border-radius: 999px;
+    background: none; color: var(--accent); cursor: pointer;
+  }
+  .mr-seg button.on { background: var(--accent); color: var(--accent-ink); }
+  .ma-hl { background: color-mix(in srgb, var(--marker-color) 16%, transparent); }
+
+  #ayah-sheet-dim {
+    position: fixed; inset: 0; z-index: 88;
+    background: rgba(30, 25, 10, 0.14);
+  }
+  #ayah-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 89;
+    max-width: 640px; margin: 0 auto; max-height: 55vh;
+    display: flex; flex-direction: column;
+    direction: ltr; text-align: left;
+    background: var(--mushaf-bg-start);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 30px rgba(30, 25, 10, 0.16);
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: as-up 0.18s ease-out;
+  }
+  #ayah-sheet[hidden], #ayah-sheet-dim[hidden] { display: none; }
+  @keyframes as-up { from { transform: translateY(24px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { #ayah-sheet { animation: none; } }
+  #as-grab {
+    display: block; width: 100%; height: 22px; padding: 0; border: 0;
+    background: none; cursor: pointer;
+  }
+  #as-grab::before {
+    content: ""; display: block; width: 38px; height: 4px; margin: 0 auto;
+    border-radius: 2px; background: color-mix(in srgb, var(--muted) 45%, transparent);
+  }
+  .as-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 0 16px 10px;
+  }
+  .as-ref { color: var(--marker-color); font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .as-ref .ar { font-family: 'Scheherazade New', serif; font-size: 19px; font-weight: 400; margin-right: 6px; }
+  #as-text {
+    overflow-y: auto; padding: 0 18px 4px;
+    font-size: 17px; line-height: 1.62; color: var(--ink);
+  }
+  .as-foot {
+    display: flex; justify-content: space-between;
+    margin-top: 8px; padding: 6px 8px 8px;
+    border-top: 1px solid var(--chrome-border);
+  }
+  .as-foot button, .mr-nav button {
+    font: inherit; font-size: 14px; font-weight: 500; color: var(--accent);
+    background: none; border: 0; padding: 8px 8px; cursor: pointer;
+  }
+  .as-foot button:disabled, .mr-nav button:disabled { visibility: hidden; }
+
+  #mreader {
+    position: fixed; inset: 0; z-index: 70;
+    display: flex; flex-direction: column;
+    direction: ltr; text-align: left;
+    background: linear-gradient(var(--mushaf-bg-start), var(--mushaf-bg-end));
+  }
+  #mreader[hidden] { display: none; }
+  .mr-bar, .mr-nav {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--chrome-bg);
+  }
+  .mr-bar {
+    padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top));
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  #mr-back {
+    font: inherit; font-size: 15px; font-weight: 500; color: var(--accent);
+    background: none; border: 0; padding: 6px 4px; cursor: pointer;
+  }
+  /* position: relative - offsetTop аятов отсчитывается от области прокрутки,
+     а не от всего окна (иначе место сползало на высоту шапки). */
+  #mr-scroll { position: relative; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overflow-anchor: none; }
+  #mr-text { max-width: 600px; margin: 0 auto; padding: 4px 20px 28px 10px; }
+  .mr-sura { text-align: center; margin: 16px 0 20px; }
+  .mr-sura .ar {
+    direction: rtl; font-family: 'Scheherazade New', serif;
+    font-size: 30px; line-height: 1.3; color: var(--ink);
+  }
+  .mr-sura .num { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .mr-a {
+    display: grid; grid-template-columns: 30px 1fr; column-gap: 6px;
+    margin: 0 0 12px; font-size: 17.5px; line-height: 1.66; color: var(--ink);
+  }
+  .mr-a .n {
+    font-size: 12px; font-weight: 600; color: var(--marker-color);
+    text-align: right; padding-top: 5px;
+  }
+  .mr-here {
+    display: flex; align-items: center; gap: 8px; margin: 2px 0 12px 36px;
+    color: var(--accent); font-size: 12.5px; transition: opacity 0.6s;
+  }
+  .mr-here::before, .mr-here::after {
+    content: ""; flex: 1; height: 1px;
+    background: color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .mr-here::before { flex: 0 0 14px; }
+  .mr-here.gone { opacity: 0; }
+  .mr-next {
+    display: block; margin: 18px auto 6px; padding: 10px 18px;
+    font: inherit; font-size: 15px; font-weight: 500;
+    color: var(--accent); background: var(--card-bg);
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: 999px; cursor: pointer;
+  }
+  .mr-msg { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 16px; }
+  .mr-nav {
+    padding: 6px 8px; padding-bottom: max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--chrome-border);
+  }
+  .mr-nav .ar { font-family: 'Scheherazade New', serif; font-size: 18px; font-weight: 400; }
+  .mr-nav button, .as-ref, .mr-next { direction: ltr; unicode-bidi: isolate; }
+  bdi.ar, .mr-next bdi { unicode-bidi: isolate; }
+  #ayah-sheet, #mreader {
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    /* Шрифт интерфейса для кнопок и подписей; засечки - только у текста перевода. */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
   /* Дашборд YassirApp (28.08.2026, редизайн 29.08.2026) - первый экран
      при открытии. Мусхаф и Тренажёр оба переключают вид внутри этой же
      страницы (см. openTrainer/dash-mushaf в скрипте ниже) - карточки
@@ -3691,11 +3829,48 @@
     <p class="s-hint" id="sett-layout-hint" data-i18n="layout_hint">Выбери тот, по которому учишь с книги: страницы и строки будут как в ней.</p>
   </div>
 
+  <!-- Переводчик смысла (02.11.2026) - только у русского, у ky/uz/zh перевод
+       один. Тот же выбор переключается прямо в окне перевода. -->
+  <div class="s-card" id="sett-mtr-card">
+    <label class="s-lab" data-i18n="mr_title">Смысловой перевод</label>
+    <div class="s-seg" id="sett-mtr">
+      <button data-tr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button>
+      <button data-tr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button>
+    </div>
+    <p class="s-hint" data-i18n="mr_sett_hint">Его можно переключить и прямо в окне перевода.</p>
+  </div>
+
   <!-- Выход - только у сессии сайта. Внутри Telegram выходить не из чего:
        там нас узнаёт сам Telegram при каждом открытии. -->
   <button id="dash-logout" hidden data-i18n="sett_logout">Выйти из приложения</button>
 </div>
 <div id="word-popup"></div>
+<!-- Смысловой перевод (02.11.2026): панель аята по удержанию и отдельное
+     чтение со своей закладкой. JS - «Смысловой перевод» ниже. -->
+<div id="ayah-sheet-dim" hidden></div>
+<div id="ayah-sheet" hidden role="dialog" aria-modal="true">
+  <button id="as-grab" type="button" data-i18n-title="mr_close" title="Закрыть"></button>
+  <div class="as-head">
+    <span class="as-ref" id="as-ref"></span>
+    <span class="mr-seg" id="as-seg"><button type="button" data-tr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-tr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+  </div>
+  <div id="as-text" class="mr-serif"></div>
+  <div class="as-foot">
+    <button type="button" id="as-prev"></button>
+    <button type="button" id="as-next"></button>
+  </div>
+</div>
+<div id="mreader" hidden>
+  <div class="mr-bar">
+    <button type="button" id="mr-back" data-i18n="mr_back">← Мусхаф</button>
+    <span class="mr-seg" id="mr-seg"><button type="button" data-tr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-tr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+  </div>
+  <div id="mr-scroll"><div id="mr-text" class="mr-serif"></div></div>
+  <div class="mr-nav">
+    <button type="button" id="mr-prev"></button>
+    <button type="button" id="mr-next"></button>
+  </div>
+</div>
 <div id="hifz-big">
   <!-- Возврат стоит в шапке слева, а не внизу (09.09.2026, общее правило
        навигации): низ — только действия, здесь 🔊 и «Сдать». -->
@@ -5109,6 +5284,17 @@
       btn_hifz_title: 'Заучивание 40+40',
       btn_revision_title: 'Отметить повторение',
       btn_meaning_title: 'Смысл',
+      mr_title: 'Смысловой перевод',
+      mr_back: '← Мусхаф',
+      mr_here: 'вы остановились здесь',
+      mr_surah: 'Сура %N%',
+      mr_next: 'Следующая сура',
+      mr_loading: 'Загружаю…',
+      mr_offline: 'Перевод не загрузился. Проверь интернет и нажми сюда ещё раз.',
+      mr_sett_hint: 'Его можно переключить и прямо в окне перевода.',
+      mr_close: 'Закрыть',
+      tr_kuliev: 'Кулиев',
+      tr_abuadel: 'Абу Адель',
       btn_bookmark_title: 'Закладка',
       hifz_close_title: 'Выйти из режима',
       hifz_progress_minus: 'минус один повтор',
@@ -5710,6 +5896,17 @@
       btn_hifz_title: 'Жаттоо 40+40',
       btn_revision_title: 'Кайталоону белгилөө',
       btn_meaning_title: 'Мааниси',
+      mr_title: 'Маанилик котормо',
+      mr_back: '← Мусхаф',
+      mr_here: 'ушул жерде токтогонсуң',
+      mr_surah: '%N%-сүрө',
+      mr_next: 'Кийинки сүрө',
+      mr_loading: 'Жүктөлүүдө…',
+      mr_offline: 'Котормо жүктөлгөн жок. Интернетти текшерип, бул жерди кайра бас.',
+      mr_sett_hint: 'Котормону ошол эле терезеден да алмаштырса болот.',
+      mr_close: 'Жабуу',
+      tr_kuliev: 'Кулиев',
+      tr_abuadel: 'Абу Адель',
       btn_bookmark_title: 'Кыстарма',
       hifz_close_title: 'Режимден чыгуу',
       hifz_progress_minus: 'бир кайталоону азайтуу',
@@ -5774,7 +5971,7 @@
       learn_hifz_0_t: '«Мусхафты» ач',
       learn_hifz_0_b: 'Жаттоо ушул жерден тапшырылат — окуган жериңден эле.',
       learn_hifz_1_t: 'Жогору жактагы 📖 бас',
-      learn_hifz_1_b: 'Бул баскыч жаттоо режимин күйгүзөт. Жанында 🔁 — ал кайталоо үчүн, чаташтырба, жана 📜 — беттин маанилик котормосу.',
+      learn_hifz_1_b: 'Бул баскыч жаттоо режимин күйгүзөт. Жанында 🔁 — ал кайталоо үчүн, чаташтырба, жана 📜 — маанилик котормо: аны өзүнчө окуйсуң, токтогон жериң өзү эсте калат. Бир аяттын маанисин көрүү үчүн — манжаңды аяттын үстүнө басып тур.',
       learn_hifz_2_t: 'Биринчи жолу — ордуңду белгиле',
       learn_hifz_2_b: 'Колдонмо кайсы саптан баштаарыңды сурайт. Ылдый жактан эмнени жаттап жатканыңды танда: сапты, барактын жарымын же бүт бетти. Анан саптын өзүн бас.',
       learn_hifz_3_t: 'Орун белгиленди',
@@ -6425,6 +6622,17 @@
       btn_hifz_title: 'Ёдлаш 40+40',
       btn_revision_title: 'Такрорлашни белгилаш',
       btn_meaning_title: 'Маъноси',
+      mr_title: 'Маънолар таржимаси',
+      mr_back: '← Мусҳаф',
+      mr_here: 'шу ерда тўхтагансиз',
+      mr_surah: '%N%-сура',
+      mr_next: 'Кейинги сура',
+      mr_loading: 'Юкланмоқда…',
+      mr_offline: 'Таржима юкланмади. Интернетни текширинг ва шу ерни яна босинг.',
+      mr_sett_hint: 'Таржимани ўша ойнанинг ўзида ҳам алмаштириш мумкин.',
+      mr_close: 'Ёпиш',
+      tr_kuliev: 'Кулиев',
+      tr_abuadel: 'Абу Адел',
       btn_bookmark_title: 'Хатчўп',
       hifz_close_title: 'Режимдан чиқиш',
       hifz_progress_minus: 'битта такрорни камайтириш',
@@ -6489,7 +6697,7 @@
       learn_hifz_0_t: '«Мусҳаф»ни оч',
       learn_hifz_0_b: 'Ёдлаш шу ердан топширилади — ўқийдиган жойингнинг ўзидан.',
       learn_hifz_1_t: 'Юқоридаги 📖 ни бос',
-      learn_hifz_1_b: 'Бу тугма ёдлаш режимини ёқади. Ёнида 🔁 — у такрорлаш учун, адаштирма, ва 📜 — бетнинг маънолар таржимаси.',
+      learn_hifz_1_b: 'Бу тугма ёдлаш режимини ёқади. Ёнида 🔁 — у такрорлаш учун, адаштирма, ва 📜 — маънолар таржимаси: уни алоҳида ўқийсан, тўхтаган жойинг ўзи эсда қолади. Битта оятнинг маъносини кўриш учун — бармоғингни оят устида ушлаб тур.',
       learn_hifz_2_t: 'Биринчи марта — жойингни белгила',
       learn_hifz_2_b: 'Илова қайси қатордан бошлашингни сўрайди. Пастда нимани ёдлаётганингни танла: қаторни, варақнинг ярмини ёки бутун бетни. Кейин қаторнинг ўзини бос.',
       learn_hifz_3_t: 'Жой белгиланди',
@@ -7179,6 +7387,17 @@
       btn_hifz_title: '背记 40+40',
       btn_revision_title: '记录复习',
       btn_meaning_title: '释义',
+      mr_title: '古兰经释义',
+      mr_back: '← 经文',
+      mr_here: '上次读到这里',
+      mr_surah: '第%N%章',
+      mr_next: '下一章',
+      mr_loading: '加载中…',
+      mr_offline: '释义没有加载。请检查网络后再点这里。',
+      mr_sett_hint: '也可以直接在释义窗口里切换。',
+      mr_close: '关闭',
+      tr_kuliev: '库利耶夫',
+      tr_abuadel: '阿布·阿迪勒',
       btn_bookmark_title: '书签',
       hifz_close_title: '退出此模式',
       hifz_progress_minus: '减一遍',
@@ -7242,7 +7461,7 @@
       learn_hifz_0_t: '打开「古兰经」',
       learn_hifz_0_b: '背记就在这里交 — 也就是你诵读的地方。',
       learn_hifz_1_t: '点上方的 📖',
-      learn_hifz_1_b: '这个按钮打开背记模式。旁边的 🔁 是复习用的，不要弄混；📜 是这一页的释义。',
+      learn_hifz_1_b: '这个按钮打开背记模式。旁边的 🔁 是复习用的，不要弄混；📜 是古兰经释义：单独阅读，会自动记住你读到的地方。想看某一节的意思，就在这一节上按住手指。',
       learn_hifz_2_t: '第一次 — 标出你的位置',
       learn_hifz_2_b: '应用会问你从哪一行开始。在下方选择你要背的分量：一行、半页或整页。然后点那一行本身。',
       learn_hifz_3_t: '位置已标出',
@@ -7449,6 +7668,7 @@
 
   function applyLang() {
     if (typeof markLang === 'function') markLang();
+    if (typeof mrMarkSeg === 'function') mrMarkSeg();
     document.querySelectorAll('[data-i18n]').forEach(function (el) {
       el.textContent = T(el.getAttribute('data-i18n'));
     });
@@ -9491,6 +9711,7 @@
     var pageHtml = function (plain) {
     var html = '';
     var textLineNo = 0;
+    var lastMa = '';
     var bare = function (s) { return String(s || '').replace(/<[^>]*>/g, ''); };
     (data.lines || []).forEach(function (line) {
       if (line.type === 'header') {
@@ -9513,6 +9734,11 @@
             // Второе слово пары (28.09.2026) получает перевод головы и
             // data-head - см. mushafPairs.
             var wkey = t.surah + ':' + t.ayah + ':' + t.position;
+            // data-ma - аят слова у КАЖДОГО токена (02.11.2026): по нему
+            // удержание открывает смысловой перевод аята. Не data-ayah: тот
+            // есть только у слов с переводом и читается заучиванием/пометками.
+            lastMa = t.surah + ':' + t.ayah;
+            var ma = ' data-ma="' + lastMa + '"';
             var head = !t.translation && pairs[wkey];
             // data-gl - подпись под словом лёжа в заучивании (19.10.2026):
             // только у головы пары (хвост делит её перевод) и без скобок -
@@ -9524,18 +9750,18 @@
               ' data-arabic="' + escapeAttr(t.html) + '" data-w="' + wkey + '"' +
               (head ? ' data-head="' + head.surah + ':' + head.ayah + ':' + head.position + '"' : '') : '';
             if (t.code_v4 && !plain) {
-              html += '<span class="' + v4Cls(t) + '"' + tr + '>' + t.code_v4 + '</span>';
+              html += '<span class="' + v4Cls(t) + '"' + ma + tr + '>' + t.code_v4 + '</span>';
             } else {
               // Без меток <tajweed>: Safari на iOS рвёт слово на границе метки.
-              html += '<span' + tr + '>' + (plain ? bare(t.html) : t.html) + '</span>';
+              html += '<span' + ma + tr + '>' + (plain ? bare(t.html) : t.html) + '</span>';
             }
           } else if (t.type === 'marker') {
             html += '<span class="marker">' + t.html + '</span>';
           } else if (t.type === 'ayah_end') {
             if (t.code_v4 && !plain) {
-              html += '<span class="' + v4Cls(t) + '">' + t.code_v4 + '</span>';
+              html += '<span class="' + v4Cls(t) + '"' + (lastMa ? ' data-ma="' + lastMa + '"' : '') + '>' + t.code_v4 + '</span>';
             } else {
-              html += '<span class="ayah-end">﴾' + bare(t.html) + '﴿</span>';
+              html += '<span class="ayah-end"' + (lastMa ? ' data-ma="' + lastMa + '"' : '') + '>﴾' + bare(t.html) + '﴿</span>';
             }
           }
         });
@@ -9912,8 +10138,309 @@
     if (name === 'page') mushafFitSchedule();
     if (name === 'mywords') loadMyWords();
   }
-  document.getElementById('btn-meaning').addEventListener('click', function () { switchTab('meaning'); });
   switchTab('page');
+
+  // ── Смысловой перевод (02.11.2026, решения пользователя) ─────────────
+  // 1) Удержание на аяте (полсекунды) - панель со смыслом ВСЕГО аята, в
+  //    чтении, повторении и заучивании. Тап (перевод слова) и двойной тап
+  //    («Мои слова») не задеты: после удержания следующий click гасится
+  //    целиком, в фазе захвата - разом для всех обработчиков #ayah-text.
+  //    У устаза в проверке удержания нет: там касание - пометка ошибки.
+  // 2) 📜 - отдельное чтение смысла, «живёт своей жизнью»: своё место
+  //    (сура:аят верхнего аята, не пиксели - Абу Адель вдвое длиннее
+  //    Кулиева), на сервере по пользователю (/api/muf/meaning_pos) - у
+  //    Telegram и иконки на экране «Домой» разный localStorage. С местом
+  //    заучивания не связано никак.
+  // Перевод: у русского - Кулиев или Абу Адель (переключатель прямо в окне
+  // и в настройках, выбор общий), у ky/uz/zh - свой единственный.
+  // Данные: mushaf_data/meaning/<перевод>/<сура>.json (scripts/build_meaning_reader.py).
+  var MEANING_VER = '1';
+  var MTR_KEY = 'yassir_meaning_tr';
+  var MPOS_KEY = 'yassir_meaning_pos';
+  var MEANING_HOLD_MS = 500;
+  var mtrRu = 'ru_kuliev';
+  try { if (localStorage.getItem(MTR_KEY) === 'ru_abuadel') mtrRu = 'ru_abuadel'; } catch (e) {}
+
+  function meaningSrc() {
+    return UI_LANG === 'ru' ? mtrRu : (UI_LANG === 'ky' || UI_LANG === 'uz' || UI_LANG === 'zh' ? UI_LANG : 'ru_kuliev');
+  }
+  var meaningCache = {};
+  function meaningSurah(src, s) {
+    var key = src + '/' + s;
+    if (!meaningCache[key]) {
+      meaningCache[key] = fetch('meaning/' + key + '.json?v=' + MEANING_VER)
+        .then(function (r) { if (!r.ok) throw new Error('meaning ' + key); return r.json(); })
+        .then(function (d) { return d.t || []; });
+      meaningCache[key].catch(function () { delete meaningCache[key]; });
+    }
+    return meaningCache[key];
+  }
+  function surahRow(s) { return SURAH_INDEX[s - 1]; }
+
+  // Переключатели переводчика: в панели, в чтении, в настройках - один выбор.
+  function mrMarkSeg() {
+    var ru = UI_LANG === 'ru';
+    ['as-seg', 'mr-seg'].forEach(function (id) { document.getElementById(id).hidden = !ru; });
+    document.getElementById('sett-mtr-card').hidden = !ru;
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#as-seg button, #mr-seg button, #sett-mtr button'),
+      function (b) { b.classList.toggle('on', b.getAttribute('data-tr') === mtrRu); });
+  }
+  function setMtr(tr) {
+    if (tr !== 'ru_abuadel') tr = 'ru_kuliev';
+    if (tr === mtrRu) return;
+    mtrRu = tr;
+    try { localStorage.setItem(MTR_KEY, tr); } catch (e) {}
+    trail('mtr', { tr: tr });
+    mrMarkSeg();
+    if (!document.getElementById('ayah-sheet').hidden) sheetShow();
+    if (!document.getElementById('mreader').hidden) mrRender(mrTopAyah());
+  }
+  ['as-seg', 'mr-seg', 'sett-mtr'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (b) setMtr(b.getAttribute('data-tr'));
+    });
+  });
+  mrMarkSeg();
+
+  // ── Панель аята ──
+  var sheetAt = null;   // {s, a}
+  function sheetHighlight() {
+    Array.prototype.forEach.call(document.querySelectorAll('#ayah-text .ma-hl'),
+      function (el) { el.classList.remove('ma-hl'); });
+    if (!sheetAt) return;
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#ayah-text [data-ma="' + sheetAt.s + ':' + sheetAt.a + '"]'),
+      function (el) { el.classList.add('ma-hl'); });
+  }
+  function sheetShow() {
+    if (!sheetAt) return;
+    var at = sheetAt, src = meaningSrc();
+    var row = surahRow(at.s);
+    document.getElementById('as-ref').innerHTML =
+      '<bdi class="ar" dir="rtl">' + row[1] + '</bdi> ' + at.s + ':' + at.a;
+    var text = document.getElementById('as-text');
+    text.textContent = T('mr_loading');
+    meaningSurah(src, at.s).then(function (t) {
+      if (sheetAt !== at || meaningSrc() !== src) return;
+      var n = t.length;
+      text.textContent = t[at.a - 1] || '';
+      text.scrollTop = 0;
+      var prev = document.getElementById('as-prev'), next = document.getElementById('as-next');
+      prev.disabled = at.s === 1 && at.a === 1;
+      next.disabled = at.s === 114 && at.a === n;
+      prev.textContent = '‹ ' + (at.a > 1 ? T('ayah_n', { N: at.a - 1 }) : T('mr_surah', { N: at.s - 1 }));
+      next.textContent = (at.a < n ? T('ayah_n', { N: at.a + 1 }) : T('mr_surah', { N: at.s + 1 })) + ' ›';
+    }, function () {
+      if (sheetAt === at) text.textContent = T('mr_offline');
+    });
+    sheetHighlight();
+  }
+  function sheetOpen(s, a) {
+    sheetAt = { s: s, a: a };
+    document.getElementById('ayah-sheet-dim').hidden = false;
+    document.getElementById('ayah-sheet').hidden = false;
+    sheetShow();
+    trail('mhold', { k: s + ':' + a });
+  }
+  function sheetClose() {
+    sheetAt = null;
+    document.getElementById('ayah-sheet-dim').hidden = true;
+    document.getElementById('ayah-sheet').hidden = true;
+    sheetHighlight();
+  }
+  function sheetStep(d) {
+    if (!sheetAt) return;
+    var at = sheetAt;
+    meaningSurah(meaningSrc(), at.s).then(function (t) {
+      if (sheetAt !== at) return;
+      if (d > 0) {
+        if (at.a < t.length) sheetAt = { s: at.s, a: at.a + 1 };
+        else if (at.s < 114) sheetAt = { s: at.s + 1, a: 1 };
+        sheetShow();
+      } else if (at.a > 1) {
+        sheetAt = { s: at.s, a: at.a - 1 }; sheetShow();
+      } else if (at.s > 1) {
+        meaningSurah(meaningSrc(), at.s - 1).then(function (p) {
+          if (sheetAt !== at) return;
+          sheetAt = { s: at.s - 1, a: p.length }; sheetShow();
+        });
+      }
+    });
+  }
+  document.getElementById('ayah-sheet-dim').addEventListener('click', sheetClose);
+  document.getElementById('as-grab').addEventListener('click', sheetClose);
+  document.getElementById('as-prev').addEventListener('click', function () { sheetStep(-1); });
+  document.getElementById('as-next').addEventListener('click', function () { sheetStep(1); });
+
+  // ── Жест удержания на листе ──
+  // Pointer events: на тачскрине прокрутка листа сама шлёт pointercancel
+  // (touch-action: pan-y), сдвиг пальца больше 10px отменяет удержание.
+  var hold = { timer: null, x: 0, y: 0, id: null, fired: false }, swallowClick = false;
+  var ayahTextEl = document.getElementById('ayah-text');
+  function holdCancel() {
+    if (hold.timer) { clearTimeout(hold.timer); hold.timer = null; }
+  }
+  ayahTextEl.addEventListener('pointerdown', function (e) {
+    holdCancel();
+    hold.fired = false;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (!e.isPrimary || review.on) return;
+    var el = e.target.closest ? e.target.closest('[data-ma]') : null;
+    if (!el) return;
+    var ma = el.getAttribute('data-ma').split(':');
+    hold.x = e.clientX; hold.y = e.clientY; hold.id = e.pointerId;
+    hold.timer = setTimeout(function () {
+      hold.timer = null;
+      hold.fired = true;
+      swallowClick = true;
+      // Устаревший тап-таймер перевода слова не должен сработать поверх.
+      if (typeof wordTapTimer !== 'undefined' && wordTapTimer) {
+        clearTimeout(wordTapTimer); wordTapTimer = null; wordTapTarget = null;
+      }
+      if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e2) {} }
+      sheetOpen(parseInt(ma[0], 10), parseInt(ma[1], 10));
+    }, MEANING_HOLD_MS);
+  });
+  ayahTextEl.addEventListener('pointermove', function (e) {
+    if (!hold.timer || e.pointerId !== hold.id) return;
+    if (Math.abs(e.clientX - hold.x) > 10 || Math.abs(e.clientY - hold.y) > 10) holdCancel();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+    ayahTextEl.addEventListener(ev, holdCancel);
+  });
+  ayahTextEl.addEventListener('touchstart', function (e) {
+    if (e.touches.length > 1) holdCancel();     // второй палец - масштаб, не удержание
+  }, { passive: true });
+  document.getElementById('page-wrap').addEventListener('scroll', holdCancel, { passive: true });
+  // Гасим click после удержания - в фазе захвата, раньше всех обработчиков
+  // (перевод слова, двойной тап, выбор строки в заучивании). На документе,
+  // а не на листе: отпущенный палец бьёт кликом уже по затемнению панели,
+  // и та закрывалась сразу после открытия (поймано на стенде).
+  window.addEventListener('click', function (e) {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }, true);
+  // Click после удержания приходит не всегда (iOS его иногда не шлёт) -
+  // флаг не должен «съесть» следующий настоящий тап.
+  ayahTextEl.addEventListener('pointerup', function () {
+    if (hold.fired) setTimeout(function () { swallowClick = false; }, 450);
+  });
+  ayahTextEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  // ── Отдельное чтение смысла ──
+  var mr = { s: 1, here: null, saveTimer: null, sentKey: '' };
+  function mrLocalPos() {
+    try {
+      var p = JSON.parse(localStorage.getItem(MPOS_KEY) || 'null');
+      if (p && p.s >= 1 && p.s <= 114 && p.a >= 1) return p;
+    } catch (e) {}
+    return null;
+  }
+  function mrTopAyah() {
+    var box = document.getElementById('mr-scroll');
+    var top = box.getBoundingClientRect().top;
+    var rows = document.querySelectorAll('#mr-text .mr-a');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getBoundingClientRect().bottom > top + 24) {
+        return { s: mr.s, a: parseInt(rows[i].getAttribute('data-a'), 10) };
+      }
+    }
+    return { s: mr.s, a: 1 };
+  }
+  function mrSave() {
+    var p = mrTopAyah(), now = Date.now();
+    p.t = now;
+    try { localStorage.setItem(MPOS_KEY, JSON.stringify(p)); } catch (e) {}
+    var key = p.s + ':' + p.a;
+    if (key === mr.sentKey) return;
+    mr.sentKey = key;
+    apiCall('/meaning_pos', { method: 'POST', quiet: true, body: { surah: p.s, ayah: p.a } })
+      .catch(function () { mr.sentKey = ''; });
+  }
+  function mrRender(at, here) {
+    mr.s = at.s;
+    var box = document.getElementById('mr-text'), scroll = document.getElementById('mr-scroll');
+    var row = surahRow(at.s), src = meaningSrc();
+    box.innerHTML = '<div class="mr-msg">' + T('mr_loading') + '</div>';
+    var prev = document.getElementById('mr-prev'), next = document.getElementById('mr-next');
+    prev.disabled = at.s <= 1; next.disabled = at.s >= 114;
+    // <bdi> - арабское имя изолировано от номера: без этого WebKit
+    // переставлял «20. طه» в «طه .20» (снимок 02.11.2026).
+    prev.innerHTML = at.s > 1 ? '‹ ' + (at.s - 1) + '. <bdi class="ar" dir="rtl">' + surahRow(at.s - 1)[1] + '</bdi>' : '';
+    next.innerHTML = at.s < 114 ? (at.s + 1) + '. <bdi class="ar" dir="rtl">' + surahRow(at.s + 1)[1] + '</bdi> ›' : '';
+    meaningSurah(src, at.s).then(function (t) {
+      if (mr.s !== at.s || meaningSrc() !== src) return;
+      var html = '<div class="mr-sura"><div class="ar">سُورَةُ ' + row[1] + '</div>' +
+        '<div class="num">' + T('mr_surah', { N: at.s }) + '</div></div>';
+      t.forEach(function (txt, i) {
+        if (here && here === i + 1) html += '<div class="mr-here" id="mr-here">' + T('mr_here') + '</div>';
+        html += '<div class="mr-a" data-a="' + (i + 1) + '"><span class="n">' + (i + 1) + '</span><span></span></div>';
+      });
+      if (at.s < 114) {
+        html += '<button type="button" class="mr-next" id="mr-next-surah">' + T('mr_next') + ': ' +
+          (at.s + 1) + '. <bdi dir="rtl">' + surahRow(at.s + 1)[1] + '</bdi></button>';
+      }
+      box.innerHTML = html;
+      // Текст перевода - через textContent: это данные, не разметка.
+      var spans = box.querySelectorAll('.mr-a span:last-child');
+      t.forEach(function (txt, i) { spans[i].textContent = txt; });
+      var target = at.a > 1 ? box.querySelector('[data-a="' + (here ? here : at.a) + '"]') : null;
+      var mark = document.getElementById('mr-here');
+      scroll.scrollTop = target ? (mark || target).offsetTop - 8 : 0;
+      if (mark) setTimeout(function () { mark.classList.add('gone'); }, 2500);
+      var ns = document.getElementById('mr-next-surah');
+      if (ns) ns.addEventListener('click', function () { mrRender({ s: at.s + 1, a: 1 }); mrSave(); });
+    }, function () {
+      if (mr.s !== at.s) return;
+      box.innerHTML = '<div class="mr-msg"></div>';
+      var msg = box.firstChild;
+      msg.textContent = T('mr_offline');
+      msg.addEventListener('click', function () { mrRender(at, here); });
+    });
+  }
+  function mrOpen() {
+    sheetClose();
+    document.getElementById('mreader').hidden = false;
+    mrMarkSeg();
+    var local = mrLocalPos();
+    var start = local || { s: 1, a: 1 };
+    mrRender(start, local && (local.s > 1 || local.a > 1) ? local.a : null);
+    trail('mread', { k: start.s + ':' + start.a });
+    // Сервер - место с другого устройства (Telegram/иконка). Новее - прыгаем.
+    apiCall('/meaning_pos', { quiet: true }).then(function (res) {
+      var d = res && res.status === 200 ? res.data : null;
+      if (!d || !d.surah || document.getElementById('mreader').hidden) return;
+      var st = Date.parse(d.updated_at || '') || 0;
+      if (local && local.t && local.t >= st) return;
+      if (local && local.s === d.surah && local.a === d.ayah) return;
+      mr.sentKey = d.surah + ':' + d.ayah;
+      mrRender({ s: d.surah, a: d.ayah }, d.surah > 1 || d.ayah > 1 ? d.ayah : null);
+    }).catch(function () {});
+  }
+  function mrClose() {
+    if (document.getElementById('mreader').hidden) return;
+    if (document.querySelector('#mr-text .mr-a')) mrSave();
+    document.getElementById('mreader').hidden = true;
+  }
+  document.getElementById('mr-scroll').addEventListener('scroll', function () {
+    clearTimeout(mr.saveTimer);
+    mr.saveTimer = setTimeout(mrSave, 1500);
+  }, { passive: true });
+  document.getElementById('mr-back').addEventListener('click', mrClose);
+  document.getElementById('mr-prev').addEventListener('click', function () {
+    if (mr.s > 1) { mrRender({ s: mr.s - 1, a: 1 }); mrSave(); }
+  });
+  document.getElementById('mr-next').addEventListener('click', function () {
+    if (mr.s < 114) { mrRender({ s: mr.s + 1, a: 1 }); mrSave(); }
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && !document.getElementById('mreader').hidden) mrSave();
+  });
+  document.getElementById('btn-meaning').addEventListener('click', mrOpen);
 
   // "Мои слова" - список (29.08.2026, см. модульный комментарий у
   // #view-mywords). Свой делегированный обработчик двойного тапа/клика -
@@ -13879,7 +14406,7 @@
         ['dash', 'Открой «Мусхаф»',
          'Заучивание сдаётся отсюда — там же, где ты читаешь.'],
         ['mushaf', 'Нажми 📖 наверху',
-         'Эта кнопка включает режим заучивания. Рядом 🔁 — она для повторения, не путай, и 📜 — смысловой перевод страницы.'],
+         'Эта кнопка включает режим заучивания. Рядом 🔁 — она для повторения, не путай, и 📜 — смысловой перевод: его читают отдельно, место запоминается само. А смысл одного аята — удержи на нём палец.'],
         ['pick', 'Первый раз — отметь своё место',
          'Приложение спросит, с какой строчки начинаешь. Внизу выбери, что заучиваешь: строку, половину листа или всю страницу. Потом тапни по самой строке.'],
         ['pointer', 'Место отмечено',

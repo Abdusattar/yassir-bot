@@ -69,7 +69,7 @@ from core.mufradat_bot import (
 )
 from core.mushaf_words import (
     add_starred_word, remove_starred_word, list_starred_words,
-    get_reading_bookmark, set_reading_bookmark,
+    get_reading_bookmark, set_reading_bookmark, get_meaning_pos, set_meaning_pos,
     get_hifz_pointer, set_hifz_pointer,
     get_hifz_progress, add_hifz_progress, set_hifz_progress, HIFZ_PROGRESS_TARGET,
     check_new_words_for_line, page_text_line_count, next_hifz_position,
@@ -633,6 +633,32 @@ async def handle_bookmark_set(request, user_id):
         return web.json_response({"error": "bad_page"}, status=400)
     set_reading_bookmark(user_id, page)
     return web.json_response({"page": page})
+
+
+# Самая длинная сура - аль-Бакара, 286 аятов. Точное число аятов клиент знает
+# из файла суры; серверу хватает границ, чтобы не писать мусор.
+_MAX_AYAH = 286
+
+
+@with_auth
+async def handle_meaning_pos_get(request, user_id):
+    """GET - место отдельного чтения смыслового перевода (📜, 02.11.2026)."""
+    return web.json_response(get_meaning_pos(user_id) or {})
+
+
+@with_auth
+async def handle_meaning_pos_set(request, user_id):
+    """POST {surah, ayah} - сохранить место чтения смысла. Не путать с 🔖 и
+    указателем заучивания - это отдельная закладка."""
+    try:
+        body = await request.json()
+        surah, ayah = int(body["surah"]), int(body["ayah"])
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+        return web.json_response({"error": "bad_pos"}, status=400)
+    if not (1 <= surah <= 114 and 1 <= ayah <= _MAX_AYAH):
+        return web.json_response({"error": "bad_pos"}, status=400)
+    updated = set_meaning_pos(user_id, surah, ayah)
+    return web.json_response({"surah": surah, "ayah": ayah, "updated_at": updated})
 
 
 def _hifz_unit_done(user_id, user, group, pointer):
@@ -2766,6 +2792,8 @@ def build_app():
     app.router.add_post("/api/muf/words/remove", handle_words_remove)
     app.router.add_get("/api/muf/bookmark", handle_bookmark_get)
     app.router.add_post("/api/muf/bookmark", handle_bookmark_set)
+    app.router.add_get("/api/muf/meaning_pos", handle_meaning_pos_get)
+    app.router.add_post("/api/muf/meaning_pos", handle_meaning_pos_set)
     app.router.add_get("/api/muf/hifz", handle_hifz_get)
     app.router.add_post("/api/muf/hifz", handle_hifz_set)
     app.router.add_get("/api/muf/layout", handle_layout_get)

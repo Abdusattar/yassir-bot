@@ -641,6 +641,42 @@ def get_reading_bookmark(user_id):
     return row[0] if row else None
 
 
+# Место отдельного чтения смыслового перевода (02.11.2026, 📜). Четвёртая
+# «закладка», и тоже своя: сура:аят верхнего аята на экране. С заучиванием
+# (mushaf_hifz_pointer) и 🔖 (mushaf_reading_bookmark) не связана никак -
+# решение пользователя: смысл читают каждый день, независимо от места
+# заучивания. На сервере, а не в localStorage: у Telegram и иконки на экране
+# «Домой» хранилища разные, место не должно теряться между ними.
+_MEANING_POS_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mushaf_meaning_pos(
+        user_id TEXT PRIMARY KEY,
+        surah INTEGER NOT NULL,
+        ayah INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+"""
+
+
+def set_meaning_pos(user_id, surah, ayah):
+    now = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_MEANING_POS_SCHEMA)
+        conn.execute(
+            "INSERT OR REPLACE INTO mushaf_meaning_pos (user_id, surah, ayah, updated_at) "
+            "VALUES (?,?,?,?)", (str(user_id), surah, ayah, now))
+    return now
+
+
+def get_meaning_pos(user_id):
+    """{surah, ayah, updated_at} или None, если ещё не читал."""
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_MEANING_POS_SCHEMA)
+        row = conn.execute(
+            "SELECT surah, ayah, updated_at FROM mushaf_meaning_pos WHERE user_id=?",
+            (str(user_id),)).fetchone()
+    return {"surah": row[0], "ayah": row[1], "updated_at": row[2]} if row else None
+
+
 # ── "Новые" слова в "Мои слова" (03.09.2026, пункт 7 старого макета 40+40)──
 # Стартовая страница заучивания - записывается РОВНО ОДИН РАЗ, на первый
 # вызов (INSERT OR IGNORE), и больше не трогается. В отличие от
