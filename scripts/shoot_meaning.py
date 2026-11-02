@@ -10,6 +10,7 @@
   toggle    - Кулиев -> Абу Адель меняет текст и переживает перезагрузку;
   reader    - 📜: прокрутил, вышел, перезагрузил - открылось на том же аяте;
   ky        - кыргызский интерфейс: кыргызский текст, переключателя нет.
+  close     - ✕ закрывает панель, перевод слова не открывается.
 Плюс снимки панели и чтения в светлой и тёмной теме - смотреть глазами.
 
 Жесты - настоящие касания через CDP (Chromium). В WebKit - те же сцены мышью:
@@ -126,11 +127,24 @@ def run(pw, engine, problems):
     pg.screenshot(path=str(OUT / f"{engine}_hold_light.png"))
     print(f"  {engine} hold: {st['ref']} | {st['text'][:70]}")
 
+    # Самая тесная шапка: длинное имя суры и 2:286 - строка не вылезает.
+    over = pg.evaluate("""() => { var r=document.getElementById('as-ref'), keep=r.innerHTML;
+        r.innerHTML='<bdi class="ar" dir="rtl">المنافقون</bdi> 2:286';
+        var h=document.querySelector('#ayah-sheet .as-head'), d=h.scrollWidth-h.clientWidth;
+        r.innerHTML=keep; return d; }""")
+    if over > 0:
+        say(f"шапка панели вылезает на {over}px")
     pg.click("#as-seg button[data-mtr=ru_abuadel]"); pg.wait_for_timeout(500)
     abu = pg.evaluate(STATE)["text"]
     if abu == st["text"] or not abu.strip():
         say("toggle: текст не сменился")
     pg.screenshot(path=str(OUT / f"{engine}_hold_abuadel.png"))
+    pg.click("#as-close"); pg.wait_for_timeout(400)
+    st = pg.evaluate(STATE)
+    if st["sheet"] or st["popup"]:
+        say(f"✕: панель {st['sheet']}, перевод слова {st['popup']}")
+    pg.wait_for_timeout(2500)
+    f.press(x, y, 700); pg.wait_for_timeout(700)
     pg.click("#ayah-sheet-dim", position={"x": 195, "y": 60}); pg.wait_for_timeout(400)
     if pg.evaluate(STATE)["sheet"]:
         say("тап по листу не закрыл панель")

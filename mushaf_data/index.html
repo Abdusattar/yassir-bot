@@ -1288,18 +1288,20 @@
   @media (orientation: landscape) and (max-height: 500px) { #ayah-sheet { max-height: 78vh; } }
   @keyframes as-up { from { transform: translateY(24px); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { #ayah-sheet { animation: none; } }
-  #as-grab {
-    display: block; width: 100%; height: 22px; padding: 0; border: 0;
-    background: none; cursor: pointer;
-  }
-  #as-grab::before {
-    content: ""; display: block; width: 38px; height: 4px; margin: 0 auto;
-    border-radius: 2px; background: color-mix(in srgb, var(--muted) 45%, transparent);
+  /* ✕ вместо полоски-ручки (02.11.2026, frontend-design): полоска во всех
+     телефонах значит «потяни вниз», а смахивания нет - в Telegram оно
+     сворачивает всё приложение. Вид - как у #surah-close; значок спокойный,
+     а область нажатия 40×40. */
+  #as-close {
+    flex: none; width: 40px; height: 40px; margin: -6px -10px -6px 0;
+    background: none; border: none; font-size: 17px; line-height: 1;
+    color: var(--muted); cursor: pointer; font-family: inherit;
   }
   .as-head {
     display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; padding: 0 16px 10px;
+    gap: 10px; padding: 14px 16px 10px;
   }
+  .as-head .as-tools { display: flex; align-items: center; gap: 8px; }
   .as-ref { color: var(--marker-color); font-weight: 600; font-size: 14px; white-space: nowrap; }
   .as-ref .ar { font-family: 'Scheherazade New', serif; font-size: 19px; font-weight: 400; margin-right: 6px; }
   #as-text {
@@ -3851,10 +3853,12 @@
      чтение со своей закладкой. JS - «Смысловой перевод» ниже. -->
 <div id="ayah-sheet-dim" hidden></div>
 <div id="ayah-sheet" hidden role="dialog" aria-modal="true">
-  <button id="as-grab" type="button" data-i18n-title="mr_close" title="Закрыть"></button>
   <div class="as-head">
     <span class="as-ref" id="as-ref"></span>
-    <span class="mr-seg" id="as-seg"><button type="button" data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+    <span class="as-tools">
+      <span class="mr-seg" id="as-seg"><button type="button" data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+      <button id="as-close" type="button" data-i18n-title="mr_close" title="Закрыть" aria-label="Закрыть">✕</button>
+    </span>
   </div>
   <div id="as-text" class="mr-serif"></div>
   <div class="as-foot">
@@ -10273,7 +10277,7 @@
     });
   }
   document.getElementById('ayah-sheet-dim').addEventListener('click', sheetClose);
-  document.getElementById('as-grab').addEventListener('click', sheetClose);
+  document.getElementById('as-close').addEventListener('click', sheetClose);
   document.getElementById('as-prev').addEventListener('click', function () { sheetStep(-1); });
   document.getElementById('as-next').addEventListener('click', function () { sheetStep(1); });
 
