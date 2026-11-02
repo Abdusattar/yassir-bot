@@ -13,6 +13,8 @@
     ... --groups task:j              группам, где есть задание (j, n, h...)
     ... --type task                  «Новое задание» вместо «Объявление»
     ... --no-board                   только в группы, без доски важного (06.10.2026)
+    ... --photo /tmp/shot.png        картинка, текст - подписью к ней (02.11.2026;
+                                     подпись Telegram - до 1024 символов)
     ... --send                       отправить на самом деле
 """
 import argparse
@@ -27,7 +29,7 @@ sys.path.insert(0, str(ROOT))
 import core.db as db                                   # noqa: E402
 from core.feed import important                        # noqa: E402
 from core.db import bot_leads_group                   # noqa: E402
-from core.tg import send_message                       # noqa: E402
+from core.tg import send_message, send_photo           # noqa: E402
 
 
 def pick_groups(spec):
@@ -59,6 +61,7 @@ async def main():
     ap.add_argument("--type", default="announce", choices=("announce", "task"))
     ap.add_argument("--title", default=None, help="строка для доски (по умолчанию первая строка текста)")
     ap.add_argument("--no-board", action="store_true", help="не вешать на доску важного")
+    ap.add_argument("--photo", default=None, help="картинка; текст уходит подписью к ней")
     ap.add_argument("--send", action="store_true")
     args = ap.parse_args()
     if args.until:
@@ -66,24 +69,36 @@ async def main():
     text = pathlib.Path(args.text_file).read_text(encoding="utf-8").strip()
     if not text:
         raise SystemExit("пустой текст")
+    if args.photo:
+        if not pathlib.Path(args.photo).is_file():
+            raise SystemExit("нет картинки: " + args.photo)
+        if len(text) > 1024:
+            raise SystemExit("подпись к картинке длиннее 1024 символов: %d" % len(text))
     db.init()
     groups = pick_groups(args.groups)
     print("тип: %s · висит до: %s · групп: %d" % (
         args.type, "без доски" if args.no_board else (args.until or "+2 дня"), len(groups)))
     for g in groups:
         print("  -", g["title"])
+    if args.photo:
+        print("картинка:", args.photo)
     print("-" * 40)
     print(text)
     print("-" * 40)
     if not args.send:
         print("НЕ отправлено: это просмотр. Для отправки добавь --send")
         return
+    async def deliver(chat_id):
+        if args.photo:
+            return await send_photo(chat_id, args.photo, caption=text)
+        return await send_message(chat_id, text)
+
     for g in groups:
         if args.no_board:
-            res = await send_message(g["chat_id"], text)
+            res = await deliver(g["chat_id"])
         else:
             with important(args.type, until=args.until, title=args.title):
-                res = await send_message(g["chat_id"], text)
+                res = await deliver(g["chat_id"])
         print("  %s: %s" % (g["title"], "ок" if res and res.get("ok") else "НЕ ДОШЛО"))
         await asyncio.sleep(0.4)
 
