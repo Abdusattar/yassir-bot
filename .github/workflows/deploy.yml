@@ -60,6 +60,8 @@ jobs:
             # Листы раскладки Дар аль-Маариф (23.09.2026) - одной ссылкой на
             # папку, как audio/ и onboarding/.
             [ -e /var/www/yassir-app/dm ] || ln -s ~/yassir-bot/mushaf_data/dm /var/www/yassir-app/dm
+            # Смысловой перевод по сурам (02.11.2026) - так же, ссылкой на папку.
+            [ -e /var/www/yassir-app/meaning ] || ln -s ~/yassir-bot/mushaf_data/meaning /var/www/yassir-app/meaning
             sudo systemctl restart yassir-bot
             # Женский бот - в том же деплое (23.09.2026). Раньше его
             # перезапускали руками, и однажды он неделю крутил код от 26.07:
