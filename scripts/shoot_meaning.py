@@ -126,7 +126,7 @@ def run(pw, engine, problems):
     pg.screenshot(path=str(OUT / f"{engine}_hold_light.png"))
     print(f"  {engine} hold: {st['ref']} | {st['text'][:70]}")
 
-    pg.click("#as-seg button[data-tr=ru_abuadel]"); pg.wait_for_timeout(500)
+    pg.click("#as-seg button[data-mtr=ru_abuadel]"); pg.wait_for_timeout(500)
     abu = pg.evaluate(STATE)["text"]
     if abu == st["text"] or not abu.strip():
         say("toggle: текст не сменился")
@@ -203,6 +203,40 @@ def run(pw, engine, problems):
     pg.wait_for_timeout(3000)
     pg.screenshot(path=str(OUT / f"{engine}_reader_here_gone.png"))
     ctx.close()
+
+    # Android: contextmenu раньше таймера (~400 мс) - панель сразу, не ждём 500 мс.
+    ctx, pg, errors, posts = open_app(b, engine, touch=False)
+    x, y = word_xy(pg)
+    pg.mouse.move(x, y); pg.mouse.down(); pg.wait_for_timeout(150)
+    pg.evaluate("(function(x,y){var el=document.elementFromPoint(x,y);"
+                "el.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:x,clientY:y}));})"
+                "(%d,%d)" % (x, y))
+    pg.wait_for_timeout(120)
+    early = pg.evaluate(STATE)["sheet"]
+    pg.mouse.up(); pg.wait_for_timeout(700)
+    st = pg.evaluate(STATE)
+    if not early or not st["sheet"] or st["popup"]:
+        say(f"android contextmenu: сразу {early}, потом {st['sheet']}, перевод слова {st['popup']}")
+    ctx.close()
+
+    # Лёжа (= «Крупно» в заучивании): панель.
+    b2ctx = b.new_context(viewport={"width": 844, "height": 390}, device_scale_factor=2,
+                          has_touch=(engine == "chromium"))
+    b2ctx.add_init_script("try{localStorage.setItem('yassir_mushaf_page','%d')}catch(e){}" % PAGE)
+    pg = b2ctx.new_page()
+    pg.goto(f"http://127.0.0.1:{land.PORT}/new?bot=male"); pg.wait_for_timeout(2500)
+    pg.evaluate("document.getElementById('dash-mushaf').click()")
+    pg.wait_for_function("document.querySelectorAll('#ayah-text [data-ma]').length > 0", timeout=20000)
+    pg.wait_for_timeout(2200)
+    f = Finger(pg, engine)
+    x, y = word_xy(pg, "#ayah-text .mushaf-line:nth-child(1) [data-ma]")
+    f.press(x, y, 700); pg.wait_for_timeout(700)
+    if not pg.evaluate(STATE)["sheet"]:
+        say("лёжа: панель не открылась")
+    pg.screenshot(path=str(OUT / f"{engine}_hold_land.png"))
+    pg.click("#ayah-sheet-dim", position={"x": 420, "y": 30}); pg.wait_for_timeout(300)
+    # «Крупно» с 22.09 - это сам лист лёжа (#hifz-big не открывается), проверено выше.
+    b2ctx.close()
 
     # Тёмная тема и кыргызский.
     ctx, pg, errors, posts = open_app(b, engine, theme="dark")

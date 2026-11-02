@@ -1284,6 +1284,8 @@
     animation: as-up 0.18s ease-out;
   }
   #ayah-sheet[hidden], #ayah-sheet-dim[hidden] { display: none; }
+  /* Лёжа экран низкий: 55% - это три строки перевода, Абу Аделю тесно. */
+  @media (orientation: landscape) and (max-height: 500px) { #ayah-sheet { max-height: 78vh; } }
   @keyframes as-up { from { transform: translateY(24px); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { #ayah-sheet { animation: none; } }
   #as-grab {
@@ -3834,8 +3836,8 @@
   <div class="s-card" id="sett-mtr-card">
     <label class="s-lab" data-i18n="mr_title">Смысловой перевод</label>
     <div class="s-seg" id="sett-mtr">
-      <button data-tr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button>
-      <button data-tr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button>
+      <button data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button>
+      <button data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button>
     </div>
     <p class="s-hint" data-i18n="mr_sett_hint">Его можно переключить и прямо в окне перевода.</p>
   </div>
@@ -3852,7 +3854,7 @@
   <button id="as-grab" type="button" data-i18n-title="mr_close" title="Закрыть"></button>
   <div class="as-head">
     <span class="as-ref" id="as-ref"></span>
-    <span class="mr-seg" id="as-seg"><button type="button" data-tr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-tr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+    <span class="mr-seg" id="as-seg"><button type="button" data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
   </div>
   <div id="as-text" class="mr-serif"></div>
   <div class="as-foot">
@@ -3863,7 +3865,7 @@
 <div id="mreader" hidden>
   <div class="mr-bar">
     <button type="button" id="mr-back" data-i18n="mr_back">← Мусхаф</button>
-    <span class="mr-seg" id="mr-seg"><button type="button" data-tr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-tr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+    <span class="mr-seg" id="mr-seg"><button type="button" data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
   </div>
   <div id="mr-scroll"><div id="mr-text" class="mr-serif"></div></div>
   <div class="mr-nav">
@@ -10184,7 +10186,7 @@
     document.getElementById('sett-mtr-card').hidden = !ru;
     Array.prototype.forEach.call(
       document.querySelectorAll('#as-seg button, #mr-seg button, #sett-mtr button'),
-      function (b) { b.classList.toggle('on', b.getAttribute('data-tr') === mtrRu); });
+      function (b) { b.classList.toggle('on', b.getAttribute('data-mtr') === mtrRu); });
   }
   function setMtr(tr) {
     if (tr !== 'ru_abuadel') tr = 'ru_kuliev';
@@ -10199,7 +10201,7 @@
   ['as-seg', 'mr-seg', 'sett-mtr'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', function (e) {
       var b = e.target.closest('button');
-      if (b) setMtr(b.getAttribute('data-tr'));
+      if (b) setMtr(b.getAttribute('data-mtr'));
     });
   });
   mrMarkSeg();
@@ -10207,11 +10209,12 @@
   // ── Панель аята ──
   var sheetAt = null;   // {s, a}
   function sheetHighlight() {
-    Array.prototype.forEach.call(document.querySelectorAll('#ayah-text .ma-hl'),
+    Array.prototype.forEach.call(document.querySelectorAll('#ayah-text .ma-hl, #hifz-big-words .ma-hl'),
       function (el) { el.classList.remove('ma-hl'); });
     if (!sheetAt) return;
     Array.prototype.forEach.call(
-      document.querySelectorAll('#ayah-text [data-ma="' + sheetAt.s + ':' + sheetAt.a + '"]'),
+      document.querySelectorAll('#ayah-text [data-ma="' + sheetAt.s + ':' + sheetAt.a + '"], ' +
+        '#hifz-big-words [data-ma="' + sheetAt.s + ':' + sheetAt.a + '"]'),
       function (el) { el.classList.add('ma-hl'); });
   }
   function sheetShow() {
@@ -10274,45 +10277,66 @@
   document.getElementById('as-prev').addEventListener('click', function () { sheetStep(-1); });
   document.getElementById('as-next').addEventListener('click', function () { sheetStep(1); });
 
-  // ── Жест удержания на листе ──
+  // ── Жест удержания: лист и «Крупно» в заучивании ──
   // Pointer events: на тачскрине прокрутка листа сама шлёт pointercancel
   // (touch-action: pan-y), сдвиг пальца больше 10px отменяет удержание.
-  var hold = { timer: null, x: 0, y: 0, id: null, fired: false }, swallowClick = false;
-  var ayahTextEl = document.getElementById('ayah-text');
+  // Android (Chrome, WebView Telegram) ловит долгое нажатие сам, около
+  // 400 мс - раньше нашего таймера - и шлёт contextmenu, часто вместе с
+  // pointercancel. Поэтому contextmenu над аятом срабатывает сразу, тем же
+  // путём, что таймер, а повтор (таймер после contextmenu) ничего не делает.
+  var hold = { timer: null, x: 0, y: 0, id: null, fired: false, ma: null }, swallowClick = false;
   function holdCancel() {
     if (hold.timer) { clearTimeout(hold.timer); hold.timer = null; }
   }
-  ayahTextEl.addEventListener('pointerdown', function (e) {
+  function holdFire() {
+    if (hold.fired || !hold.ma) return;
     holdCancel();
-    hold.fired = false;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (!e.isPrimary || review.on) return;
-    var el = e.target.closest ? e.target.closest('[data-ma]') : null;
-    if (!el) return;
-    var ma = el.getAttribute('data-ma').split(':');
-    hold.x = e.clientX; hold.y = e.clientY; hold.id = e.pointerId;
-    hold.timer = setTimeout(function () {
-      hold.timer = null;
-      hold.fired = true;
-      swallowClick = true;
-      // Устаревший тап-таймер перевода слова не должен сработать поверх.
-      if (typeof wordTapTimer !== 'undefined' && wordTapTimer) {
-        clearTimeout(wordTapTimer); wordTapTimer = null; wordTapTarget = null;
-      }
-      if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e2) {} }
-      sheetOpen(parseInt(ma[0], 10), parseInt(ma[1], 10));
-    }, MEANING_HOLD_MS);
-  });
-  ayahTextEl.addEventListener('pointermove', function (e) {
-    if (!hold.timer || e.pointerId !== hold.id) return;
-    if (Math.abs(e.clientX - hold.x) > 10 || Math.abs(e.clientY - hold.y) > 10) holdCancel();
-  });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
-    ayahTextEl.addEventListener(ev, holdCancel);
-  });
-  ayahTextEl.addEventListener('touchstart', function (e) {
-    if (e.touches.length > 1) holdCancel();     // второй палец - масштаб, не удержание
-  }, { passive: true });
+    hold.fired = true;
+    swallowClick = true;
+    // Устаревший тап-таймер перевода слова не должен сработать поверх.
+    if (typeof wordTapTimer !== 'undefined' && wordTapTimer) {
+      clearTimeout(wordTapTimer); wordTapTimer = null; wordTapTarget = null;
+    }
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e2) {} }
+    sheetOpen(hold.ma[0], hold.ma[1]);
+  }
+  function holdRelease() {
+    holdCancel();
+    // Click после удержания приходит не всегда (iOS его иногда не шлёт) -
+    // флаг не должен «съесть» следующий настоящий тап.
+    if (hold.fired) setTimeout(function () { swallowClick = false; }, 450);
+  }
+  function holdAttach(el) {
+    el.addEventListener('pointerdown', function (e) {
+      holdCancel();
+      hold.fired = false; hold.ma = null;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (!e.isPrimary || review.on) return;
+      var w = e.target.closest ? e.target.closest('[data-ma]') : null;
+      if (!w) return;
+      var ma = w.getAttribute('data-ma').split(':');
+      hold.ma = [parseInt(ma[0], 10), parseInt(ma[1], 10)];
+      hold.x = e.clientX; hold.y = e.clientY; hold.id = e.pointerId;
+      hold.timer = setTimeout(holdFire, MEANING_HOLD_MS);
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!hold.timer || e.pointerId !== hold.id) return;
+      if (Math.abs(e.clientX - hold.x) > 10 || Math.abs(e.clientY - hold.y) > 10) holdCancel();
+    });
+    el.addEventListener('pointerup', holdRelease);
+    el.addEventListener('pointercancel', holdRelease);
+    el.addEventListener('pointerleave', holdCancel);
+    el.addEventListener('touchstart', function (e) {
+      if (e.touches.length > 1) holdCancel();     // второй палец - масштаб, не удержание
+    }, { passive: true });
+    el.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      if (hold.timer) holdFire();                 // Android: долгое нажатие раньше таймера
+    });
+  }
+  var ayahTextEl = document.getElementById('ayah-text');
+  holdAttach(ayahTextEl);
+  holdAttach(document.getElementById('hifz-big-words'));
   document.getElementById('page-wrap').addEventListener('scroll', holdCancel, { passive: true });
   // Гасим click после удержания - в фазе захвата, раньше всех обработчиков
   // (перевод слова, двойной тап, выбор строки в заучивании). На документе,
@@ -10324,12 +10348,6 @@
     e.stopImmediatePropagation();
     e.preventDefault();
   }, true);
-  // Click после удержания приходит не всегда (iOS его иногда не шлёт) -
-  // флаг не должен «съесть» следующий настоящий тап.
-  ayahTextEl.addEventListener('pointerup', function () {
-    if (hold.fired) setTimeout(function () { swallowClick = false; }, 450);
-  });
-  ayahTextEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   // ── Отдельное чтение смысла ──
   var mr = { s: 1, here: null, saveTimer: null, sentKey: '' };
@@ -10689,9 +10707,14 @@
      иногда забыл — хочется глянуть перевод, не выходя»). */
   function hifzBigWord(token, foreign) {
     var tr = token.translation ? ' data-tr="' + escapeAttr(token.translation) + '"' : '';
-    var glyph = foreign ? (token.html || '') : (token.code_v4 || token.html);
-    var cls = foreign ? 'tail-plain' : v4Cls(token);
-    return '<span class="' + cls + '"' + tr + '>' + glyph + '</span>';
+    // data-ma - удержание открывает смысл аята и в «Крупно» (02.11.2026).
+    var ma = token.surah ? ' data-ma="' + token.surah + ':' + token.ayah + '"' : '';
+    // Шрифт листа не загрузился (data-plain) - глифы V4 здесь были бы чужими
+    // словами, как на самом листе: обычный текст.
+    var plain = foreign || document.getElementById('ayah-text').hasAttribute('data-plain');
+    var glyph = plain ? String(token.html || '').replace(/<[^>]*>/g, '') : (token.code_v4 || token.html);
+    var cls = foreign ? 'tail-plain' : (plain ? '' : v4Cls(token));
+    return '<span class="' + cls + '"' + ma + tr + '>' + glyph + '</span>';
   }
 
   function hifzTailTokens(lineIdx) {
