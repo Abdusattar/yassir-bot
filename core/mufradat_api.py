@@ -1972,6 +1972,9 @@ async def handle_my_month(request, user_id):
         # Онлайн-урок (14.09.2026): точки в своём месяце и строка «Я был».
         "lessons": get_lesson_dates(user["id"], group["id"], request.query.get("month")),
         "lesson": lesson_attendance_status(user["id"], group["id"]),
+        # Узр кнопкой и пауза «Цикл» (03.11.2026, core/absence.py).
+        "absence": _absence_payload(user["id"], group),
+        "pauses": _month_pauses(user["id"], group["id"], request.query.get("month")),
         # Сколько заданий в полном дне у ЭТОГО студента (у хафиза без
         # заучивания) - приложение по нему решает, какой день неполный и
         # отвечает на тап мини-отчётом (07.10.2026).
@@ -1983,6 +1986,74 @@ async def handle_my_month(request, user_id):
     if group["group_type"] == "prep":
         payload["prep"] = prep_progress(user["id"], group["id"])
     return web.json_response(payload)
+
+
+def _month_pauses(student_id, group_id, month=None):
+    from core.absence import pause_dates
+    from core.db import _month_range
+    start, nxt = _month_range(month or get_date()[:7])
+    return pause_dates(student_id, group_id, start, nxt)
+
+
+def _absence_payload(uid, group):
+    """Карточка «Не могу сегодня» в «Работе с устазом» (03.11.2026):
+    узр - всем, «Цикл» - только сёстрам (решает сервер, не клиент)."""
+    from core import absence
+    return {
+        "excuse": absence.excuse_status(uid, group["id"]),
+        # В подготовительной паузы нет (03.11.2026): там свой срок (≥5 полных
+        # дней за PREP_DAYS), пауза его не сдвигает - решение за пользователем.
+        "cycle_allowed": bool(config.IS_FEMALE) and (group["group_type"] or "relaxed") != "prep",
+        "pause": absence.pause_status(uid),
+    }
+
+
+@with_auth
+async def handle_absence_excuse(request, user_id):
+    """POST {reason} - узр из приложения. Правило то же, что у «узр» текстом
+    (core/absence.py apply_excuse), и ответ в группу тот же: устаз видит узр
+    там, где привык."""
+    from core import absence
+    from core.handlers import excuse_reply
+    user = find_user_by_phone(user_id)
+    group = get_learning_group(user_id, include_prep=True)
+    if not user or not group:
+        return web.json_response({"error": "no_group"}, status=400)
+    if absence.active_pause(user["id"]):
+        return web.json_response({"error": "paused"}, status=409)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    reason = str((body or {}).get("reason") or "").strip()[:300]
+    result = absence.apply_excuse(user["id"], group["id"], reason or None)
+    if result == "ok" and group["chat_id"]:
+        from core.tg import send_message
+        try:
+            # Причину в группу не пишем: её видит устаз в разборе дня
+            # (календарь), а группе достаточно «узр принят».
+            text = excuse_reply(user["name"], result) + " (через YassirApp)"
+            await send_message(group["chat_id"], text)
+        except Exception as e:
+            log.error("excuse notify error: %s: %s", type(e).__name__, e)
+    return web.json_response({"result": result, "absence": _absence_payload(user["id"], group)})
+
+
+@with_auth
+async def handle_absence_cycle(request, user_id):
+    """POST - пауза «Цикл». Только женский бот; в группу ничего не пишем."""
+    from core import absence
+    if not config.IS_FEMALE:
+        return web.json_response({"error": "not_allowed"}, status=403)
+    user = find_user_by_phone(user_id)
+    group = get_learning_group(user_id, include_prep=True)
+    if not user or not group:
+        return web.json_response({"error": "no_group"}, status=400)
+    if (group["group_type"] or "relaxed") == "prep":
+        return web.json_response({"error": "not_allowed"}, status=403)
+    absence.start_pause(user["id"], group["id"])
+    return web.json_response({"absence": _absence_payload(user["id"], group),
+                              "pauses": _month_pauses(user["id"], group["id"])})
 
 
 @with_auth
@@ -2056,6 +2127,8 @@ async def handle_ustaz_student(request, user_id):
         # Снять ошибочную отметку урока - устаз этой группы или супер-админ.
         "can_edit_lessons": group_id in [g["id"] for g in visible],
         "days": get_student_month_days(student_id, group_id, request.query.get("month")),
+        # Дни паузы «Цикл» - пунктиром в календаре (03.11.2026), без подробностей.
+        "pauses": _month_pauses(student_id, group_id, request.query.get("month")),
         "threshold": group_miss_threshold(group["group_type"] if group else None),
         "month": request.query.get("month") or get_date()[:7],
         "today": get_date(),
@@ -2816,6 +2889,8 @@ def build_app():
     app.router.add_get("/api/muf/day", handle_my_day)
     app.router.add_get("/api/muf/ustaz/day", handle_ustaz_day)
     app.router.add_post("/api/muf/lesson/mark", handle_lesson_mark)
+    app.router.add_post("/api/muf/absence/excuse", handle_absence_excuse)
+    app.router.add_post("/api/muf/absence/cycle", handle_absence_cycle)
     app.router.add_get("/api/muf/ustaz/students", handle_ustaz_students)
     app.router.add_get("/api/muf/ustaz/student", handle_ustaz_student)
     app.router.add_post("/api/muf/ustaz/lesson/remove", handle_ustaz_lesson_remove)

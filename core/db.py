@@ -408,6 +408,9 @@ def init():
     # Лекции по группам (17.09.2026) - таблицы и разовый перенос.
     from core import curriculum
     curriculum.init()
+    # Узр кнопкой и пауза «Цикл» (03.11.2026) - core/absence.py.
+    from core import absence
+    absence.init()
 
 
 def _run_migrations(c):
@@ -2053,16 +2056,24 @@ def cancel_task_on(student_id, group_id, date, task_code, by=None, why=None):
             (student_id, group_id, date, task_code), by, why) > 0
 
 
-def save_report(uid, group_id, date, tasks_done):
+def save_report(uid, group_id, date, tasks_done, closes_pause=True):
+    """closes_pause=False - зачёт не от самого студента «сейчас» (устаз
+    принял старую запись): паузу «Цикл» он не закрывает (core/absence.py)."""
+    inserted = 0
     with db() as c:
         for key in ("m", "r", "t", "j", "n", "h"):
             if tasks_done.get(key):
-                c.execute(
+                cur = c.execute(
                     "INSERT OR IGNORE INTO score_events"
                     "(student_id,group_id,date,category,subcategory,points)"
                     " VALUES(?,?,?,'task',?,1)",
                     (uid, group_id, date, key)
                 )
+                inserted += cur.rowcount
+    # Новая сдача закрывает паузу (дубль Telegram - 0 строк - не закрывает).
+    if inserted and closes_pause:
+        from core import absence
+        absence.on_task_saved(uid, date)
 
 
 def student_ids_with_tasks_since(date_str):
@@ -3051,6 +3062,14 @@ def get_group_month_progress(group_id, month=None):
         by_student.setdefault(r["student_id"], {})[r["date"]] = r["n"]
 
     lesson_dates = get_group_lesson_dates(group_id, month)
+    # Дни паузы «Цикл» (03.11.2026) - одним запросом, как точки урока.
+    with db() as c:
+        pause_rows = c.execute(
+            "SELECT student_id, date FROM score_events WHERE group_id=? AND category='pause'"
+            " AND date>=? AND date<? ORDER BY date", (group_id, month_start, nxt)).fetchall()
+    pause_dates_by = {}
+    for r in pause_rows:
+        pause_dates_by.setdefault(r["student_id"], []).append(r["date"])
     out = []
     for st in students:
         detail = get_skip_count_month_detail(st["id"], group_id) or {}
@@ -3065,6 +3084,7 @@ def get_group_month_progress(group_id, month=None):
             # «пропущено уроков» читал таблицу online_lessons, которую не
             # заполняют с 29.06 - он всегда был нулём и не показывался.
             "lesson_days": lesson_dates.get(st["id"], []),
+            "pause_days": pause_dates_by.get(st["id"], []),
         })
     # Кому нужна помощь - тот выше: сортируем по пропускам, а не по алфавиту.
     out.sort(key=lambda x: (-x["missed"], x["name"]))
@@ -3305,6 +3325,10 @@ def get_streak_days(uid, group_id, group_tasks, for_date=None):
     там день уже закончился по определению."""
     tz = pytz.timezone(TZ)
     dates = _full_task_dates(uid, group_id, group_tasks) | prior_full_dates(uid, group_id)
+    # Пауза «Цикл» (03.11.2026, core/absence.py): её дни серию не рвут и не
+    # растят - исключение из строгого правила серии (wiki/streak).
+    from core.absence import pause_dates
+    paused = set(pause_dates(uid)) - dates
     anchor = datetime.strptime(for_date, "%Y-%m-%d").date() if for_date else _study_now(uid).date()
     if for_date is None and anchor.isoformat() not in dates:
         anchor -= timedelta(days=1)
@@ -3313,6 +3337,8 @@ def get_streak_days(uid, group_id, group_tasks, for_date=None):
         day = (anchor - timedelta(days=i)).isoformat()
         if day in dates:
             streak += 1
+        elif day in paused:
+            continue
         else:
             break
     return streak
@@ -3374,7 +3400,13 @@ def get_group_streaks(group_id, group_tasks, for_date=None):
             result[sid] = ends[yesterday.isoformat()]
     # У хафиза полный день - без заучивания; запрос выше меряет всех по всем
     # заданиям группы, поэтому хафизов (их единицы) пересчитываем по одному.
-    for sid in hafiz_ids(group_id):
+    # Хафизы и те, у кого была пауза «Цикл» (дни паузы - мост в серии, см.
+    # get_streak_days) - тоже по одному: их единицы.
+    with db() as c:
+        had_pause = {r["student_id"] for r in c.execute(
+            "SELECT DISTINCT student_id FROM score_events WHERE group_id=? AND category='pause'",
+            (group_id,)).fetchall()}
+    for sid in hafiz_ids(group_id) | had_pause:
         streak = get_streak_days(sid, group_id, group_tasks, for_date)
         if streak:
             result[sid] = streak
@@ -3467,9 +3499,10 @@ def get_missing_students(group_id, group_tasks, date=None):
     result = []
     with db() as c:
         for s in students:
+            # Узр или пауза «Цикл» (03.11.2026) - напоминать не о чем.
             has_excuse = c.execute(
                 "SELECT 1 FROM score_events"
-                " WHERE student_id=? AND group_id=? AND date=? AND category='excuse' LIMIT 1",
+                " WHERE student_id=? AND group_id=? AND date=? AND category IN ('excuse','pause') LIMIT 1",
                 (s["id"], group_id, check_date)
             ).fetchone()
             if has_excuse:
@@ -3608,6 +3641,11 @@ def get_daily_task_counts(group_id, group_tasks, for_date):
     task_map = {}
     for r in task_rows:
         task_map.setdefault(r["student_id"], set()).add(r["subcategory"])
+    # Пауза «Цикл» (03.11.2026): в утренней сводке её нет совсем - ни узром,
+    # ни несдачей. Сводка уходит в общую группу, а это группе не видно.
+    from core.absence import paused_ids
+    paused = paused_ids(group_id, for_date)
+    students = [s for s in students if s["id"] not in paused or s["id"] in task_map]
     return [
         {"id": s["id"], "name": s["name"],
          "done": sum(1 for k in group_tasks if k in task_map.get(s["id"], set())),
@@ -4412,6 +4450,11 @@ def format_daily_report(group_id, group_title, group_tasks, for_date=None, submi
     task_map = {}
     for r in task_rows:
         task_map.setdefault(r["student_id"], set()).add(r["subcategory"])
+    # Пауза «Цикл» (03.11.2026): строки сестры в отчёте группы нет вообще -
+    # ни «❌ 0/3», ни «узр». Группе это не видно.
+    from core.absence import paused_ids
+    paused = paused_ids(group_id, for_date)
+    students = [s for s in students if s["id"] not in paused or s["id"] in task_map]
 
     total_tasks = len(group_tasks)
     legend = "  ".join(DEFAULT_TASKS[k] for k in group_tasks)
@@ -4738,7 +4781,7 @@ def set_revision_verdict(rec_id, verdict, by_phone):
         cancel_task_on(rec["student_id"], rec["group_id"], rec["date"], "r",
                        by=by_phone, why="запись повторения отвергнута")
     elif verdict == REVISION_ACCEPTED:
-        save_report(rec["student_id"], rec["group_id"], rec["date"], {"r": True})
+        save_report(rec["student_id"], rec["group_id"], rec["date"], {"r": True}, closes_pause=False)
     rec["verdict"] = verdict
     return rec
 

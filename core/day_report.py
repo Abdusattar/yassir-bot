@@ -118,6 +118,7 @@ def day_report(student_id, group_id, date_str, phone=None):
     done_at = {}
     excuse = None
     lesson = False
+    pause = False
     for e in events:
         if e["category"] == "task":
             done_at.setdefault(e["subcategory"], _local_hhmm(e["created_at"], tz))
@@ -125,6 +126,10 @@ def day_report(student_id, group_id, date_str, phone=None):
             excuse = e["note"] or ""
         elif e["category"] == "attendance" and e["subcategory"] == "online":
             lesson = True
+        elif e["category"] == "pause":
+            # Пауза «Цикл» (03.11.2026): и студентке, и устазу - одно слово
+            # «пауза», без подробностей.
+            pause = True
 
     tasks = []
     for k in keys:
@@ -175,5 +180,5 @@ def day_report(student_id, group_id, date_str, phone=None):
             if len(trail) >= _TRAIL_MAX:
                 break
 
-    return {"date": date_str, "tasks": tasks, "excuse": excuse, "lesson": lesson, "trail": trail,
-            "trail_ev": trail_ev}
+    return {"date": date_str, "tasks": tasks, "excuse": excuse, "lesson": lesson, "pause": pause,
+            "trail": trail, "trail_ev": trail_ev}

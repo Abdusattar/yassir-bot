@@ -415,7 +415,18 @@ _yassir_answer_times: dict = {}
 # пользователя после разбора реального кейса - Изат, G-2c, 6 дней подряд
 # голым словом "Узр" без причины). После лимита день не засчитывается узром
 # и не даёт балл - считается обычным пропуском.
-EXCUSE_MONTHLY_LIMIT = 3
+from core.absence import EXCUSE_MONTHLY_LIMIT, apply_excuse   # 03.11.2026: одно правило с кнопкой в приложении
+
+
+def excuse_reply(name, result):
+    """Ответ в группу на узр - тот же текст и для «узр» текстом, и для
+    кнопки в приложении (03.11.2026)."""
+    if result == "already":
+        return "ℹ️ " + name + ", причина уже засчитана сегодня. 🤲"
+    if result == "limit":
+        return ("⚠️ " + name + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
+                ") уже исчерпан. Этот день будет считаться пропуском.")
+    return "✅ " + name + ", уважительная причина принята, день не считается пропуском. Берегите себя! 🤲"
 
 
 def _yassir_quota_ok(phone):
@@ -2068,25 +2079,9 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
     uzr_match = UZR_RE.match(text.strip())
     if uzr_match:
         reason = uzr_match.group(1).strip()
-        with db() as c:
-            already_excuse = c.execute(
-                "SELECT 1 FROM score_events"
-                " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
-                (s["id"], group_id, get_date(s["id"]))
-            ).fetchone()
-        if already_excuse:
-            await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
-        elif get_excuse_count_month(s["id"], group_id) >= EXCUSE_MONTHLY_LIMIT:
-            await send_message(chat_id,
-                "⚠️ " + s["name"] + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
-                ") уже исчерпан. Этот день будет считаться пропуском.")
-        else:
-            # Узр без балла (30.09.2026, решение пользователя: «не хочу давать
-            # балл за узр, но штрафовать не будем»). Событие остаётся - по нему
-            # день не пропуск и считается месячный лимит узров.
-            add_bonus(s["id"], group_id, get_date(s["id"]), 0, "excuse", note=reason or None)
-            await send_message(chat_id,
-                "✅ " + s["name"] + ", уважительная причина принята, день не считается пропуском. Берегите себя! 🤲")
+        # Узр без балла (30.09.2026); правило общее с кнопкой в приложении -
+        # core/absence.py apply_excuse.
+        await send_message(chat_id, excuse_reply(s["name"], apply_excuse(s["id"], group_id, reason)))
         return
 
     # ── Прямое обращение к Ясиру ──────────────────────────────────────────────
@@ -2162,22 +2157,7 @@ async def process_message(chat_id, sender, text, sender_name="", is_media=False,
         # ── Уважительная причина → 1 балл (только если это не отчёт) ────────
         is_excuse = any(w in text.strip().lower() for w in EXCUSE_WORDS)
         if is_excuse:
-            with db() as c:
-                already_excuse = c.execute(
-                    "SELECT 1 FROM score_events"
-                    " WHERE student_id=? AND group_id=? AND date=? AND category='excuse'",
-                    (s["id"], group_id, get_date(s["id"]))
-                ).fetchone()
-            if already_excuse:
-                await send_message(chat_id, "ℹ️ " + s["name"] + ", причина уже засчитана сегодня. 🤲")
-            elif get_excuse_count_month(s["id"], group_id) >= EXCUSE_MONTHLY_LIMIT:
-                await send_message(chat_id,
-                    "⚠️ " + s["name"] + ", лимит узров на этот месяц (" + str(EXCUSE_MONTHLY_LIMIT) +
-                    ") уже исчерпан. Этот день будет считаться пропуском.")
-            else:
-                add_bonus(s["id"], group_id, get_date(s["id"]), 0, "excuse")   # без балла, см. выше
-                await send_message(chat_id,
-                    "✅ " + s["name"] + ", уважительная причина принята, день не считается пропуском. Берегите себя! 🤲")
+            await send_message(chat_id, excuse_reply(s["name"], apply_excuse(s["id"], group_id)))
             return
         # Незваный ответ бота (см. AI_ANSWER_IF_RELEVANT в config.py): по
         # умолчанию выключен с 09.09.2026 - слишком много непрошеных реплик

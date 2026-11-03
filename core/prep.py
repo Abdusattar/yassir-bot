@@ -288,8 +288,15 @@ async def send_prep_reminders():
 
         active_names = []
         passive_names = []
+        # Пауза «Цикл» (03.11.2026): список уходит в группу - сестры на
+        # паузе в нём нет ни среди сдающих, ни среди «пока не сдавали».
+        from core.absence import paused_ids
+        from core.db import group_date
+        paused = paused_ids(group_id, group_date())
 
         for s in students:
+            if s["id"] in paused:
+                continue
             days_done = count_report_days_since(s["id"], group_id, s["joined_date"])
             elapsed = int(s["elapsed"] or 0)
             if days_done >= 1:

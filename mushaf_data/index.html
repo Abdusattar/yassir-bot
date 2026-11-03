@@ -2887,6 +2887,43 @@
   /* Неполный день отвечает на тап (07.10.2026): тонкая обводка цветом
      долга - «здесь есть что посмотреть», без крика. */
   .stu-cal .c.part { cursor: pointer; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--no) 55%, transparent); }
+  /* Пауза «Цикл» (03.11.2026): пунктир акцентом - «не пропуск и не сдача»,
+     без слова на клетке. Тап - разбор дня с одной строкой «пауза». */
+  .stu-cal .c.pz { background: var(--card-bg); color: var(--accent); cursor: pointer; box-sizing: border-box;
+    border: 1.5px dashed color-mix(in srgb, var(--accent) 60%, transparent); }
+  .stu-strip i.pz { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  /* Карточка «Не могу сегодня» в «Работе с устазом» (03.11.2026) - той же
+     формы, что «Онлайн-урок»: редкое действие, на главный экран не выносим. */
+  #subs-absence .lesson-row { margin-top: 0; }
+  .lesson-row .abs-btns { display: flex; gap: 8px; flex: 0 0 auto; }
+  #abs-veil { position: fixed; inset: 0; background: rgba(20, 18, 10, .32); z-index: 900; display: none; }
+  #abs-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; display: none; direction: ltr;
+    max-width: 560px; margin: 0 auto; box-sizing: border-box;
+    background: var(--card-bg); color: var(--ink); border-radius: 22px 22px 0 0;
+    padding: 10px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 30px rgba(30, 25, 10, .12);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #abs-veil.on, #abs-sheet.on { display: block; }
+  #abs-sheet .grip { width: 38px; height: 4px; border-radius: 2px; background: var(--card-border); margin: 0 auto 14px; }
+  #abs-sheet h3 { margin: 0 0 2px; font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
+  #abs-sheet .sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  #abs-sheet textarea {
+    width: 100%; box-sizing: border-box; min-height: 84px; border-radius: 14px; resize: none;
+    border: 1px solid var(--card-border); padding: 12px 13px; font: inherit; font-size: 16px;
+    background: var(--dash-bg-end); color: var(--ink);
+  }
+  #abs-sheet .note { font-size: 13px; color: var(--muted); line-height: 1.4; margin: 10px 2px 16px; }
+  #abs-sheet ul { margin: 4px 0 18px; padding: 0; list-style: none; }
+  #abs-sheet li { position: relative; padding: 0 0 9px 20px; font-size: 14.5px; line-height: 1.4; }
+  #abs-sheet li::before { content: ''; position: absolute; left: 4px; top: 8px; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--accent); }
+  #abs-sheet .go { width: 100%; border: 0; border-radius: 15px; padding: 15px; font: inherit;
+    font-size: 16px; font-weight: 600; background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+  #abs-sheet .go:disabled { opacity: .6; }
+  #abs-sheet .cancel { display: block; width: 100%; text-align: center; margin-top: 10px; padding: 8px;
+    font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; cursor: pointer; }
   .stu-day { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--card-bg, #fff);
              border: 1px solid var(--card-border); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
   .stu-day .stu-day-head { font-weight: 600; margin-bottom: 2px; }
@@ -3902,6 +3939,8 @@
   </div>
 </div>
 
+<div id="abs-veil"></div>
+<div id="abs-sheet" role="dialog" aria-modal="true"></div>
 <div id="confirm-overlay">
   <div class="confirm-card">
     <p id="confirm-text"></p>
@@ -4972,6 +5011,29 @@
       lesson_marked_today: '✓ онлайн-урок отмечен сегодня',
       lesson_marked_recent: '✓ онлайн-урок отмечен',
       lesson_dot_legend: '• онлайн-урок',
+      abs_title: 'Не могу сегодня',
+      abs_left: 'узр: осталось %N% из %M% в этом месяце',
+      abs_none_left: 'узров в этом месяце не осталось',
+      abs_today: '✓ узр на сегодня принят',
+      abs_btn_excuse: 'Узр',
+      abs_btn_cycle: 'Цикл',
+      abs_paused: 'Цикл · %N%-й день',
+      abs_paused_hint: 'закончится с первой сдачей',
+      abs_ex_title: 'Узр',
+      abs_ex_sub: 'на сегодня · осталось %N% из %M% в этом месяце',
+      abs_ex_ph: 'Причина для устаза, по желанию',
+      abs_ex_note: 'День не будет пропуском. Баллов за узр нет. В группе появится «узр принят», причину увидит только устаз.',
+      abs_ex_go: 'Отправить узр',
+      abs_cy_title: 'Цикл',
+      abs_cy_sub: 'пауза с сегодняшнего дня',
+      abs_cy_1: 'Дни паузы не считаются пропусками, серия не прерывается.',
+      abs_cy_2: 'Я не буду напоминать о заданиях.',
+      abs_cy_3: 'Пауза закончится сама, как только ты сдашь задание. Самое долгое — 15 дней.',
+      abs_cy_4: 'Устаз увидит в календаре только «пауза». Группе не видно.',
+      abs_cy_go: 'Поставить паузу',
+      abs_cancel: 'Отмена',
+      day_pause: 'пауза',
+      pause_legend: 'пунктир — пауза',
       ustaz_lesson_legend: '• под днём — был на онлайн-уроке',
       ustaz_lesson_cal_legend: '• онлайн-урок, тап по дню — снять',
       ustaz_lesson_remove: '%N%: снять отметку урока за %D%?',
@@ -5623,6 +5685,29 @@
       lesson_marked_today: '✓ онлайн-сабак бүгүн белгиленди',
       lesson_marked_recent: '✓ онлайн-сабак белгиленди',
       lesson_dot_legend: '• онлайн-сабак',
+      abs_title: 'Бүгүн мүмкүн эмес',
+      abs_left: 'узр: бул айда %M% ичинен %N% калды',
+      abs_none_left: 'бул айда узр калган жок',
+      abs_today: '✓ бүгүнкү узр кабыл алынды',
+      abs_btn_excuse: 'Узр',
+      abs_btn_cycle: 'Цикл',
+      abs_paused: 'Цикл · %N%-күн',
+      abs_paused_hint: 'биринчи тапшырганда бүтөт',
+      abs_ex_title: 'Узр',
+      abs_ex_sub: 'бүгүнгө · бул айда %M% ичинен %N% калды',
+      abs_ex_ph: 'Устазга себеп, каалаган учурда',
+      abs_ex_note: 'Бул күн калтырылган болуп эсептелбейт. Узр үчүн упай жок. Топто «узр кабыл алынды» чыгат, себебин устаз гана көрөт.',
+      abs_ex_go: 'Узр жөнөтүү',
+      abs_cy_title: 'Цикл',
+      abs_cy_sub: 'бүгүндөн тартып тыныгуу',
+      abs_cy_1: 'Тыныгуу күндөрү калтырылган болуп эсептелбейт, катар үзүлбөйт.',
+      abs_cy_2: 'Тапшырмалар тууралуу эскертпейм.',
+      abs_cy_3: 'Тапшырма тапшырганыңда тыныгуу өзү бүтөт. Эң узуну — 15 күн.',
+      abs_cy_4: 'Устаз календарда «тыныгуу» деп гана көрөт. Топко көрүнбөйт.',
+      abs_cy_go: 'Тыныгуу коюу',
+      abs_cancel: 'Жокко чыгаруу',
+      day_pause: 'тыныгуу',
+      pause_legend: 'пунктир — тыныгуу',
       ustaz_lesson_legend: '• күндүн астында — онлайн-сабакка катышкан',
       ustaz_lesson_cal_legend: '• онлайн-сабак, күндү бассаң — алынып салынат',
       ustaz_lesson_remove: '%N%: %D% күнкү сабак белгисин алып салуубу?',
@@ -6349,6 +6434,29 @@
       lesson_marked_today: '✓ онлайн-дарс бугун белгиланди',
       lesson_marked_recent: '✓ онлайн-дарс белгиланди',
       lesson_dot_legend: '• онлайн-дарс',
+      abs_title: 'Бугун қила олмайман',
+      abs_left: 'узр: бу ой %M% тадан %N% та қолди',
+      abs_none_left: 'бу ой узр қолмади',
+      abs_today: '✓ бугунги узр қабул қилинди',
+      abs_btn_excuse: 'Узр',
+      abs_btn_cycle: 'Цикл',
+      abs_paused: 'Цикл · %N%-кун',
+      abs_paused_hint: 'биринчи топширганда тугайди',
+      abs_ex_title: 'Узр',
+      abs_ex_sub: 'бугунга · бу ой %M% тадан %N% та қолди',
+      abs_ex_ph: 'Устоз учун сабаб, хоҳласанг',
+      abs_ex_note: 'Бу кун қолдирилган ҳисобланмайди. Узр учун балл йўқ. Гуруҳда «узр қабул қилинди» чиқади, сабабни фақат устоз кўради.',
+      abs_ex_go: 'Узр юбориш',
+      abs_cy_title: 'Цикл',
+      abs_cy_sub: 'бугундан бошлаб танаффус',
+      abs_cy_1: 'Танаффус кунлари қолдирилган ҳисобланмайди, кетма-кетлик узилмайди.',
+      abs_cy_2: 'Топшириқлар ҳақида эслатмайман.',
+      abs_cy_3: 'Топшириқ топширишинг билан танаффус ўзи тугайди. Энг узоғи — 15 кун.',
+      abs_cy_4: 'Устоз календарда фақат «танаффус» деб кўради. Гуруҳга кўринмайди.',
+      abs_cy_go: 'Танаффус қўйиш',
+      abs_cancel: 'Бекор қилиш',
+      day_pause: 'танаффус',
+      pause_legend: 'пунктир — танаффус',
       ustaz_lesson_legend: '• куннинг тагида — онлайн-дарсда қатнашган',
       ustaz_lesson_cal_legend: '• онлайн-дарс, кунни боссанг — олиб ташланади',
       ustaz_lesson_remove: '%N%: %D% кунги дарс белгиси олиб ташлансинми?',
@@ -7077,6 +7185,29 @@
       lesson_marked_today: '✓ 今天已签到线上课',
       lesson_marked_recent: '✓ 已签到线上课',
       lesson_dot_legend: '• 线上课',
+      abs_title: '今天无法完成',
+      abs_left: '请假：本月还剩 %N%/%M% 次',
+      abs_none_left: '本月请假次数已用完',
+      abs_today: '✓ 今天的请假已接受',
+      abs_btn_excuse: '请假',
+      abs_btn_cycle: '经期',
+      abs_paused: '经期 · 第%N%天',
+      abs_paused_hint: '第一次提交后自动结束',
+      abs_ex_title: '请假',
+      abs_ex_sub: '今天 · 本月还剩 %N%/%M% 次',
+      abs_ex_ph: '给老师的原因（可不填）',
+      abs_ex_note: '这一天不算缺勤。请假不计分。群里会显示“请假已接受”，原因只有老师能看到。',
+      abs_ex_go: '提交请假',
+      abs_cy_title: '经期',
+      abs_cy_sub: '从今天开始暂停',
+      abs_cy_1: '暂停的日子不算缺勤，连续记录不会中断。',
+      abs_cy_2: '我不会提醒你完成任务。',
+      abs_cy_3: '你一提交任务，暂停就自动结束。最长 15 天。',
+      abs_cy_4: '老师在日历上只看到“暂停”。群里看不到。',
+      abs_cy_go: '开始暂停',
+      abs_cancel: '取消',
+      day_pause: '暂停',
+      pause_legend: '虚线 — 暂停',
       ustaz_lesson_legend: '• 日期下方的点 — 参加了线上课',
       ustaz_lesson_cal_legend: '• 线上课，点日期可撤销',
       ustaz_lesson_remove: '%N%：撤销 %D% 的上课签到？',
@@ -14124,6 +14255,10 @@
      хватило, узр, урок и короткий след действий в приложении. Полный день
      и пустой тапом не отвечают: там и так всё ясно. Одна функция рисует
      отчёт и студенту, и устазу в «Студентах» - картина одна у обоих. */
+  function dayIsPause(d, key) {
+    return (d.pauses || []).indexOf(key) >= 0;
+  }
+
   function dayIsPartial(d, tasks) {
     var total = d.tasks_total || 3;
     return tasks.length > 0 && tasks.length < total;
@@ -14157,7 +14292,10 @@
   function dayReportHTML(r) {
     var out = '<div class="stu-day-head">' + lessonDate(r.date) + '</div>';
     if (r.trail_ev) r.trail = r.trail_ev.map(dayTrailLine);
-    (r.tasks || []).forEach(function (t) {
+    // День паузы «Цикл» без сдач (03.11.2026): одно слово «пауза», без
+    // красных «не сдано» - это не долг.
+    var pauseOnly = r.pause && !(r.tasks || []).some(function (t) { return t.done; });
+    (pauseOnly ? [] : (r.tasks || [])).forEach(function (t) {
       // Имя задания приходит по-русски (core/day_report.py); на другом
       // языке интерфейса - из словаря (28.10.2026, аудит zh).
       if (UI_LANG !== 'ru' && T('task_' + t.key)) t.name = T('task_' + t.key);
@@ -14166,6 +14304,7 @@
         ? '<div class="ok">✓ ' + t.name + (t.at ? ' ' + t.at : '') + (t.detail ? ' · ' + ustazEsc(t.detail) : '') + '</div>'
         : '<div class="no">✗ ' + t.name + ' — ' + T('day_not_done') + '</div>';
     });
+    if (r.pause) out += '<div class="ok">' + T('day_pause') + '</div>';
     if (r.excuse != null) out += '<div class="ok">' + T('day_excuse') + (r.excuse ? ': ' + ustazEsc(r.excuse) : '') + '</div>';
     if (r.lesson) out += '<div class="ok">' + T('day_lesson') + '</div>';
     if (r.trail && r.trail.length) {
@@ -14211,6 +14350,7 @@
       // Неполный день отвечает на тап мини-отчётом (07.10.2026) - помечаем
       // его, чтобы палец видел, куда нажимать.
       if (dayIsPartial(d, tasks)) cls += ' part';
+      else if (!tasks.length && dayIsPause(d, stuDayKey(d.month, day))) cls += ' pz';
       cells += '<div class="c ' + cls + '" data-date="' + stuDayKey(d.month, day) + '">' + day + '</div>';
     }
     var miss = d.threshold
@@ -14220,7 +14360,8 @@
       T('subs_month_title') + (d.group_title ? ' · ' + ustazEsc(d.group_title) : '') +
       '</div><div class="stu-cal">' + cells + '</div>' +
       '<div class="stu-legend">' + miss + ' · ' + T('subs_month_legend') +
-      ((d.lessons || []).length ? ' · ' + T('lesson_dot_legend') : '') + '</div>';
+      ((d.lessons || []).length ? ' · ' + T('lesson_dot_legend') : '') +
+      ((d.pauses || []).length ? ' · ' + T('pause_legend') : '') + '</div>';
   }
 
   /* Вариант В (06.09.2026, выбор пользователя): ДВЕ строки черточек.
@@ -14245,6 +14386,7 @@
     for (var day = 1; day <= info.days; day++) {
       var n = ((d.days || {})[stuDayKey(d.month, day)] || []).length;
       var cls = day > info.today ? 'future' : (n ? 'd' + Math.min(3, n) : '');
+      if (!n && dayIsPause(d, stuDayKey(d.month, day))) cls = 'pz';
       out += '<i class="' + cls + '"></i>';
     }
     return '<div class="stu-strip">' + out + '</div>';
@@ -14339,6 +14481,91 @@
     });
   }
 
+  /* «Не могу сегодня» (03.11.2026, решение пользователя): узр кнопкой - всем,
+     пауза «Цикл» - только сёстрам (cycle_allowed решает сервер). Карточка
+     здесь, а не на главном экране: нажимают редко. Правила - core/absence.py. */
+  function subsRenderAbsence(d) {
+    var box = document.getElementById('subs-absence');
+    var a = d && d.absence;
+    if (!box || !a) return;
+    if (a.pause) {
+      box.innerHTML = '<div class="lesson-row"><div class="t"><b>' +
+        T('abs_paused', { N: a.pause.day }) + '</b><span>' + T('abs_paused_hint') + '</span></div></div>';
+      return;
+    }
+    var ex = a.excuse || {};
+    var hint = ex.today ? T('abs_today')
+      : ex.left > 0 ? T('abs_left', { N: ex.left, M: ex.limit }) : T('abs_none_left');
+    var btns = '';
+    if (!ex.today && ex.left > 0) btns += '<button id="abs-ex-btn">' + T('abs_btn_excuse') + '</button>';
+    if (a.cycle_allowed) btns += '<button id="abs-cy-btn">' + T('abs_btn_cycle') + '</button>';
+    box.innerHTML = '<div class="lesson-row"><div class="t"><b>' + T('abs_title') + '</b><span>' + hint +
+      '</span></div>' + (btns ? '<div class="abs-btns">' + btns + '</div>' : '') + '</div>';
+    var exBtn = document.getElementById('abs-ex-btn');
+    if (exBtn) exBtn.addEventListener('click', function () { absOpenExcuse(d); });
+    var cyBtn = document.getElementById('abs-cy-btn');
+    if (cyBtn) cyBtn.addEventListener('click', function () { absOpenCycle(d); });
+  }
+
+  function absClose() {
+    document.getElementById('abs-veil').classList.remove('on');
+    document.getElementById('abs-sheet').classList.remove('on');
+  }
+  function absOpen(html) {
+    var sheet = document.getElementById('abs-sheet');
+    sheet.innerHTML = '<div class="grip"></div>' + html +
+      '<button class="cancel" id="abs-cancel">' + T('abs_cancel') + '</button>';
+    document.getElementById('abs-veil').classList.add('on');
+    sheet.classList.add('on');
+    document.getElementById('abs-cancel').addEventListener('click', absClose);
+  }
+  document.getElementById('abs-veil').addEventListener('click', absClose);
+
+  // Ответ сервера - сразу в карточку и в месяц, без перезагрузки экрана.
+  function absApply(d, r) {
+    if (r.absence) d.absence = r.absence;
+    if (r.pauses) d.pauses = r.pauses;
+    subsRenderAbsence(d);
+    var month = document.getElementById('subs-month');
+    if (month) {
+      var open = month.getAttribute('data-open') === '1';
+      month.innerHTML = subsMonthSummaryHTML(d);
+      if (open) month.insertAdjacentHTML('beforeend', subsCalendarHTML(d));
+    }
+  }
+
+  function absSend(path, body, d) {
+    var go = document.getElementById('abs-go');
+    go.disabled = true;
+    apiCall(path, { method: 'POST', body: body }).then(function (res) {
+      go.disabled = false;
+      absClose();
+      absApply(d, (res && res.data) || {});
+    }).catch(function () { go.disabled = false; });
+  }
+
+  function absOpenExcuse(d) {
+    var ex = (d.absence && d.absence.excuse) || {};
+    absOpen('<h3>' + T('abs_ex_title') + '</h3><div class="sub">' +
+      T('abs_ex_sub', { N: ex.left, M: ex.limit }) + '</div>' +
+      '<textarea id="abs-reason" maxlength="300" placeholder="' + ustazEsc(T('abs_ex_ph')) + '"></textarea>' +
+      '<div class="note">' + T('abs_ex_note') + '</div>' +
+      '<button class="go" id="abs-go">' + T('abs_ex_go') + '</button>');
+    document.getElementById('abs-go').addEventListener('click', function () {
+      absSend('/absence/excuse', { reason: document.getElementById('abs-reason').value || '' }, d);
+    });
+  }
+
+  function absOpenCycle(d) {
+    absOpen('<h3>' + T('abs_cy_title') + '</h3><div class="sub">' + T('abs_cy_sub') + '</div><ul>' +
+      ['abs_cy_1', 'abs_cy_2', 'abs_cy_3', 'abs_cy_4'].map(function (k) {
+        return '<li>' + T(k) + '</li>';
+      }).join('') + '</ul><button class="go" id="abs-go">' + T('abs_cy_go') + '</button>');
+    document.getElementById('abs-go').addEventListener('click', function () {
+      absSend('/absence/cycle', {}, d);
+    });
+  }
+
   function subsLoadMonth() {
     var box = document.getElementById('subs-month');
     if (!box) return;
@@ -14350,6 +14577,7 @@
       if (!d || d.group_title == null) return;
       box.innerHTML = subsMonthSummaryHTML(d);
       subsRenderLesson(d);
+      subsRenderAbsence(d);
       // Тап проваливает в месяц по дням - тот же жест и тот же календарь,
       // что у устаза в "Студентах". Полоски при этом никуда не деваются:
       // сворачивать их обратно незачем, они и так две строки.
@@ -14357,7 +14585,7 @@
       box.addEventListener('click', function (e) {
         if (box.getAttribute('data-open') === '1') {
           // Календарь открыт: тап по неполному дню - мини-отчёт (07.10.2026).
-          var cell = e.target && e.target.closest ? e.target.closest('.stu-cal .c.part') : null;
+          var cell = e.target && e.target.closest ? e.target.closest('.stu-cal .c.part, .stu-cal .c.pz') : null;
           if (cell) dayReportToggle(box, cell, '/day');
           return;
         }
@@ -15126,7 +15354,7 @@
       if (waiting) {
         html += '<div class="subs-quiet">' + T('subs_waiting_quiet', { N: waiting }) + '</div>';
       }
-      html += '<div id="subs-month"></div><div id="subs-lesson"></div>' +
+      html += '<div id="subs-month"></div><div id="subs-lesson"></div><div id="subs-absence"></div>' +
         '<div id="subs-recent-rows">' +
         recent.map(function (it) { return subsRow(it, today); }).join('') +
         '</div>';
@@ -16085,11 +16313,13 @@
     return month + '-' + (day < 10 ? '0' : '') + day;
   }
 
-  function stuStrip(days, month, today, lessons) {
+  function stuStrip(days, month, today, lessons, pauses) {
     var info = stuMonthInfo(month, today), out = '', has = false;
     for (var d = 1; d <= info.days; d++) {
       var n = days[stuDayKey(month, d)] || 0;
       var cls = d > info.today ? 'future' : (n ? 'd' + Math.min(3, n) : '');
+      // Пауза «Цикл» (03.11.2026) - не розовым пропуском, а тихой чертой.
+      if (!n && (pauses || []).indexOf(stuDayKey(month, d)) >= 0) cls = 'pz';
       if ((lessons || []).indexOf(stuDayKey(month, d)) >= 0) { cls += ' les'; has = true; }
       out += '<i class="' + cls + '"></i>';
     }
@@ -16291,7 +16521,7 @@
           '<div class="top"><span class="name">' + ustazEsc(st.name) + '</span>' +
           '<span class="miss' + (near ? ' near' : '') + '">' +
           stuMissLine(st, data.threshold) + '</span></div>' +
-          stuStrip(st.days || {}, data.month, data.today, st.lesson_days) +
+          stuStrip(st.days || {}, data.month, data.today, st.lesson_days, st.pause_days) +
           '</div>';
       }).join('') + '<div class="stu-legend">' + T('ustaz_strip_legend') +
         (students.some(function (st) { return (st.lesson_days || []).length; })
@@ -16333,11 +16563,14 @@
         var key = stuDayKey(d.month, day);
         if ((d.lessons || []).indexOf(key) >= 0) cls += ' les' + (d.can_edit_lessons ? ' tap' : '');
         if (dayIsPartial(d, tasks)) cls += ' part';
+        else if (!tasks.length && dayIsPause(d, key)) cls += ' pz';
         cells += '<div class="c ' + cls + '" data-date="' + key + '">' + day + '</div>';
       }
       var missed = 0;
       for (var dd = 1; dd <= info.today; dd++) {
-        if (!((d.days || {})[stuDayKey(d.month, dd)] || []).length) missed++;
+        // День паузы «Цикл» - не пропуск (03.11.2026).
+        if (!((d.days || {})[stuDayKey(d.month, dd)] || []).length &&
+            !dayIsPause(d, stuDayKey(d.month, dd))) missed++;
       }
       body.innerHTML = '<div class="ustaz-head">' +
         '<button class="nav-back" id="stu-back">' + T('ustaz_student_back') + '</button>' +
@@ -16349,6 +16582,7 @@
                      : T('ustaz_misses_no_limit', { N: missed })) +
         ((d.lessons || []).length
           ? ' · ' + T(d.can_edit_lessons ? 'ustaz_lesson_cal_legend' : 'lesson_dot_legend') : '') +
+        ((d.pauses || []).length ? ' · ' + T('pause_legend') : '') +
         '</div>';
       document.getElementById('stu-back').addEventListener('click', openStudents);
       // Ошибочная отметка урока снимается тапом по дню с точкой, с
@@ -16366,7 +16600,7 @@
       // Неполный день - мини-отчёт по студенту (07.10.2026), тот же, что
       // видит он сам. День с точкой урока и правом снимать её остаётся за
       // снятием отметки - у него свой тап выше.
-      Array.prototype.forEach.call(body.querySelectorAll('.stu-cal .c.part:not(.tap)'), function (c) {
+      Array.prototype.forEach.call(body.querySelectorAll('.stu-cal .c.part:not(.tap), .stu-cal .c.pz:not(.tap)'), function (c) {
         c.addEventListener('click', function () {
           dayReportToggle(body, c, '/ustaz/day?id=' + studentId + '&group=' + stuShown);
         });
