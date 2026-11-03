@@ -2630,6 +2630,16 @@
   #learn-step.article section { display: flex; flex-direction: column; gap: 8px; }
   #learn-step.article section + section { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--card-border); }
   #learn-step.article h3 { font-size: clamp(18.5px, 5vw, 21px); }
+  /* Видео-инструкция раздела (27.10.2026): ролик вертикальный, 9:16. Ширину
+     берём от высоты экрана, чтобы ролик целиком влезал вместе с кнопкой
+     «Пошагово» под ним; на узком экране упирается в ширину колонки. */
+  #learn-body .learn-video {
+    width: min(100%, 520px, calc((100vh - 190px) * 9 / 16));
+    width: min(100%, 520px, calc((100dvh - 190px) * 9 / 16));
+    aspect-ratio: 9 / 16; align-self: center;
+    border-radius: 18px; overflow: hidden; background: #000; box-shadow: var(--shadow-sm);
+  }
+  #learn-body .learn-video iframe { width: 100%; height: 100%; border: 0; display: block; }
   /* Низ - над панелью Telegram и полосой iPhone (07.10.2026: «нижняя
      кнопка не видна» - подвал уходил под них), как у остальных экранов. */
   #learn-foot { flex: 0 0 auto; direction: ltr;
@@ -14657,6 +14667,9 @@
     {
       id: 'hifz', mark: '\u25f4', name: 'Заучивание',
       desc: 'Как сдать 40+40 из Мусхафа',
+      // Видео-инструкция (27.10.2026): id ролика на YouTube. У раздела с ним
+      // первым открывается видео, шаги со снимками - кнопкой под ним.
+      video: 'roO2tI8iNmg',
       steps: [
         ['dash', 'Открой «Мусхаф»',
          'Заучивание сдаётся отсюда — там же, где ты читаешь.'],
@@ -14677,6 +14690,7 @@
     {
       id: 'revision', mark: '🔁', name: 'Повторение',
       desc: 'Что читать каждый день',
+      video: 'LnvB8Zf_Hsk',
       steps: [
         ['read', 'Читаешь всё, что уже выучил',
          'Повторение — это не вчерашняя строчка. Каждый день перечитываешь с начала суры Аль-Бакара до места, где остановился. Её начало открывается сразу: «⤒ Бакара» внизу. Забыл — подглядывай в текст, это не экзамен: цель — освежить, а не проверить себя.'],
@@ -14691,6 +14705,7 @@
     {
       id: 'words', mark: '\u0646', name: 'Слова и тренажёр',
       desc: 'Муфрадат, «Мои слова»',
+      video: 'drBlR1-Ta3U',
       steps: [
         ['trainer_start', 'Скажи, докуда дошёл',
          'В первый раз тренажёр спросит страницу мусхафа. Слова он берёт не с неё одной, а со всего пути от начала до неё — это и есть твой словарь.'],
@@ -14713,6 +14728,7 @@
     {
       id: 'ustaz', mark: '\u2713', name: 'Работа с устазом',
       desc: 'Разбор, пометки, пересдача',
+      video: 'JED2dRaFJmw',
       steps: [
         ['subs', 'Здесь видно, что с твоими записями',
          '«На проверке» — устаз ещё не дошёл, от тебя ничего не нужно. «Принято» — разобрано. «Пересдать» — просит начитать это место заново; такие записи собраны наверху, чтобы не искать.'],
@@ -14906,7 +14922,9 @@
         var right = empty ? T('learn_soon')
           : (done.indexOf(sec.id) >= 0
               ? '<span class="done">✓ ' + T('learn_read') + '</span>'
-              : (group === 'rules' ? '' : learnPlural(sec.steps.length)));   // правила - страница, не шаги
+              : (group === 'rules' ? ''                                       // правила - страница, не шаги
+                 : sec.video ? learnT('learn_video_badge', '▶ видео')
+                 : learnPlural(sec.steps.length)));
         out += '<button class="learn-item"' + (empty ? ' disabled style="opacity:.55"' : ' data-sec="' + i + '"') + '>' +
           '<span class="mk">' + sec.mark + '</span>' +
           '<span><span class="nm">' + learnName(sec) + '</span>' +
@@ -14922,7 +14940,9 @@
     body.innerHTML = html;
     Array.prototype.forEach.call(body.querySelectorAll('[data-sec]'), function (b) {
       b.addEventListener('click', function () {
-        learnRenderStep(parseInt(b.getAttribute('data-sec'), 10), 0);
+        var si = parseInt(b.getAttribute('data-sec'), 10);
+        if (LEARN[si].video) learnRenderVideo(si);
+        else learnRenderStep(si, 0);
       });
     });
 
@@ -15096,6 +15116,44 @@
     learnMarkDone(sec.id);
   }
 
+  /* Видео-инструкция раздела (27.10.2026, решение пользователя): ролик
+     сверху, под ним кнопка на прежние шаги со снимками - их не убрали, кому-то
+     удобнее листать, а на ky/uz шаги переведены, ролик - нет.
+
+     Плеер - youtube-nocookie, playsinline: играет на странице, а не уходит в
+     полноэкранный плеер iOS; rel=0 - в конце предлагаются ролики только
+     нашего канала. referrerpolicy обязателен: без адреса страницы YouTube
+     отказывается играть встроенный ролик (ошибка 153).
+
+     learnAt.step = -1: шаг «до первого», поэтому свайп и «Дальше» отсюда
+     ведут на шаг 0, а «Назад» с шага 0 - обратно сюда (learnStepBy).
+     Уход с экрана заменяет #learn-body - вместе с iframe останавливается и
+     звук. Глава отмечается прочитанной при открытии, как страница «Правил». */
+  function learnRenderVideo(si) {
+    var sec = LEARN[si];
+    learnAt = { section: si, step: -1 };
+    document.getElementById('learn-title').textContent = learnName(sec);
+    document.getElementById('learn-back').textContent = T('learn_back_toc');
+    document.getElementById('learn-foot').style.display = 'none';
+    var src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(sec.video)
+      + '?playsinline=1&rel=0&modestbranding=1';
+    var body = document.getElementById('learn-body');
+    body.innerHTML =
+      '<div class="learn-video"><iframe src="' + src + '" title="' + feedEsc(learnName(sec)) + '"'
+      + ' allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen'
+      + ' referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
+      + '<button class="learn-item" id="learn-video-steps">'
+      + '<span class="mk">' + sec.mark + '</span>'
+      + '<span><span class="nm">' + learnT('learn_video_steps', 'Пошагово со снимками') + '</span>'
+      + '<span class="ds">' + learnPlural(sec.steps.length) + '</span></span>'
+      + '<span class="cnt">›</span></button>';
+    body.scrollTop = 0;
+    document.getElementById('learn-video-steps').addEventListener('click', function () {
+      learnRenderStep(si, 0);
+    });
+    learnMarkDone(sec.id);
+  }
+
   function learnRenderStep(si, step) {
     var sec = LEARN[si];
     if (sec.group === 'rules') return learnRenderArticle(si);
@@ -15131,6 +15189,7 @@
     if (!learnAt) return;
     var sec = LEARN[learnAt.section], next = learnAt.step + delta;
     if (sec.group === 'rules') return learnRenderToc();   // глава-страница: «Готово» - в оглавление
+    if (next === -1 && sec.video) return learnRenderVideo(learnAt.section);   // с шага 0 - к ролику
     // Край в любую сторону возвращает в оглавление: «назад» с первого шага и
     // «Готово» с последнего ведут в одно и то же место, откуда любой раздел
     // открывается одним тапом.
