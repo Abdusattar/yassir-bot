@@ -138,7 +138,7 @@ SIFAT = (
     {"id": "hams", "lesson": "Первая пара", "question": "Шёпот или звонкость?",
      "options": (("hams", "Шёпот — الهمس"), ("jahr", "Звонкость — الجهر")),
      "letters": {"hams": "فحثهشخصسكت"}, "rest": "jahr"},
-    {"id": "shidda", "lesson": "Вторая пара", "question": "Звук обрывается или течёт?",
+    {"id": "shidda", "lesson": "Вторая пара", "question": "Звук обрывается, течёт или посередине?",
      "options": (("shidda", "Взрыв — الشدة"), ("tawassut", "Середина — التوسط"),
                  ("rakhawa", "Мягкость — الرخاوة")),
      "letters": {"shidda": "ءجدقطبكت", "tawassut": "لنعمر"}, "rest": "rakhawa"},
@@ -152,11 +152,35 @@ SIFAT = (
      "options": (("idhlaq", "Лёгкость — الإذلاق"), ("ismat", "Удержание — الإصمات")),
      "letters": {"idhlaq": "فرمنلب"}, "rest": "ismat"},
 )
+# Фразы-ключи пар (03.11.2026) - из байтов, с огласовками как в уроках 24-28.
+# Показываются ТОЛЬКО после ответа: до ответа фраза на экране выдала бы его,
+# и буква ушла бы в долгий повтор невыученной (совет ревью). Студенты
+# угадывали, не видя логики: «буква есть во фразе - свойство названо, нет -
+# противоположное» (вَالضِّدَّ قُلْ).
+SIFA_KEYS = {
+    "hams": "فَحَثَّهُ شَخْصٌ سَكَتْ",
+    "shidda": "أَجِدْ قَطٍ بَكَتْ",
+    "tawassut": "لِنْ عُمَرْ",
+    "istila": "خُصَّ ضَغْطٍ قِظْ",
+    "itbaq": "ص ض ط ظ",
+    "idhlaq": "فِرَّ مِنْ لُبِّ",
+}
 _SIFA = {p["id"]: p for p in SIFAT}
 _SIFA_LABEL = {oid: label for p in SIFAT for oid, label in p["options"]}
 # 28 согласных букв; و и ي - согласные, как в карточках мест выхода.
 SIFA_LETTERS = "ءبتثجحخدذرزسشصضطظعغفقكلمنهوي"
 _NOTE = {"و": "согласная, как в وَلَد", "ي": "согласная, как в يَد"}
+
+
+def _sifa_why(card):
+    """Почему ответ такой: фразы-ключи пары и какая из них содержит букву."""
+    pair = _SIFA[card["kind"]]
+    groups = [{"id": gid, "label": _SIFA_LABEL[gid], "phrase": SIFA_KEYS[gid],
+               "letters": " ".join(letters)}
+              for gid, letters in pair["letters"].items()]
+    hit = next((g["id"] for g in groups if card["glyph"] in g["letters"]), None)
+    return {"groups": groups, "hit": hit, "rest": pair["rest"],
+            "rest_label": _SIFA_LABEL[pair["rest"]]}
 
 
 def _sifa_answer(pair, letter):
@@ -406,6 +430,8 @@ def answer(user_id, card_id, slot):
     reached = before < DAILY_TARGET <= daily_count(user_id)
     feedback = {"correct": correct, "glyph": card["glyph"], "note": card["note"],
                 "answer": _label(card, card["answer"]), "answer_id": card["answer"]}
+    if card["kind"] != "makhraj":
+        feedback["why"] = _sifa_why(card)
     _next(session, user_id)
     return state(user_id, feedback), reached
 

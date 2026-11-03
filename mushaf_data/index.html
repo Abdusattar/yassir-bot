@@ -2195,6 +2195,30 @@
   .tj-dots span.tj-day-done { color: var(--ok, #15803d); font-weight: 600; }
   .tj-sum { font-size: 15px; color: var(--ink); line-height: 1.5; }
   .tj-sum b { font-family: 'Scheherazade New', serif; font-size: 1.6em; font-weight: 400; }
+  /* «Почему» после ответа на сифат (03.11.2026): фразы-ключи пары, где
+     буква есть - подсвечена. Студенты угадывали, не видя логики. До ответа
+     не показываем - иначе ответ на экране. */
+  #tj-after { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  #tj-after:empty { display: none; }
+  .tj-why { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+  .tj-why .row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 12px; border-radius: 14px; border: 1px solid var(--card-border); min-width: 0; }
+  .tj-why .row.hit { border-color: var(--ok); background: var(--ok-soft); }
+  .tj-why .lbl { font-size: 14px; color: var(--muted); }
+  .tj-why .row.hit .lbl { color: var(--ok); font-weight: 600; }
+  .tj-why .key { display: flex; flex-direction: column; align-items: flex-end; }
+  .tj-why .ph { font-family: 'Scheherazade New', serif; font-size: 26px; line-height: 1.45;
+    direction: rtl; color: var(--ink); }
+  /* Буквы фразы по одной, искомая обведена. Отдельными буквами, а не
+     цветом внутри слова: iOS рвёт вязь на цветных вставках. */
+  .tj-why .lt { direction: rtl; display: flex; gap: 0; font-family: 'Scheherazade New', serif;
+    font-size: 20px; line-height: 1; color: var(--ink); opacity: .7; }
+  .tj-why .row.hit .lt { opacity: .85; }
+  .tj-why .lt b { font-weight: 400; width: 23px; height: 26px; display: inline-flex;
+    align-items: center; justify-content: center; border-radius: 50%; }
+  .tj-why .lt b.me { color: var(--ok); opacity: 1; box-shadow: inset 0 0 0 1.5px var(--ok); }
+  .tj-why .say { font-size: 15px; color: var(--ink); text-align: center; line-height: 1.45; margin-top: 2px; }
+  .tj-why .say .tj-ar { font-family: 'Scheherazade New', serif; font-size: 1.5em; }
   .tj-go {
     background: var(--accent); color: #fff; border: 0; border-radius: 14px;
     padding: 13px 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
@@ -4849,6 +4873,8 @@
       tajweed_question: 'Откуда выходит буква?',
       tajweed_retry: 'повторяем',
       tajweed_next: 'Дальше',
+      tj_why_in: 'Буква %L% есть в этой фразе',
+      tj_why_out: 'Буквы %L% нет во фразе — значит «%A%»',
       tajweed_day_done: 'норма дня закрыта',
       tajweed_done_title: 'Заход окончен 🤲',
       tajweed_first_letters: 'Сразу верно: %L%',
@@ -5556,6 +5582,8 @@
       tajweed_question: 'Тамга кайдан чыгат?',
       tajweed_retry: 'кайталайбыз',
       tajweed_next: 'Кийинки',
+      tj_why_in: '%L% тамгасы ушул сөз айкашында бар',
+      tj_why_out: '%L% тамгасы сөз айкашында жок — демек «%A%»',
       tajweed_day_done: 'күндүк норма аткарылды',
       tajweed_done_title: 'Айлампа бүттү 🤲',
       tajweed_first_letters: 'Дароо туура: %L%',
@@ -6305,6 +6333,8 @@
       tajweed_question: 'Ҳарф қаердан чиқади?',
       tajweed_retry: 'такрорлаймиз',
       tajweed_next: 'Кейингиси',
+      tj_why_in: '%L% ҳарфи шу иборада бор',
+      tj_why_out: '%L% ҳарфи иборада йўқ — демак «%A%»',
       tajweed_day_done: 'кунлик меъёр бажарилди',
       tajweed_done_title: 'Айлана тугади 🤲',
       tajweed_first_letters: 'Дарров тўғри: %L%',
@@ -7054,6 +7084,8 @@
       tajweed_question: '这个字母从哪里发音？',
       tajweed_retry: '再复习',
       tajweed_next: '继续',
+      tj_why_in: '字母 %L% 在这句口诀里',
+      tj_why_out: '字母 %L% 不在口诀里 — 所以是「%A%」',
       tajweed_day_done: '今日目标已完成',
       tajweed_done_title: '本轮结束 🤲',
       tajweed_first_letters: '一次答对：%L%',
@@ -7512,7 +7544,7 @@
       tjo_idhlaq: '轻快 — الإذلاق',
       tjo_ismat: '持重 — الإصمات',
       tjq_hams: '耳语还是响亮？',
-      tjq_shidda: '声音是中断还是延续？',
+      tjq_shidda: '声音是中断、延续，还是居中？',
       tjq_istila: '舌根抬起还是放下？',
       tjq_itbaq: '舌头是否贴住上腭？',
       tjq_idhlaq: '轻快还是持重？',
@@ -16822,6 +16854,33 @@
     });
   }
 
+  // Короткое имя свойства: «Взрыв — الشدة» → «Взрыв» (так же и в zh).
+  function tajweedShort(oid, fallback) {
+    return String(T('tjo_' + oid) || fallback || '').split(' — ')[0];
+  }
+  // Внутри фразы - со строчной: «значит «удержание»» (у zh регистра нет).
+  function tajweedLower(t) { return t.charAt(0).toLowerCase() + t.slice(1); }
+
+  // Фразы-ключи пары: где буква есть - подсвечено; нет нигде - противоположное.
+  function tajweedWhy(fb) {
+    var w = fb.why, L = '<span class="tj-ar">' + fb.glyph + '</span>‎';
+    var html = '<div class="tj-why">';
+    w.groups.forEach(function (g) {
+      var lt = g.letters.split(' ').map(function (ch) {
+        return '<b' + (ch === fb.glyph ? ' class="me"' : '') + '>' + ch + '</b>';
+      }).join('');
+      // Фраза «ص ض ط ظ» и есть сами буквы - второй строкой не повторяем.
+      var same = g.phrase.replace(/\s/g, '') === g.letters.replace(/\s/g, '');
+      html += '<div class="row' + (g.id === w.hit ? ' hit' : '') + '"><span class="lbl">' +
+        tajweedShort(g.id, g.label) + '</span><span class="key">' +
+        (same ? '' : '<span class="ph">' + g.phrase + '</span>') +
+        '<span class="lt">' + lt + '</span></span></div>';
+    });
+    html += '<div class="say">' + (w.hit ? T('tj_why_in', { L: L })
+      : T('tj_why_out', { L: L, A: tajweedLower(tajweedShort(w.rest, w.rest_label)) })) + '</div>';
+    return html + '</div>';
+  }
+
   function renderTajweed(d) {
     tajweedState = d;
     var body = document.getElementById('tajweed-body');
@@ -16887,10 +16946,14 @@
                              : b.textContent === fb.answer) b.classList.add('ok');
           });
           if (!fb.correct) btn.classList.add('no');
-          if (fb.correct) { setTimeout(function () { renderTajweed(next); }, 900); return; }
+          // Места выхода: верно - сразу дальше. Сифаты (03.11.2026) - и при
+          // верном ответе ждём «Дальше»: угаданный ответ без объяснения
+          // ничему не учит, а строку «почему» надо успеть прочитать.
+          if (fb.correct && !fb.why) { setTimeout(function () { renderTajweed(next); }, 900); return; }
           // Мимо - ждём «Дальше»: верный ответ надо успеть прочитать.
           var after = document.getElementById('tj-after');
-          after.innerHTML = '<button class="tj-go" id="tj-next">' + T('tajweed_next') + '</button>';
+          after.innerHTML = (fb.why ? tajweedWhy(fb) : '') +
+            '<button class="tj-go" id="tj-next">' + T('tajweed_next') + '</button>';
           document.getElementById('tj-next').addEventListener('click', function () { renderTajweed(next); });
         });
       });

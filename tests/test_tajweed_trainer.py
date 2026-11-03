@@ -350,3 +350,19 @@ def test_mistake_on_the_last_card_of_a_batch_also_waits(test_db):
 
     assert missed not in order[:3]
     assert order[3] == missed
+
+
+def test_sifat_answer_explains_why_by_key_phrase():
+    """После ответа - фраза-ключ и попала ли в неё буква (03.11.2026)."""
+    by = {(c["kind"], c["glyph"]): c for c in tt.CARDS}
+    why = tt._sifa_why(by[("shidda", "ق")])
+    assert [g["id"] for g in why["groups"]] == ["shidda", "tawassut"]
+    assert why["hit"] == "shidda" and "ق" in why["groups"][0]["letters"]
+    why = tt._sifa_why(by[("idhlaq", "ق")])
+    assert why["hit"] is None and why["rest"] == "ismat"
+    # Фраза-ключ и список букв - одно и то же: без огласовок буквы совпадают.
+    import re
+    for p in tt.SIFAT:
+        for gid, letters in p["letters"].items():
+            bare = re.sub(r"[ً-ْ\s]", "", tt.SIFA_KEYS[gid])
+            assert set(bare.replace("أ", "ء")) == set(letters), gid
