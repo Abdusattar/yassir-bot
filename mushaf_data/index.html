@@ -2060,14 +2060,14 @@
      Та же приглушённо-изумрудная палитра, что и у дашборда - единый
      фирменный акцент на всё приложение, не отдельный стиль под каждый
      экран. */
-  #trainer, #trainers, #tajweed, #nahw, #hadith {
+  #trainer, #trainers, #tajweed, #nahw, #hadith, #more {
     display: none;
     flex-direction: column;
     height: 100%;
     width: 100%;
     background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
   }
-  #trainer-topbar, #trainers-topbar, #tajweed-topbar, #nahw-topbar, #hadith-topbar {
+  #trainer-topbar, #trainers-topbar, #tajweed-topbar, #nahw-topbar, #hadith-topbar, #more-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2121,7 +2121,7 @@
   /* «Тренажёры» (14.09.2026) - вход через одну дверь, внутри по строке на
      тренажёр: «Слова», «Таджвид», позже «Нахв». Строка крупная, с тем же
      золотым знаком, что у двери, и счётом дня справа - за ним и заходят. */
-  #trainers-body {
+  #trainers-body, #more-body {
     flex: 1 1 auto; min-height: 0; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 18px 16px 24px;
@@ -2153,6 +2153,70 @@
     background: var(--accent-soft); color: var(--accent);
   }
   .tr-hub .cnt.done { background: var(--ok-soft); color: var(--ok); }
+
+  /* Нижняя панель разделов (04.11.2026, перенос из прототипа «Хифз ·
+     Сегодня»): Сегодня, Мусхаф, Тренажёры, Прогресс, Ещё. Видна на
+     дашборде, в хабе «Тренажёров», в «Работе с устазом», в «Ещё», в
+     «Знаниях» и в настройках. В мусхафе и на глубоких экранах (карточка
+     тренажёра, заучивание, разбор) её нет: там внизу стоят действия, и
+     правило «низ - только действия» остаётся. Когда панель видна,
+     корневой «← Дашборд» в шапке не нужен: его роль берёт «Сегодня».
+
+     Панель фиксирована внизу, а место под неё освобождает padding у body:
+     все экраны - height: 100% от body, ничего не уходит под неё.
+
+     Под «домиком» iPhone оставляем системный отступ минус 14px - подписи
+     не налезают на полоску жеста, а панель не висит высоко (замер в
+     прототипе). Отступ Telegram учитываем так же, как в #page-nav. */
+  :root {
+    --tabs-safe: max(4px, calc(env(safe-area-inset-bottom, 0px) - 14px),
+                      calc(var(--tg-safe-area-inset-bottom, 0px) - 14px));
+    --tabs-h: calc(49px + var(--tabs-safe));
+  }
+  #tabs {
+    display: none;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    padding: 2px max(4px, env(safe-area-inset-right, 0px)) var(--tabs-safe) max(4px, env(safe-area-inset-left, 0px));
+    background: var(--chrome-bg);
+    border-top: 1px solid var(--chrome-border);
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  body.tabs-on #tabs { display: flex; }
+  body.tabs-on { padding-bottom: var(--tabs-h); }
+  .tabs-btn {
+    flex: 1 1 0; min-width: 0; height: 46px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    border: 0; background: none; border-radius: 12px; padding: 0;
+    font: inherit; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; line-height: 1.1;
+    color: var(--muted); cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabs-btn svg {
+    width: 22px; height: 22px; flex: 0 0 auto;
+    fill: none; stroke: currentColor; stroke-width: 1.7;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .tabs-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs-btn.on { color: var(--accent); }
+  .tabs-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* В мусхафе панели нет (решение пользователя 04.11.2026): с ней лист
+     не помещался и прокручивался. Мусхаф - во всю высоту, как раньше, и
+     возврат «← Дашборд» в его шапке остаётся. */
+  body.tabs-on #subs-back { display: none; }
+  /* Настройки и «Знания» - с панелью (решение пользователя 04.11.2026).
+     Настройки - шторка position: fixed во весь экран: поднимаем её низ над
+     панелью. У подвала «Знаний» отступ под «домик» теперь у панели. */
+  body.tabs-on #sett { bottom: var(--tabs-h); }
+  body.tabs-on #learn-foot { padding-bottom: 16px; }
+  /* В шапке «Тренажёров» заголовок по центру (space-between на трёх
+     элементах) - прячем возврат, но оставляем его место. */
+  body.tabs-on #trainers-back { visibility: hidden; }
+  #more-topbar { justify-content: center; min-height: 47px; }
+  .tr-hub .mk svg {
+    width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
   /* Карточка таджвида: одна буква - крупнее слова в «Словах», её форму
      надо узнать с расстояния руки. Подпись под буквой - только у و и ي,
      которые выходят из двух мест (согласная и мадд). */
@@ -4345,6 +4409,36 @@
   <div id="ustaz-body"></div>
 </div>
 
+<!-- «Ещё» (04.11.2026) - пятая вкладка нижней панели: то, что не ежедневная
+     работа. Пока две строки - «Знания» и «Настройки»; обе открывают уже
+     существующие экраны, своего содержимого здесь нет. -->
+<div id="more">
+  <div id="more-topbar">
+    <span data-i18n="tab_more">Ещё</span>
+  </div>
+  <div id="more-body">
+    <button class="tr-hub" id="more-learn">
+      <span class="mk"><svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2z"/><path d="M8 7h7M8 11h5"/></svg></span>
+      <span><span class="nm" data-i18n="dash_learn">Знания</span><span class="ds" data-i18n="more_learn_sub">Правила, как работаем, уроки</span></span>
+    </button>
+    <button class="tr-hub" id="more-sett">
+      <span class="mk"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>
+      <span><span class="nm" data-i18n="sett_title">Настройки</span><span class="ds" data-i18n="more_sett_sub">Имя, язык, тема, позвать друга</span></span>
+    </button>
+  </div>
+</div>
+
+<!-- Нижняя панель разделов (04.11.2026). Видимость и активную вкладку
+     решает tabsSync() по тому, какой экран сейчас открыт, - сами экраны
+     о панели не знают. Иконки - из прототипа «Хифз · Сегодня». -->
+<nav id="tabs" aria-label="Разделы">
+  <button class="tabs-btn" data-tab="today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.3 2.3 4.7-5"/></svg><span data-i18n="tab_today">Сегодня</span></button>
+  <button class="tabs-btn" data-tab="mushaf"><svg viewBox="0 0 24 24"><path d="M4 5.5A2 2 0 0 1 6 4h4.5a2 2 0 0 1 1.5.7A2 2 0 0 1 13.5 4H18a2 2 0 0 1 2 2v13.5h-6.5a2 2 0 0 0-1.5.7 2 2 0 0 0-1.5-.7H4z"/><path d="M12 5v14.5"/></svg><span data-i18n="dash_mushaf">Мусхаф</span></button>
+  <button class="tabs-btn" data-tab="train"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 10l2 2-2 2M12.5 14h3.5"/></svg><span data-i18n="trainers_title">Тренажёры</span></button>
+  <button class="tabs-btn" data-tab="progress"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-4M12 16V8M17 16V5"/></svg><span data-i18n="tab_progress">Прогресс</span></button>
+  <button class="tabs-btn" data-tab="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span data-i18n="tab_more">Ещё</span></button>
+</nav>
+
 <!-- Экран входа (10.09.2026) - показывается только вне Telegram, см. JS.
      Тексты здесь по-русски и без data-i18n намеренно: до входа язык
      студента ещё неизвестен (он хранится на сервере, по Telegram ID), а
@@ -5133,6 +5227,14 @@
       ustaz_days: '%N% дн',
       ustaz_minutes: '%N% мин',
       back_dashboard: '← Дашборд',
+      // Нижняя панель (04.11.2026). ky/uz/zh собраны из уже принятых в
+      // словарях слов (Билим, Жөндөөлөр, сабактар...) - сверить носителю.
+      tab_today: 'Сегодня',
+      tab_progress: 'Прогресс',
+      tab_more: 'Ещё',
+      back_more: '← Ещё',
+      more_learn_sub: 'Правила, как работаем, уроки',
+      more_sett_sub: 'Имя, язык, тема, позвать друга',
       back_page: '← Страница',
       back_mushaf: '← Мусхаф',
       back_trainer: '← Тренажёр',
@@ -5465,6 +5567,12 @@
       dash_trainer: 'Машыгуу',
       dash_trainer_sub: 'Муфрадат — Курандын сөздөрүн үйрөн',
       back_dashboard: '← Башкы бет',
+      tab_today: 'Бүгүн',
+      tab_progress: 'Прогресс',
+      tab_more: 'Дагы',
+      back_more: '← Дагы',
+      more_learn_sub: 'Эрежелер, кантип иштейбиз, сабактар',
+      more_sett_sub: 'Аты, тил, көрүнүш, дос чакыруу',
       tab_mywords: '⭐ Менин сөздөрүм',
       // Строки режима заучивания (hifz_*) намеренно только по-русски
       // (01.09.2026): фича ещё шлифуется, локализуем одним проходом,
@@ -6219,6 +6327,12 @@
       dash_trainer: 'Машқ',
       dash_trainer_sub: 'Муфрадат — Қуръон сўзларини ўрган',
       back_dashboard: '← Бош саҳифа',
+      tab_today: 'Бугун',
+      tab_progress: 'Тараққиёт',
+      tab_more: 'Яна',
+      back_more: '← Яна',
+      more_learn_sub: 'Қоидалар, қандай ишлаймиз, дарслар',
+      more_sett_sub: 'Исм, тил, кўриниш, дўстни таклиф қилиш',
       tab_mywords: '⭐ Менинг сўзларим',
       surah_list_title: 'Суралар',
       tab_mushaf: '📗 Мусҳаф',
@@ -6973,6 +7087,12 @@
       dash_trainer: '练习',
       dash_trainer_sub: '词汇 — 学习古兰经的词语',
       back_dashboard: '← 主页',
+      tab_today: '今天',
+      tab_progress: '进度',
+      tab_more: '更多',
+      back_more: '← 更多',
+      more_learn_sub: '规则、使用方法、课程',
+      more_sett_sub: '名字、语言、主题、邀请朋友',
       tab_mywords: '⭐ 我的生词',
       surah_list_title: '章目',
       tab_mushaf: '📗 古兰经',
@@ -8318,7 +8438,13 @@
     if (e.key === 'Escape' && feedBox.classList.contains('on')) feedClose();
   });
 
-  function settOpen() {
+  // fromMore - открыто из вкладки «Ещё» (04.11.2026): настройки лежат поверх
+  // неё, и возврат подписан «← Ещё». Ключ меняем в data-i18n, а не только в
+  // тексте - иначе смена языка тут же, в настройках, вернула бы «← Дашборд».
+  function settOpen(fromMore) {
+    var back = document.getElementById('sett-back');
+    back.setAttribute('data-i18n', fromMore === true ? 'back_more' : 'back_dashboard');
+    back.textContent = T(back.getAttribute('data-i18n'));
     settBox.classList.add('on');
     markLang();
     markTheme();
@@ -8329,7 +8455,7 @@
   }
   function settClose() { settBox.classList.remove('on'); }
 
-  document.getElementById('btn-profile').addEventListener('click', settOpen);
+  document.getElementById('btn-profile').addEventListener('click', function () { settOpen(false); });
   document.getElementById('sett-back').addEventListener('click', settClose);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && settBox.classList.contains('on')) settClose();
@@ -14927,7 +15053,7 @@
     learnAt = null;
     var done = learnDone();
     document.getElementById('learn-title').textContent = T('learn_title');
-    document.getElementById('learn-back').textContent = T('back_dashboard');
+    document.getElementById('learn-back').textContent = T(learnFromMore ? 'back_more' : 'back_dashboard');
     document.getElementById('learn-foot').style.display = 'none';
 
     // Уроки идут ПЕРВЫМИ (решение пользователя 11.09.2026, когда увидел
@@ -15229,13 +15355,18 @@
     learnRenderStep(learnAt.section, next);
   }
 
-  function openLearn() {
+  // Из оглавления «Знаний» возвращаемся туда, откуда пришли: с дашборда - на
+  // дашборд, из вкладки «Ещё» - в «Ещё» (04.11.2026, нижняя панель).
+  var learnFromMore = false;
+  function openLearn(fromMore) {
+    learnFromMore = fromMore === true;
     document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('more').style.display = 'none';
     document.getElementById('learn').style.display = 'flex';
     learnRenderToc();
   }
 
-  document.getElementById('dash-learn').addEventListener('click', openLearn);
+  document.getElementById('dash-learn').addEventListener('click', function () { openLearn(false); });
 
   /* ─── «Позвать друга» (20.09.2026) ────────────────────────────────────
      Команда /invite в личке осталась, но кнопка меню в чате занята самим
@@ -15348,6 +15479,11 @@
     if (learnAt && learnAt.lesson) return lessonsRenderList(learnAt.lesson);
     if (learnAt) return learnRenderToc();
     document.getElementById('learn').style.display = 'none';
+    if (learnFromMore) {
+      learnFromMore = false;
+      document.getElementById('more').style.display = 'flex';
+      return;
+    }
     document.getElementById('dashboard').style.display = 'flex';
     if (typeof pulseIntroStart === 'function') pulseIntroStart();
   });
@@ -17732,6 +17868,100 @@
       document.getElementById('trainer-body').innerHTML = html;
     });
   }
+
+  /* ─── Нижняя панель разделов (04.11.2026) ─────────────────────────────
+     Перенос из прототипа «Хифз · Сегодня». Экраны приложения открываются
+     каждый своей функцией и сами прячут соседей - общего переключателя нет.
+     Поэтому панель не встраивается в каждую из них, а СМОТРИТ на экраны:
+     tabsSync() по видимости решает, корневой ли это экран раздела, и
+     показывает панель только там. Мусхаф и глубокие экраны (карточка
+     тренажёра, заучивание, разбор, кабинет устаза) панель прячут сами
+     собой: там лист во всю высоту или внизу стоят действия. */
+  var TABS_SCREENS = ['dashboard', 'app', 'trainers', 'subs', 'more', 'learn',
+    'trainer', 'tajweed', 'nahw', 'hadith', 'ustaz'];
+  var tabsBox = document.getElementById('tabs');
+
+  function tabsVisible(id) {
+    var el = document.getElementById(id);
+    return !!el && !el.hidden && getComputedStyle(el).display !== 'none';
+  }
+  function tabsSettOn() { return settBox.classList.contains('on'); }
+
+  // Какая вкладка подсвечена, или null - панель не нужна. Мусхафа здесь нет
+  // намеренно (решение пользователя 04.11.2026): с панелью лист не помещался
+  // и прокручивался, поэтому в мусхафе её не показываем.
+  function tabsCurrent() {
+    if (tabsVisible('login') || tabsVisible('wrongbot')) return null;
+    // Настройки - шторка поверх любого экрана, живут во вкладке «Ещё».
+    if (tabsSettOn()) return 'more';
+    if (tabsVisible('dashboard')) return 'today';
+    if (tabsVisible('trainers')) return 'train';
+    if (tabsVisible('subs')) return 'progress';
+    if (tabsVisible('more') || tabsVisible('learn')) return 'more';
+    return null;
+  }
+
+  function tabsSync() {
+    var cur = tabsCurrent();
+    document.body.classList.toggle('tabs-on', !!cur);
+    Array.prototype.forEach.call(tabsBox.querySelectorAll('.tabs-btn'), function (b) {
+      var on = b.getAttribute('data-tab') === cur;
+      b.classList.toggle('on', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+  }
+
+  var tabsQueued = false;
+  function tabsQueue() {
+    if (tabsQueued) return;
+    tabsQueued = true;
+    requestAnimationFrame(function () { tabsQueued = false; tabsSync(); });
+  }
+  var tabsObs = new MutationObserver(tabsQueue);
+  TABS_SCREENS.concat(['sett', 'login', 'wrongbot']).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) tabsObs.observe(el, { attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
+  });
+
+  function tabsGo(tab) {
+    var cur = tabsCurrent();
+    var onLearn = tabsVisible('learn');
+    // Тап по своей вкладке на её же экране - ничего. Из настроек и «Знаний»
+    // «Ещё» ведёт в само «Ещё».
+    if (cur === tab && !tabsSettOn() && !onLearn) return;
+    // Уборка уходящего экрана - то же, что делают их кнопки возврата.
+    if (tabsSettOn()) settClose();
+    if (onLearn) {
+      // Очищаем тело «Знаний»: иначе ролик из «Как работать» играл бы и со
+      // скрытого экрана. При следующем входе openLearn рисует оглавление.
+      document.getElementById('learn-body').innerHTML = '';
+      document.getElementById('learn').style.display = 'none';
+      learnFromMore = false;
+    }
+    if (cur === 'progress') subsStopAudio();
+    ['dashboard', 'app', 'trainers', 'subs', 'more'].forEach(function (id) {
+      document.getElementById(id).style.display = 'none';
+    });
+    if (tab === 'today') {
+      document.getElementById('dashboard').style.display = 'flex';
+      if (typeof pulseIntroStart === 'function') pulseIntroStart();
+    } else if (tab === 'mushaf') {
+      openMushaf('page');
+    } else if (tab === 'train') {
+      openTrainers();
+    } else if (tab === 'progress') {
+      openSubs();
+    } else if (tab === 'more') {
+      document.getElementById('more').style.display = 'flex';
+    }
+  }
+
+  Array.prototype.forEach.call(tabsBox.querySelectorAll('.tabs-btn'), function (b) {
+    b.addEventListener('click', function () { tabsGo(b.getAttribute('data-tab')); });
+  });
+  document.getElementById('more-learn').addEventListener('click', function () { openLearn(true); });
+  document.getElementById('more-sett').addEventListener('click', function () { settOpen(true); });
+  tabsSync();
 })();
 </script>
 </body>
