@@ -190,10 +190,14 @@ async def morning_tadabbur_report():
             elif not full:
                 partial_titles.append(title)
             else:
-                full_lines = [
-                    c["name"] + " — 🌟" + str(get_streak_days(c["id"], group["id"], group_tasks, yesterday))
+                # 04.11.2026: студентка заметила, что больший страйк стоял ниже -
+                # SQL без ORDER BY. Сортируем: страйк по убыванию, затем имя.
+                streaks = [
+                    (c["name"], get_streak_days(c["id"], group["id"], group_tasks, yesterday))
                     for c in full
                 ]
+                streaks.sort(key=lambda x: (-x[1], x[0] or ""))
+                full_lines = [n + " — 🌟" + str(s) for n, s in streaks]
                 groups_info.append({
                     "title": title,
                     "full_lines": full_lines,
