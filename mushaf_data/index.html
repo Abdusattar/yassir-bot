@@ -2165,18 +2165,25 @@
      Панель фиксирована внизу, а место под неё освобождает padding у body:
      все экраны - height: 100% от body, ничего не уходит под неё.
 
-     Под «домиком» iPhone оставляем системный отступ минус 14px - подписи
-     не налезают на полоску жеста, а панель не висит высоко (замер в
-     прототипе). Отступ Telegram учитываем так же, как в #page-nav. */
+     Размеры (04.11.2026, решение пользователя после проверки на iPhone) -
+     один в один с панелью приложения «Коран — строчка в день» (app.css,
+     .tabs/.tab): иконка 23px, подпись 10.5px с межстрочным 1.5 (16px),
+     отступы кнопки 5/3px, у панели 5px сверху и 4px + системный отступ
+     «домика» снизу. Кнопка 49px, панель 59px + отступ «домика». Перед
+     этим были два захода: 46px и «минус 14px» («слишком низкая»), 54px и
+     крупный шрифт («слишком огромная»). Отступ Telegram учитываем так
+     же, как в #page-nav. Высоту панели задаём явно (--tabs-h), чтобы
+     padding у body совпадал с ней до пикселя. */
   :root {
-    --tabs-safe: max(4px, calc(env(safe-area-inset-bottom, 0px) - 14px),
-                      calc(var(--tg-safe-area-inset-bottom, 0px) - 14px));
-    --tabs-h: calc(49px + var(--tabs-safe));
+    --tabs-safe: max(env(safe-area-inset-bottom, 0px),
+                     var(--tg-safe-area-inset-bottom, 0px));
+    --tabs-h: calc(59px + var(--tabs-safe));
   }
   #tabs {
     display: none;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-    padding: 2px max(4px, env(safe-area-inset-right, 0px)) var(--tabs-safe) max(4px, env(safe-area-inset-left, 0px));
+    height: var(--tabs-h);
+    padding: 5px max(6px, env(safe-area-inset-right, 0px)) calc(4px + var(--tabs-safe)) max(6px, env(safe-area-inset-left, 0px));
     background: var(--chrome-bg);
     border-top: 1px solid var(--chrome-border);
     direction: ltr;
@@ -2185,16 +2192,16 @@
   body.tabs-on #tabs { display: flex; }
   body.tabs-on { padding-bottom: var(--tabs-h); }
   .tabs-btn {
-    flex: 1 1 0; min-width: 0; height: 46px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    border: 0; background: none; border-radius: 12px; padding: 0;
-    font: inherit; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; line-height: 1.1;
+    flex: 1 1 0; min-width: 0; height: 49px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+    border: 0; background: none; border-radius: 10px; padding: 5px 0 3px;
+    font: inherit; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; line-height: 16px;
     color: var(--muted); cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .tabs-btn svg {
-    width: 22px; height: 22px; flex: 0 0 auto;
-    fill: none; stroke: currentColor; stroke-width: 1.7;
+    width: 23px; height: 23px; flex: 0 0 auto;
+    fill: none; stroke: currentColor; stroke-width: 1.6;
     stroke-linecap: round; stroke-linejoin: round;
   }
   .tabs-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
