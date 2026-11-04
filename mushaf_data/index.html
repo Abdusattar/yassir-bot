@@ -27,6 +27,21 @@
     var _t = localStorage.getItem('yassir_theme');
     if (_t === 'light' || _t === 'dark') document.documentElement.setAttribute('data-theme', _t);
   } catch (e) {}
+  // Отступ «домика» в приложении с экрана iPhone (05.11.2026, снимок
+  // пользователя: нижняя панель прижата к полоске жеста, а в Telegram -
+  // нормально). В Telegram отступ даёт сам Telegram
+  // (--tg-safe-area-inset-bottom). Со значка его должен дать Safari через
+  // env(), но без viewport-fit=cover env() там 0, а страница при этом
+  // доходит до самого низа экрана. viewport-fit=cover на всё приложение не
+  // включаем: шапки всех экранов ушли бы под строку состояния. Поэтому
+  // точечно: со значка на iPhone с «домиком» (экран от 812pt, у SE его
+  // нет) - системные 34pt. Читает только нижняя панель (--tabs-safe).
+  try {
+    if (navigator.standalone === true && /iPhone/.test(navigator.userAgent) &&
+        Math.max(screen.width, screen.height) >= 812) {
+      document.documentElement.style.setProperty('--ios-pwa-bottom', '34px');
+    }
+  } catch (e) {}
 </script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -2175,8 +2190,10 @@
      же, как в #page-nav. Высоту панели задаём явно (--tabs-h), чтобы
      padding у body совпадал с ней до пикселя. */
   :root {
+    /* --ios-pwa-bottom - приложение со значка на iPhone, см. скрипт в <head>. */
     --tabs-safe: max(env(safe-area-inset-bottom, 0px),
-                     var(--tg-safe-area-inset-bottom, 0px));
+                     var(--tg-safe-area-inset-bottom, 0px),
+                     var(--ios-pwa-bottom, 0px));
     --tabs-h: calc(59px + var(--tabs-safe));
   }
   #tabs {
