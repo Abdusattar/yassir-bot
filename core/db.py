@@ -2243,6 +2243,17 @@ _REDONE_EXISTS = (
 )
 
 
+# Студент всё ещё в группе этой сдачи (05.11.2026, решение пользователя).
+# Долг пересдачи из группы, откуда он ушёл, студенту не показываем: ни на
+# двери, ни в блоке «ПЕРЕСДАТЬ». Новый устаз его не задавал. История и
+# вердикт в базе целы; вернётся в ту группу - долг снова виден. Стену
+# (get_open_retakes) это не трогает: она и так смотрит только текущую группу.
+_IN_GROUP_NOW = (
+    "SELECT 1 FROM user_groups ug"
+    " WHERE ug.user_id = vs.student_id AND ug.group_id = vs.group_id AND ug.active = 1"
+)
+
+
 def get_student_submissions(student_id, limit=20):
     """Свои сдачи для кабинета студента (04.09.2026, экран "Сдачи" из макета
     01.09). Отдаём только признаки наличия аудио, не сами file_id: сырой
@@ -2264,6 +2275,7 @@ def get_student_submissions(student_id, limit=20):
             " vs.review_file_id IS NOT NULL AS has_review_audio,"
             " vs.verdict, vs.verdict_at, vs.error_words,"
             f" ({_REDONE_EXISTS}) AS redone,"
+            f" NOT EXISTS ({_IN_GROUP_NOW}) AS left_group,"
             " g.title AS group_title, ru.name AS review_by_name"
             " FROM voice_submissions vs"
             " JOIN groups g ON g.id = vs.group_id"
@@ -2276,6 +2288,7 @@ def get_student_submissions(student_id, limit=20):
     for r in rows:
         row = dict(r)
         row["redone"] = bool(row["redone"])
+        row["left_group"] = bool(row["left_group"])
         out.append(row)
     return out
 
@@ -2376,7 +2389,8 @@ def get_submission_counts(student_id):
         retake = c.execute(
             "SELECT COUNT(*) AS n FROM voice_submissions vs"
             " WHERE vs.student_id=? AND vs.verdict='retake'"
-            f" AND NOT EXISTS ({_REDONE_EXISTS})",
+            f" AND NOT EXISTS ({_REDONE_EXISTS})"
+            f" AND EXISTS ({_IN_GROUP_NOW})",
             (student_id,)
         ).fetchone()["n"]
     waiting = sum(1 for r in merge_submission_series(rows) if not r["reviewed_at"])

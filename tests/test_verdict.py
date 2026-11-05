@@ -472,3 +472,23 @@ def test_retake_in_debt_layout_after_switch(test_db, monkeypatch):
     assert same["ok"] is True
     assert db.get_open_retakes(sid, group["id"]) == []
     assert db.is_retake_answered(db.get_submission(sub_id))
+
+
+def test_retake_from_left_group_not_shown_to_student(test_db):
+    """05.11.2026, решение пользователя: студент ушёл из группы, где ему
+    вернули запись на пересдачу, и не пересдавал. Долг ему больше не
+    показываем - ни цифрой на двери, ни в блоке «ПЕРЕСДАТЬ». Вердикт в базе
+    цел и для устаза остаётся как был."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    sub_id = _submission(sid, group, 1, 2, 0, 1)
+    _with_comment(sid, 1)
+    db.set_submission_verdict(sub_id, db.VERDICT_RETAKE, "888002")
+    assert db.get_submission_counts(sid)["retake"] == 1
+    assert not db.get_student_submissions(sid)[0]["left_group"]
+
+    db.deactivate_student(sid, group["id"])
+
+    assert db.get_submission_counts(sid)["retake"] == 0
+    row = db.get_student_submissions(sid)[0]
+    assert row["left_group"] and row["verdict"] == db.VERDICT_RETAKE

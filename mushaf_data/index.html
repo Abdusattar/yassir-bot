@@ -14121,7 +14121,8 @@
       : (item.verdict === 'retake'
         ? (item.redone
           ? ['wait', T('subs_verdict_redone')]
-          : ['retake', T('subs_verdict_retake')])
+          // из прежней группы - без красного: это уже не долг
+          : [item.left_group ? 'wait' : 'retake', T('subs_verdict_retake')])
         : [done ? 'done' : 'wait', T(done ? 'subs_done' : 'subs_wait')]);
     var marks = [];
     try { marks = JSON.parse(item.error_words || '[]'); } catch (e) { marks = []; }
@@ -14180,7 +14181,7 @@
        (07.09.2026). При вердикте «на пересдачу» дверь выделена: это работа,
        которую от студента ждут. */
     if (fromApp && hasReview) {
-      var retake = item.verdict === 'retake' && !item.redone;
+      var retake = item.verdict === 'retake' && !item.redone && !item.left_group;
       html += '<div class="sub-actions" style="margin-top:6px">' +
         '<button style="flex:1" class="' + (retake ? 'primary' : 'sub-open') +
         '" data-look="' + item.id + '">' +
@@ -15592,7 +15593,11 @@
       // Сдачи из блока «нужно пересдать» в ленте не повторяем - одна и та же
       // строка дважды на экране читается как две разные работы. Отвеченная
       // пересдача (redone) в блоке не висит, значит её место здесь.
-      var feed = items.filter(function (it) { return it.verdict !== 'retake' || it.redone; });
+      // left_group - долг из группы, откуда студент ушёл (05.11.2026): не
+      // задача, а история; в блок «ПЕРЕСДАТЬ» не идёт.
+      var feed = items.filter(function (it) {
+        return it.verdict !== 'retake' || it.redone || it.left_group;
+      });
       var recent = feed.filter(function (it) { return it.date >= cutoff; });
       /* Сверху - только то, что просит устаз (07.09.2026). У активного
          студента сдач больше сотни, из них половина «ждёт проверки» - но это
@@ -15607,7 +15612,9 @@
          замечание устаза (08.09.2026, решение пользователя): долг гаснет сам,
          карточка уходит в ленту, отдельной «пересдачи» никто не ждёт. Признак
          redone считает сервер тем же правилом, что снимает гейт. */
-      var todo = items.filter(function (it) { return it.verdict === 'retake' && !it.redone; });
+      var todo = items.filter(function (it) {
+        return it.verdict === 'retake' && !it.redone && !it.left_group;
+      });
       /* Сверху - самый ранний по МУСХАФУ, а не по дате разбора (13.09.2026,
          решение пользователя). Устаз мог разобрать стр. 7 в понедельник, а
          стр. 6 во вторник: по дате «старше» стр. 7, хотя по Корану она позже,
