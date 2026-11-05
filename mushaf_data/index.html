@@ -11092,8 +11092,16 @@
     Array.prototype.forEach.call(box.children, function (el) { el.classList.remove('hifz-off'); });
     var oldX = box.querySelector('.hifz-xtail');
     if (oldX) oldX.parentNode.removeChild(oldX);
-    var rows = document.querySelectorAll('#ayah-text .mushaf-line');
-    Array.prototype.forEach.call(rows, function (row) {
+    var allRows = document.querySelectorAll('#ayah-text .mushaf-line');
+    // Пустые строки-заглушки (стр. 1 и 2 обеих раскладок, после текста) - не
+    // строки заучивания (05.11.2026, Умар устаз): с ними последняя строка
+    // стр. 2 «имела следующую» пустую на том же листе, и переход со стр. 3
+    // не вставал; половина при выборе считалась по 13 строкам вместо 6.
+    // Счёт тот же, что hifzTextLines и page_text_line_count на сервере.
+    var rows = Array.prototype.filter.call(allRows, function (row) {
+      return row.children.length > 0;
+    });
+    Array.prototype.forEach.call(allRows, function (row) {
       row.classList.remove('hifz-lit', 'hifz-dim', 'hifz-has-tail',
         'pick-half-a', 'pick-half-b', 'pick-half-first-b', 'pick-half-last-a');
       Array.prototype.forEach.call(row.children, function (sp) {
@@ -11159,7 +11167,10 @@
           xh += '<span class="tail-plain"' + tr + '>' + tk.html + '</span>';
         }
         x.innerHTML = xh;
-        box.appendChild(x);
+        // Сразу под последней строкой единицы, а не в конец листа: на стр. 1-2
+        // за текстом идут пустые заглушки, и переход отъехал бы под них.
+        var anchor = rows[lit[lit.length - 1]];
+        box.insertBefore(x, anchor ? anchor.nextSibling : null);
         lastShown = x;
         xtail = true;
       }
@@ -11678,6 +11689,7 @@
        когда на экране уже тот лист, что в шапке (data-page ставит reveal). */
     if (parseInt(this.getAttribute('data-page'), 10) !== currentPage) return;
     var idx = parseInt(row.getAttribute('data-line'), 10);
+    if (idx >= hifzTextLines().length) return;   // пустая заглушка стр. 1-2
     if (hifz.unit === 'half') {
       // Тапнул по любой строке половины — значит выбрал ЭТУ половину.
       // Указатель ставим на её первую строку: этап 2 определяет половину
