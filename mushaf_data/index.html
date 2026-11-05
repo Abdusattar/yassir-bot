@@ -9485,7 +9485,9 @@
   // пользователя), даже если в прошлый раз ушли со "Смысла"/"Мои слова".
   document.getElementById('dash-mushaf').addEventListener('click', function () { openMushaf('page'); });
   document.getElementById('dash-trainer').addEventListener('click', function () { openTrainers(); });
-  document.getElementById('dash-subs').addEventListener('click', openSubs);
+  // Не голый openSubs (05.11.2026, Толкун): клик передал бы событие в
+  // fromWall - и «Сначала пересдай, потом дальше» висело у всех без долгов.
+  document.getElementById('dash-subs').addEventListener('click', function () { openSubs(); });
   document.getElementById('subs-back').addEventListener('click', function () {
     subsStopAudio();
     document.getElementById('subs').style.display = 'none';
