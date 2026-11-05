@@ -11068,6 +11068,31 @@
     return lastTokenIdx + 1;
   }
 
+  /* Поглощённая последняя строка (05.11.2026, Умар устаз): её ЦЕЛИКОМ
+     съедает переход предпоследней - стр. 1 «وَلَا ٱلضَّآلِّينَ», стр. 2
+     «هُمُ ٱلْمُفْلِحُونَ». Отдельной единицей этапа 1 она была бы теми же
+     двумя словами по 40+40, поэтому входит в предыдущую строку. Индекс или
+     -1. То же правило - hifz_absorbed_line на сервере. */
+  function hifzAbsorbed() {
+    var lines = hifzTextLines(), n = lines.length;
+    if (n < 2) return -1;
+    var words = 0, toks = lines[n - 1].tokens;
+    for (var i = 0; i < toks.length; i++) if (toks[i].type === 'word') words++;
+    var tail = hifzTailTokens(n - 2), taken = 0;
+    for (var j = 0; j < tail && j < toks.length; j++) if (toks[j].type === 'word') taken++;
+    return words && taken >= words ? n - 1 : -1;
+  }
+  // Строка-единица этапа 1: на поглощённой - предыдущая.
+  function hifzUnitLine(line) {
+    return line !== null && line === hifzAbsorbed() ? line - 1 : line;
+  }
+  // «строчка N из M» с учётом склейки: поглощённая строка не считается.
+  function hifzLineOf(line) {
+    var r = hifzHalfRange(hifzHalf(line)), ab = hifzAbsorbed();
+    var m = r[1] - r[0] + 1 - (ab >= r[0] && ab <= r[1] ? 1 : 0);
+    return T('hifz_line_of', { N: hifzUnitLine(line) - r[0] + 1, M: m });
+  }
+
   /* Половины страницы: первая — floor(n/2) строк, вторая — остальные.
      На 15 строках это 7+8, ровно как в печатной раскладке. */
   function hifzHalf(lineIdx) {
@@ -11122,7 +11147,12 @@
     if (!hifz.on || hifz.picking || hifz.line === null) return;
 
     var lit = [];
-    if (hifz.stage === 1) lit = [hifz.line];
+    if (hifz.stage === 1) {
+      // Склейка (05.11.2026): единица предпоследней строки - вместе с
+      // поглощённой последней, переход уже со следующего листа.
+      var ul = hifzUnitLine(hifz.line);
+      lit = ul !== hifz.line || hifzAbsorbed() === ul + 1 ? [ul, ul + 1] : [ul];
+    }
     else if (hifz.stage === 2) {
       var r = hifzHalfRange(hifzHalf(hifz.line));
       for (var i = r[0]; i <= r[1]; i++) lit.push(i);
@@ -11261,9 +11291,7 @@
         ? tapHint + ' · ' + T('hifz_pick_sub_elsewhere', { N: hifzPointerPage })
         : tapHint;
     } else if (hifz.stage === 1) {
-      var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
-      where.textContent = T('page_n', { N: currentPage }) + ' · ' +
-        T('hifz_line_of', { N: hifz.line - r[0] + 1, M: r[1] - r[0] + 1 });
+      where.textContent = T('page_n', { N: currentPage }) + ' · ' + hifzLineOf(hifz.line);
       sub.textContent = T('hifz_stage1');
     } else if (hifz.stage === 2) {
       var rr = hifzHalfRange(hifzHalf(hifz.line));
@@ -11364,7 +11392,10 @@
     if (hifz.stage === 3) return 'full';
     if (hifz.stage === 2) return hifzHalf(hifz.line) === 0 ? 'first_half' : 'second_half';
     var n = hifzTextLines().length, mid = Math.floor(n / 2);
-    return hifz.line < mid ? ('first_' + hifz.line) : ('second_' + (hifz.line - mid));
+    // Склеенная единица стр. 1-2 звучит файлом предпоследней строки: в нём
+    // поглощённая строка уже есть как переход (05.11.2026).
+    var ul = hifz.stage === 1 ? hifzUnitLine(hifz.line) : hifz.line;
+    return ul < mid ? ('first_' + ul) : ('second_' + (ul - mid));
   }
 
   function hifzAudioUrl() {
@@ -11598,7 +11629,9 @@
     var to = { line: hifz.line, stage: hifz.stage, page: currentPage };
     if (hifz.stage === 1) {
       var half = hifzHalf(hifz.line), r = hifzHalfRange(half);
-      if (hifz.line < r[1]) to.line = hifz.line + 1;
+      // Поглощённая последняя строка - не своя единица (05.11.2026).
+      var end = hifzAbsorbed() === r[1] ? r[1] - 1 : r[1];
+      if (hifz.line < end) to.line = hifz.line + 1;
       else to.stage = 2;                           // строчки половины закончились
     } else if (hifz.stage === 2) {
       if (hifzHalf(hifz.line) === 0) {             // первая половина сдана
@@ -11697,7 +11730,7 @@
       hifz.line = hifzHalfRange(hifzHalf(idx))[0];
       hifz.stage = 2;
     } else {
-      hifz.line = idx;
+      hifz.line = idx === hifzAbsorbed() ? idx - 1 : idx;   // склейка стр. 1-2
       hifz.stage = 1;
     }
     trail('pick', { p: currentPage, l: hifz.line, s: hifz.stage });
@@ -13066,9 +13099,7 @@
   function hifzPlaceText(page, line, stage) {
     if (page !== currentPage) return T('page_n', { N: page });
     if (stage === 1) {
-      var r = hifzHalfRange(hifzHalf(line));
-      return T('page_n', { N: page }) + ' · ' +
-        T('hifz_line_of', { N: line - r[0] + 1, M: r[1] - r[0] + 1 });
+      return T('page_n', { N: page }) + ' · ' + hifzLineOf(line);
     }
     if (stage === 2) {
       var rr = hifzHalfRange(hifzHalf(line));

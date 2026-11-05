@@ -923,6 +923,63 @@ def page_text_line_count(page_number, default=15, layout="madani"):
     return count
 
 
+_HIFZ_HARAKAT = re.compile("[ً-ٰٟۖ-ۭـ]")
+_absorbed_lines = {}
+
+
+def _tail_word_count(tokens):
+    """Порт hifzTailTokens (mushaf_data/index.html): сколько СЛОВ следующей
+    строки уходит в переход. Первое слово; короткое (<=3 буквы без огласовок)
+    тянет второе; на конце аята - ещё одно; потолок три."""
+    taken = 0
+    for i, t in enumerate(tokens):
+        if taken >= 3:
+            break
+        if t.get("type") != "word":
+            continue
+        taken += 1
+        after = tokens[i + 1] if i + 1 < len(tokens) else None
+        ends_ayah = bool(after) and after.get("type") == "ayah_end"
+        base = len(_HIFZ_HARAKAT.sub("", re.sub(r"<[^>]+>", "", t.get("html") or "")))
+        if taken == 1 and base > 3 and not ends_ayah:
+            break
+        if taken >= 2 and not ends_ayah:
+            break
+    return taken
+
+
+def hifz_absorbed_line(page_number, layout="madani"):
+    """Последняя строка листа, которую ЦЕЛИКОМ съедает переход предыдущей, -
+    или None (05.11.2026, Умар устаз). На стр. 1 («وَلَا ٱلضَّآلِّينَ») и стр. 2
+    («هُمُ ٱلْمُفْلِحُونَ») обеих раскладок: предпоследняя строка уже читается
+    с ней, и отдельной единицей этапа 1 она была бы теми же двумя словами
+    по 40+40. Такая строка входит в предыдущую единицу. Правило то же, что
+    hifzAbsorbed в приложении, - разойдутся, и шаг разойдётся."""
+    key = (layout, page_number)
+    if key in _absorbed_lines:
+        return _absorbed_lines[key]
+    res = None
+    data = _page_json(page_number, layout)
+    if data:
+        lines = [l for l in data.get("lines", []) if l.get("type") == "text" and l.get("tokens")]
+        if len(lines) >= 2:
+            last = lines[-1]["tokens"]
+            words = sum(1 for t in last if t.get("type") == "word")
+            if words and _tail_word_count(last) >= words:
+                res = len(lines) - 1
+    _absorbed_lines[key] = res
+    return res
+
+
+def hifz_unit_line(page, line, stage, layout="madani"):
+    """Строка-единица этапа 1: поглощённая последняя строка - это единица
+    предыдущей. Для этапов 2/3 и прочих строк - как есть."""
+    if stage == 1 and page is not None and line is not None:
+        if line == hifz_absorbed_line(page, layout or "madani"):
+            return line - 1
+    return line
+
+
 def next_hifz_position(page, line, stage, page_lines=None, layout="madani"):
     """Чистая функция: (страница, строка, этап) -> следующая позиция.
     Возвращает то же самое, если дальше идти некуда (последняя страница)."""
@@ -930,6 +987,9 @@ def next_hifz_position(page, line, stage, page_lines=None, layout="madani"):
     mid = n // 2
     if stage == 1:
         half_end = (mid - 1) if line < mid else (n - 1)
+        # Поглощённая последняя строка - не своя единица (05.11.2026).
+        if half_end == n - 1 and hifz_absorbed_line(page, layout) == n - 1 and not page_lines:
+            half_end = n - 2
         if line < half_end:
             return page, line + 1, 1
         return page, line, 2

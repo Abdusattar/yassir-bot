@@ -12,13 +12,24 @@ from core.content import TASK_KEYS, TASK_WORDS
 def _same_unit(page, line, stage, layout, n_page, n_line, n_layout):
     """SQL same_unit(...): запись n - та же единица 40+40, что (page, line,
     stage) в раскладке layout, хотя бы и сданная в другой раскладке (10.10.2026,
-    см. mushaf_words.unit_in_layout). Этап сравнивает сам запрос."""
+    см. mushaf_words.unit_in_layout). Этап сравнивает сам запрос.
+
+    Поглощённая последняя строка стр. 1-2 (05.11.2026) - часть единицы
+    предыдущей: долг на ней закрывает сдача склеенной единицы и наоборот."""
+    if page is not None and n_page is not None:
+        from core.mushaf_words import hifz_unit_line
+        line = hifz_unit_line(page, line, stage, layout)
+        n_line = hifz_unit_line(n_page, n_line, stage, n_layout)
     if (layout or "madani") == (n_layout or "madani"):
         return int((page, line) == (n_page, n_line))
     if page is None:
         return 0
     from core.mushaf_words import unit_in_layout
-    return int(unit_in_layout(page, line, stage, layout, n_layout) == (n_page, n_line))
+    from core.mushaf_words import hifz_unit_line
+    to = unit_in_layout(page, line, stage, layout, n_layout)
+    if to and to[0] is not None:
+        to = (to[0], hifz_unit_line(to[0], to[1], stage, n_layout))
+    return int(tuple(to or ()) == (n_page, n_line))
 
 
 def db():
