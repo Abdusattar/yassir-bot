@@ -2217,9 +2217,14 @@ def save_submission_review(chat_id, message_id, review_type, review_file_id=None
 # студент добивает свои 40+40 частями за 2-3 дня, каждая часть - сдача той же
 # единицы. Отвечать отдельной "пересдачей" ему не нужно, продолжение работы и
 # есть ответ (решение пользователя 08.09.2026).
+#
+# Группу НЕ сверяем (05.11.2026, Абдулхаким): место в Коране - его, а не
+# группы. Его перевели из подготовительной в G-7 в день, когда пришла
+# пересдача; он пересдал то же место уже из новой группы, устаз принял, а
+# «пересдать 1» на двери висело дальше. Половины не смешаются - базы разные.
 _REDONE_EXISTS = (
     "SELECT 1 FROM voice_submissions n"
-    " WHERE n.student_id = vs.student_id AND n.group_id = vs.group_id"
+    " WHERE n.student_id = vs.student_id"
     "   AND n.hifz_stage IS vs.hifz_stage"
     "   AND same_unit(vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.hifz_layout,"
     "                 n.hifz_page, n.hifz_line, n.hifz_layout)"
@@ -2530,10 +2535,10 @@ def is_retake_answered(submission):
     with db() as c:
         row = c.execute(
             "SELECT 1 FROM voice_submissions"
-            " WHERE student_id=? AND group_id=? AND hifz_stage IS ?"
+            " WHERE student_id=? AND hifz_stage IS ?"      # группа любая, см. _REDONE_EXISTS
             " AND same_unit(?, ?, ?, ?, hifz_page, hifz_line, hifz_layout)"
             " AND id > ? LIMIT 1",
-            (submission["student_id"], submission["group_id"], submission["hifz_stage"],
+            (submission["student_id"], submission["hifz_stage"],
              submission["hifz_page"], submission["hifz_line"], submission["hifz_stage"],
              submission["hifz_layout"], submission["verdict_after_id"] or submission["id"])
         ).fetchone()

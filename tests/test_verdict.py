@@ -388,6 +388,29 @@ def test_принятую_работу_заморозка_не_трогает(te
     assert db.is_retake_answered(db.get_submission(sub_id)) is False
 
 
+def test_retake_closed_after_transfer_to_other_group(test_db):
+    """05.11.2026, Абдулхаким: пересдача пришла в подготовительной, в тот же
+    день его перевели в G-7, и он пересдал то же место уже оттуда. Долг
+    должен закрыться - и на двери, и в списке сдач, и для устаза."""
+    group = _group()
+    sid = db.add_student("Сатар", group["id"], phone="777001")
+    sub_id = _submission(sid, group, 1, 2, 0, 3)
+    _with_comment(sid, 1)
+    db.set_submission_verdict(sub_id, db.VERDICT_RETAKE, "888002")
+    assert db.get_submission_counts(sid)["retake"] == 1
+
+    db.save_group("-100444002", "G-7", tasks="m,r,t")
+    new = db.get_group("-100444002")
+    db.save_voice_submission(sid, new["id"], "-100444002", 2, db.get_date(), file_id="f2",
+                             hifz_page=2, hifz_line=0, hifz_stage=3)
+
+    assert db.get_submission_counts(sid)["retake"] == 0
+    assert db.get_open_retakes(sid, group["id"]) == []
+    assert db.is_retake_answered(db.get_submission(sub_id))
+    old = [s for s in db.get_student_submissions(sid) if s["id"] == sub_id][0]
+    assert old["redone"]
+
+
 def test_retake_closed_by_same_line_in_other_layout(test_db):
     """10.10.2026, Абу Абдуллах (G 2b): вердикт «на пересдачу» пришёл по
     мадинской строке, когда он уже перешёл на египетскую раскладку и пересдал
