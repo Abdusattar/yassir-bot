@@ -2236,6 +2236,10 @@
   /* В шапке «Тренажёров» заголовок по центру (space-between на трёх
      элементах) - прячем возврат, но оставляем его место. */
   body.tabs-on #trainers-back { visibility: hidden; }
+  /* Панель есть и внутри тренажёров (10.11.2026, решение пользователя).
+     В карточке «Слов» свой нижний бар «Мои слова · Мусхаф»: «Мусхаф»
+     дублирует вкладку - прячем, «Мои слова» остаётся. */
+  body.tabs-on #trainer-tab-mushaf { display: none; }
   #more-topbar { justify-content: center; min-height: 47px; }
   .tr-hub .mk svg {
     width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7;
@@ -17950,9 +17954,11 @@
      каждый своей функцией и сами прячут соседей - общего переключателя нет.
      Поэтому панель не встраивается в каждую из них, а СМОТРИТ на экраны:
      tabsSync() по видимости решает, корневой ли это экран раздела, и
-     показывает панель только там. Мусхаф и глубокие экраны (карточка
-     тренажёра, заучивание, разбор, кабинет устаза) панель прячут сами
-     собой: там лист во всю высоту или внизу стоят действия. */
+     показывает панель только там. Мусхаф и глубокие экраны (заучивание,
+     разбор, кабинет устаза) панель прячут сами собой: там лист во всю
+     высоту или внизу стоят действия. Экраны тренажёров (карточка «Слов»,
+     таджвид, нахв, хадис) - с панелью (10.11.2026, решение пользователя):
+     их низ скроллится вместе с телом, действий, прибитых к низу, нет. */
   var TABS_SCREENS = ['dashboard', 'app', 'trainers', 'subs', 'more', 'learn',
     'trainer', 'tajweed', 'nahw', 'hadith', 'ustaz'];
   var tabsBox = document.getElementById('tabs');
@@ -17971,7 +17977,10 @@
     // Настройки - шторка поверх любого экрана, живут во вкладке «Ещё».
     if (tabsSettOn()) return 'more';
     if (tabsVisible('dashboard')) return 'today';
-    if (tabsVisible('trainers')) return 'train';
+    // Внутри тренажёров панель тоже есть (10.11.2026, решение пользователя):
+    // карточка «Слов», таджвид, нахв и хадис - те же «Тренажёры».
+    if (tabsVisible('trainers') || tabsVisible('trainer') || tabsVisible('tajweed') ||
+        tabsVisible('nahw') || tabsVisible('hadith')) return 'train';
     if (tabsVisible('subs')) return 'ustaz';
     if (tabsVisible('more') || tabsVisible('learn')) return 'more';
     return null;
@@ -18002,9 +18011,14 @@
   function tabsGo(tab) {
     var cur = tabsCurrent();
     var onLearn = tabsVisible('learn');
+    var inTrainer = tabsVisible('trainer') || tabsVisible('tajweed') ||
+      tabsVisible('nahw') || tabsVisible('hadith');
     // Тап по своей вкладке на её же экране - ничего. Из настроек и «Знаний»
-    // «Ещё» ведёт в само «Ещё».
-    if (cur === tab && !tabsSettOn() && !onLearn) return;
+    // «Ещё» ведёт в само «Ещё», из карточки тренажёра «Тренажёры» - в хаб.
+    if (cur === tab && !tabsSettOn() && !onLearn) {
+      if (tab === 'train' && inTrainer) openTrainers();
+      return;
+    }
     // Уборка уходящего экрана - то же, что делают их кнопки возврата.
     if (tabsSettOn()) settClose();
     if (onLearn) {
@@ -18015,7 +18029,7 @@
       learnFromMore = false;
     }
     if (cur === 'ustaz') subsStopAudio();
-    ['dashboard', 'app', 'trainers', 'subs', 'more'].forEach(function (id) {
+    ['dashboard', 'app', 'trainers', 'trainer', 'tajweed', 'nahw', 'hadith', 'subs', 'more'].forEach(function (id) {
       document.getElementById(id).style.display = 'none';
     });
     if (tab === 'today') {
