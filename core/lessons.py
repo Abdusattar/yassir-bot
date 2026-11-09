@@ -40,6 +40,25 @@ SUBJECTS = (
     {"id": "n", "title": "Нахв", "sub": "Слово, число, и‘раб", "mark": "📗"},
 )
 
+# Видеоуроки на YouTube (10.11.2026, Эрлан): по порядку уроков предмета -
+# первый id к первому уроку списка, и так далее. Урок считается по месту в
+# `order_index` внутри предмета, а не по id части: базы мужского и женского
+# ботов разные, а программа и порядок уроков у них одни. В приложении ролик
+# стоит над текстом урока, как видео-инструкции в «Как работать». Следующие
+# ролики - дописать в конец списка; у кого видео нет, поле `video` пустое.
+LESSON_VIDEOS = {
+    "j": [
+        "szPjLeQAtHA", "DTANlvT6FLQ", "_QG6nsyQuKI", "FyvJ9gK_XyY", "SdX8ir0uSV0",
+        "5C9xYUNBuxg", "B4h8YiR4_p4", "r9jgaWz0U9E", "FCM1WkdeXfw", "d0Fi07mgq8g",
+    ],
+}
+
+
+def lesson_video(subject, rank):
+    """Id ролика для урока с порядковым номером rank (с 1) или None."""
+    vids = LESSON_VIDEOS.get(subject) or []
+    return vids[rank - 1] if 0 < rank <= len(vids) else None
+
 
 # Китайский перевод (28.10.2026, scripts/build_lessons_zh.py). Текст ищется по
 # хэшу русского: поправили урок - покажем русский, а не устаревший перевод.
@@ -138,7 +157,8 @@ def lessons_of(subject, group_id=None, lang="ru"):
         "parts": r["part_total"],
         "open": bool(at(r)),
         "at": (at(r) or "")[:10],
-    } for r in rows]
+        "video": bool(lesson_video(subject, k + 1)),
+    } for k, r in enumerate(rows)]
 
 
 def lesson(part_id, group_id=None, lang="ru"):
@@ -150,9 +170,14 @@ def lesson(part_id, group_id=None, lang="ru"):
         with db() as c:
             r = c.execute("""
                 SELECT id, subject, chapter, topic, part_number, part_total,
-                       content, published_at
+                       content, published_at, order_index
                 FROM curriculum_parts WHERE id=?
             """, (int(part_id),)).fetchone()
+            rank = None
+            if r:
+                rank = c.execute(
+                    "SELECT count(*) FROM curriculum_parts WHERE subject=? AND order_index<=?",
+                    (r["subject"], r["order_index"])).fetchone()[0]
     except Exception as e:
         log.error("lesson error: %s: %s", type(e).__name__, e)
         return None
@@ -171,4 +196,5 @@ def lesson(part_id, group_id=None, lang="ru"):
         "parts": r["part_total"],
         "content": _tr_content(r["content"], lang),
         "at": (opened or "")[:10],
+        "video": lesson_video(r["subject"], rank or 0),
     }
