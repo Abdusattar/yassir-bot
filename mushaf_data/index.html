@@ -2756,6 +2756,8 @@
     border-radius: 18px; overflow: hidden; background: #000; box-shadow: var(--shadow-sm);
   }
   #learn-body .learn-video iframe { width: 100%; height: 100%; border: 0; display: block; }
+  /* Видеоурок над текстом урока (10.11.2026): тот же плеер, под ним текст. */
+  #learn-body .learn-video + .k-text { margin-top: 14px; }
   /* Низ - над панелью Telegram и полосой iPhone (07.10.2026: «нижняя
      кнопка не видна» - подвал уходил под них), как у остальных экранов. */
   #learn-foot { flex: 0 0 auto; direction: ltr;
@@ -15245,7 +15247,8 @@
           html += '<p class="k-cap">' + feedEsc(chapter) + '</p>';
         }
         n += 1;
-        var right = it.open ? '' : '🔒';
+        // ▶ у открытого урока с видеоуроком (10.11.2026).
+        var right = it.open ? (it.video ? '▶' : '') : '🔒';
         // «Откроется в четверг» — только у ближайшего закрытого: у всех
         // остальных это было бы неправдой.
         var desc = it.open ? lessonDate(it.at)
@@ -15296,7 +15299,16 @@
         + (T(SUBJ_TITLE_KEY[subject])
            || ((lessonsCache || []).filter(function (s) { return s.id === subject; })[0] || {}).title
            || '');
-      body.innerHTML = '<div class="k-text"><p class="k-chapter">' + feedEsc(d.chapter)
+      // Видеоурок (10.11.2026): ролик с YouTube над текстом, тот же плеер и те же
+      // параметры, что у видео-инструкций «Как работать» (learnRenderVideo). Id
+      // приходит с сервера (core/lessons.py, LESSON_VIDEOS) - по номеру урока.
+      var video = d.video
+        ? '<div class="learn-video"><iframe src="https://www.youtube-nocookie.com/embed/'
+          + encodeURIComponent(d.video) + '?playsinline=1&rel=0&modestbranding=1" title="'
+          + feedEsc(d.topic) + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen"'
+          + ' allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
+        : '';
+      body.innerHTML = video + '<div class="k-text"><p class="k-chapter">' + feedEsc(d.chapter)
         + (d.parts > 1 ? ' · ' + T('lesson_part_of', { N: d.part, M: d.parts }) : '')
         + '</p>' + lessonArabic(feedEsc(d.content)) + '</div>';
       body.scrollTop = 0;
