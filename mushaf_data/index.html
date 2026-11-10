@@ -2509,6 +2509,17 @@
   #review-foot #review-pp { flex: 0 0 auto; padding: 0; width: 38px; height: 38px; border-radius: 50%;
     background: var(--accent); border: none; color: #fff; font-size: 15px; }
   #review-pp svg, .rev-player .pp svg { width: 16px; height: 16px; fill: currentColor; display: block; margin: 0 auto; }
+  #review-foot .who { font-size: 12px; color: var(--muted); display: flex; gap: 6px; margin-bottom: 6px; }
+  #review-foot .who b { color: var(--ink); font-size: 12.5px; font-weight: 600; }
+  #review-foot #review-mine.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  /* Волна громкости (11.11.2026): столбики по пикам записи, проигранные -
+     зелёные. Есть столбики - полосы и ползунка нет, как в Telegram. */
+  .wave { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: none; align-items: center; gap: 2px; }
+  .wave i { flex: 1 1 0; min-width: 0; min-height: 3px; border-radius: 2px; background: var(--card-border); }
+  .wave i.on { background: var(--accent); }
+  #review-track.has-wave, .rev-track.has-wave { height: 30px; background: none; }
+  #review-track.has-wave .wave, .rev-track.has-wave .wave { display: flex; }
+  #review-track.has-wave #review-fill, .rev-track.has-wave .rev-fill { display: none; }
   #review-foot .player #review-back10 { flex: 0 0 auto; padding: 8px 10px; font-size: 12px; }
   #look-foot .bar,
   #review-foot .bar,
@@ -4240,16 +4251,21 @@
          место было нельзя. Та же полоса, что у разбора студента (#look-foot):
          пауза, дорожка с перетаскиванием, время. Появляется, когда запись
          пошла, и прячется со стопом. -->
-    <div class="player" id="review-player" style="display:none">
-      <button id="review-pp" title="Пауза"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.6"/><rect x="14" y="5" width="4" height="14" rx="1.6"/></svg></button>
+    <!-- Плеер виден сразу, с ▶ (11.11.2026, просьба Умар устаза убрать «Стоп»):
+         запуск и пауза - круглая кнопка, отдельных «Прослушать сдачу» и «Стоп»
+         нет. Дорожка - волна громкости из 60 столбиков (sub.peaks считает
+         сервер при приёме сдачи, как у голосовых Telegram); без столбиков -
+         ровная полоса. «Мой разбор» переключает источник внутри плеера. -->
+    <div class="player" id="review-player">
+      <button id="review-pp" title="Слушать"><svg viewBox="0 0 24 24"><path d="M8.6 5.2v13.6c0 .9 1 1.4 1.7.9l10.3-6.8c.7-.4.7-1.4 0-1.8L10.3 4.3c-.7-.5-1.7 0-1.7.9z"/></svg></button>
       <div class="bar">
-        <div id="review-track"><div id="review-fill"></div></div>
+        <div class="who"><b id="review-src">Сдача</b></div>
+        <div id="review-track"><div class="wave" id="review-wave"></div><div id="review-fill"></div></div>
         <div class="t"><span id="review-cur">0:00</span><span id="review-total">0:00</span></div>
       </div>
       <button id="review-back10" data-i18n="review_back10">↺ 10 сек</button>
     </div>
     <div class="row">
-      <button id="review-play">▶ Прослушать сдачу</button>
       <button id="review-mine" style="display:none">▶ Мой разбор</button>
       <button id="review-comment" data-i18n="review_comment">🎙 Замечание</button>
     </div>
@@ -5126,6 +5142,8 @@
       review_need_comment: 'Сначала запиши замечание — без него пересдача не уйдёт',
       review_play: '▶ Прослушать сдачу',
       review_play_mine: '▶ Мой разбор',
+      review_src_own: 'Сдача',
+      review_src_mine: 'Мой разбор',
       review_frozen: 'Студент уже пересдал — новая запись ждёт разбора в «Ждут»',
       review_next: 'Дальше: %N% · стр. %P% ›',
       review_to_list: 'К списку',
@@ -5840,6 +5858,8 @@
       review_need_comment: 'Адегенде эскертүүнү жаз — ансыз кайра тапшыруу жөнөтүлбөйт',
       review_play: '▶ Тапшырууну угуу',
       review_play_mine: '▶ Менин талдоом',
+      review_src_own: 'Тапшыруу',
+      review_src_mine: 'Менин талдоом',
       review_frozen: 'Студент кайра тапшырып койду — жаңы жазуу «Күтүүдө» бөлүмүндө талдоону күтүп жатат',
       review_next: 'Кийинки: %N% · %P%-бет ›',
       review_to_list: 'Тизмеге',
@@ -6597,6 +6617,8 @@
       review_need_comment: 'Аввал изоҳ қолдир — усиз қайта топшириш юборилмайди',
       review_play: '▶ Топширишни тинглаш',
       review_play_mine: '▶ Менинг таҳлилим',
+      review_src_own: 'Топшириқ',
+      review_src_mine: 'Менинг таҳлилим',
       review_frozen: 'Талаба қайта топширди — янги ёзув «Кутмоқда» бўлимида таҳлилни кутяпти',
       review_next: 'Кейингиси: %N% · %P%-бет ›',
       review_to_list: 'Рўйхатга',
@@ -7356,6 +7378,8 @@
       review_need_comment: '请先录下意见 — 没有意见，重交不能发出',
       review_play: '▶ 听学生的录音',
       review_play_mine: '▶ 我的点评',
+      review_src_own: '录音',
+      review_src_mine: '我的点评',
       review_frozen: '学生已经重交 — 新录音在「待审」里等你点评',
       review_next: '下一个：%N% · 第%P%页 ›',
       review_to_list: '回到列表',
@@ -14265,6 +14289,31 @@
   var ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8.6 5.2v13.6c0 .9 1 1.4 1.7.9l10.3-6.8c.7-.4.7-1.4 0-1.8L10.3 4.3c-.7-.5-1.7 0-1.7.9z"/></svg>';
   var ICON_PAUSE = '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.6"/><rect x="14" y="5" width="4" height="14" rx="1.6"/></svg>';
 
+  /* Волна громкости из пиков 0..1 (11.11.2026). Пики считает сервер при
+     приёме записи (core/audio_compat.py), здесь только рисуем; пустой список -
+     волны нет, остаётся полоса. */
+  function waveRender(track, peaks) {
+    var wave = track.querySelector('.wave');
+    if (!wave) return;
+    peaks = Array.isArray(peaks) ? peaks : [];
+    track.classList.toggle('has-wave', peaks.length > 0);
+    wave.innerHTML = peaks.map(function (v) {
+      var h = Math.max(10, Math.min(100, Math.round((+v || 0) * 100)));
+      return '<i style="height:' + h + '%"></i>';
+    }).join('');
+  }
+  function waveProgress(track, ratio) {
+    var wave = track.querySelector('.wave');
+    if (!wave || !track.classList.contains('has-wave')) return;
+    var bars = wave.children, n = Math.round(ratio * bars.length);
+    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('on', i < n);
+  }
+  // Заливка полосы и волны разом - для timeupdate и перемотки.
+  function trackProgress(track, fill, ratio) {
+    if (fill) fill.style.width = (ratio * 100) + '%';
+    waveProgress(track, ratio);
+  }
+
   function audioSeekable(track, audio, fill) {
     var seeking = false;
     function seekTo(clientX) {
@@ -14273,7 +14322,7 @@
       var box = track.getBoundingClientRect();
       var ratio = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
       audio.currentTime = ratio * d;
-      if (fill) fill.style.width = (ratio * 100) + '%';
+      trackProgress(track, fill, ratio);
     }
     track.addEventListener('pointerdown', function (e) {
       seeking = true;
@@ -15818,31 +15867,47 @@
       n ? T('review_marked', { N: n }) : T('review_tap_words');
   }
 
+  // Источник в плеере: 'own' - запись студента, 'review' - замечание устаза.
+  // reviewPlaying - что загружено в <audio> (null - ещё ничего).
+  var reviewSrc = 'own';
+
   function reviewStopAudio() {
     try { reviewAudio.pause(); } catch (e) {}
     if (reviewAudio.src && reviewAudio.src.indexOf('blob:') === 0) URL.revokeObjectURL(reviewAudio.src);
     reviewAudio.removeAttribute('src');
     reviewPlaying = null;
-    document.getElementById('review-play').textContent = reviewPlayLabel();
-    document.getElementById('review-mine').textContent = T('review_play_mine');
-    reviewPlayerShow(false);
+    reviewPlayerReset();
   }
 
-  // Плеер с дорожкой (10.11.2026): виден, пока запись загружена.
-  function reviewPlayerShow(on) {
-    document.getElementById('review-player').style.display = on ? '' : 'none';
-    if (on) return;
-    document.getElementById('review-fill').style.width = '0';
+  /* Плеер стоит в подвале всегда (11.11.2026): ▶, волна записи студента и
+     её длина известны ещё до загрузки звука - из данных сдачи. Сброс - к
+     записи студента, с начала. */
+  function reviewPlayerReset() {
+    var sub = review.sub || {};
+    var track = document.getElementById('review-track');
+    reviewSrc = 'own';
+    waveRender(track, sub.peaks);
+    trackProgress(track, document.getElementById('review-fill'), 0);
     document.getElementById('review-cur').textContent = '0:00';
-    document.getElementById('review-total').textContent = '0:00';
-    document.getElementById('review-pp').innerHTML = ICON_PAUSE;
+    document.getElementById('review-total').textContent = reviewTotalLabel(sub.duration);
+    document.getElementById('review-pp').innerHTML = ICON_PLAY;
+    document.getElementById('review-pp').disabled = false;
+    document.getElementById('review-src').textContent = T('review_src_own');
+    var mine = document.getElementById('review-mine');
+    mine.classList.remove('on');
+    mine.textContent = T('review_play_mine');
+  }
+  function reviewTotalLabel(sec) {
+    var dur = ustazDur(sec);
+    return dur ? dur.replace('⏱ ', '') : '0:00';
   }
   function reviewPlayerTime() {
     var d = reviewAudio.duration;
     document.getElementById('review-cur').textContent = lookFmt(reviewAudio.currentTime);
     if (isFinite(d) && d > 0) {
       document.getElementById('review-total').textContent = lookFmt(d);
-      document.getElementById('review-fill').style.width = (reviewAudio.currentTime / d * 100) + '%';
+      trackProgress(document.getElementById('review-track'), document.getElementById('review-fill'),
+        reviewAudio.currentTime / d);
     }
   }
   reviewAudio.addEventListener('timeupdate', reviewPlayerTime);
@@ -15850,20 +15915,15 @@
   reviewAudio.addEventListener('durationchange', reviewPlayerTime);
   reviewAudio.addEventListener('play', function () { document.getElementById('review-pp').innerHTML = ICON_PAUSE; });
   reviewAudio.addEventListener('pause', function () { document.getElementById('review-pp').innerHTML = ICON_PLAY; });
+  // Доиграла - остаёмся на конце с ▶: тап играет заново с начала.
+  reviewAudio.addEventListener('ended', function () { document.getElementById('review-pp').innerHTML = ICON_PLAY; });
   document.getElementById('review-pp').addEventListener('click', function () {
-    if (!reviewPlaying) return;
+    if (!review.sub) return;
+    if (!reviewPlaying) { reviewPlay(reviewSrc); return; }
+    if (reviewAudio.ended) reviewAudio.currentTime = 0;
     if (reviewAudio.paused) reviewAudio.play().catch(function () {}); else reviewAudio.pause();
   });
   audioSeekable(document.getElementById('review-track'), reviewAudio, document.getElementById('review-fill'));
-
-  // «▶ Прослушать сдачу · 1:48» - длина записи прямо на кнопке (14.09.2026):
-  // подсказка над кнопками занята счётчиком пометок и перерисовывается.
-  function reviewPlayLabel() {
-    var dur = review.sub ? ustazDur(review.sub.duration) : '';
-    return T('review_play') + (dur ? ' · ' + dur.replace('⏱ ', '') : '');
-  }
-
-  reviewAudio.addEventListener('ended', reviewStopAudio);
 
   /* Два звука на один плеер (07.09.2026): запись студента и собственное
      замечание устаза. Открыв уже разобранную сдачу, устаз должен слышать не
@@ -15872,11 +15932,18 @@
      второй кнопке останавливает первую. */
   function reviewPlay(kind) {
     kind = kind === 'review' ? 'review' : 'own';
-    var was = reviewPlaying;
-    if (was) reviewStopAudio();
-    if (was === kind) return;             // повторный тап по той же кнопке - стоп
-    var btn = document.getElementById(kind === 'own' ? 'review-play' : 'review-mine');
-    btn.disabled = true;
+    if (reviewPlaying) reviewStopAudio();
+    reviewSrc = kind;
+    var pp = document.getElementById('review-pp'), track = document.getElementById('review-track');
+    var mine = document.getElementById('review-mine');
+    mine.classList.toggle('on', kind === 'review');
+    document.getElementById('review-src').textContent = T(kind === 'own' ? 'review_src_own' : 'review_src_mine');
+    // Волна - у записи студента; у замечания устаза пиков нет, полоса.
+    waveRender(track, kind === 'own' ? review.sub.peaks : null);
+    trackProgress(track, document.getElementById('review-fill'), 0);
+    document.getElementById('review-total').textContent =
+      kind === 'own' ? reviewTotalLabel(review.sub.duration) : '0:00';
+    pp.disabled = true;
     var path = '/ustaz/audio?id=' + review.sub.id + '&kind=' + kind;
     // След «звук» (07.10.2026, Умар устаз: «не могу прослушать» 15-минутную
     // запись, а сервер отдал файл дважды целиком): пишем, что телефон получил,
@@ -15888,20 +15955,17 @@
       stage = 'play';
       reviewAudio.src = url;
       reviewPlaying = kind;
-      btn.disabled = false;
-      btn.textContent = T('review_stop');
+      pp.disabled = false;
       document.getElementById('review-back10').textContent = T('review_back10');
-      reviewPlayerShow(true);
       return audioPlay(reviewAudio, audioReload(reviewAudio, path));
     }).catch(function (e) {
       trail('audio', { n: 'fail ' + stage + ' ' + tag + ' ' + ((e && (e.name + ' ' + e.message)) || '?') });
-      btn.disabled = false;
-      btn.textContent = T('review_failed');
-      // Запись не пошла - перематывать нечего, плеер не должен остаться.
-      reviewPlayerShow(false);
+      // Запись не пошла - говорим в подписи плеера и возвращаем ▶.
+      reviewStopAudio();
+      document.getElementById('review-src').textContent = T('review_failed');
       setTimeout(function () {
-        btn.textContent = kind === 'own' ? reviewPlayLabel() : T('review_play_mine');
-      }, 2000);
+        if (!reviewPlaying) document.getElementById('review-src').textContent = T('review_src_own');
+      }, 2500);
     });
   }
 
@@ -15922,7 +15986,7 @@
       }
       review.on = true;
       review.sub = sub;
-      document.getElementById('review-play').textContent = reviewPlayLabel();
+      reviewPlayerReset();
       review.words = {};
       (sub.error_words || []).forEach(function (m) { review.words[reviewKey(m.line, m.word)] = true; });
       hifz.on = true;
@@ -15950,7 +16014,6 @@
     });
     var mine = document.getElementById('review-mine');
     mine.style.display = review.sub && review.sub.has_review_audio ? '' : 'none';
-    mine.textContent = T('review_play_mine');
     applyErrorMarks(reviewMarkedList());
     reviewHint();
     hifzHead();   // шапку проверки рисует она сама, см. hifzHead
@@ -16114,8 +16177,10 @@
     });
   }
 
-  document.getElementById('review-play').addEventListener('click', function () { reviewPlay('own'); });
-  document.getElementById('review-mine').addEventListener('click', function () { reviewPlay('review'); });
+  // «Мой разбор» - переключатель источника: тап - замечание устаза, ещё тап - снова сдача.
+  document.getElementById('review-mine').addEventListener('click', function () {
+    reviewPlay(reviewSrc === 'review' ? 'own' : 'review');
+  });
   /* Отмотка на 10 секунд (07.09.2026, просьба пользователя): устаз слушает
      чужую начитку и ловит ошибку на слух - нужное место переслушивают по
      нескольку раз, каждое нажатие отматывает ещё на 10 секунд. */
@@ -16292,7 +16357,10 @@
       ? '<div class="rev-done">' + T(it.verdict === 'rejected' ? 'ustaz_rev_rejected' : 'ustaz_rev_accepted') + '</div>'
       : '<div class="rev-player" data-player="' + it.id + '">' +
           '<div class="line"><button class="pp">' + ICON_PLAY + '</button>' +
-          '<div class="rev-track"><div class="rev-fill"></div></div>' +
+          '<div class="rev-track' + (it.peaks && it.peaks.length ? ' has-wave' : '') + '">' +
+            '<div class="wave">' + (it.peaks || []).map(function (v) {
+              return '<i style="height:' + Math.max(10, Math.min(100, Math.round((+v || 0) * 100))) + '%"></i>';
+            }).join('') + '</div><div class="rev-fill"></div></div>' +
           '<span class="rev-time">0:00 / ' + (dur ? dur.replace('⏱ ', '') : '—') + '</span></div>' +
           '<div class="rev-skips">' +
             '<button data-skip="-300">' + T('ustaz_rev_back5') + '</button>' +
@@ -16326,6 +16394,8 @@
     var time = revCardEl.querySelector('.rev-time');
     var d = isFinite(revAudio.duration) && revAudio.duration > 0 ? revAudio.duration : 0;
     if (fill) fill.style.width = (d ? (revAudio.currentTime / d * 100) : 0) + '%';
+    var tr = fill && fill.parentNode;
+    if (tr) waveProgress(tr, d ? revAudio.currentTime / d : 0);
     if (time) time.textContent = revFmt(revAudio.currentTime) + ' / ' + (d ? revFmt(d) : '—');
   }
   revAudio.addEventListener('timeupdate', revTick);
@@ -16423,8 +16493,7 @@
     function seekAt(track, clientX) {
       var box = track.getBoundingClientRect();
       var ratio = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
-      var fill = track.querySelector('.rev-fill');
-      if (fill) fill.style.width = (ratio * 100) + '%';
+      trackProgress(track, track.querySelector('.rev-fill'), ratio);
       if (revLoadedId === id) {
         var d = isFinite(revAudio.duration) ? revAudio.duration : 0;
         if (d) { revAudio.currentTime = Math.min(d - 1, Math.max(0, d * ratio)); revTick(); }
