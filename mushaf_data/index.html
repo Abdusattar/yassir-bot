@@ -2508,6 +2508,7 @@
      свои размеры: круглая пауза и короткий «↺ 10 сек» у правого края. */
   #review-foot #review-pp { flex: 0 0 auto; padding: 0; width: 38px; height: 38px; border-radius: 50%;
     background: var(--accent); border: none; color: #fff; font-size: 15px; }
+  #review-pp svg, .rev-player .pp svg { width: 16px; height: 16px; fill: currentColor; display: block; margin: 0 auto; }
   #review-foot .player #review-back10 { flex: 0 0 auto; padding: 8px 10px; font-size: 12px; }
   #look-foot .bar,
   #review-foot .bar,
@@ -4240,7 +4241,7 @@
          пауза, дорожка с перетаскиванием, время. Появляется, когда запись
          пошла, и прячется со стопом. -->
     <div class="player" id="review-player" style="display:none">
-      <button id="review-pp" title="Пауза">❚❚</button>
+      <button id="review-pp" title="Пауза"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.6"/><rect x="14" y="5" width="4" height="14" rx="1.6"/></svg></button>
       <div class="bar">
         <div id="review-track"><div id="review-fill"></div></div>
         <div class="t"><span id="review-cur">0:00</span><span id="review-total">0:00</span></div>
@@ -14259,6 +14260,11 @@
      ведут ползунок, а не тыкают в точку. Pointer Events с захватом - палец
      может уйти с полосы, перемотка продолжается, пока не отпустят.
      fill - заливка, двигаем сразу, не дожидаясь timeupdate. */
+  // Значки плеера (10.11.2026, решение пользователя: текстовые ▶ и ❚❚ «жирные»):
+  // тонкий треугольник и две скруглённые полосы, цвет - currentColor.
+  var ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8.6 5.2v13.6c0 .9 1 1.4 1.7.9l10.3-6.8c.7-.4.7-1.4 0-1.8L10.3 4.3c-.7-.5-1.7 0-1.7.9z"/></svg>';
+  var ICON_PAUSE = '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.6"/><rect x="14" y="5" width="4" height="14" rx="1.6"/></svg>';
+
   function audioSeekable(track, audio, fill) {
     var seeking = false;
     function seekTo(clientX) {
@@ -15829,7 +15835,7 @@
     document.getElementById('review-fill').style.width = '0';
     document.getElementById('review-cur').textContent = '0:00';
     document.getElementById('review-total').textContent = '0:00';
-    document.getElementById('review-pp').textContent = '❚❚';
+    document.getElementById('review-pp').innerHTML = ICON_PAUSE;
   }
   function reviewPlayerTime() {
     var d = reviewAudio.duration;
@@ -15842,8 +15848,8 @@
   reviewAudio.addEventListener('timeupdate', reviewPlayerTime);
   reviewAudio.addEventListener('loadedmetadata', reviewPlayerTime);
   reviewAudio.addEventListener('durationchange', reviewPlayerTime);
-  reviewAudio.addEventListener('play', function () { document.getElementById('review-pp').textContent = '❚❚'; });
-  reviewAudio.addEventListener('pause', function () { document.getElementById('review-pp').textContent = '▶'; });
+  reviewAudio.addEventListener('play', function () { document.getElementById('review-pp').innerHTML = ICON_PAUSE; });
+  reviewAudio.addEventListener('pause', function () { document.getElementById('review-pp').innerHTML = ICON_PLAY; });
   document.getElementById('review-pp').addEventListener('click', function () {
     if (!reviewPlaying) return;
     if (reviewAudio.paused) reviewAudio.play().catch(function () {}); else reviewAudio.pause();
@@ -16285,7 +16291,7 @@
     var tail = it.verdict
       ? '<div class="rev-done">' + T(it.verdict === 'rejected' ? 'ustaz_rev_rejected' : 'ustaz_rev_accepted') + '</div>'
       : '<div class="rev-player" data-player="' + it.id + '">' +
-          '<div class="line"><button class="pp">▶</button>' +
+          '<div class="line"><button class="pp">' + ICON_PLAY + '</button>' +
           '<div class="rev-track"><div class="rev-fill"></div></div>' +
           '<span class="rev-time">0:00 / ' + (dur ? dur.replace('⏱ ', '') : '—') + '</span></div>' +
           '<div class="rev-skips">' +
@@ -16327,7 +16333,7 @@
   revAudio.addEventListener('ended', function () {
     if (revCardEl) {
       var pp = revCardEl.querySelector('.pp');
-      if (pp) pp.textContent = '▶';
+      if (pp) pp.innerHTML = ICON_PLAY;
     }
   });
 
@@ -16335,7 +16341,7 @@
     try { revAudio.pause(); } catch (e) {}
     if (revCardEl) {
       var pp = revCardEl.querySelector('.pp');
-      if (pp) pp.textContent = '▶';
+      if (pp) pp.innerHTML = ICON_PLAY;
     }
   }
 
@@ -16351,7 +16357,7 @@
       .then(function (url) {
         revAudio.src = url;
         revLoadedId = id;
-        if (pp) pp.textContent = '▶';
+        if (pp) pp.innerHTML = ICON_PLAY;
       });
   }
 
@@ -16360,11 +16366,11 @@
     ustazRevLoad(card, id).then(function () {
       revCardEl = card;
       var pp = card.querySelector('.pp');
-      if (pp) pp.textContent = '❚❚';
+      if (pp) pp.innerHTML = ICON_PAUSE;
       return audioPlay(revAudio, function () {
         revLoadedId = null;
         return ustazRevLoad(card, id).then(function () {
-          if (pp) pp.textContent = '❚❚';
+          if (pp) pp.innerHTML = ICON_PAUSE;
         });
       });
     }).catch(function () { ustazRevStop(); });
