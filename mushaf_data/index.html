@@ -3142,8 +3142,14 @@
     width: 40px; height: 40px; flex: none; border: none; border-radius: 50%;
     background: var(--accent); color: #fff; font-size: 15px; cursor: pointer;
   }
-  .rev-track { flex: 1; height: 6px; border-radius: 3px; background: var(--card-border); cursor: pointer; }
-  .rev-fill { height: 100%; border-radius: 3px; background: var(--accent); width: 0; }
+  .rev-track { flex: 1; height: 6px; border-radius: 3px; background: var(--card-border); cursor: pointer;
+    position: relative; touch-action: none; }
+  /* Ползунок и широкая зона захвата (10.11.2026): полосу тянут пальцем, а не
+     тыкают в точку - см. audioSeekable. */
+  .rev-track::before { content: ''; position: absolute; left: 0; right: 0; top: -12px; bottom: -12px; }
+  .rev-fill { height: 100%; border-radius: 3px; background: var(--accent); width: 0; position: relative; }
+  .rev-fill::after { content: ''; position: absolute; right: -8px; top: 50%; width: 16px; height: 16px;
+    margin-top: -8px; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
   .rev-time {
     font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
     min-width: 84px; text-align: right;
@@ -16403,6 +16409,43 @@
   // Один слушатель на карточку: кнопки внутри неё пересобираются.
   function ustazRevBind(card) {
     var id = parseInt(card.getAttribute('data-rev'), 10);
+    /* Перемотка перетаскиванием по полосе (10.11.2026, решение пользователя):
+       раньше только тап в точку и шаги 30 сек / 5 мин. Pointer Events с
+       захватом, как в audioSeekable; первый тап ещё и грузит запись, поэтому
+       движение до загрузки просто ждёт - перематывать нечего. */
+    var seeking = false;
+    function seekAt(track, clientX) {
+      var box = track.getBoundingClientRect();
+      var ratio = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
+      var fill = track.querySelector('.rev-fill');
+      if (fill) fill.style.width = (ratio * 100) + '%';
+      if (revLoadedId === id) {
+        var d = isFinite(revAudio.duration) ? revAudio.duration : 0;
+        if (d) { revAudio.currentTime = Math.min(d - 1, Math.max(0, d * ratio)); revTick(); }
+      } else {
+        ustazRevSeek(card, id, ratio);
+      }
+    }
+    card.addEventListener('pointerdown', function (e) {
+      var track = e.target.closest('.rev-track');
+      if (!track) return;
+      seeking = true;
+      try { track.setPointerCapture(e.pointerId); } catch (err) {}
+      seekAt(track, e.clientX);
+      e.preventDefault();
+    });
+    card.addEventListener('pointermove', function (e) {
+      var track = seeking && e.target.closest('.rev-track');
+      if (track) seekAt(track, e.clientX);
+    });
+    function stopSeek(e) {
+      if (!seeking) return;
+      seeking = false;
+      var track = e.target.closest('.rev-track');
+      if (track) { try { track.releasePointerCapture(e.pointerId); } catch (err) {} }
+    }
+    card.addEventListener('pointerup', stopSeek);
+    card.addEventListener('pointercancel', stopSeek);
     card.addEventListener('click', function (e) {
       var t = e.target;
       if (t.closest('.pp')) { ustazRevPlay(card, id); return; }
@@ -16414,12 +16457,7 @@
         ustazRevVerdict(card, id, t.closest('[data-verdict]').getAttribute('data-verdict'));
         return;
       }
-      var track = t.closest('.rev-track');
-      if (track) {
-        var box = track.getBoundingClientRect();
-        ustazRevSeek(card, id, (e.clientX - box.left) / box.width);
-        return;
-      }
+      if (t.closest('.rev-track')) return;   // перемотка - на pointerdown выше
       if (t.closest('.rev-play')) ustazRevPlay(card, id);
     });
   }
