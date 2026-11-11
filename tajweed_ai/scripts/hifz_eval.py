@@ -190,6 +190,14 @@ def split_wave(wave, sr=16000, chunk_sec=CHUNK_SEC, top_db=35):
     return chunks
 
 
+def _as_list(x):
+    return [float(v) for v in (x.tolist() if hasattr(x, "tolist") else x)]
+
+
+def _p(unit):
+    return round(unit.prob, 3) if unit is not None else None
+
+
 def run_muaalem(muaalem, wave, ref):
     """Инференс кусками с последующей склейкой фонем/сифатов в один
     объект того же вида, что MuaalemOutput (нужны только .phonemes.text и
@@ -198,15 +206,16 @@ def run_muaalem(muaalem, wave, ref):
     chunks = split_wave(wave)
     if len(chunks) == 1:
         return muaalem([wave], [ref], sampling_rate=16000)[0], 1
-    text, sifat = "", []
+    text, sifat, probs = "", [], []
     for s, e in chunks:
         out = muaalem([wave[s:e]], [ref], sampling_rate=16000)[0]
         text += out.phonemes.text
+        probs.extend(_as_list(out.phonemes.probs))
         sifat.extend(out.sifat)
 
     class _Ph:
         pass
-    ph = _Ph(); ph.text = text
+    ph = _Ph(); ph.text = text; ph.probs = probs
     merged = _Ph(); merged.phonemes = ph; merged.sifat = sifat
     return merged, len(chunks)
 
@@ -298,8 +307,16 @@ def evaluate_one(muaalem, qt, qm_explain, dmp, rule_hint, moshaf, meta, wave):
         # длины мадда, без гунны и т.п.) без повторного инференса
         "pred_groups": [{"g": s.phonemes_group,
                          "q": s.qalqla.text if s.qalqla is not None else None,
-                         "n": s.ghonna.text if s.ghonna is not None else None}
+                         "n": s.ghonna.text if s.ghonna is not None else None,
+                         # уверенность модели по сифатам (11.11.2026, признак
+                         # фильтра этапа 3)
+                         "qp": _p(s.qalqla), "np": _p(s.ghonna)}
                         for s in pred.sifat],
+        # уверенность по каждой фонеме pred_phonemes (11.11.2026): признак
+        # «насколько модель сама уверена» для фильтра этапа 3. Длина должна
+        # совпасть с pred_phonemes - иначе поле не пишем, чтобы не врать.
+        "pred_probs": (lambda pr: [round(v, 3) for v in pr] if len(pr) == len(pred.phonemes.text) else None)(
+            _as_list(pred.phonemes.probs)),
         "ref_groups": [s.phonemes for s in ref.sifat],
         "word_groups": word_groups,
     }
