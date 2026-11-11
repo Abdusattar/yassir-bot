@@ -1092,7 +1092,10 @@
      на всех телефонах и красятся в currentColor. Размер от шрифта кнопки;
      у иконок без подписи - свой. */
   .ic { width: 1.15em; height: 1.15em; vertical-align: -0.22em; display: inline-block; flex: none; }
-  .ic + span, span + .ic { margin-left: .35em; }
+  .ic + span, span + .ic { margin-inline-start: .35em; }
+  /* Кнопка с иконкой и подписью читается слева направо и в rtl-контейнерах
+     мусхафа: иконка слева, подпись справа. */
+  .tab-btn, #page-nav button, #bm-menu button > span, #hifz-submit, #hifz-big-submit { direction: ltr; unicode-bidi: isolate; }
   #btn-profile .ic, #topbar .ic, .hifz-listen-btn .ic { width: 22px; height: 22px; vertical-align: middle; }
   .dash-row .mark .ic { width: 24px; height: 24px; vertical-align: middle; }
   .icon-gold .ic { width: 1em; height: 1em; vertical-align: -0.15em; }
