@@ -3510,6 +3510,7 @@
   #dash-hero .h-line.v4line { display: flex; flex-wrap: nowrap; justify-content: space-between;
     align-items: baseline; white-space: nowrap; overflow: hidden; line-height: 2; }
   #dash-hero .h-line.v4line .td-v4 { font-family: 'today-v4', 'Scheherazade New', serif; font-palette: --TdV4Light; }
+  #dash-hero .h-line.v4line .td-tail { opacity: .5; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
   }
@@ -4817,18 +4818,6 @@
 <script>
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
-  // Лёгкая отдача на тап по кнопкам шапки мусхафа и вкладкам (11.11.2026,
-  // просьба пользователя): в Telegram - его HapticFeedback, в браузере -
-  // navigator.vibrate (Android; iOS Safari его не поддерживает).
-  function haptic() {
-    try {
-      if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) { tg.HapticFeedback.impactOccurred('light'); return; }
-    } catch (e) {}
-    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e2) {} }
-  }
-  document.addEventListener('click', function (e) {
-    if (e.target.closest('#topbar button, #tabs .tabs-btn, #review-foot button, .rev-player .pp, #dash-hero .d-btn, #dash-checks .d-btn')) haptic();
-  }, true);
   if (tg) { tg.ready(); tg.expand(); }
 
   // Открыто кнопкой в чате @YassirAppBot (?bot=app, 01.10.2026). Бот один
@@ -9290,6 +9279,62 @@
     return (line.tokens || []).filter(function (t) { return t.type === 'word'; });
   }
   function dashBare(h) { return String(h || '').replace(/<[^>]*>/g, ''); }
+  /* Имена сур по-русски для подписи карточки дня (11.11.2026, как в макете
+     «Хифз»: «Аль-Бакара · 2:6–7»). Для ky/uz та же кириллица; для zh -
+     арабское имя из SURAH_INDEX. */
+  var SURAH_RU = [
+    'Аль-Фатиха','Аль-Бакара','Аль Имран','Ан-Ниса','Аль-Маида','Аль-Анам',
+    'Аль-Араф','Аль-Анфаль','Ат-Тауба','Юнус','Худ','Юсуф',
+    'Ар-Рад','Ибрахим','Аль-Хиджр','Ан-Нахль','Аль-Исра','Аль-Кахф',
+    'Марьям','Та Ха','Аль-Анбия','Аль-Хадж','Аль-Муминун','Ан-Нур',
+    'Аль-Фуркан','Аш-Шуара','Ан-Намль','Аль-Касас','Аль-Анкабут','Ар-Рум',
+    'Лукман','Ас-Саджда','Аль-Ахзаб','Саба','Фатыр','Ясин',
+    'Ас-Саффат','Сад','Аз-Зумар','Гафир','Фуссилят','Аш-Шура',
+    'Аз-Зухруф','Ад-Духан','Аль-Джасия','Аль-Ахкаф','Мухаммад','Аль-Фатх',
+    'Аль-Худжурат','Каф','Аз-Зарият','Ат-Тур','Ан-Наджм','Аль-Камар',
+    'Ар-Рахман','Аль-Вакиа','Аль-Хадид','Аль-Муджадаля','Аль-Хашр','Аль-Мумтахана',
+    'Ас-Сафф','Аль-Джума','Аль-Мунафикун','Ат-Тагабун','Ат-Талак','Ат-Тахрим',
+    'Аль-Мульк','Аль-Калям','Аль-Хакка','Аль-Мааридж','Нух','Аль-Джинн',
+    'Аль-Муззаммиль','Аль-Муддассир','Аль-Кияма','Аль-Инсан','Аль-Мурсалят','Ан-Наба',
+    'Ан-Назиат','Абаса','Ат-Таквир','Аль-Инфитар','Аль-Мутаффифин','Аль-Иншикак',
+    'Аль-Бурудж','Ат-Тарик','Аль-Аля','Аль-Гашия','Аль-Фаджр','Аль-Баляд',
+    'Аш-Шамс','Аль-Лейль','Ад-Духа','Аш-Шарх','Ат-Тин','Аль-Аляк',
+    'Аль-Кадр','Аль-Баййина','Аз-Зальзаля','Аль-Адият','Аль-Кариа','Ат-Такасур',
+    'Аль-Аср','Аль-Хумаза','Аль-Филь','Курайш','Аль-Маун','Аль-Каусар',
+    'Аль-Кафирун','Ан-Наср','Аль-Масад','Аль-Ихлас','Аль-Фаляк','Ан-Нас'
+  ];
+  function dashSuraLabel(lines) {
+    var sn = 0, a1 = 0, a2 = 0;
+    lines.forEach(function (line) {
+      (line.tokens || []).forEach(function (t) {
+        if (t.type !== 'word' || !t.surah) return;
+        if (!sn) { sn = t.surah; }
+        if (t.surah !== sn) return;
+        if (!a1 || t.ayah < a1) a1 = t.ayah;
+        if (t.ayah > a2) a2 = t.ayah;
+      });
+    });
+    if (!sn) return '';
+    var name = UI_LANG === 'zh' ? (SURAH_INDEX[sn - 1] || [])[1] : SURAH_RU[sn - 1];
+    return (name || '') + ' \u00b7 ' + sn + ':' + a1 + (a2 > a1 ? '\u2013' + a2 : '');
+  }
+  /* Связка (11.11.2026, правка пользователя): строка учится до начала
+     следующей - те же токены, что берёт hifzTailTokens в мусхафе, то же
+     правило длины слова и конца аята. С другого листа (foreign) - обычным
+     текстом: глифы чужого листа в шрифте этого были бы чужими словами. */
+  function dashTailCount(next) {
+    if (!next || !next.tokens) return 0;
+    var taken = 0, last = -1;
+    for (var i = 0; i < next.tokens.length && taken < 3; i++) {
+      var t = next.tokens[i];
+      if (t.type !== 'word') continue;
+      taken++; last = i;
+      var after = next.tokens[i + 1];
+      if (taken === 1 && hifzBaseLen(t.html) > 3) { if (!after || after.type !== 'ayah_end') break; }
+      else if (taken >= 2) { if (!after || after.type !== 'ayah_end') break; }
+    }
+    return last + 1;
+  }
   /* Строка дня глифами мусхафа (11.11.2026, правка пользователя: «как в
      мусхафе, а не арабская надпись»). Тот же приём, что trainerLineFont:
      шрифт листа своим семейством, опоздавший ответ не ставится, не
@@ -9307,16 +9352,18 @@
       return true;
     }).catch(function () { return false; });
   }
-  function dashLineHtml(line, v4) {
+  function dashLineHtml(line, v4, tail, foreign) {
     var html = '';
-    (line.tokens || []).forEach(function (t) {
-      var glyph = v4 && t.code_v4 && !t.fp;
+    var put = function (t, extra, plain) {
+      var glyph = !plain && v4 && t.code_v4 && !t.fp;
       if (t.type === 'word') {
-        html += '<span class="' + (glyph ? 'td-v4' : 'td-w') + '">' + (glyph ? t.code_v4 : dashBare(t.html)) + '</span>';
+        html += '<span class="' + (glyph ? 'td-v4' : 'td-w') + extra + '">' + (glyph ? t.code_v4 : dashBare(t.html)) + '</span>';
       } else if (t.type === 'ayah_end') {
-        html += '<span class="' + (glyph ? 'td-v4' : 'td-ae') + '">' + (glyph ? t.code_v4 : '\uFD3E' + dashBare(t.html) + '\uFD3F') + '</span>';
+        html += '<span class="' + (glyph ? 'td-v4' : 'td-ae') + extra + '">' + (glyph ? t.code_v4 : '\uFD3E' + dashBare(t.html) + '\uFD3F') + '</span>';
       }
-    });
+    };
+    (line.tokens || []).forEach(function (t) { put(t, '', false); });
+    (tail || []).forEach(function (t) { put(t, ' td-tail', !!foreign); });
     return '<div class="h-line v4line">' + html + '</div>';
   }
   // Одна строка, как на листе: кегль по ширине карточки. Ширина нулевая,
@@ -9387,7 +9434,6 @@
       if (!h.page) return;
       dashPage(h.page, function (d) {
         if (req !== dashHeroReq) return;
-        sura.textContent = (d.surah_names || []).join(', ');
         var lines = dashTextLines(d), n = lines.length;
         if (!n) return;
         dashLineFont(d.font_url).then(function (v4) {
@@ -9399,8 +9445,18 @@
     };
     var paint = function (lines, n, v4) {
         if (!h.stage || h.stage === 1) {
-          var line = lines[h.line || 0];
-          if (line) body.innerHTML = dashLineHtml(line, v4);
+          var idx = h.line || 0, line = lines[idx];
+          if (!line) return;
+          sura.textContent = dashSuraLabel([line]);
+          var done = function (next, foreign) {
+            if (req !== dashHeroReq) return;
+            var k = dashTailCount(next);
+            body.innerHTML = dashLineHtml(line, v4, next ? next.tokens.slice(0, k) : [], foreign);
+            dashFitLines();
+          };
+          if (idx + 1 < n) done(lines[idx + 1], false);
+          else if (h.page < LAST_PAGE) { done(null); dashPage(h.page + 1, function (d2) { done(dashTextLines(d2)[0], true); }); }
+          else done(null);
           return;
         }
         // Этап 2 - половина листа (первая floor(n/2) строк, как hifzHalf),
@@ -9408,6 +9464,7 @@
         var mid = Math.floor(n / 2), from = 0, to = n - 1;
         if (h.stage === 2) { if ((h.line || 0) < mid) { to = mid - 1; } else { from = mid; } }
         place.textContent = T('page_n', { N: h.page }) + ' · ' + T('hero_stage', { S: h.stage });
+        sura.textContent = dashSuraLabel(lines.slice(from, to + 1));
         var map = '';
         for (var i = 0; i < n; i++) map += '<i class="' + (i >= from && i <= to ? 'on' : '') + '"></i>';
         // Строка во всю ширину карточки (как на этапе 1 - тем же кеглем,
