@@ -1459,12 +1459,13 @@
      свёрнут. Двери убраны: их заменила нижняя панель. */
   #dash-title { flex: 1; min-width: 0; font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.2; }
   #dash-title span { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+  #dash-head { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   #dash-count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   #dash-head #my-day, #dash-settings { display: none !important; }
   #dash-doors { display: none !important; }
   .dash-eyebrow { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
     color: var(--muted); margin: 18px 0 8px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-  .dash-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+  .td-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
     padding: 14px 16px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--ink); box-shadow: var(--shadow-sm); }
   #dash-hero .h-where { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
@@ -4004,7 +4005,7 @@
   </div>
   <!-- Кабинет устаза (п. 9): только у устаза, перед карточкой дня. Тап -
        та же дверь #dash-ustaz (скрыта), чтобы обработчики не дублировать. -->
-  <button class="dash-card d-row" id="dash-ustaz-row" style="display:none">
+  <button class="td-card d-row" id="dash-ustaz-row" style="display:none">
     <span class="d-ustaz-mk"></span>
     <span class="bd"><span class="t" id="dash-ustaz-row-t"></span><br><span class="s" id="dash-ustaz-row-s"></span></span>
     <span class="d-pill calm" id="dash-ustaz-row-n" style="display:none"></span>
@@ -4012,15 +4013,15 @@
   </button>
   <!-- Карточка дня (п. 2): экран сам решает, что первое - пересдача,
        заучивание, повтор, слова, «на сегодня всё». -->
-  <div class="dash-card" id="dash-hero" style="margin-top:12px">
+  <div class="td-card" id="dash-hero" style="margin-top:12px">
     <div class="h-where"><span class="h-sura" id="dash-hero-sura"></span><span class="h-place" id="dash-hero-place"></span></div>
     <div id="dash-hero-body"></div>
     <div class="h-row" id="dash-hero-row"></div>
   </div>
   <p class="dash-eyebrow" id="dash-checks-cap"></p>
-  <div class="dash-card" id="dash-checks" style="padding-block:4px"></div>
+  <div class="td-card" id="dash-checks" style="padding-block:4px"></div>
   <p class="dash-eyebrow" id="dash-ustaz-cap"></p>
-  <button class="dash-card d-row" id="dash-ustaz-card"></button>
+  <button class="td-card d-row" id="dash-ustaz-card"></button>
   <div id="dash-doors" class="three">
   <!-- Своя дверь студента (04.09.2026, экран "Сдачи" из макета 01.09): свои
        сдачи, ответ устаза и пересдача. Видна всем - у кого сдач ещё нет,
@@ -4066,7 +4067,7 @@
        на первом экране. См. boardRender и core/feed.py. -->
 <div id="dash-board"></div>
   <!-- Джамаат свёрнут (п. 2, как в макете): одна строка, раскрывается тапом. -->
-  <details id="dash-jamaat" class="dash-card">
+  <details id="dash-jamaat" class="td-card">
     <summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg><span id="dash-jamaat-sum"></span></summary>
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
@@ -9384,6 +9385,9 @@
   }
   function dashToday(f) {
     dashHead(f); dashHero(f); dashChecks(f); dashUstazCard(f); dashUstazRow();
+    // Устаз без своих заданий (не студент) - карточку дня и чек-лист не показываем.
+    var hasTasks = !!(f.day && f.day.tasks && f.day.tasks.length);
+    document.getElementById('dash-hero').style.display = hasTasks ? '' : 'none';
     var sum = document.getElementById('dash-jamaat-sum');
     if (sum && !sum.textContent) sum.textContent = T('jamaat_today');
   }
