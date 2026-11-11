@@ -1130,6 +1130,8 @@
   .tab-btn, #page-nav button, #bm-menu button > span, #hifz-submit, #hifz-big-submit { direction: ltr; unicode-bidi: isolate; }
   #btn-profile .ic, .hifz-listen-btn .ic { width: 22px; height: 22px; vertical-align: middle; }
   #topbar .ic { width: 24px; height: 24px; vertical-align: middle; }
+  /* Кнопки в рамке 34px: сама иконка чуть меньше, рамка та же (11.11.2026). */
+  #btn-hifz .ic, #btn-revision .ic, #btn-meaning .ic, #read-gloss-btn .ic { width: 20px; height: 20px; }
   .dash-row .mark .ic { width: 24px; height: 24px; vertical-align: middle; }
   .icon-gold .ic { width: 1em; height: 1em; vertical-align: -0.15em; }
   #look-play .ic, #rec-review-play .ic, #hifz-rec-play .ic { width: 16px; height: 16px; vertical-align: middle; fill: currentColor; stroke: none; }
@@ -3500,6 +3502,19 @@
     :root:not([data-theme="light"]) .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
   }
   :root[data-theme="dark"] .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
+  /* Строка дня на «Сегодня» глифами мусхафа (11.11.2026) - см. dashLineFont.
+     Семейство своё ('today-v4'), чтобы не сбить лист в мусхафе и тренажёр.
+     Вёрстка как у .mushaf-line: flex + space-between, одна строка, кегль
+     подгоняется под ширину (dashFitLines). */
+  @font-palette-values --TdV4Light { font-family: 'today-v4'; base-palette: 0; }
+  @font-palette-values --TdV4Dark { font-family: 'today-v4'; base-palette: 1; }
+  #dash-hero .h-line.v4line { display: flex; flex-wrap: nowrap; justify-content: space-between;
+    align-items: baseline; white-space: nowrap; overflow: hidden; line-height: 2; }
+  #dash-hero .h-line.v4line .td-v4 { font-family: 'today-v4', 'Scheherazade New', serif; font-palette: --TdV4Light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
+  }
+  :root[data-theme="dark"] #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
   .trainer-line .tl-w.on {
     background: var(--ok-soft); box-shadow: 0 0 0 2px var(--ok);
     border-radius: 8px; padding: 0 .18em;
@@ -9276,6 +9291,50 @@
     return (line.tokens || []).filter(function (t) { return t.type === 'word'; });
   }
   function dashBare(h) { return String(h || '').replace(/<[^>]*>/g, ''); }
+  /* Строка дня глифами мусхафа (11.11.2026, правка пользователя: «как в
+     мусхафе, а не арабская надпись»). Тот же приём, что trainerLineFont:
+     шрифт листа своим семейством, опоздавший ответ не ставится, не
+     загрузился - строка обычным текстом. */
+  var dashV4Face = null, dashV4Url = null, dashV4Want = null;
+  function dashLineFont(url) {
+    dashV4Want = url;
+    if (!url || typeof FontFace === 'undefined') return Promise.resolve(false);
+    if (url === dashV4Url) return Promise.resolve(true);
+    return loadV4Face('today-v4', url).then(function (loaded) {
+      if (dashV4Want !== url) return false;
+      if (dashV4Face) { try { document.fonts.delete(dashV4Face); } catch (e) {} }
+      document.fonts.add(loaded);
+      dashV4Face = loaded; dashV4Url = url;
+      return true;
+    }).catch(function () { return false; });
+  }
+  function dashLineHtml(line, v4) {
+    var html = '';
+    (line.tokens || []).forEach(function (t) {
+      var glyph = v4 && t.code_v4 && !t.fp;
+      if (t.type === 'word') {
+        html += '<span class="' + (glyph ? 'td-v4' : 'td-w') + '">' + (glyph ? t.code_v4 : dashBare(t.html)) + '</span>';
+      } else if (t.type === 'ayah_end') {
+        html += '<span class="' + (glyph ? 'td-v4' : 'td-ae') + '">' + (glyph ? t.code_v4 : '\uFD3E' + dashBare(t.html) + '\uFD3F') + '</span>';
+      }
+    });
+    return '<div class="h-line v4line">' + html + '</div>';
+  }
+  // Одна строка, как на листе: кегль по ширине карточки. Ширина нулевая,
+  // пока вкладка скрыта, - тогда повтор при показе вкладки (tabsGo).
+  function dashFitLines() {
+    var els = document.querySelectorAll('#dash-hero .h-line.v4line');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i]; el.style.fontSize = '';
+      var cs = getComputedStyle(el);
+      var room = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (!(room > 0)) continue;
+      var need = 0;
+      for (var k = 0; k < el.children.length; k++) need += el.children[k].getBoundingClientRect().width;
+      if (need > room) el.style.fontSize = Math.max(13, parseFloat(cs.fontSize) * room / need * 0.985).toFixed(1) + 'px';
+    }
+  }
+  window.addEventListener('resize', dashFitLines);
   function dashTask(f, k) {
     var day = f && f.day, out = null;
     ((day && day.tasks) || []).forEach(function (t) { if (t.k === k) out = t; });
@@ -9314,6 +9373,7 @@
     else if (k === 'n') openNahw();
     else if (k === 'h') openHadith();
   }
+  var dashHeroReq = 0;
   function dashHero(f) {
     var sura = document.getElementById('dash-hero-sura'), place = document.getElementById('dash-hero-place');
     var body = document.getElementById('dash-hero-body'), row = document.getElementById('dash-hero-row');
@@ -9323,18 +9383,25 @@
       return '<button class="d-btn' + (primary ? ' primary' : '') + '" data-dash-go="' + k + '">' + (icon || '') + label + '</button>';
     };
     sura.textContent = ''; place.textContent = dashPlace(h); body.innerHTML = ''; row.innerHTML = '';
-    var lineText = function (line) {
-      return dashLineWords(line).map(function (w) { return dashBare(w.html); }).join(' ');
-    };
+    var req = ++dashHeroReq;
     var showLine = function () {
       if (!h.page) return;
       dashPage(h.page, function (d) {
+        if (req !== dashHeroReq) return;
         sura.textContent = (d.surah_names || []).join(', ');
         var lines = dashTextLines(d), n = lines.length;
         if (!n) return;
+        dashLineFont(d.font_url).then(function (v4) {
+          if (req !== dashHeroReq) return;
+          paint(lines, n, v4);
+          dashFitLines();
+        });
+      });
+    };
+    var paint = function (lines, n, v4) {
         if (!h.stage || h.stage === 1) {
           var line = lines[h.line || 0];
-          if (line) body.innerHTML = '<div class="h-line">' + lineText(line) + '</div>';
+          if (line) body.innerHTML = dashLineHtml(line, v4);
           return;
         }
         // Этап 2 - половина листа (первая floor(n/2) строк, как hifzHalf),
@@ -9345,9 +9412,8 @@
         var map = '';
         for (var i = 0; i < n; i++) map += '<i class="' + (i >= from && i <= to ? 'on' : '') + '"></i>';
         body.innerHTML = '<div class="h-task"><div class="h-map">' + map + '</div><div style="flex:1;min-width:0">' +
-          '<div class="h-line">' + lineText(lines[from]) + '</div>' +
+          dashLineHtml(lines[from], v4) +
           '<div class="h-to">' + T('hero_to_line', { N: to + 1 }) + '</div></div></div>';
-      });
     };
     if (retake) {
       place.textContent = dashPlace(h);
@@ -19056,6 +19122,7 @@
       if (tab === 'train' && inTrainer) openTrainers();
       return;
     }
+    if (tab === 'today') setTimeout(dashFitLines, 50);
     // Уборка уходящего экрана - то же, что делают их кнопки возврата.
     if (tabsSettOn()) settClose();
     if (onLearn) {
