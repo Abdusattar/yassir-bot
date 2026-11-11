@@ -277,6 +277,24 @@
     flex: 0 0 auto;
   }
   #topbar .topbar-left { display: flex; align-items: center; gap: 8px; }
+  /* Листание в шапке (11.11.2026) - только в режиме «Страница» с панелью. */
+  #tb-pages { display: none; align-items: center; gap: 0; }
+  body.tabs-mushaf #tb-pages { display: flex; }
+  body.tabs-mushaf #page-nav { display: none !important; }
+  body.tabs-mushaf #mushaf-back, body.tabs-mushaf #ayah-range { display: none; }
+  body.tabs-mushaf #topbar { padding: 6px 6px; }
+  body.tabs-mushaf #topbar .topbar-left, body.tabs-mushaf #topbar .topbar-right { gap: 2px; }
+  #tb-page { background: none; border: none; font: inherit; font-size: 13px; color: var(--muted);
+    display: flex; align-items: center; gap: 4px; padding: 6px 4px; cursor: pointer; white-space: nowrap; }
+  #tb-page b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #tb-pages .nav-btn { padding: 4px 8px; }
+  #bm-menu #btn-bm-baqara { color: var(--accent); }
+  #bm-jump { display: flex; gap: 8px; align-items: center; padding: 10px 12px 6px; margin-top: 4px;
+    border-top: 1px solid var(--card-border); font-size: 13px; color: var(--muted); }
+  #bm-jump input { width: 64px; font: inherit; font-size: 15px; padding: 6px 8px; border: 1px solid var(--card-border);
+    border-radius: 8px; background: var(--bg); color: var(--ink); }
+  #bm-jump button { flex: none; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--accent);
+    background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
   #topbar .topbar-right { display: flex; align-items: center; gap: 8px; }
   #btn-revision, #btn-meaning {
     background: none; border: none; font-size: 18px; padding: 2px 4px;
@@ -4164,6 +4182,18 @@
         <span class="surah-caret"></span>
       </button>
     </div>
+    <!-- Мусхаф с нижней панелью (11.11.2026, перенос из прототипа «Хифз ·
+         Сегодня»): листание и номер страницы переезжают из #page-nav сюда,
+         строка страниц внизу уступает место панели вкладок. Номер страницы -
+         меню (#bm-menu): закладка, к закладке, в начало Бакары, переход по
+         номеру. Видно только при body.tabs-mushaf (режим «Страница»); в
+         заучивании, разборе и «Смысле» всё как прежде. ‹ слева = следующая
+         страница (вправо по мусхафу), как и в #page-nav. -->
+    <div class="topbar-pages" id="tb-pages">
+      <button id="tb-next" class="nav-btn" aria-label="Следующая страница">‹</button>
+      <button id="tb-page" aria-label="Страница и закладка"><b id="tb-n">—</b><span class="surah-caret"></span></button>
+      <button id="tb-prev" class="nav-btn" aria-label="Предыдущая страница">›</button>
+    </div>
     <div class="topbar-right">
       <!-- Отметка "повторение" (30.08.2026) - студент сам подтверждает, что
            перечитал от начала Аль-Бакары до места, где остановился;
@@ -4253,6 +4283,10 @@
   <div id="bm-menu">
     <button id="btn-bookmark-save"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg><span data-i18n="bm_save">Сохранить закладку здесь</span></span><small data-i18n="bm_save_sub">эта страница станет закладкой</small></button>
     <button id="btn-bookmark-go"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg><span data-i18n="bm_go">К закладке</span></span><small id="bm-go-sub" data-i18n="bm_go_sub">страница, где остановился</small></button>
+    <!-- Пункты для шапки с панелью (11.11.2026): из #page-nav сюда переехали
+         «⤒ Бакара» и переход по номеру страницы. -->
+    <button id="btn-bm-baqara"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14" /><path d="m18 13-6-6-6 6" /><path d="M12 7v14" /></svg><span data-i18n="bm_baqara">В начало Бакары</span></span><small data-i18n="bm_baqara_sub">стр. 2 — ежедневный повтор</small></button>
+    <div id="bm-jump"><span data-i18n="bm_jump">К странице</span><input id="bm-jump-input" type="number" inputmode="numeric" min="1" max="604"><button id="bm-jump-go" data-i18n="bm_jump_go">Открыть</button></div>
   </div>
 
   <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
@@ -5373,6 +5407,10 @@
       bm_go: 'К закладке',
       bm_go_sub: 'страница, где остановился',
       bm_baqara_short: 'Бакара',
+      bm_baqara: 'В начало Бакары',
+      bm_baqara_sub: 'стр. 2 — ежедневный повтор',
+      bm_jump: 'К странице',
+      bm_jump_go: 'Открыть',
       hifz_rotate_hint: 'Поверните телефон — строки станут крупнее',
       hifz_rotate_hint_lock: 'не поворачивается — снимите блокировку поворота',
       hifz_unit_line: 'Строка',
@@ -6090,6 +6128,10 @@
       bm_go: 'Кыстармага',
       bm_go_sub: 'токтогон бетиң',
       bm_baqara_short: 'Бакара',
+      bm_baqara: 'Бакаранын башына',
+      bm_baqara_sub: '2-бет — күнүмдүк кайталоо',
+      bm_jump: 'Бетке',
+      bm_jump_go: 'Ачуу',
       hifz_rotate_hint: 'Телефонду бур — саптар чоңоёт',
       hifz_rotate_hint_lock: 'бурулбай жатабы — буруунун кулпусун ач',
       hifz_unit_line: 'Сап',
@@ -6869,6 +6911,10 @@
       bm_go: 'Хатчўпга',
       bm_go_sub: 'тўхтаган бетинг',
       bm_baqara_short: 'Бақара',
+      bm_baqara: 'Бақара бошига',
+      bm_baqara_sub: '2-бет — кунлик такрорлаш',
+      bm_jump: 'Бетга',
+      bm_jump_go: 'Очиш',
       hifz_rotate_hint: 'Телефонни айлантир — қаторлар катталашади',
       hifz_rotate_hint_lock: 'айланмаяптими — айланиш қулфини оч',
       hifz_unit_line: 'Қатор',
@@ -7650,6 +7696,10 @@
       bm_go: '回到书签',
       bm_go_sub: '你停下的那一页',
       bm_baqara_short: '黄牛章',
+      bm_baqara: '回到黄牛章开头',
+      bm_baqara_sub: '第2页 — 每日复习',
+      bm_jump: '跳到页',
+      bm_jump_go: '打开',
       hifz_rotate_hint: '把手机横过来 — 字会变大',
       hifz_rotate_hint_lock: '转不过来 — 请关闭屏幕旋转锁定',
       hifz_unit_line: '一行',
@@ -9949,6 +9999,22 @@
     else if (full && !capped) mushafFitTrusted = fitted;
     el.style.fontSize = fitted.toFixed(1) + 'px';
 
+    // Второй предел - по высоте (11.11.2026, нижняя панель в мусхафе): лист
+    // стоя должен влезать целиком, а не скроллиться. Если высота листа
+    // больше места под ним - уменьшаем кегль пропорционально. Лёжа лист
+    // скроллится по замыслу (21.09.2026), там этого предела нет.
+    var wrap = document.getElementById('page-wrap');
+    var appEl = document.getElementById('app');
+    if (wrap && wrap.clientHeight && !(appEl && appEl.classList.contains('land'))) {
+      for (var h = 0; h < 2; h++) {
+        var room = wrap.clientHeight - 12;
+        var need = el.scrollHeight;
+        if (!(need > room) || fitted <= MUSHAF_MIN_FONT_SIZE) break;
+        fitted = Math.max(MUSHAF_MIN_FONT_SIZE, fitted * (room / need) * 0.99);
+        el.style.fontSize = fitted.toFixed(1) + 'px';
+      }
+    }
+
     // Самопроверка (см. MUSHAF_VERIFY_* выше). Меряем УЖЕ ОТРИСОВАННЫЕ
     // строки как есть, без .measuring: нас интересует не натуральная ширина
     // слов, а факт "вылезло за край или нет" при боевом justify.
@@ -10205,6 +10271,7 @@
         ? T('ayah_range', { A: firstAyah.ayah, B: lastAyah.ayah })
         : T('ayah_n', { N: firstAyah.ayah });
     document.getElementById('page-indicator').textContent = T('page_n', { N: data.page });
+    document.getElementById('tb-n').textContent = T('page_n', { N: data.page });
 
     // Настоящая построчная вёрстка (QUL/King Fahd Complex, 27.08.2026) -
     // каждая строка мусхафа - свой <div>, а не единый абзац с переносом
@@ -10319,6 +10386,8 @@
 
     document.getElementById('btn-prev').disabled = data.page >= LAST_PAGE;
     document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
+    document.getElementById('tb-prev').disabled = data.page >= LAST_PAGE;
+    document.getElementById('tb-next').disabled = data.page <= FIRST_PAGE;
 
     renderWordsList(data);
     renderMeaning(data);
@@ -13599,14 +13668,18 @@
      встают у 🔖: пункт меню к этому моменту уже скрыт. */
   var bmBtn = document.getElementById('btn-bookmark');
   var bmMenu = document.getElementById('bm-menu');
+  // Откуда открыли меню - у той кнопки и всплывают подсказки (11.11.2026:
+  // в шапке с панелью это номер страницы #tb-page, в строке страниц - 🔖).
+  var bmAnchor = bmBtn;
   function bmClose() { bmMenu.classList.remove('on'); }
-  bmBtn.addEventListener('click', function (e) {
+  function bmOpen(e, anchor) {
     e.stopPropagation();
     if (bmMenu.classList.contains('on')) { bmClose(); return; }
+    bmAnchor = anchor;
     bmMenu.classList.add('on');
     // Под кнопкой, а если снизу не хватает места (полоса теперь внизу
     // экрана, а лёжа - в конце листа) - над ней. Прижато к экрану.
-    var r = bmBtn.getBoundingClientRect(), m = bmMenu.getBoundingClientRect();
+    var r = anchor.getBoundingClientRect(), m = bmMenu.getBoundingClientRect();
     var top = r.bottom + 6;
     if (top + m.height > window.innerHeight - 8) top = r.top - m.height - 6;
     bmMenu.style.top = Math.max(8, top) + 'px';
@@ -13617,19 +13690,33 @@
         document.getElementById('bm-go-sub').textContent = T('page_n', { N: res.data.page });
       }
     });
-  });
-  bmMenu.addEventListener('click', function (e) { if (e.target.closest('button')) bmClose(); });
+  }
+  bmBtn.addEventListener('click', function (e) { bmOpen(e, bmBtn); });
+  document.getElementById('tb-page').addEventListener('click', function (e) { bmOpen(e, document.getElementById('tb-page')); });
+  document.getElementById('tb-next').addEventListener('click', function () { document.getElementById('btn-next').click(); });
+  document.getElementById('tb-prev').addEventListener('click', function () { document.getElementById('btn-prev').click(); });
+  document.getElementById('btn-bm-baqara').addEventListener('click', function () { loadPage(BAQARA_START_PAGE); });
+  var bmJumpInput = document.getElementById('bm-jump-input');
+  function bmJumpGo() {
+    var n = parseInt(bmJumpInput.value, 10);
+    if (n >= FIRST_PAGE && n <= LAST_PAGE) { loadPage(n); bmClose(); }
+  }
+  document.getElementById('bm-jump-go').addEventListener('click', bmJumpGo);
+  bmJumpInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') bmJumpGo(); });
+  bmJumpInput.addEventListener('click', function (e) { e.stopPropagation(); });
+  // Поле ввода внутри меню: тап по нему меню не закрывает, по пунктам - закрывает.
+  bmMenu.addEventListener('click', function (e) { if (e.target.closest('button') && !e.target.closest('#bm-jump')) bmClose(); });
   document.addEventListener('click', function (e) {
     if (bmMenu.classList.contains('on') && !bmMenu.contains(e.target)) bmClose();
   });
   document.getElementById('page-wrap').addEventListener('scroll', bmClose, { passive: true });
   document.getElementById('btn-bookmark-save').addEventListener('click', function () {
     apiCall('/bookmark', { method: 'POST', body: { page: currentPage } }).then(function (res) {
-      if (res.status !== 401) showPopupMessage(bmBtn, T('bookmark_saved', { N: currentPage }));
+      if (res.status !== 401) showPopupMessage(bmAnchor, T('bookmark_saved', { N: currentPage }));
     });
   });
   document.getElementById('btn-bookmark-go').addEventListener('click', function () {
-    var btn = bmBtn;
+    var btn = bmAnchor;
     apiCall('/bookmark').then(function (res) {
       if (res.status === 401) return;
       if (res.data && res.data.page) {
@@ -18342,14 +18429,22 @@
   }
   function tabsSettOn() { return settBox.classList.contains('on'); }
 
-  // Какая вкладка подсвечена, или null - панель не нужна. Мусхафа здесь нет
-  // намеренно (решение пользователя 04.11.2026): с панелью лист не помещался
-  // и прокручивался, поэтому в мусхафе её не показываем.
+  // Мусхаф в режиме «Страница» (11.11.2026, перенос из прототипа): панель
+  // есть, строка страниц переехала в шапку, кегль ограничен и по высоте -
+  // лист не скроллится. Заучивание, разбор, проверка, «Смысл» - без панели.
+  function mushafTabsMode() {
+    var app = document.getElementById('app'), page = document.getElementById('view-page');
+    return !!(page && page.classList.contains('active')) &&
+      !app.classList.contains('hifz') && !app.classList.contains('look') && !app.classList.contains('review');
+  }
+
+  // Какая вкладка подсвечена, или null - панель не нужна.
   function tabsCurrent() {
     if (tabsVisible('login') || tabsVisible('wrongbot')) return null;
     // Настройки - шторка поверх любого экрана, живут во вкладке «Ещё».
     if (tabsSettOn()) return 'more';
     if (tabsVisible('dashboard')) return 'today';
+    if (tabsVisible('app') && mushafTabsMode()) return 'mushaf';
     // Внутри тренажёров панель тоже есть (10.11.2026, решение пользователя):
     // карточка «Слов», таджвид, нахв и хадис - те же «Тренажёры».
     if (tabsVisible('trainers') || tabsVisible('trainer') || tabsVisible('tajweed') ||
@@ -18361,7 +18456,11 @@
 
   function tabsSync() {
     var cur = tabsCurrent();
+    var wasMushaf = document.body.classList.contains('tabs-mushaf');
     document.body.classList.toggle('tabs-on', !!cur);
+    document.body.classList.toggle('tabs-mushaf', cur === 'mushaf');
+    // Панель появилась или ушла - высота листа другая, кегль перемеряем.
+    if (wasMushaf !== (cur === 'mushaf') && typeof mushafFitSchedule === 'function') mushafFitSchedule();
     Array.prototype.forEach.call(tabsBox.querySelectorAll('.tabs-btn'), function (b) {
       var on = b.getAttribute('data-tab') === cur;
       b.classList.toggle('on', on);
@@ -18376,7 +18475,7 @@
     requestAnimationFrame(function () { tabsQueued = false; tabsSync(); });
   }
   var tabsObs = new MutationObserver(tabsQueue);
-  TABS_SCREENS.concat(['sett', 'login', 'wrongbot']).forEach(function (id) {
+  TABS_SCREENS.concat(['sett', 'login', 'wrongbot', 'view-page']).forEach(function (id) {
     var el = document.getElementById(id);
     if (el) tabsObs.observe(el, { attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
   });
