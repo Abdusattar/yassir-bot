@@ -33,7 +33,7 @@ from aiohttp import web
 import config
 from config import TELEGRAM_TOKEN, SUPER_ADMIN_IDS, PROFILE, REC_AAC_IDS
 from core.app_trail import add_trail, ua_short
-from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy, local_copy_path
+from core.audio_compat import needs_mp3, cached_mp3, to_mp3, local_copy, local_copy_path, peaks_for
 import core.audio_compat as audio_compat
 from core.db import (
     get_learning_group, get_admin_groups, get_pending_voice_reviews,
@@ -2321,8 +2321,11 @@ async def handle_ustaz_submission(request, user_id):
         "hifz_stage": sub["hifz_stage"], "hifz_layout": sub.get("hifz_layout"),
         "has_audio": bool(sub["file_id"]),
         "has_review_audio": bool(sub["review_file_id"]),
-        # Длина записи в секундах - на кнопке «Прослушать сдачу» (14.09.2026).
+        # Длина записи в секундах - под дорожкой плеера (14.09.2026).
         "duration": sub["duration"],
+        # Волна громкости для дорожки (11.11.2026): список 0..1 из копии на
+        # сервере или null, если копии уже нет (старше 5 дней).
+        "peaks": peaks_for(sub["file_id"]),
         "verdict": sub["verdict"],
         # Пересдано - экран показывает разбор, но не даёт его переделать
         # (07.09.2026, см. core/db.py:is_retake_answered).
@@ -2410,6 +2413,7 @@ async def handle_ustaz_revisions(request, user_id):
         return web.json_response({"error": "not_ustaz"}, status=403)
     items = get_revision_recordings([g["id"] for g in visible])
     for it in items:
+        it["peaks"] = peaks_for(it.get("file_id"))   # волна в карточке (11.11.2026)
         it.pop("file_id", None)
     return web.json_response({"items": items, "today": get_date()})
 

@@ -25,9 +25,12 @@ mp3 на лету - 64k / 32 кГц (полоса до ~14 кГц): быстре
 ядрах (15 минут записи: mp3 ~15-25 с, AAC 37-107 с).
 """
 
+import array
 import asyncio
 import hashlib
+import json
 import logging
+import math
 import os
 import re
 import tempfile
@@ -48,6 +51,17 @@ _MP3_ARGS = ["-vn", "-ac", "1", "-ar", "32000",
              "-c:a", "libmp3lame", "-b:a", "64k", "-compression_level", "7"]
 _COPY_AAC_ARGS = ["-vn", "-ac", "1", "-c:a", "aac", "-b:a", "64k"]
 _COPY_AS_IS_MAX_BPS = 96000
+
+# Волна громкости для плеера устаза (11.11.2026, просьба пользователя: «как
+# голосовое в Telegram»). Считается один раз на сервере сразу после копии
+# m4a - телефону не надо качать и раскодировать 15 минут записи ради
+# картинки. ffmpeg отдаёт моно 1000 Гц в s16le (15 минут - 900 тыс.
+# сэмплов, 2 часа повторения - 7 млн, Python проходит за доли секунды),
+# дальше RMS по PEAKS_N корзинам и нормировка на самый громкий. Лежит
+# рядом с копией (<sha1>.peaks.json) и живёт те же 5 дней; старше - звук из
+# Telegram и волны нет, плеер рисует ровную полосу.
+PEAKS_N = 48
+_PEAKS_ARGS = ["-vn", "-ac", "1", "-ar", "1000", "-c:a", "pcm_s16le"]
 
 _IOS = re.compile(r"(?:iPhone|iPad|iPod).*? OS (\d+)_(\d+)")
 _MAC_SAFARI = re.compile(r"Version/(\d+)\.(\d+)")
@@ -103,6 +117,45 @@ def local_copy_path(file_id):
 def local_copy(file_id):
     """Копия m4a за 5 дней (играет везде) или None."""
     return _read(_cache_path(file_id, "m4a")) if file_id else None
+
+
+def peaks_from_pcm(raw, n=PEAKS_N):
+    """Список из n чисел 0..1 по сырому моно s16le; тишина - нули."""
+    if not raw:
+        return [0.0] * n
+    samples = array.array("h")
+    samples.frombytes(raw[: len(raw) - len(raw) % 2])
+    total = len(samples)
+    if not total:
+        return [0.0] * n
+    out = []
+    for k in range(n):
+        a, b = total * k // n, total * (k + 1) // n
+        if b <= a:
+            out.append(0.0)
+            continue
+        acc = 0
+        for v in samples[a:b]:
+            acc += v * v
+        out.append(math.sqrt(acc / (b - a)))
+    top = max(out)
+    if top <= 0:
+        return [0.0] * n
+    return [round(v / top, 2) for v in out]
+
+
+def peaks_for(file_id):
+    """Волна записи (список 0..1) или None - копии нет или ещё считается."""
+    if not file_id:
+        return None
+    data = _read(_cache_path(file_id, "peaks.json"))
+    if not data:
+        return None
+    try:
+        peaks = json.loads(data)
+    except ValueError:
+        return None
+    return peaks if isinstance(peaks, list) and peaks else None
 
 
 async def to_mp3(audio_bytes, file_id):
@@ -161,6 +214,10 @@ async def _make_copy(file_id, parts, ogg):
                 out = await _ffmpeg(ogg, _COPY_AAC_ARGS, "ipod", "m4a", low_priority=True)
             if out:
                 _store(_cache_path(file_id, "m4a"), out)
+                raw = await _ffmpeg(out, _PEAKS_ARGS, "s16le", "raw", low_priority=True)
+                if raw:
+                    _store(_cache_path(file_id, "peaks.json"),
+                           json.dumps(peaks_from_pcm(raw)).encode())
         except Exception:
             log.exception("audio: копия не сделана")
 
