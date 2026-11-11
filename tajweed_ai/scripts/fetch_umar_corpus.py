@@ -76,7 +76,7 @@ c.row_factory = sqlite3.Row
 rows = c.execute('''
     SELECT vs.id, vs.student_id, vs.group_id, vs.file_id, vs.sent_at,
            vs.review_type, vs.review_file_id, vs.review_text, vs.review_by,
-           vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.duration,
+           vs.hifz_page, vs.hifz_line, vs.hifz_stage, vs.hifz_layout, vs.duration,
            vs.verdict, vs.verdict_at, vs.verdict_by, vs.error_words,
            u.name, ru.name AS review_by_name, vu.name AS verdict_by_name
     FROM voice_submissions vs JOIN users u ON u.id = vs.student_id
@@ -107,13 +107,23 @@ def download_voice(file_id):
         return audio_resp.content
 
 
-def fetch_all(only=None):
+def fetch_all(only=None, ustaz="Умар", ids=None):
     """only: None - всё; "verdict" - только сдачи с вердиктом из хифза;
     "voice" - только голосовые коррекции. meta.json переписывается для ВСЕХ
     строк выборки при каждом запуске (вердикт/пометки могли появиться позже),
-    аудио докачивается только если пары ещё нет."""
+    аудио докачивается только если пары ещё нет.
+
+    11.11.2026: ustaz - только сдачи, где вердикт/реплай этого устаза
+    (решение 14.09: корпус только Умар устаза; '' - все устазы; review_by
+    NULL = Умар до появления колонки). ids - только эти сдачи (пробный
+    прогон на 10 сдачах)."""
     fetched = load_json_set(FETCHED_PATH)
     rows = fetch_umar_reviews()
+    if ustaz:
+        rows = [r for r in rows if r["verdict_by_name"] == ustaz
+                or (not r["verdict"] and (r["review_by_name"] == ustaz or r["review_by"] is None))]
+    if ids:
+        rows = [r for r in rows if r["id"] in ids]
     if only == "verdict":
         rows = [r for r in rows if r["verdict"]]
     elif only == "voice":
@@ -138,6 +148,7 @@ def fetch_all(only=None):
             "hifz_page": r["hifz_page"],
             "hifz_line": r["hifz_line"],
             "hifz_stage": r["hifz_stage"],
+            "hifz_layout": r["hifz_layout"],
             "verdict": r["verdict"],
             "verdict_at": r["verdict_at"],
             "verdict_by": r["verdict_by"],
@@ -188,9 +199,12 @@ if __name__ == "__main__":
                      help="удалить пары, чей id вручную добавлен в data/umar_corpus_reviewed.json")
     ap.add_argument("--only", choices=["verdict", "voice"],
                      help="verdict - только сдачи хифза с вердиктом; voice - только голосовые коррекции")
+    ap.add_argument("--ustaz", default="Умар", help="только этот устаз ('' - все)")
+    ap.add_argument("--ids", help="только эти сдачи, через запятую")
     args = ap.parse_args()
 
     if args.purge_reviewed:
         purge_reviewed()
     else:
-        fetch_all(args.only)
+        ids = {int(x) for x in args.ids.split(",")} if args.ids else None
+        fetch_all(args.only, args.ustaz, ids)
