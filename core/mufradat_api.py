@@ -46,7 +46,7 @@ from core.db import (
     get_skip_count_month_detail, get_submission_counts, merge_submission_series,
     is_retake_answered, get_group_tasks, get_today_report, is_app_member, save_report,
     other_bot_member,
-    get_profile, update_profile, revision_record_required, get_revision_recordings, is_hafiz_phone, student_tasks,
+    get_profile, update_profile, revision_record_required, get_revision_recordings, is_hafiz_phone, student_tasks, day_missing,
     get_revision_recording, get_rejected_revisions,
     lesson_attendance_status, credit_lesson_attendance, get_lesson_dates,
     remove_lesson_attendance, set_user_tz, get_dm_ok_by_phone,
@@ -1974,8 +1974,9 @@ async def handle_my_month(request, user_id):
     if not user or not group:
         return web.json_response({"days": {}, "month": get_date()[:7], "today": get_date()})
     detail = get_skip_count_month_detail(user["id"], group["id"]) or {}
+    days = get_student_month_days(user["id"], group["id"], request.query.get("month"))
     payload = {
-        "days": get_student_month_days(user["id"], group["id"], request.query.get("month")),
+        "days": days,
         "threshold": group_miss_threshold(group["group_type"]),
         "missed": detail.get("missed", 0),
         "group_title": group["title"],
@@ -1991,6 +1992,8 @@ async def handle_my_month(request, user_id):
         # заучивания) - приложение по нему решает, какой день неполный и
         # отвечает на тап мини-отчётом (07.10.2026).
         "tasks_total": len(student_tasks(user["id"], get_group_tasks(group))),
+        # Сколько обязательных не хватило по дню - цвет клетки (11.11.2026).
+        "miss": day_missing(user["id"], group["id"], days, get_group_tasks(group)),
     }
     # У подготовительной правило другое (см. core/prep.py): не «сколько
     # пропустил до перевода», а «сколько полных дней набрал до срока».
@@ -2133,12 +2136,14 @@ async def handle_ustaz_student(request, user_id):
         return web.json_response({"error": "not_found"}, status=404)
     group = get_group_by_id(group_id)
     visible, _own, _is_super, _hidden = _visible_ustaz_groups(user_id, "all")
+    days = get_student_month_days(student_id, group_id, request.query.get("month"))
     return web.json_response({
         "name": student["name"],
         "lessons": get_lesson_dates(student_id, group_id, request.query.get("month")),
         # Снять ошибочную отметку урока - устаз этой группы или супер-админ.
         "can_edit_lessons": group_id in [g["id"] for g in visible],
-        "days": get_student_month_days(student_id, group_id, request.query.get("month")),
+        "days": days,
+        "miss": day_missing(student_id, group_id, days, get_group_tasks(group)) if group else {},
         # Дни паузы «Цикл» - пунктиром в календаре (03.11.2026), без подробностей.
         "pauses": _month_pauses(student_id, group_id, request.query.get("month")),
         "threshold": group_miss_threshold(group["group_type"] if group else None),

@@ -1356,6 +1356,21 @@ def tasks_on(tasks, since, day):
     return [k for k in tasks if since.get(k, "") <= day]
 
 
+def day_missing(uid, group_id, days_subs, group_tasks, hafiz=None, since=None):
+    """{дата: сколько обязательных заданий не сдано} по дням со сдачами -
+    цвет дня в «Моём месяце» и у устаза (11.11.2026, Розалина: 3 из 4
+    горело как полный день - цвет считал «3 и больше = всё»). Обязательные -
+    по этому студенту (хафиз без заучивания) и по дню (задание, добавленное
+    в середине месяца, ранние дни неполными не делает)."""
+    need_all = student_tasks(uid, group_tasks, hafiz)
+    since = task_since(group_id) if since is None else since
+    out = {}
+    for day, subs in days_subs.items():
+        need = tasks_on(need_all, since, day)
+        out[day] = len([k for k in need if k not in set(subs)])
+    return out
+
+
 def update_group_lang(chat_id, lang):
     with db() as c:
         c.execute("UPDATE groups SET lang=? WHERE chat_id=?", (lang, chat_id))
@@ -3080,16 +3095,22 @@ def get_group_month_progress(group_id, month=None):
     placeholders = ",".join("?" * len(ids))
     with db() as c:
         rows = c.execute(
-            f"SELECT student_id, date, COUNT(DISTINCT subcategory) AS n"
+            f"SELECT student_id, date, COUNT(DISTINCT subcategory) AS n,"
+            f" GROUP_CONCAT(DISTINCT subcategory) AS subs"
             f" FROM score_events"
             f" WHERE group_id=? AND category='task' AND date>=? AND date<?"
             f" AND student_id IN ({placeholders})"
             f" GROUP BY student_id, date",
             (group_id, month_start, nxt, *ids)
         ).fetchall()
-    by_student = {}
+    by_student, subs_by = {}, {}
     for r in rows:
         by_student.setdefault(r["student_id"], {})[r["date"]] = r["n"]
+        subs_by.setdefault(r["student_id"], {})[r["date"]] = (r["subs"] or "").split(",")
+    group_row = get_group_by_id(group_id)
+    group_tasks = get_group_tasks(group_row) if group_row else ["m", "r", "t"]
+    since = task_since(group_id)
+    hafiz = hafiz_ids(group_id)
 
     lesson_dates = get_group_lesson_dates(group_id, month)
     # Дни паузы «Цикл» (03.11.2026) - одним запросом, как точки урока.
@@ -3107,6 +3128,9 @@ def get_group_month_progress(group_id, month=None):
             "id": st["id"],
             "name": st["name"],
             "days": by_student.get(st["id"], {}),
+            # Сколько обязательных не хватило по дню - цвет полосы (11.11.2026).
+            "miss": day_missing(st["id"], group_id, subs_by.get(st["id"], {}), group_tasks,
+                                hafiz=hafiz, since=since),
             "missed": detail.get("missed", 0),
             "submitted": detail.get("submitted", 0),
             "window_start": detail.get("start"),
