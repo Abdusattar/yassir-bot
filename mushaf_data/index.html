@@ -3510,7 +3510,8 @@
   #dash-hero .h-line.v4line { display: flex; flex-wrap: nowrap; justify-content: space-between;
     align-items: baseline; white-space: nowrap; overflow: hidden; line-height: 2; }
   #dash-hero .h-line.v4line .td-v4 { font-family: 'today-v4', 'Scheherazade New', serif; font-palette: --TdV4Light; }
-  #dash-hero .h-line.v4line .td-tail { opacity: .5; }
+  #dash-hero .h-line.v4tail { justify-content: flex-start; gap: .25em; margin-top: 4px; padding-top: 4px; padding-bottom: 4px;
+    background: transparent; opacity: .55; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
   }
@@ -9363,13 +9364,25 @@
       }
     };
     (line.tokens || []).forEach(function (t) { put(t, '', false); });
-    (tail || []).forEach(function (t) { put(t, ' td-tail', !!foreign); });
-    return '<div class="h-line v4line">' + html + '</div>';
+    var out = '<div class="h-line v4line">' + html + '</div>';
+    // Связка отдельной строкой под основной, как на листе (там она - начало
+    // следующей строки); кегль берёт у основной в dashFitLines.
+    if (tail && tail.length) {
+      html = '';
+      tail.forEach(function (t) { put(t, ' td-tail', !!foreign); });
+      out += '<div class="h-line v4line v4tail">' + html + '</div>';
+    }
+    return out;
   }
   // Одна строка, как на листе: кегль по ширине карточки. Ширина нулевая,
   // пока вкладка скрыта, - тогда повтор при показе вкладки (tabsGo).
   function dashFitLines() {
-    var els = document.querySelectorAll('#dash-hero .h-line.v4line');
+    var els = document.querySelectorAll('#dash-hero .h-line.v4line:not(.v4tail)');
+    var tails = document.querySelectorAll('#dash-hero .v4tail');
+    for (var j = 0; j < tails.length; j++) {
+      var prev = tails[j].previousElementSibling;
+      if (prev) tails[j].style.fontSize = (prev.style.fontSize || getComputedStyle(prev).fontSize);
+    }
     for (var i = 0; i < els.length; i++) {
       var el = els[i]; el.style.fontSize = '';
       var cs = getComputedStyle(el);
@@ -9378,6 +9391,8 @@
       var need = 0;
       for (var k = 0; k < el.children.length; k++) need += el.children[k].getBoundingClientRect().width;
       if (need > room) el.style.fontSize = Math.max(13, parseFloat(cs.fontSize) * room / need * 0.985).toFixed(1) + 'px';
+      var tl = el.nextElementSibling;
+      if (tl && tl.classList.contains('v4tail')) tl.style.fontSize = el.style.fontSize || getComputedStyle(el).fontSize;
     }
   }
   window.addEventListener('resize', dashFitLines);
@@ -9447,11 +9462,11 @@
         if (!h.stage || h.stage === 1) {
           var idx = h.line || 0, line = lines[idx];
           if (!line) return;
-          sura.textContent = dashSuraLabel([line]);
           var done = function (next, foreign) {
             if (req !== dashHeroReq) return;
-            var k = dashTailCount(next);
-            body.innerHTML = dashLineHtml(line, v4, next ? next.tokens.slice(0, k) : [], foreign);
+            var k = dashTailCount(next), tail = next ? next.tokens.slice(0, k) : [];
+            sura.textContent = dashSuraLabel([line, { tokens: tail }]);
+            body.innerHTML = dashLineHtml(line, v4, tail, foreign);
             dashFitLines();
           };
           if (idx + 1 < n) done(lines[idx + 1], false);
