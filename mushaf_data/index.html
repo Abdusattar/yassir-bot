@@ -102,8 +102,8 @@
        спорить с таджвидной раскраской (зашита в сам шрифт, несколько
        ярких цветов на буквах). --mushaf-bg-end чуть глубже старта -
        лёгкий намёк на состаренную бумагу, не плоский цвет. */
-    --mushaf-bg-start: #fbf8f0;
-    --mushaf-bg-end: #f4ecd8;
+    --mushaf-bg-start: #faf7f0;
+    --mushaf-bg-end: #faf7f0;
     /* chrome (topbar/page-nav/tabbar) - часть той же "бумажной"
        поверхности, не отдельная белая полоса поверх нее (#page-wrap/
        #ayah-text не имеют своего непрозрачного фона). color-mix - доля
@@ -153,8 +153,8 @@
       /* Тёплый тёмно-коричневый ("переплёт книги"), НЕ тот же зеленоватый
          тёмный, что у #trainer/#dashboard (--dash-bg-* ниже) - своя
          идентичность мусхафа и в тёмной теме тоже (30.08.2026). */
-      --mushaf-bg-start: #201a12;
-      --mushaf-bg-end: #17130d;
+      --mushaf-bg-start: #16150f;
+      --mushaf-bg-end: #16150f;
       --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
       --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
       --muted: #a39a7d;
@@ -182,8 +182,8 @@
   :root[data-theme="dark"] {
     --bg: #16140f;
     --ink: #f0ead8;
-    --mushaf-bg-start: #201a12;
-    --mushaf-bg-end: #17130d;
+    --mushaf-bg-start: #16150f;
+    --mushaf-bg-end: #16150f;
     --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
     --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
     --muted: #a39a7d;
@@ -299,14 +299,20 @@
     border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; font-size: 13px;
     font-weight: 600; cursor: pointer; text-align: center; }
   #topbar .topbar-right { display: flex; align-items: center; gap: 8px; }
-  #btn-hifz, #btn-revision, #btn-meaning {
-    background: none; border: none; font-size: 18px; padding: 4px 5px;
-    cursor: pointer; line-height: 1; border-radius: 9px; color: var(--ink);
+  /* Кнопки шапки как в макете Quran-stroka (11.11.2026, решение
+     пользователя): квадратики 34px с тонкой рамкой на подложке, включённая -
+     светло-зелёная с зелёной рамкой. Иконки прежние. */
+  #btn-hifz, #btn-revision, #btn-meaning, #read-gloss-btn, #tb-pages .nav-btn {
+    min-width: 34px; height: 34px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 9px; color: var(--ink);
+    font-size: 18px; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
+  #topbar .topbar-right { gap: 6px; }
+  #tb-pages { gap: 6px; }
   /* Сдано сегодня (11.11.2026, просьба пользователя): заучивание и
      повторение, которые уже засчитаны, подсвечены мягким зелёным - по
      фактам дня с дашборда (dashFactsLast.day.tasks). */
-  #btn-hifz.done, #btn-revision.done { background: var(--accent-soft); color: var(--accent); }
+  #btn-hifz.done, #btn-revision.done, #read-gloss-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   #topbar .topbar-back {
     background: none; border: none; color: var(--accent);
     font-size: 13px; font-weight: 600; padding: 4px 0; cursor: pointer;
@@ -1507,13 +1513,18 @@
   .d-ustaz-mk { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent);
     display: grid; place-items: center; flex: none; }
   .d-ustaz-mk .ic { width: 20px; height: 20px; }
-  details#dash-jamaat { margin-top: 14px; }
-  details#dash-jamaat > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
-    color: var(--muted); font-size: 13.5px; min-height: 28px; }
-  details#dash-jamaat > summary::-webkit-details-marker { display: none; }
-  details#dash-jamaat > summary .chev { width: 16px; height: 16px; transition: transform .15s; }
-  details#dash-jamaat[open] > summary .chev { transform: rotate(90deg); }
-  details#dash-jamaat #dash-pulse { margin-top: 10px; margin-bottom: 0; border: 0; box-shadow: none; padding: 0; }
+  #dash-jamaat { margin-top: 14px; }
+  #dash-jamaat .jm-cap { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  #dash-jamaat #dash-pulse { margin-top: 10px; margin-bottom: 0; border: 0; box-shadow: none; padding: 0; }
+  /* Карточка дня на этапах 2 и 3: карта листа с подсвеченной частью,
+     первая строка части и «до строчки N» (11.11.2026). */
+  #dash-hero .h-task { display: flex; gap: 14px; align-items: stretch; margin-top: 12px; }
+  #dash-hero .h-map { flex: none; width: 58px; display: grid; gap: 3px; align-content: center; padding: 9px 8px;
+    background: var(--dash-bg-start); border: 1px solid var(--card-border); border-radius: 9px; }
+  #dash-hero .h-map i { display: block; height: 4px; border-radius: 2px; background: var(--card-border); }
+  #dash-hero .h-map i.on { background: var(--accent); }
+  #dash-hero .h-task .h-line { margin: 0; font-size: 22px; line-height: 1.7; padding: 6px 10px; }
+  #dash-hero .h-task .h-to { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
   /* Заголовок вкладки слева, как в макете (п. 6). */
   body.tabs-on #trainers-topbar, body.tabs-on #subs-topbar, body.tabs-on #more-topbar {
     justify-content: flex-start; background: transparent; border-bottom: 0; padding: 18px 16px 2px;
@@ -1548,7 +1559,7 @@
   .tr-word .ru { font-size: 13.5px; line-height: 1.3; }
   .tr-hub .mk.gold { background: color-mix(in srgb, var(--marker-color) 18%, transparent); color: var(--marker-color); }
   /* Иконки шапки мусхафа подальше друг от друга (п. 1). */
-  body.tabs-mushaf #topbar .topbar-right { gap: 10px; }
+  body.tabs-mushaf #topbar .topbar-right { gap: 6px; }
 
   #dashboard {
     position: relative;
@@ -4067,8 +4078,8 @@
        на первом экране. См. boardRender и core/feed.py. -->
 <div id="dash-board"></div>
   <!-- Джамаат свёрнут (п. 2, как в макете): одна строка, раскрывается тапом. -->
-  <details id="dash-jamaat" class="td-card">
-    <summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg><span id="dash-jamaat-sum"></span></summary>
+  <div id="dash-jamaat" class="td-card">
+    <div class="jm-cap" id="dash-jamaat-sum"></div>
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
     <div class="p-split" id="pulse-split"></div>
@@ -4096,7 +4107,7 @@
       <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
     </div>
   </div>
-  </details>
+  </div>
 </div>
 <!-- Настройки (10.09.2026). Обязательное здесь одно - имя: его видит устаз
      в отчётах и вся группа в рейтинге. Год рождения и место человек говорит
@@ -5183,6 +5194,8 @@
   var I18N = i18nTable();
   function i18nTable() { return {
     ru: {
+      hero_stage: 'Этап %S%',
+      hero_to_line: 'до строчки %N%',
       today_closed: 'день закрыт',
       today_checks: 'Сдача на сегодня',
       today_ustaz: 'Устаз',
@@ -5903,6 +5916,8 @@
       wrongbot_note: 'Там твоя группа, сдачи и задания. Здесь я тебя не записываю, чтобы ничего не перепуталось.',
     },
     ky: {
+      hero_stage: '%S%-этап',
+      hero_to_line: '%N%-сапка чейин',
       today_closed: 'күн жабык',
       today_checks: 'Бүгүнкү тапшыруу',
       today_ustaz: 'Устаз',
@@ -6715,6 +6730,8 @@
       login_err_too_many: 'Катары менен өтө көп кат кетти. Бир сааттан кийин аракет кыл.',
     },
     uz: {
+      hero_stage: '%S%-босқич',
+      hero_to_line: '%N%-қаторгача',
       today_closed: 'кун ёпилди',
       today_checks: 'Бугунги топшириқ',
       today_ustaz: 'Устоз',
@@ -7527,6 +7544,8 @@
     // без Gemini - решение пользователя. Учитель - 老师, Аллах - 安拉 (как в
     // смысловом переводе Rowwad/chinese_suliman), группы и «узр» - как есть.
     zh: {
+      hero_stage: '第%S%阶段',
+      hero_to_line: '到第%N%行',
       today_closed: '今日已完成',
       today_checks: '今日作业',
       today_ustaz: '老师',
@@ -9304,14 +9323,30 @@
       return '<button class="d-btn' + (primary ? ' primary' : '') + '" data-dash-go="' + k + '">' + (icon || '') + label + '</button>';
     };
     sura.textContent = ''; place.textContent = dashPlace(h); body.innerHTML = ''; row.innerHTML = '';
+    var lineText = function (line) {
+      return dashLineWords(line).map(function (w) { return dashBare(w.html); }).join(' ');
+    };
     var showLine = function () {
       if (!h.page) return;
       dashPage(h.page, function (d) {
         sura.textContent = (d.surah_names || []).join(', ');
-        if (h.stage && h.stage !== 1) return;
-        var lines = dashTextLines(d), line = lines[h.line || 0];
-        if (!line) return;
-        body.innerHTML = '<div class="h-line">' + dashLineWords(line).map(function (w) { return dashBare(w.html); }).join(' ') + '</div>';
+        var lines = dashTextLines(d), n = lines.length;
+        if (!n) return;
+        if (!h.stage || h.stage === 1) {
+          var line = lines[h.line || 0];
+          if (line) body.innerHTML = '<div class="h-line">' + lineText(line) + '</div>';
+          return;
+        }
+        // Этап 2 - половина листа (первая floor(n/2) строк, как hifzHalf),
+        // этап 3 - весь лист: карта, первая строка части и «до строчки N».
+        var mid = Math.floor(n / 2), from = 0, to = n - 1;
+        if (h.stage === 2) { if ((h.line || 0) < mid) { to = mid - 1; } else { from = mid; } }
+        place.textContent = T('page_n', { N: h.page }) + ' · ' + T('hero_stage', { S: h.stage });
+        var map = '';
+        for (var i = 0; i < n; i++) map += '<i class="' + (i >= from && i <= to ? 'on' : '') + '"></i>';
+        body.innerHTML = '<div class="h-task"><div class="h-map">' + map + '</div><div style="flex:1;min-width:0">' +
+          '<div class="h-line">' + lineText(lines[from]) + '</div>' +
+          '<div class="h-to">' + T('hero_to_line', { N: to + 1 }) + '</div></div></div>';
       });
     };
     if (retake) {
