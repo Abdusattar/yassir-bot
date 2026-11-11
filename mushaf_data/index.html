@@ -9966,6 +9966,7 @@
     var font = MUSHAF_MEASURE_BASE * avail / (w * mushafFitK) * MUSHAF_FIT_SAFETY;
     font = Math.min(mushafMaxFont(), Math.max(MUSHAF_MIN_FONT_SIZE, font));
     el.style.fontSize = font.toFixed(1) + 'px';
+    el.setAttribute('data-fit-base', font.toFixed(1));   // кегль по ширине - для предела по высоте
     return { font: font, capped: false, lines: lines, avail: avail, w: w,
              why: 'table k' + mushafFitK.toFixed(3) };
   }
@@ -10024,27 +10025,6 @@
     else if (full && !capped) mushafFitTrusted = fitted;
     el.style.fontSize = fitted.toFixed(1) + 'px';
 
-    // Второй предел - по высоте (11.11.2026, нижняя панель в мусхафе): лист
-    // стоя должен влезать целиком, а не скроллиться. Если высота листа
-    // больше места под ним - уменьшаем кегль пропорционально. Лёжа лист
-    // скроллится по замыслу (21.09.2026), там этого предела нет.
-    var wrap = document.getElementById('page-wrap');
-    var appEl = document.getElementById('app');
-    var byWidth = fitted;
-    if (wrap && wrap.clientHeight && !(appEl && appEl.classList.contains('land'))) {
-      for (var h = 0; h < 2; h++) {
-        var room = wrap.clientHeight - 12;
-        var need = el.scrollHeight;
-        if (!(need > room) || fitted <= MUSHAF_MIN_FONT_SIZE) break;
-        fitted = Math.max(MUSHAF_MIN_FONT_SIZE, fitted * (room / need) * 0.99);
-        el.style.fontSize = fitted.toFixed(1) + 'px';
-      }
-    }
-    // Кегль ужат по высоте - сужаем и колонку в той же пропорции: иначе
-    // justify растягивает слова на прежнюю ширину огромными пробелами
-    // (замечание пользователя 11.11.2026). Колонка стоит по центру (margin auto).
-    el.style.maxWidth = fitted < byWidth ? Math.round(avail * fitted / byWidth) + 'px' : '';
-
     // Самопроверка (см. MUSHAF_VERIFY_* выше). Меряем УЖЕ ОТРИСОВАННЫЕ
     // строки как есть, без .measuring: нас интересует не натуральная ширина
     // слов, а факт "вылезло за край или нет" при боевом justify.
@@ -10056,6 +10036,7 @@
       fitted = Math.max(MUSHAF_MIN_FONT_SIZE, fitted * shrink);
       el.style.fontSize = fitted.toFixed(1) + 'px';
     }
+    el.setAttribute('data-fit-base', fitted.toFixed(1));   // кегль по ширине - для предела по высоте
     return { font: fitted, capped: capped, lines: lines.length, avail: avail, maxW: maxW };
   }
 
@@ -10071,17 +10052,49 @@
   // Листа в таблице нет - как до неё: первый удавшийся замер запоминается;
   // если поздний дал другой размер (или первый упёрся в потолок и так и не
   // поправился) - уходит отчёт.
+  /* Второй предел кегля - по высоте (11.11.2026, нижняя панель в мусхафе,
+     перенос из прототипа). Только в режиме «Страница» с панелью и только
+     стоя: лист должен влезать целиком, а не скроллиться; лёжа лист
+     скроллится по замыслу (21.09.2026). Шаг идёт ПОСЛЕ подбора по ширине
+     (табличного или замером) и не трогает его: clampFontToFit и сверка с
+     таблицей остаются как были. Кегль ужат - колонка сужается в той же
+     пропорции, иначе justify растянул бы слова огромными пробелами. */
+  function mushafHeightCap() {
+    var el = document.getElementById('ayah-text');
+    var wrap = document.getElementById('page-wrap');
+    var app = document.getElementById('app');
+    if (!el || !wrap) return;
+    el.style.maxWidth = '';
+    if (!document.body.classList.contains('tabs-mushaf') || app.classList.contains('land')) return;
+    // base - кегль по ширине. Сверка с таблицей возвращает «прежний» кегль,
+    // а он мог быть уже ужат этим же шагом, поэтому кегль по ширине
+    // запоминаем в data-fit-base; подбор по ширине его сбрасывает.
+    var cur = parseFloat(el.style.fontSize);
+    if (!cur || !wrap.clientHeight) return;
+    var base = parseFloat(el.getAttribute('data-fit-base')) || cur;
+    var full = el.clientWidth, font = cur;
+    for (var i = 0; i < 2; i++) {
+      var room = wrap.clientHeight - 12, need = el.scrollHeight;
+      if (!(need > room) || font <= MUSHAF_MIN_FONT_SIZE) break;
+      font = Math.max(MUSHAF_MIN_FONT_SIZE, font * (room / need) * 0.99);
+      el.style.fontSize = font.toFixed(1) + 'px';
+    }
+    if (font < base) el.style.maxWidth = Math.round(full * font / base) + 'px';
+  }
+
   function mushafFitSchedule() {
     var run = ++mushafFitRun;
     var predicted = mushafFitPredict();
+    if (predicted) mushafHeightCap();
     var first = predicted, reported = false;
     var tick = function (why, last) {
       if (run !== mushafFitRun) return;
       if (predicted) {
-        if (last) mushafFitVerify(predicted, why);
+        if (last) { mushafFitVerify(predicted, why); mushafHeightCap(); }
         return;
       }
       var r = clampFontToFit(last);
+      mushafHeightCap();
       if (!r) return;
       if (!first) { first = r; first.why = why; return; }
       var moved = Math.abs(r.font - first.font) > 0.5;
