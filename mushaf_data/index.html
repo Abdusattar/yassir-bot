@@ -293,8 +293,11 @@
     border-top: 1px solid var(--card-border); font-size: 13px; color: var(--muted); }
   #bm-jump input { width: 64px; font: inherit; font-size: 15px; padding: 6px 8px; border: 1px solid var(--card-border);
     border-radius: 8px; background: var(--bg); color: var(--ink); }
-  #bm-jump button { flex: none; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--accent);
-    background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  #bm-jump > span { white-space: nowrap; }
+  /* Два id в селекторе: общее правило #bm-menu button ниже по файлу иначе перебивает. */
+  #bm-menu #bm-jump button { display: inline-block; width: auto; flex: none; padding: 7px 12px; border-radius: 8px;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer; text-align: center; }
   #topbar .topbar-right { display: flex; align-items: center; gap: 8px; }
   #btn-revision, #btn-meaning {
     background: none; border: none; font-size: 18px; padding: 2px 4px;
