@@ -81,7 +81,7 @@ SHOT_QUALITY = 65
 # у студента этих экранов нет вообще.
 SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs", "month", "look",
           "read", "bookmark", "revision", "revision_ask",
-          "trainer_start", "trainer_q", "trainer_daily", "trainer_range", "trainer_answer",
+          "trainer_start", "trainer_q", "trainer_daily", "trainer_range", "trainer_end", "trainer_answer",
           "word_tap", "word_add", "mywords",
           "u_door", "u_queue", "u_open", "u_marks", "u_comment", "u_verdict",
           "u_done", "u_students"]
@@ -91,7 +91,7 @@ SCENES = ["dash", "mushaf", "pick", "pointer", "big", "rec", "progress", "subs",
 PRE_STATE = {
     "progress": "stage2",
     "trainer_start": "trainer_fresh",
-    "trainer_q": "words", "trainer_daily": "words", "trainer_range": "words",
+    "trainer_q": "words", "trainer_daily": "words", "trainer_range": "words", "trainer_end": "trainer_end",
     "trainer_answer": "words", "mywords": "words",
 }
 
@@ -216,11 +216,33 @@ def set_state(mode):
         # страницу. Без сброса сцена сняла бы обычный вопрос.
         with sqlite3.connect(str(TMP / "hadiths.db")) as conn:
             conn.execute("DELETE FROM mufradat_page WHERE user_id=?", (STUDENT,))
-    if mode == "words":
+    if mode in ("words", "trainer_end"):
         # Тренажёр без закладки просит выбрать страницу - для сцены с
         # вопросом её надо поставить заранее.
         from core.mufradat import set_current_page
         set_current_page(STUDENT, 3)
+    if mode == "trainer_end":
+        # Итог сеанса (11.11.2026): прогресс ставим явно - иначе снимок зависит
+        # от прошлых прогонов. 20 слов в пути, остальные выучены; точность
+        # за 9 дней - 90%.
+        from datetime import date as _d, timedelta as _td
+        keys = sorted({w["progress_key"] for w in _mufradat.get_words_for_bookmark(STUDENT)})
+        with sqlite3.connect(str(TMP / "hadiths.db")) as conn:
+            _mufradat._ensure_progress_schema(conn)
+            conn.execute("DELETE FROM mufradat_progress WHERE user_id=?", (STUDENT,))
+            conn.executemany(
+                "INSERT INTO mufradat_progress(user_id, word_id, correct_streak, wrong_count, days_correct,"
+                " correct_count, last_correct_date) VALUES(?,?,?,?,?,?,?)",
+                # Выученные - с давним верным ответом: срок отдыха прошёл, и
+                # вопросу есть из чего собраться на любом языке словаря.
+                [(STUDENT, k, 1 if i < 20 else _mufradat.MASTERY_STREAK, 1, 3, 6, "2026-01-01")
+                 for i, k in enumerate(keys)])
+            conn.execute(_mufradat._DAILY_STATS_SCHEMA)
+            conn.execute("DELETE FROM mufradat_daily_stats WHERE user_id=?", (STUDENT,))
+            today = _d.fromisoformat(_mufradat._today())
+            conn.executemany("INSERT INTO mufradat_daily_stats(user_id, date, correct, wrong) VALUES(?,?,?,?)",
+                             [(STUDENT, (today - _td(days=d)).isoformat(), 36, 4) for d in range(9)])
+        api._active.pop(STUDENT, None)
 
 
 # ─── страница стенда ──────────────────────────────────────────────────────
@@ -427,6 +449,13 @@ SCENE_SCRIPT = """
       await state('words');
       $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(2200);
       spot('.trainer-pagebar');       // ➖ ➕ - шаг закладки на страницу
+    },
+
+    // Итог сеанса (11.11.2026): доля выученных, итог в словах, рейтинг.
+    trainer_end: async function () {
+      await state('trainer_end');
+      $('dash-trainer').click(); await wait(900); $('trh-words').click(); await wait(2200);
+      $('tr-end').click(); await wait(1800);
     },
 
     trainer_answer: async function () {
