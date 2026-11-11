@@ -74,7 +74,9 @@ async def _credit_task_if_applicable(user_id, chat_id):
 
     if group["chat_id"]:
         score = compute_overall_score(user_id)
-        score_part = f", вес {score['score10']:.2f}/10" if score else ""
+        # «выучено N%» вместо «вес 9.81/10» (11.11.2026) - та же мера, что в
+        # приложении: доля полностью выученных слов закладки.
+        score_part = f", выучено {score['percent']}%" if score else ""
         # Тот же короткий формат "Имя, Слова +.", что и у обычной сдачи
         # текстом в группе (core/handlers.py, SHORT_TASKS) - раньше здесь
         # было длинное отдельное предложение, из которого не считывалось

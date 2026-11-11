@@ -54,6 +54,7 @@ from core.db import (
 from core.mufradat import (
     generate_question, get_progress_map, record_answer,
     set_current_page, get_current_page, get_words_for_bookmark, compute_overall_score,
+    recent_accuracy,
     get_current_lang, set_current_lang, SUPPORTED_LANGUAGES,
     record_daily_answered_word, get_daily_words_status, get_today_correct_keys,
     get_starred_question_pool, _is_junk, warm_pool_cache, pool_progress_keys,
@@ -272,7 +273,7 @@ def _question_payload(user_id, state, overall_score, feedback=None, status=None)
     return payload
 
 
-def _new_question(user_id, start_score10):
+def _new_question(user_id, start_score10, start_mastered=None):
     """Генерирует вопрос из ТЕКУЩЕГО пула закладки, кладёт в _active,
     возвращает (state, overall_score) или (None, overall_score) если пул
     пуст - вызывающий код решает, что показать в этом случае (см.
@@ -302,6 +303,11 @@ def _new_question(user_id, start_score10):
         "position": q["word"]["position"], "review": q.get("review", False),
         "start_score10": start_score10 if start_score10 is not None else (
             overall_score["score10"] if overall_score else None
+        ),
+        # Выученные слова на старте сеанса (11.11.2026) - итог говорит «+N
+        # слов выучено» / «N слов повторить», а не «вес снизился на 0.02».
+        "start_mastered": start_mastered if start_mastered is not None else (
+            overall_score["mastered"] if overall_score else None
         ),
     }
     _active[user_id] = state
@@ -419,6 +425,7 @@ async def handle_answer(request, user_id):
     correct = chosen == state["target"]
     target = state["target"]
     start_score10 = state.get("start_score10")
+    start_mastered = state.get("start_mastered")
     _active.pop(user_id, None)
 
     record_answer(user_id, state["word_id"], correct)
@@ -438,7 +445,7 @@ async def handle_answer(request, user_id):
         "remaining_correct": max(0, status["correct_target"] - status["correct"]),
     }
 
-    new_state, overall_score = _new_question(user_id, start_score10)
+    new_state, overall_score = _new_question(user_id, start_score10, start_mastered)
     if new_state is None:
         return web.json_response({
             "empty": True, "feedback": feedback, "overall_score": overall_score,
@@ -481,9 +488,14 @@ async def handle_end(request, user_id):
     итоговый вес, прирост за сеанс и место в дивизионе, если студент в группе."""
     state = _active.pop(user_id, None)
     end_score = compute_overall_score(user_id)
-    result = {"overall_score": end_score}
+    result = {"overall_score": end_score, "bookmark_page": get_current_page(user_id)}
     if end_score and state and state.get("start_score10") is not None:
         result["delta"] = round(end_score["score10"] - state["start_score10"], 2)
+    # 11.11.2026: итог в словах, не в десятых долях веса, и точность за
+    # последние дни вместо «за всё время» (та почти не двигается).
+    if end_score and state and state.get("start_mastered") is not None:
+        result["gained"] = end_score["mastered"] - state["start_mastered"]
+    result["recent"] = recent_accuracy(user_id)
     # Вне главного потока: пересчёт рейтинга (раз в минуту) и своя свежая
     # строка - базы, а бот в это время отвечает остальным (16.10.2026).
     boards = await asyncio.to_thread(_fresh_boards, user_id)

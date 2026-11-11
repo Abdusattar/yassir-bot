@@ -920,6 +920,7 @@ def record_answer(user_id, word_id, correct):
             "VALUES (?,?,?,?,?,?)",
             (user_id, word_id, streak, wrong, right, last_date)
         )
+        _bump_daily_stats(conn, user_id, today, correct)
     if correct and streak >= MASTERY_STREAK:
         # "Мои слова" (core/mushaf_words.py, 29.08.2026) - слово выходит из
         # личного списка ровно в момент, когда становится "выученным" по
@@ -1170,9 +1171,14 @@ def compute_overall_score(user_id, words=None, progress=None):
     total = len(pair_keys)
     if not total:
         return None
+    # percent (11.11.2026, решение пользователя): студенту показываем долю
+    # ПОЛНОСТЬЮ выученных слов, округлённую вниз - 100% только когда выучено
+    # всё до последнего слова. score10 (с частичным зачётом ступенек)
+    # остаётся для прироста за сеанс и старых клиентов.
     return {
         "total": total, "mastered": mastered, "remaining": total - mastered,
         "score10": round(10 * stimulus_sum / total, 2),
+        "percent": 100 * mastered // total,
     }
 
 
@@ -1541,6 +1547,65 @@ def _daily_status_row(conn, user_id, today, target):
         "count": count, "target": target,
         "correct": correct, "correct_target": correct_target,
         "done": count >= target and correct >= correct_target,
+    }
+
+
+# Точность за последние дни (11.11.2026, решение пользователя). Точность
+# «за всё время» у давно занимающихся почти не двигается: у Толкун 20 578
+# ответов, до 90% - ~14 000 верных подряд, а ошибки периода заучивания висят
+# в ней навсегда. Поэтому студенту - точность за окно. Истории ответов по
+# дням до 11.11 нет (mufradat_progress хранит только итоги, а в
+# mufradat_daily_answered_words - «слово взято за день», не каждый ответ),
+# поэтому окно копится с выкладки и честно называет число дней.
+RECENT_ACCURACY_DAYS = 30
+# Меньше ответов - цифру не показываем: одна ошибка из трёх дала бы «67%».
+RECENT_ACCURACY_MIN_ANSWERS = 20
+
+_DAILY_STATS_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mufradat_daily_stats(
+        user_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        correct INTEGER NOT NULL DEFAULT 0,
+        wrong INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, date)
+    )
+"""
+
+
+def _bump_daily_stats(conn, user_id, today, correct):
+    """+1 к верным или неверным ответам дня - каждый ответ, не только
+    первый по слову (в отличие от mufradat_daily_answered_words)."""
+    conn.execute(_DAILY_STATS_SCHEMA)
+    conn.execute(
+        "INSERT INTO mufradat_daily_stats (user_id, date, correct, wrong) VALUES (?,?,?,?) "
+        "ON CONFLICT(user_id, date) DO UPDATE SET correct=correct+excluded.correct, "
+        "wrong=wrong+excluded.wrong",
+        (user_id, today, 1 if correct else 0, 0 if correct else 1)
+    )
+
+
+def recent_accuracy(user_id, days=RECENT_ACCURACY_DAYS):
+    """{accuracy, correct, n, days} за последние days дней (включая сегодня)
+    или None, если ответов меньше RECENT_ACCURACY_MIN_ANSWERS. days в ответе -
+    сколько дней окно реально покрывает: с первого дня, когда велся учёт,
+    но не больше days - пока данных меньше месяца, студент видит «за 5 дней»,
+    а не «за 30»."""
+    today = _today()
+    start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
+    with sqlite3.connect(HADITHS_DB) as conn:
+        conn.execute(_DAILY_STATS_SCHEMA)
+        correct, wrong, first = conn.execute(
+            "SELECT COALESCE(SUM(correct), 0), COALESCE(SUM(wrong), 0), MIN(date) "
+            "FROM mufradat_daily_stats WHERE user_id=? AND date>=?",
+            (user_id, start)
+        ).fetchone()
+    n = correct + wrong
+    if n < RECENT_ACCURACY_MIN_ANSWERS:
+        return None
+    covered = (date.fromisoformat(today) - date.fromisoformat(first)).days + 1
+    return {
+        "accuracy": 100 * correct // n, "correct": correct, "n": n,
+        "days": min(days, covered),
     }
 
 

@@ -2428,6 +2428,11 @@
   .nh-src a { color: inherit; }
   .trainer-info, .trainer-session { font-size: 13px; color: var(--muted); }
   .trainer-score { font-size: 13px; color: var(--muted); }
+  /* «Выучено N% слов до стр. B» (11.11.2026) - главная цифра студента. */
+  .trainer-learned { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+  .trainer-learned b { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .trainer-learned span { font-size: 12.5px; color: var(--muted); }
+  .trainer-lb-order { font-size: 12px; color: var(--muted); align-self: flex-start; text-align: left; line-height: 1.4; }
 
   /* Слово с ошибкой (04.09.2026). Подложкой, а не подчёркиванием: под
      арабской вязью с огласовками линия лезет на знаки и читается как часть
@@ -5419,6 +5424,27 @@
       delta_up: '📈 Вырос за сеанс на +%N%',
       delta_down: '📉 Снизился за сеанс на %N%',
       delta_same: 'Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲',
+      // «Выучено N%» вместо «Общий вес 9.81/10» (11.11.2026, решение
+      // пользователя): доля ПОЛНОСТЬЮ выученных слов, вниз - 100% только
+      // когда выучено всё. Итог сеанса - в словах, точность - за окно дней.
+      learned_line: 'Выучено %P%% слов до стр. %N%',
+      learned_of: '%N% из %M% · осталось %R%',
+      learned_of_all: '%N% из %M%',
+      gained_up_one: '📈 +%N% слово выучено за сеанс',
+      gained_up_few: '📈 +%N% слова выучено за сеанс',
+      gained_up_many: '📈 +%N% слов выучено за сеанс',
+      gained_down_one: '%N% слово нужно повторить — оно придёт в следующих карточках',
+      gained_down_few: '%N% слова нужно повторить — они придут в следующих карточках',
+      gained_down_many: '%N% слов нужно повторить — они придут в следующих карточках',
+      gained_same: 'Слова в пути: каждый верный ответ приближает их к «выучено» 🤲',
+      gained_all: 'Все слова держатся в памяти. Новые слова — на стр. %N%, нажми ➕ в карточке',
+      recent_acc_one: 'Точность за %D% день: %P%% (%C% из %T%)',
+      recent_acc_few: 'Точность за %D% дня: %P%% (%C% из %T%)',
+      recent_acc_many: 'Точность за %D% дней: %P%% (%C% из %T%)',
+      lb_order: 'Место решают три вещи вместе: точность ответов, сколько разных слов ты тренировал и как далеко по Корану.',
+      lb_words_one: '%N% слово',
+      lb_words_few: '%N% слова',
+      lb_words_many: '%N% слов',
       rank_line: '🏆 Место в %D%: %X%',
       x_of_y: '%P% из %T%',
       btn_new_card: '🔁 Новая карточка',
@@ -5460,7 +5486,7 @@
       bookmark_none: 'Закладка ещё не сохранена',
       meaning_missing: 'перевод смысла для этой страницы ещё не загружен',
       trainer_empty: 'Слова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше.',
-      trainer_review: 'Все слова до твоей страницы закреплены, МашаАллах 🤲 Повторяем выученное.',
+      trainer_review: 'Все слова до стр. %N% выучены, МашаАллах 🤲 Повторяем выученное. Новые слова — нажми ➕',
       session_expired: 'Сессия Telegram истекла 🤲 Перезайди в приложение.',
       tab_meaning_full: '📜 Смысл',
       tab_trainer_full: '🌱 Тренажёр',
@@ -5687,6 +5713,24 @@
       delta_up: '📈 Сеанста +%N% өстү',
       delta_down: '📉 Сеанста %N% төмөндөдү',
       delta_same: 'Сеанста балл өзгөргөн жок — дагы аракет кыл, ар бир туура жооп аны жылдырат 🤲',
+      learned_line: '%N%-бетке чейин сөздөрдүн %P%% жатталды',
+      learned_of: '%M% сөздөн %N% · калды %R%',
+      learned_of_all: '%M% сөздөн %N%',
+      gained_up_one: '📈 Сеанста +%N% сөз жатталды',
+      gained_up_few: '📈 Сеанста +%N% сөз жатталды',
+      gained_up_many: '📈 Сеанста +%N% сөз жатталды',
+      gained_down_one: '%N% сөздү кайталоо керек — алар кийинки карточкаларда келет',
+      gained_down_few: '%N% сөздү кайталоо керек — алар кийинки карточкаларда келет',
+      gained_down_many: '%N% сөздү кайталоо керек — алар кийинки карточкаларда келет',
+      gained_same: 'Сөздөр жолдо: ар бир туура жооп аларды «жатталды» дегенге жакындатат 🤲',
+      gained_all: 'Бардык сөздөр эсте турат. Жаңы сөздөр — %N%-бетте, карточкада ➕ бас',
+      recent_acc_one: 'Акыркы %D% күндөгү тактык: %P%% (%T% жооптон %C%)',
+      recent_acc_few: 'Акыркы %D% күндөгү тактык: %P%% (%T% жооптон %C%)',
+      recent_acc_many: 'Акыркы %D% күндөгү тактык: %P%% (%T% жооптон %C%)',
+      lb_order: 'Орунду үч нерсе бирге чечет: жооптордун тактыгы, канча ар түрдүү сөз машыктың жана Куран боюнча канчалык алыстасың.',
+      lb_words_one: '%N% сөз',
+      lb_words_few: '%N% сөз',
+      lb_words_many: '%N% сөз',
       rank_line: '🏆 %D% ичиндеги орун: %X%',
       x_of_y: '%T% ичинен %P%',
       btn_new_card: '🔁 Жаңы карточка',
@@ -5704,7 +5748,7 @@
       bookmark_none: 'Кыстарма азырынча сактала элек',
       meaning_missing: 'бул беттин маанилик котормосу азырынча жүктөлө элек',
       trainer_empty: 'Кыстармаңдагы сөздөр азырынча түгөндү 🤲 Бетти алдыга жылдыр.',
-      trainer_review: 'Бетиңе чейинки бардык сөздөр бекемделди, МашаАллах 🤲 Үйрөнгөндү кайталайбыз.',
+      trainer_review: '%N%-бетке чейинки бардык сөздөр жатталды, МашаАллах 🤲 Үйрөнгөндү кайталайбыз. Жаңы сөздөр — ➕ бас',
       session_expired: 'Telegram сессиясы бүттү 🤲 Колдонмого кайра кир.',
       tab_meaning_full: '📜 Мааниси',
       tab_trainer_full: '🌱 Машыгуу',
@@ -6449,6 +6493,24 @@
       delta_up: '📈 Сеансда +%N% га ошди',
       delta_down: '📉 Сеансда %N% га камайди',
       delta_same: 'Сеансда балл ўзгармади — яна уриниб кўр, ҳар бир тўғри жавоб уни кўтаради 🤲',
+      learned_line: '%N%-бетгача сўзларнинг %P%% и ёдланди',
+      learned_of: '%M% тадан %N% та · қолди %R%',
+      learned_of_all: '%M% тадан %N% та',
+      gained_up_one: '📈 Сеансда +%N% та сўз ёдланди',
+      gained_up_few: '📈 Сеансда +%N% та сўз ёдланди',
+      gained_up_many: '📈 Сеансда +%N% та сўз ёдланди',
+      gained_down_one: '%N% та сўзни такрорлаш керак — улар кейинги карточкаларда келади',
+      gained_down_few: '%N% та сўзни такрорлаш керак — улар кейинги карточкаларда келади',
+      gained_down_many: '%N% та сўзни такрорлаш керак — улар кейинги карточкаларда келади',
+      gained_same: 'Сўзлар йўлда: ҳар бир тўғри жавоб уларни «ёдланди»га яқинлаштиради 🤲',
+      gained_all: 'Барча сўзлар ёдда турибди. Янги сўзлар — %N%-бетда, карточкада ➕ ни бос',
+      recent_acc_one: 'Охирги %D% кундаги аниқлик: %P%% (%T% тадан %C% та)',
+      recent_acc_few: 'Охирги %D% кундаги аниқлик: %P%% (%T% тадан %C% та)',
+      recent_acc_many: 'Охирги %D% кундаги аниқлик: %P%% (%T% тадан %C% та)',
+      lb_order: 'Ўринни учта нарса биргаликда белгилайди: жавоблар аниқлиги, қанча турли сўзни машқ қилганинг ва Қуръон бўйича қанчалик олдиндалигинг.',
+      lb_words_one: '%N% та сўз',
+      lb_words_few: '%N% та сўз',
+      lb_words_many: '%N% та сўз',
       rank_line: '🏆 %D% даги ўрин: %X%',
       x_of_y: '%T% тадан %P%',
       btn_new_card: '🔁 Янги карточка',
@@ -6466,7 +6528,7 @@
       bookmark_none: 'Хатчўп ҳозирча сақланмаган',
       meaning_missing: 'бу бетнинг маънолар таржимаси ҳозирча юкланмаган',
       trainer_empty: 'Хатчўпингдаги сўзлар ҳозирча тугади 🤲 Кейинги бетга ўт.',
-      trainer_review: 'Бетинггача бўлган барча сўзлар мустаҳкамланди, МашаАллоҳ 🤲 Ўрганганни такрорлаймиз.',
+      trainer_review: '%N%-бетгача барча сўзлар ёдланди, МашаАллоҳ 🤲 Ўрганганни такрорлаймиз. Янги сўзлар — ➕ ни бос',
       session_expired: 'Telegram сессияси тугади 🤲 Иловага қайта кир.',
       online_now_n: 'ҳозир онлайн: %N% киши ўқимоқда',
       // 28.09.2026: 393 строки - черновик Claude, проверка Gemini 3.1 Pro
@@ -7211,6 +7273,24 @@
       delta_up: '📈 本轮提高了 +%N%',
       delta_down: '📉 本轮下降了 %N%',
       delta_same: '本轮分数没有变化 — 再试一次，每答对一次都会推动它 🤲',
+      learned_line: '第%N%页之前的词已掌握 %P%%',
+      learned_of: '%N% / %M% · 剩余 %R%',
+      learned_of_all: '%N% / %M%',
+      gained_up_one: '📈 本轮新掌握 +%N% 个词',
+      gained_up_few: '📈 本轮新掌握 +%N% 个词',
+      gained_up_many: '📈 本轮新掌握 +%N% 个词',
+      gained_down_one: '%N% 个词需要复习 — 它们会出现在接下来的卡片中',
+      gained_down_few: '%N% 个词需要复习 — 它们会出现在接下来的卡片中',
+      gained_down_many: '%N% 个词需要复习 — 它们会出现在接下来的卡片中',
+      gained_same: '词语正在路上：每答对一次都让它们更接近「已掌握」 🤲',
+      gained_all: '所有词都记住了。新词在第%N%页，点卡片上的 ➕',
+      recent_acc_one: '近 %D% 天准确率：%P%%（%T% 题中答对 %C% 题）',
+      recent_acc_few: '近 %D% 天准确率：%P%%（%T% 题中答对 %C% 题）',
+      recent_acc_many: '近 %D% 天准确率：%P%%（%T% 题中答对 %C% 题）',
+      lb_order: '名次由三项共同决定：答题准确率、练过多少个不同的词、以及在古兰经中的进度。',
+      lb_words_one: '%N% 个词',
+      lb_words_few: '%N% 个词',
+      lb_words_many: '%N% 个词',
       rank_line: '🏆 %D%中的名次：%X%',
       x_of_y: '%P% / %T%',
       btn_new_card: '🔁 换一张卡片',
@@ -7228,7 +7308,7 @@
       bookmark_none: '还没有保存书签',
       meaning_missing: '这一页的释义还没有加载',
       trainer_empty: '你书签范围内的词暂时练完了 🤲 把书签往后移一页吧。',
-      trainer_review: '你所在页之前的词都已巩固，玛莎安拉 🤲 现在复习学过的。',
+      trainer_review: '第%N%页之前的词都已掌握，玛莎安拉 🤲 现在复习学过的。新词请点 ➕',
       session_expired: 'Telegram 会话已过期 🤲 请重新进入应用。',
       online_now_n: '现在有 %N% 人在线学习',
       trainers_title: '练习',
@@ -17872,12 +17952,21 @@
     return html;
   }
 
-  function renderOverallScore(s) {
-    if (!s) return '';
-    var pct = Math.max(0, Math.min(100, s.score10 * 10));
-    return '<div class="trainer-score">📊 ' + T('overall_score') + ': ' + s.score10.toFixed(2) +
-      '/10 (' + T('mastered_of', { N: s.mastered, M: s.total }) + ')</div>' +
-      '<div class="trainer-score-bar"><div class="trainer-score-bar-fill" style="width:' + pct + '%"></div></div>';
+  // «Выучено N% слов до стр. B» (11.11.2026): одна понятная цифра вместо
+  // «Общий вес 9.81/10». Полоса - тоже по выученным словам, без частичного
+  // зачёта ступенек: что на ней, то и в цифре. percent приходит с сервера
+  // (вниз); у старого ответа без него считаем так же здесь.
+  function renderOverallScore(s, page) {
+    if (!s || !s.total) return '';
+    var pct = s.percent != null ? s.percent : Math.floor(100 * s.mastered / s.total);
+    var full = s.mastered >= s.total;
+    var head = T('learned_line', { P: pct, N: page || '' }) + (full ? ' ✓' : '');
+    var sub = full ? T('learned_of_all', { N: s.mastered, M: s.total })
+      : T('learned_of', { N: s.mastered, M: s.total, R: s.total - s.mastered });
+    var w = Math.max(0, Math.min(100, 100 * s.mastered / s.total));
+    return '<div class="trainer-learned"><b>' + head + '</b>' +
+      '<div class="trainer-score-bar"><div class="trainer-score-bar-fill" style="width:' + w + '%"></div></div>' +
+      '<span>' + sub + '</span></div>';
   }
 
   function renderDailyBadge(d) {
@@ -17911,6 +18000,7 @@
         var n = parseInt(document.getElementById('tp-input').value, 10);
         if (!n) return;
         withAuthCheck(apiCall('/page', { method: 'POST', body: { page: n } }), function (data) {
+          if (data) trail('wpage', { p: data.bookmark_page, n: 'ввод' });
           trainerState = data; renderTrainer();
         });
       });
@@ -17920,7 +18010,7 @@
     if (d.empty) {
       body.innerHTML = renderFeedbackBanner(d.feedback) +
         '<div class="trainer-msg">' + T('trainer_empty') + '</div>' +
-        renderOverallScore(d.overall_score) +
+        renderOverallScore(d.overall_score, d.bookmark_page) +
         '<div class="trainer-pagebar"><button id="tr-inc">➕</button></div>';
       document.getElementById('tr-inc').addEventListener('click', function () { stepPage(1); });
       return;
@@ -17945,7 +18035,7 @@
     var html = renderFeedbackBanner(d.feedback);
     // Повтор выученного (19.10.2026): новых слов до закладки не осталось,
     // спрашиваются закреплённые - пусть человек знает, что это не сбой.
-    if (d.review) html += '<div class="trainer-info">' + T('trainer_review') + '</div>';
+    if (d.review) html += '<div class="trainer-info">' + T('trainer_review', { N: d.bookmark_page }) + '</div>';
     html += '<div class="trainer-ctx" id="tr-ctx"><div class="trainer-word">' + d.arabic + '</div></div>';
     html += '<div class="trainer-options">';
     d.options.forEach(function (opt, i) {
@@ -17974,6 +18064,7 @@
     if (myPlace) myPlace.addEventListener('click', function () {
       myPlace.disabled = true;
       withAuthCheck(apiCall('/page', { method: 'POST', body: { page: d.hifz_page } }), function (data) {
+        if (data) trail('wpage', { p: data.bookmark_page, n: 'моё место' });
         trainerState = data; renderTrainer();
       });
     });
@@ -17995,13 +18086,17 @@
   }
 
   // Строка рейтинга - одна и та же у лидеров и у себя (28.09.2026).
-  function lbRowText(place, e) {
-    return place + '. ' + e.name + ' (' + e.group + ') — ' +
-      e.accuracy.toFixed(0) + '% (' + e.correct + '/' + e.n + '), ' + T('page_n', { N: e.page });
+  // В строке - всё, что решает место (11.11.2026): точность, сколько разных
+  // слов тренировал (attempted) и страница. Раньше было «83% (17081/20578)»,
+  // и человек с 91% выше человека с 97% выглядел несправедливо.
+  function lbResultText(e) {
+    var words = e.attempted != null
+      ? ' · ' + T(ruPluralKey('lb_words', e.attempted), { N: e.attempted }) : '';
+    return e.accuracy.toFixed(0) + '%' + words + ' · ' + T('page_n', { N: e.page });
   }
 
-  function lbResultText(e) {
-    return e.accuracy.toFixed(0) + '% (' + e.correct + '/' + e.n + '), ' + T('page_n', { N: e.page });
+  function lbRowText(place, e) {
+    return place + '. ' + e.name + ' (' + e.group + ') — ' + lbResultText(e);
   }
 
   /* Строка мусхафа со словом вопроса. Лист берём тем же page*.json, что
@@ -18104,6 +18199,7 @@
 
   function stepPage(delta) {
     withAuthCheck(apiCall('/page', { method: 'POST', body: { delta: delta } }), function (data) {
+      if (data) trail('wpage', { p: data.bookmark_page, n: delta > 0 ? '+' + delta : String(delta) });
       trainerState = data; renderTrainer();
     });
   }
@@ -18115,14 +18211,29 @@
     setTrainerScreen('card');
     withAuthCheck(apiCall('/end', { method: 'POST' }), function (d) {
       var html = '<div class="trainer-msg">' + T('session_done') + '</div>';
-      html += renderOverallScore(d.overall_score);
-      if (typeof d.delta === 'number') {
-        if (d.delta > 0) html += '<div class="trainer-info">' + T('delta_up', { N: d.delta.toFixed(2) }) + '</div>';
-        else if (d.delta < 0) html += '<div class="trainer-info">' + T('delta_down', { N: Math.abs(d.delta).toFixed(2) }) + '</div>';
-        else html += '<div class="trainer-info">' + T('delta_same') + '</div>';
+      var sc = d.overall_score;
+      html += renderOverallScore(sc, d.bookmark_page);
+      if (sc) trail('wend', { p: d.bookmark_page, n: sc.mastered + '/' + sc.total });
+      // Итог в словах (11.11.2026). Было «Вес за сеанс не изменился -
+      // каждый верный ответ его двигает» даже у того, у кого всё выучено:
+      // выше 10 расти некуда, и фраза говорила неправду (Толкун).
+      var info = '';
+      if (sc && sc.total && sc.mastered >= sc.total) {
+        info = T('gained_all', { N: (d.bookmark_page || 0) + 1 });
+      } else if (typeof d.gained === 'number' && d.gained > 0) {
+        info = T(ruPluralKey('gained_up', d.gained), { N: d.gained });
+      } else if (typeof d.gained === 'number' && d.gained < 0) {
+        info = T(ruPluralKey('gained_down', -d.gained), { N: -d.gained });
+      } else if (typeof d.gained === 'number') {
+        info = T('gained_same');
       }
-      if (d.me) {
-        html += '<div class="trainer-info">' + T('my_result', { R: lbResultText(d.me) }) + '</div>';
+      if (info) html += '<div class="trainer-info">' + info + '</div>';
+      // Точность за последние дни, а не за всё время: та почти не движется.
+      // Нет 20 ответов за окно - строки нет (одна ошибка из трёх = «67%»).
+      if (d.recent) {
+        html += '<div class="trainer-info">' + T(ruPluralKey('recent_acc', d.recent.days), {
+          D: d.recent.days, P: d.recent.accuracy, C: d.recent.correct, T: d.recent.n,
+        }) + '</div>';
       }
       if (d.rank) {
         html += '<div class="trainer-info">' + T('rank_line', {
@@ -18139,7 +18250,8 @@
   function showLeaderboard() {
     setTrainerScreen('rating');
     withAuthCheck(apiCall('/leaderboard'), function (d) {
-      var html = '<div class="trainer-msg">' + T('top_title') + '</div>';
+      var html = '<div class="trainer-msg">' + T('top_title') + '</div>' +
+        '<div class="trainer-lb-order">' + T('lb_order') + '</div>';
       if (!d.in_group) {
         html += d.personal
           ? '<div class="trainer-info">' + T('rank_among', {
