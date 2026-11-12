@@ -102,8 +102,8 @@
        спорить с таджвидной раскраской (зашита в сам шрифт, несколько
        ярких цветов на буквах). --mushaf-bg-end чуть глубже старта -
        лёгкий намёк на состаренную бумагу, не плоский цвет. */
-    --mushaf-bg-start: #fbf8f0;
-    --mushaf-bg-end: #f4ecd8;
+    --mushaf-bg-start: #faf7f0;
+    --mushaf-bg-end: #faf7f0;
     /* chrome (topbar/page-nav/tabbar) - часть той же "бумажной"
        поверхности, не отдельная белая полоса поверх нее (#page-wrap/
        #ayah-text не имеют своего непрозрачного фона). color-mix - доля
@@ -117,15 +117,15 @@
     --popup-bg: #2b2b2b;
     --popup-ink: #ffffff;
     --marker-color: #b08d2e;
-    --dash-bg-start: #eaf4ec;
-    --dash-bg-end: #f8f6ef;
+    --dash-bg-start: #f2f3ec;
+    --dash-bg-end: #f2f3ec;
     /* Акцент - приглушённый изумрудный (цвет обложки мусхафа), НЕ ярко-
        зелёный "успех" из обычных UI-китов - решение 29.08.2026, "высший
        класс дизайнера": один тон на всё приложение (кнопки, прогресс,
        бейдж иконки), не мешанина из синего/зелёного/жёлтого. */
-    --accent: #1f7a52;
+    --accent: #1f7a5c;
     --accent-ink: #ffffff;
-    --accent-soft: #e3f2e8;
+    --accent-soft: #dcefe6;
     --card-bg: #ffffff;
     --card-border: #e6e1d2;
     --shadow-sm: 0 1px 2px rgba(30, 25, 10, 0.05), 0 1px 6px rgba(30, 25, 10, 0.04);
@@ -153,21 +153,21 @@
       /* Тёплый тёмно-коричневый ("переплёт книги"), НЕ тот же зеленоватый
          тёмный, что у #trainer/#dashboard (--dash-bg-* ниже) - своя
          идентичность мусхафа и в тёмной теме тоже (30.08.2026). */
-      --mushaf-bg-start: #201a12;
-      --mushaf-bg-end: #17130d;
+      --mushaf-bg-start: #16150f;
+      --mushaf-bg-end: #16150f;
       --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
       --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
       --muted: #a39a7d;
       --popup-bg: #f0ead8;
       --popup-ink: #16140f;
       --marker-color: #d4af37;
-      --dash-bg-start: #182019;
-      --dash-bg-end: #14120d;
-      --accent: #4cae83;
+      --dash-bg-start: #15181a;
+      --dash-bg-end: #15181a;
+      --accent: #4fbf95;
       --accent-ink: #0d1a12;
-      --accent-soft: #1e3126;
-      --card-bg: #201d16;
-      --card-border: #3a3527;
+      --accent-soft: #1d3a30;
+      --card-bg: #22262a;
+      --card-border: #33383a;
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 6px rgba(0, 0, 0, 0.2);
       --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
       --ok: #4cae83;
@@ -182,21 +182,21 @@
   :root[data-theme="dark"] {
     --bg: #16140f;
     --ink: #f0ead8;
-    --mushaf-bg-start: #201a12;
-    --mushaf-bg-end: #17130d;
+    --mushaf-bg-start: #16150f;
+    --mushaf-bg-end: #16150f;
     --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
     --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
     --muted: #a39a7d;
     --popup-bg: #f0ead8;
     --popup-ink: #16140f;
     --marker-color: #d4af37;
-    --dash-bg-start: #182019;
-    --dash-bg-end: #14120d;
-    --accent: #4cae83;
+    --dash-bg-start: #15181a;
+    --dash-bg-end: #15181a;
+    --accent: #4fbf95;
     --accent-ink: #0d1a12;
-    --accent-soft: #1e3126;
-    --card-bg: #201d16;
-    --card-border: #3a3527;
+    --accent-soft: #1d3a30;
+    --card-bg: #22262a;
+    --card-border: #33383a;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 6px rgba(0, 0, 0, 0.2);
     --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
     --ok: #4cae83;
@@ -277,11 +277,42 @@
     flex: 0 0 auto;
   }
   #topbar .topbar-left { display: flex; align-items: center; gap: 8px; }
+  /* Листание в шапке (11.11.2026) - только в режиме «Страница» с панелью. */
+  #tb-pages { display: none; align-items: center; gap: 0; }
+  body.tabs-mushaf #tb-pages { display: flex; }
+  body.tabs-mushaf #page-nav { display: none !important; }
+  body.tabs-mushaf #mushaf-back, body.tabs-mushaf #ayah-range { display: none; }
+  body.tabs-mushaf #topbar { padding: 6px 6px; }
+  body.tabs-mushaf #topbar .topbar-left, body.tabs-mushaf #topbar .topbar-right { gap: 2px; }
+  #tb-page { background: none; border: none; font: inherit; font-size: 13px; color: var(--muted);
+    display: flex; align-items: center; gap: 4px; padding: 6px 4px; cursor: pointer; white-space: nowrap; }
+  #tb-page b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #tb-pages .nav-btn { padding: 4px 8px; }
+  #bm-menu #btn-bm-baqara { color: var(--accent); }
+  #bm-jump { display: flex; gap: 8px; align-items: center; padding: 10px 12px 6px; margin-top: 4px;
+    border-top: 1px solid var(--card-border); font-size: 13px; color: var(--muted); }
+  #bm-jump input { width: 64px; font: inherit; font-size: 15px; padding: 6px 8px; border: 1px solid var(--card-border);
+    border-radius: 8px; background: var(--bg); color: var(--ink); }
+  #bm-jump > span { white-space: nowrap; }
+  /* Два id в селекторе: общее правило #bm-menu button ниже по файлу иначе перебивает. */
+  #bm-menu #bm-jump button { display: inline-block; width: auto; flex: none; padding: 7px 12px; border-radius: 8px;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer; text-align: center; }
   #topbar .topbar-right { display: flex; align-items: center; gap: 8px; }
-  #btn-revision, #btn-meaning {
-    background: none; border: none; font-size: 18px; padding: 2px 4px;
-    cursor: pointer; line-height: 1;
+  /* Кнопки шапки как в макете Quran-stroka (11.11.2026, решение
+     пользователя): квадратики 34px с тонкой рамкой на подложке, включённая -
+     светло-зелёная с зелёной рамкой. Иконки прежние. */
+  #btn-hifz, #btn-revision, #btn-meaning, #read-gloss-btn, #tb-pages .nav-btn {
+    min-width: 34px; height: 34px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 9px; color: var(--ink);
+    font-size: 18px; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
+  #topbar .topbar-right { gap: 6px; }
+  #tb-pages { gap: 6px; }
+  /* Сдано сегодня (11.11.2026, просьба пользователя): заучивание и
+     повторение, которые уже засчитаны, подсвечены мягким зелёным - по
+     фактам дня с дашборда (dashFactsLast.day.tasks). */
+  #btn-hifz.done, #btn-revision.done, #read-gloss-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   #topbar .topbar-back {
     background: none; border: none; color: var(--accent);
     font-size: 13px; font-weight: 600; padding: 4px 0; cursor: pointer;
@@ -1099,6 +1130,8 @@
   .tab-btn, #page-nav button, #bm-menu button > span, #hifz-submit, #hifz-big-submit { direction: ltr; unicode-bidi: isolate; }
   #btn-profile .ic, .hifz-listen-btn .ic { width: 22px; height: 22px; vertical-align: middle; }
   #topbar .ic { width: 24px; height: 24px; vertical-align: middle; }
+  /* Кнопки в рамке 34px: сама иконка чуть меньше, рамка та же (11.11.2026). */
+  #btn-hifz .ic, #btn-revision .ic, #btn-meaning .ic, #read-gloss-btn .ic { width: 20px; height: 20px; }
   .dash-row .mark .ic { width: 24px; height: 24px; vertical-align: middle; }
   .icon-gold .ic { width: 1em; height: 1em; vertical-align: -0.15em; }
   #look-play .ic, #rec-review-play .ic, #hifz-rec-play .ic { width: 16px; height: 16px; vertical-align: middle; fill: currentColor; stroke: none; }
@@ -1428,6 +1461,107 @@
      три, центрирование выглядело опрятно; с дыханием джамаата наверху оно
      начало гулять - блок то выше, то ниже в зависимости от того, показана ли
      дверь устаза. Теперь порядок постоянный: заголовок, дыхание, двери. */
+  /* ══ «Сегодня» по макету «Хифз · Сегодня» (11.11.2026, решение пользователя) ══
+     Заголовок слева, лента, карточка дня с одной главной кнопкой, чек-лист
+     «Сдача на сегодня» по заданиям группы, карточка устаза, джамаат
+     свёрнут. Двери убраны: их заменила нижняя панель. */
+  #dash-title { flex: 1; min-width: 0; font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+  #dash-title span { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+  #dash-head { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #dash-count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #dash-head #my-day, #dash-settings { display: none !important; }
+  #dash-doors { display: none !important; }
+  .dash-eyebrow { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); margin: 18px 0 8px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .td-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+    padding: 14px 16px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--ink); box-shadow: var(--shadow-sm); }
+  #dash-hero .h-where { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  #dash-hero .h-sura { font-weight: 600; font-size: 16px; }
+  #dash-hero .h-place { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  #dash-hero .h-line { direction: rtl; text-align: center; font-family: 'Scheherazade New', serif; font-size: 27px;
+    line-height: 1.9; margin: 12px -6px 0; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); }
+  #dash-hero .h-note { margin: 12px 0 0; font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+  #dash-hero .h-lock { display: flex; gap: 10px; align-items: center; margin: 12px 0 0; padding: 10px 12px;
+    border-radius: 12px; background: var(--dash-bg-start); font-size: 13.5px; color: var(--muted); }
+  #dash-hero .h-row { display: flex; gap: 8px; margin-top: 14px; }
+  .d-btn { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--card-border);
+    background: var(--card-bg); color: var(--ink); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; -webkit-tap-highlight-color: transparent; }
+  .d-btn.primary { flex: 1; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .d-btn.sm { min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .d-btn .ic { width: 18px; height: 18px; }
+  .d-check { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 0; }
+  .d-check + .d-check { border-top: 1px solid var(--card-border); }
+  .d-check .mk { width: 26px; height: 26px; border-radius: 50%; flex: none; border: 1.7px solid var(--card-border);
+    display: grid; place-items: center; color: #fff; }
+  .d-check .mk svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2.4; fill: none;
+    stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+  .d-check.done .mk { background: var(--accent); border-color: var(--accent); }
+  .d-check.done .mk svg { opacity: 1; }
+  .d-check .bd { flex: 1; min-width: 0; }
+  .d-check .t { font-weight: 500; }
+  .d-check.done .t { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--card-border); }
+  .d-check .s { font-size: 12.5px; color: var(--muted); }
+  .d-row { display: flex; align-items: center; gap: 12px; cursor: pointer; width: 100%; text-align: left; }
+  .d-row .bd { flex: 1; min-width: 0; }
+  .d-row .t { font-weight: 500; }
+  .d-row .s { font-size: 12.5px; color: var(--muted); }
+  .d-row .chev { width: 18px; height: 18px; color: var(--muted); flex: none; }
+  .d-pill { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--accent-soft);
+    color: var(--accent); flex: none; white-space: nowrap; }
+  .d-pill.wait { background: var(--warn-soft); color: var(--warn); }
+  .d-pill.redo { background: var(--no-soft); color: var(--no); }
+  .d-ustaz-mk { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; flex: none; }
+  .d-ustaz-mk .ic { width: 20px; height: 20px; }
+  #dash-jamaat { margin-top: 14px; }
+  #dash-jamaat .jm-cap { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  #dash-jamaat #dash-pulse { margin-top: 10px; margin-bottom: 0; border: 0; box-shadow: none; padding: 0; }
+  /* Карточка дня на этапах 2 и 3: карта листа с подсвеченной частью,
+     первая строка части и «до строчки N» (11.11.2026). */
+  #dash-hero .h-task { display: flex; gap: 14px; align-items: center; margin-top: 10px; }
+  #dash-hero .h-map { flex: none; width: 52px; display: grid; gap: 2px; align-content: center; padding: 7px 7px;
+    background: var(--dash-bg-start); border: 1px solid var(--card-border); border-radius: 8px; }
+  #dash-hero .h-map i { display: block; height: 3px; border-radius: 2px; background: var(--card-border); }
+  #dash-hero .h-map i.on { background: var(--accent); }
+  #dash-hero .h-task .h-to { font-size: 14px; color: var(--muted); }
+  /* Заголовок вкладки слева, как в макете (п. 6). */
+  body.tabs-on #trainers-topbar, body.tabs-on #subs-topbar, body.tabs-on #more-topbar {
+    justify-content: flex-start; background: transparent; border-bottom: 0; padding: 18px 16px 2px;
+    font-size: 24px; font-weight: 700; min-height: 0; }
+  body.tabs-on #trainers-back, body.tabs-on #subs-back { display: none; }
+  body.tabs-on #subs-topbar .subs-wall-note { font-size: 13px; font-weight: 500; margin-left: auto; }
+  /* Плитки уроков наверху «Устаза» (п. 4) и блоки тренажёров (п. 3). */
+  .subs-lessons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .subs-lessons .k-tile { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--card-bg);
+    border: 1px solid var(--card-border); border-radius: 16px; padding: 12px 13px 11px; cursor: pointer; font: inherit;
+    color: var(--ink); -webkit-tap-highlight-color: transparent; }
+  .subs-lessons .k-tile:only-child { grid-column: 1 / -1; }
+  .subs-lessons .t-mk { color: var(--accent); }
+  .subs-lessons .t-mk .ic { width: 22px; height: 22px; }
+  .subs-lessons .t-nm { font-size: 17px; font-weight: 640; }
+  .subs-lessons .t-ds { font-size: 13px; color: var(--muted); line-height: 1.3; }
+  .subs-lessons .t-cnt { font-size: 12.5px; color: var(--accent); font-weight: 600; margin-top: 2px; }
+  details.tr-fold { width: 100%; max-width: 520px; align-self: center; box-sizing: border-box; background: var(--card-bg);
+    border: 1px solid var(--card-border); border-radius: 20px; box-shadow: var(--shadow-sm); padding: 0 16px; }
+  details.tr-fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    min-height: 56px; font-weight: 600; font-size: 16px; }
+  details.tr-fold > summary::-webkit-details-marker { display: none; }
+  details.tr-fold > summary .chev { width: 16px; height: 16px; color: var(--muted); transition: transform .15s; }
+  details.tr-fold[open] > summary .chev { transform: rotate(90deg); }
+  details.tr-fold > summary .cnt { margin-left: auto; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .tr-words { padding: 0 0 12px; }
+  .tr-word { display: grid; grid-template-columns: 26px 1fr 1fr; gap: 10px; align-items: center; min-height: 44px;
+    padding: 5px 0; border-top: 1px solid var(--card-border); }
+  .tr-word .n { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tr-word .ar { direction: rtl; text-align: right; font-family: 'Scheherazade New', serif; font-size: 24px; line-height: 1.3; }
+  .tr-word .ru { font-size: 13.5px; line-height: 1.3; }
+  .tr-hub .mk.gold { background: color-mix(in srgb, var(--marker-color) 18%, transparent); color: var(--marker-color); }
+  /* Иконки шапки мусхафа подальше друг от друга (п. 1). */
+  body.tabs-mushaf #topbar .topbar-right { gap: 6px; }
+
   #dashboard {
     position: relative;
     display: flex;
@@ -3367,6 +3501,21 @@
     :root:not([data-theme="light"]) .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
   }
   :root[data-theme="dark"] .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
+  /* Строка дня на «Сегодня» глифами мусхафа (11.11.2026) - см. dashLineFont.
+     Семейство своё ('today-v4'), чтобы не сбить лист в мусхафе и тренажёр.
+     Вёрстка как у .mushaf-line: flex + space-between, одна строка, кегль
+     подгоняется под ширину (dashFitLines). */
+  @font-palette-values --TdV4Light { font-family: 'today-v4'; base-palette: 0; }
+  @font-palette-values --TdV4Dark { font-family: 'today-v4'; base-palette: 1; }
+  #dash-hero .h-line.v4line { display: flex; flex-wrap: nowrap; justify-content: space-between;
+    align-items: baseline; white-space: nowrap; overflow: hidden; line-height: 2; }
+  #dash-hero .h-line.v4line .td-v4 { font-family: 'today-v4', 'Scheherazade New', serif; font-palette: --TdV4Light; }
+  #dash-hero .h-line.v4tail { justify-content: flex-start; gap: .25em; margin-top: 4px; padding-top: 4px; padding-bottom: 4px;
+    background: transparent; opacity: .55; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
+  }
+  :root[data-theme="dark"] #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
   .trainer-line .tl-w.on {
     background: var(--ok-soft); box-shadow: 0 0 0 2px var(--ok);
     border-radius: 8px; padding: 0 .18em;
@@ -3830,6 +3979,11 @@
 <body>
 <div id="dashboard">
   <div id="dash-head">
+    <!-- Заголовок как в макете «Хифз · Сегодня» (11.11.2026): название и
+         дата слева, счёт дел дня справа. «Мой день» и шестерёнка скрыты
+         стилями (#dash-head #my-day, #dash-settings): настройки живут в «Ещё». -->
+    <div id="dash-title"><span id="dash-title-t"></span><span id="dash-date"></span></div>
+    <span id="dash-count"></span>
     <!-- «Мой день» переехал сюда 10.09.2026 (решение пользователя): строка
          шапки пустовала на девять десятых, а карточка «Мой день» занимала
          ~90px и отодвигала двери за первый экран. Разметка та же, меняется
@@ -3876,6 +4030,25 @@
       <button id="grad-no"></button>
     </div>
   </div>
+  <!-- Кабинет устаза (п. 9): только у устаза, перед карточкой дня. Тап -
+       та же дверь #dash-ustaz (скрыта), чтобы обработчики не дублировать. -->
+  <button class="td-card d-row" id="dash-ustaz-row" style="display:none">
+    <span class="d-ustaz-mk"></span>
+    <span class="bd"><span class="t" id="dash-ustaz-row-t"></span><br><span class="s" id="dash-ustaz-row-s"></span></span>
+    <span class="d-pill calm" id="dash-ustaz-row-n" style="display:none"></span>
+    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+  <!-- Карточка дня (п. 2): экран сам решает, что первое - пересдача,
+       заучивание, повтор, слова, «на сегодня всё». -->
+  <div class="td-card" id="dash-hero" style="margin-top:12px">
+    <div class="h-where"><span class="h-sura" id="dash-hero-sura"></span><span class="h-place" id="dash-hero-place"></span></div>
+    <div id="dash-hero-body"></div>
+    <div class="h-row" id="dash-hero-row"></div>
+  </div>
+  <p class="dash-eyebrow" id="dash-checks-cap"></p>
+  <div class="td-card" id="dash-checks" style="padding-block:4px"></div>
+  <p class="dash-eyebrow" id="dash-ustaz-cap"></p>
+  <button class="td-card d-row" id="dash-ustaz-card"></button>
   <div id="dash-doors" class="three">
   <!-- Своя дверь студента (04.09.2026, экран "Сдачи" из макета 01.09): свои
        сдачи, ответ устаза и пересдача. Видна всем - у кого сдач ещё нет,
@@ -3920,6 +4093,9 @@
   <!-- Доска важного (17.09.2026): над пульсом, под дверями - двери остаются
        на первом экране. См. boardRender и core/feed.py. -->
 <div id="dash-board"></div>
+  <!-- Джамаат свёрнут (п. 2, как в макете): одна строка, раскрывается тапом. -->
+  <div id="dash-jamaat" class="td-card">
+    <div class="jm-cap" id="dash-jamaat-sum"></div>
   <div id="dash-pulse">
     <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
     <div class="p-split" id="pulse-split"></div>
@@ -3946,6 +4122,7 @@
       <canvas id="pulse-wave" width="330" height="70"></canvas>
       <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
     </div>
+  </div>
   </div>
 </div>
 <!-- Настройки (10.09.2026). Обязательное здесь одно - имя: его видит устаз
@@ -4164,6 +4341,18 @@
         <span class="surah-caret"></span>
       </button>
     </div>
+    <!-- Мусхаф с нижней панелью (11.11.2026, перенос из прототипа «Хифз ·
+         Сегодня»): листание и номер страницы переезжают из #page-nav сюда,
+         строка страниц внизу уступает место панели вкладок. Номер страницы -
+         меню (#bm-menu): закладка, к закладке, в начало Бакары, переход по
+         номеру. Видно только при body.tabs-mushaf (режим «Страница»); в
+         заучивании, разборе и «Смысле» всё как прежде. ‹ слева = следующая
+         страница (вправо по мусхафу), как и в #page-nav. -->
+    <div class="topbar-pages" id="tb-pages">
+      <button id="tb-next" class="nav-btn" aria-label="Следующая страница">‹</button>
+      <button id="tb-page" aria-label="Страница и закладка"><b id="tb-n">—</b><span class="surah-caret"></span></button>
+      <button id="tb-prev" class="nav-btn" aria-label="Предыдущая страница">›</button>
+    </div>
     <div class="topbar-right">
       <!-- Отметка "повторение" (30.08.2026) - студент сам подтверждает, что
            перечитал от начала Аль-Бакары до места, где остановился;
@@ -4253,6 +4442,10 @@
   <div id="bm-menu">
     <button id="btn-bookmark-save"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg><span data-i18n="bm_save">Сохранить закладку здесь</span></span><small data-i18n="bm_save_sub">эта страница станет закладкой</small></button>
     <button id="btn-bookmark-go"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg><span data-i18n="bm_go">К закладке</span></span><small id="bm-go-sub" data-i18n="bm_go_sub">страница, где остановился</small></button>
+    <!-- Пункты для шапки с панелью (11.11.2026): из #page-nav сюда переехали
+         «⤒ Бакара» и переход по номеру страницы. -->
+    <button id="btn-bm-baqara"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14" /><path d="m18 13-6-6-6 6" /><path d="M12 7v14" /></svg><span data-i18n="bm_baqara">В начало Бакары</span></span><small data-i18n="bm_baqara_sub">стр. 2 — ежедневный повтор</small></button>
+    <div id="bm-jump"><span data-i18n="bm_jump">К странице</span><input id="bm-jump-input" type="number" inputmode="numeric" min="1" max="604"><button id="bm-jump-go" data-i18n="bm_jump_go">Открыть</button></div>
   </div>
 
   <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
@@ -5005,6 +5198,34 @@
   var I18N = i18nTable();
   function i18nTable() { return {
     ru: {
+      hero_stage: 'Этап %S%',
+      hero_to_line: 'до строчки %N%',
+      today_closed: 'день закрыт',
+      today_checks: 'Сдача на сегодня',
+      today_ustaz: 'Устаз',
+      jamaat_today: 'Джамаат сегодня',
+      jamaat_acts: 'действий',
+      hero_submit: 'Учить и сдать',
+      hero_redo: 'Пересдать',
+      hero_redo_note: 'Устаз вернул на пересдачу: %N%',
+      hero_redo_s: 'нужно пересдать',
+      hero_wait_s: 'ждёт устаза, от тебя ничего не нужно',
+      hero_repeat: 'Повторил',
+      hero_rep_s: 'от начала Аль-Бакары до закладки',
+      hero_words: 'Пройти слова',
+      hero_all: 'На сегодня всё, мāшāАллах',
+      hero_open: 'Открыть мусхаф',
+      hero_left: 'Осталось: %N%',
+      hero_next_locked: 'Следующая строчка откроется, когда устаз примет сегодняшнюю.',
+      check_rec: 'записать',
+      check_mark: 'отметить',
+      check_go: 'пройти',
+      ustaz_cab_row: 'Кабинет устаза',
+      ustaz_cab_sub: 'ждут проверки: %N%',
+      ustaz_card_sub: 'сдачи и ответы устаза',
+      subs_verdict_wait: 'на проверке',
+      line_words: 'Слова из сегодняшней строки',
+      mywords_sub: 'слова, отмеченные при чтении',
       dash_mushaf: 'Мусхаф',
       dash_mushaf_sub: 'Чтение с таджвидом и переводом',
       dash_trainer: 'Тренажёры',
@@ -5373,6 +5594,10 @@
       bm_go: 'К закладке',
       bm_go_sub: 'страница, где остановился',
       bm_baqara_short: 'Бакара',
+      bm_baqara: 'В начало Бакары',
+      bm_baqara_sub: 'стр. 2 — ежедневный повтор',
+      bm_jump: 'К странице',
+      bm_jump_go: 'Открыть',
       hifz_rotate_hint: 'Поверните телефон — строки станут крупнее',
       hifz_rotate_hint_lock: 'не поворачивается — снимите блокировку поворота',
       hifz_unit_line: 'Строка',
@@ -5695,6 +5920,34 @@
       wrongbot_note: 'Там твоя группа, сдачи и задания. Здесь я тебя не записываю, чтобы ничего не перепуталось.',
     },
     ky: {
+      hero_stage: '%S%-этап',
+      hero_to_line: '%N%-сапка чейин',
+      today_closed: 'күн жабык',
+      today_checks: 'Бүгүнкү тапшыруу',
+      today_ustaz: 'Устаз',
+      jamaat_today: 'Жамаат бүгүн',
+      jamaat_acts: 'аракет',
+      hero_submit: 'Жаттап тапшыруу',
+      hero_redo: 'Кайра тапшыруу',
+      hero_redo_note: 'Устаз кайра тапшырууга кайтарды: %N%',
+      hero_redo_s: 'кайра тапшыруу керек',
+      hero_wait_s: 'устазды күтүүдө, сенден эч нерсе керек эмес',
+      hero_repeat: 'Кайталадым',
+      hero_rep_s: 'Бакаранын башынан кыстырмага чейин',
+      hero_words: 'Сөздөрдү өтүү',
+      hero_all: 'Бүгүнкүгө баары, машаАллах',
+      hero_open: 'Мусхафты ачуу',
+      hero_left: 'Калды: %N%',
+      hero_next_locked: 'Кийинки сап устаз бүгүнкүнү кабыл алганда ачылат.',
+      check_rec: 'жазуу',
+      check_mark: 'белгилөө',
+      check_go: 'өтүү',
+      ustaz_cab_row: 'Устаз кабинети',
+      ustaz_cab_sub: 'текшерүүнү күтөт: %N%',
+      ustaz_card_sub: 'тапшыруулар жана устаздын жообу',
+      subs_verdict_wait: 'текшерүүдө',
+      line_words: 'Бүгүнкү саптын сөздөрү',
+      mywords_sub: 'окуганда белгиленген сөздөр',
       dash_mushaf: 'Мусхаф',
       dash_mushaf_sub: 'Тажвид жана котормо менен окуу',
       dash_trainer: 'Машыгуу',
@@ -6090,6 +6343,10 @@
       bm_go: 'Кыстармага',
       bm_go_sub: 'токтогон бетиң',
       bm_baqara_short: 'Бакара',
+      bm_baqara: 'Бакаранын башына',
+      bm_baqara_sub: '2-бет — күнүмдүк кайталоо',
+      bm_jump: 'Бетке',
+      bm_jump_go: 'Ачуу',
       hifz_rotate_hint: 'Телефонду бур — саптар чоңоёт',
       hifz_rotate_hint_lock: 'бурулбай жатабы — буруунун кулпусун ач',
       hifz_unit_line: 'Сап',
@@ -6477,6 +6734,34 @@
       login_err_too_many: 'Катары менен өтө көп кат кетти. Бир сааттан кийин аракет кыл.',
     },
     uz: {
+      hero_stage: '%S%-босқич',
+      hero_to_line: '%N%-қаторгача',
+      today_closed: 'кун ёпилди',
+      today_checks: 'Бугунги топшириқ',
+      today_ustaz: 'Устоз',
+      jamaat_today: 'Жамоат бугун',
+      jamaat_acts: 'ҳаракат',
+      hero_submit: 'Ёдлаб топшириш',
+      hero_redo: 'Қайта топшириш',
+      hero_redo_note: 'Устоз қайта топширишга қайтарди: %N%',
+      hero_redo_s: 'қайта топшириш керак',
+      hero_wait_s: 'устозни кутяпти, сендан ҳеч нарса керак эмас',
+      hero_repeat: 'Такрорладим',
+      hero_rep_s: 'Бақара бошидан хатчўпгача',
+      hero_words: 'Сўзларни ўтиш',
+      hero_all: 'Бугунга ҳаммаси, машаАллоҳ',
+      hero_open: 'Мусҳафни очиш',
+      hero_left: 'Қолди: %N%',
+      hero_next_locked: 'Кейинги қатор устоз бугунгисини қабул қилганда очилади.',
+      check_rec: 'ёзиш',
+      check_mark: 'белгилаш',
+      check_go: 'ўтиш',
+      ustaz_cab_row: 'Устоз кабинети',
+      ustaz_cab_sub: 'текширишни кутяпти: %N%',
+      ustaz_card_sub: 'топшириқлар ва устоз жавоби',
+      subs_verdict_wait: 'текширувда',
+      line_words: 'Бугунги қатор сўзлари',
+      mywords_sub: 'ўқишда белгиланган сўзлар',
       dash_mushaf: 'Мусҳаф',
       dash_mushaf_sub: 'Тажвид ва таржима билан ўқиш',
       dash_trainer: 'Машқ',
@@ -6869,6 +7154,10 @@
       bm_go: 'Хатчўпга',
       bm_go_sub: 'тўхтаган бетинг',
       bm_baqara_short: 'Бақара',
+      bm_baqara: 'Бақара бошига',
+      bm_baqara_sub: '2-бет — кунлик такрорлаш',
+      bm_jump: 'Бетга',
+      bm_jump_go: 'Очиш',
       hifz_rotate_hint: 'Телефонни айлантир — қаторлар катталашади',
       hifz_rotate_hint_lock: 'айланмаяптими — айланиш қулфини оч',
       hifz_unit_line: 'Қатор',
@@ -7259,6 +7548,34 @@
     // без Gemini - решение пользователя. Учитель - 老师, Аллах - 安拉 (как в
     // смысловом переводе Rowwad/chinese_suliman), группы и «узр» - как есть.
     zh: {
+      hero_stage: '第%S%阶段',
+      hero_to_line: '到第%N%行',
+      today_closed: '今日已完成',
+      today_checks: '今日作业',
+      today_ustaz: '老师',
+      jamaat_today: '今日社区',
+      jamaat_acts: '次行动',
+      hero_submit: '背诵并提交',
+      hero_redo: '重交',
+      hero_redo_note: '老师要求重交：%N%',
+      hero_redo_s: '需要重交',
+      hero_wait_s: '等待老师，你无需操作',
+      hero_repeat: '已复习',
+      hero_rep_s: '从黄牛章开头到书签',
+      hero_words: '做单词练习',
+      hero_all: '今日已全部完成，马沙安拉',
+      hero_open: '打开穆斯哈夫',
+      hero_left: '剩余：%N%',
+      hero_next_locked: '老师通过今天这一行后，下一行才会打开。',
+      check_rec: '录音',
+      check_mark: '标记',
+      check_go: '开始',
+      ustaz_cab_row: '老师面板',
+      ustaz_cab_sub: '待审核：%N%',
+      ustaz_card_sub: '作业与老师回复',
+      subs_verdict_wait: '审核中',
+      line_words: '今日这一行的单词',
+      mywords_sub: '阅读时标记的单词',
       dash_mushaf: '古兰经',
       dash_mushaf_sub: '带泰吉威德标注和译文的诵读',
       dash_trainer: '练习',
@@ -7650,6 +7967,10 @@
       bm_go: '回到书签',
       bm_go_sub: '你停下的那一页',
       bm_baqara_short: '黄牛章',
+      bm_baqara: '回到黄牛章开头',
+      bm_baqara_sub: '第2页 — 每日复习',
+      bm_jump: '跳到页',
+      bm_jump_go: '打开',
       hifz_rotate_hint: '把手机横过来 — 字会变大',
       hifz_rotate_hint_lock: '转不过来 — 请关闭屏幕旋转锁定',
       hifz_unit_line: '一行',
@@ -8895,6 +9216,7 @@
       if (isUstaz) {
         door.style.display = 'flex';
         var n = res.data.waiting_count || 0;
+        setTimeout(function () { if (typeof dashUstazRow === 'function') dashUstazRow(); }, 0);
         if (n > 0) { count.textContent = n; count.style.display = 'flex'; }
         else { count.style.display = 'none'; }
       } else {
@@ -8922,6 +9244,348 @@
   function dayTaskName(k) {
     return T('task_' + k) || k;
   }
+
+  // Подсветка «сдано сегодня» на кнопках мусхафа (11.11.2026): 'm' -
+  // заучивание, 'r' - повторение, по тем же фактам, что и полоска «Мой день».
+  function mushafDoneMarks(force) {
+    var day = dashFactsLast && dashFactsLast.day, m = false, r = false;
+    ((day && day.tasks) || []).forEach(function (t) {
+      if (t.k === 'm' && t.done) m = true;
+      if (t.k === 'r' && t.done) r = true;
+    });
+    if (force === 'm') m = true;
+    if (force === 'r') r = true;
+    var h = document.getElementById('btn-hifz'), rv = document.getElementById('btn-revision');
+    if (h) h.classList.toggle('done', m);
+    if (rv) rv.classList.toggle('done', r);
+  }
+
+  /* ══ «Сегодня» по макету (11.11.2026) ══════════════════════════════════
+     Карточка дня, чек-лист и карточка устаза рисуются из тех же фактов
+     heartbeat, что и прежний дашборд: day.tasks (k: m r t j n h, done),
+     hifz {page, line, stage}, words/tajweed/nahw/hadith, subs. Строчка
+     дня - текстом из page*.json (запасной шрифт, не глифы V4: шрифт
+     листа живёт только в мусхафе). */
+  var dashPageCache = {};
+  function dashPage(n, cb) {
+    if (!n) return;
+    if (dashPageCache[n]) { cb(dashPageCache[n]); return; }
+    fetch(pageJsonUrl(n, UI_LANG)).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) { dashPageCache[n] = d; cb(d); } }).catch(function () {});
+  }
+  function dashTextLines(d) {
+    return (d.lines || []).filter(function (l) { return l.type === 'text'; });
+  }
+  function dashLineWords(line) {
+    return (line.tokens || []).filter(function (t) { return t.type === 'word'; });
+  }
+  function dashBare(h) { return String(h || '').replace(/<[^>]*>/g, ''); }
+  /* Имена сур по-русски для подписи карточки дня (11.11.2026, как в макете
+     «Хифз»: «Аль-Бакара · 2:6–7»). Для ky/uz та же кириллица; для zh -
+     арабское имя из SURAH_INDEX. */
+  var SURAH_RU = [
+    'Аль-Фатиха','Аль-Бакара','Аль Имран','Ан-Ниса','Аль-Маида','Аль-Анам',
+    'Аль-Араф','Аль-Анфаль','Ат-Тауба','Юнус','Худ','Юсуф',
+    'Ар-Рад','Ибрахим','Аль-Хиджр','Ан-Нахль','Аль-Исра','Аль-Кахф',
+    'Марьям','Та Ха','Аль-Анбия','Аль-Хадж','Аль-Муминун','Ан-Нур',
+    'Аль-Фуркан','Аш-Шуара','Ан-Намль','Аль-Касас','Аль-Анкабут','Ар-Рум',
+    'Лукман','Ас-Саджда','Аль-Ахзаб','Саба','Фатыр','Ясин',
+    'Ас-Саффат','Сад','Аз-Зумар','Гафир','Фуссилят','Аш-Шура',
+    'Аз-Зухруф','Ад-Духан','Аль-Джасия','Аль-Ахкаф','Мухаммад','Аль-Фатх',
+    'Аль-Худжурат','Каф','Аз-Зарият','Ат-Тур','Ан-Наджм','Аль-Камар',
+    'Ар-Рахман','Аль-Вакиа','Аль-Хадид','Аль-Муджадаля','Аль-Хашр','Аль-Мумтахана',
+    'Ас-Сафф','Аль-Джума','Аль-Мунафикун','Ат-Тагабун','Ат-Талак','Ат-Тахрим',
+    'Аль-Мульк','Аль-Калям','Аль-Хакка','Аль-Мааридж','Нух','Аль-Джинн',
+    'Аль-Муззаммиль','Аль-Муддассир','Аль-Кияма','Аль-Инсан','Аль-Мурсалят','Ан-Наба',
+    'Ан-Назиат','Абаса','Ат-Таквир','Аль-Инфитар','Аль-Мутаффифин','Аль-Иншикак',
+    'Аль-Бурудж','Ат-Тарик','Аль-Аля','Аль-Гашия','Аль-Фаджр','Аль-Баляд',
+    'Аш-Шамс','Аль-Лейль','Ад-Духа','Аш-Шарх','Ат-Тин','Аль-Аляк',
+    'Аль-Кадр','Аль-Баййина','Аз-Зальзаля','Аль-Адият','Аль-Кариа','Ат-Такасур',
+    'Аль-Аср','Аль-Хумаза','Аль-Филь','Курайш','Аль-Маун','Аль-Каусар',
+    'Аль-Кафирун','Ан-Наср','Аль-Масад','Аль-Ихлас','Аль-Фаляк','Ан-Нас'
+  ];
+  function dashSuraLabel(lines) {
+    var sn = 0, a1 = 0, a2 = 0;
+    lines.forEach(function (line) {
+      (line.tokens || []).forEach(function (t) {
+        if (t.type !== 'word' || !t.surah) return;
+        if (!sn) { sn = t.surah; }
+        if (t.surah !== sn) return;
+        if (!a1 || t.ayah < a1) a1 = t.ayah;
+        if (t.ayah > a2) a2 = t.ayah;
+      });
+    });
+    if (!sn) return '';
+    var name = UI_LANG === 'zh' ? (SURAH_INDEX[sn - 1] || [])[1] : SURAH_RU[sn - 1];
+    return (name || '') + ' \u00b7 ' + sn + ':' + a1 + (a2 > a1 ? '\u2013' + a2 : '');
+  }
+  /* Связка (11.11.2026, правка пользователя): строка учится до начала
+     следующей - те же токены, что берёт hifzTailTokens в мусхафе, то же
+     правило длины слова и конца аята. С другого листа (foreign) - обычным
+     текстом: глифы чужого листа в шрифте этого были бы чужими словами. */
+  function dashTailCount(next) {
+    if (!next || !next.tokens) return 0;
+    var taken = 0, last = -1;
+    for (var i = 0; i < next.tokens.length && taken < 3; i++) {
+      var t = next.tokens[i];
+      if (t.type !== 'word') continue;
+      taken++; last = i;
+      var after = next.tokens[i + 1];
+      if (taken === 1 && hifzBaseLen(t.html) > 3) { if (!after || after.type !== 'ayah_end') break; }
+      else if (taken >= 2) { if (!after || after.type !== 'ayah_end') break; }
+    }
+    return last + 1;
+  }
+  /* Строка дня глифами мусхафа (11.11.2026, правка пользователя: «как в
+     мусхафе, а не арабская надпись»). Тот же приём, что trainerLineFont:
+     шрифт листа своим семейством, опоздавший ответ не ставится, не
+     загрузился - строка обычным текстом. */
+  var dashV4Face = null, dashV4Url = null, dashV4Want = null;
+  function dashLineFont(url) {
+    dashV4Want = url;
+    if (!url || typeof FontFace === 'undefined') return Promise.resolve(false);
+    if (url === dashV4Url) return Promise.resolve(true);
+    return loadV4Face('today-v4', url).then(function (loaded) {
+      if (dashV4Want !== url) return false;
+      if (dashV4Face) { try { document.fonts.delete(dashV4Face); } catch (e) {} }
+      document.fonts.add(loaded);
+      dashV4Face = loaded; dashV4Url = url;
+      return true;
+    }).catch(function () { return false; });
+  }
+  function dashLineHtml(line, v4, tail, foreign) {
+    var html = '';
+    var put = function (t, extra, plain) {
+      var glyph = !plain && v4 && t.code_v4 && !t.fp;
+      if (t.type === 'word') {
+        html += '<span class="' + (glyph ? 'td-v4' : 'td-w') + extra + '">' + (glyph ? t.code_v4 : dashBare(t.html)) + '</span>';
+      } else if (t.type === 'ayah_end') {
+        html += '<span class="' + (glyph ? 'td-v4' : 'td-ae') + extra + '">' + (glyph ? t.code_v4 : '\uFD3E' + dashBare(t.html) + '\uFD3F') + '</span>';
+      }
+    };
+    (line.tokens || []).forEach(function (t) { put(t, '', false); });
+    var out = '<div class="h-line v4line">' + html + '</div>';
+    // Связка отдельной строкой под основной, как на листе (там она - начало
+    // следующей строки); кегль берёт у основной в dashFitLines.
+    if (tail && tail.length) {
+      html = '';
+      tail.forEach(function (t) { put(t, ' td-tail', !!foreign); });
+      out += '<div class="h-line v4line v4tail">' + html + '</div>';
+    }
+    return out;
+  }
+  // Одна строка, как на листе: кегль по ширине карточки. Ширина нулевая,
+  // пока вкладка скрыта, - тогда повтор при показе вкладки (tabsGo).
+  function dashFitLines() {
+    var els = document.querySelectorAll('#dash-hero .h-line.v4line:not(.v4tail)');
+    var tails = document.querySelectorAll('#dash-hero .v4tail');
+    for (var j = 0; j < tails.length; j++) {
+      var prev = tails[j].previousElementSibling;
+      if (prev) tails[j].style.fontSize = (prev.style.fontSize || getComputedStyle(prev).fontSize);
+    }
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i]; el.style.fontSize = '';
+      var cs = getComputedStyle(el);
+      var room = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (!(room > 0)) continue;
+      var need = 0;
+      for (var k = 0; k < el.children.length; k++) need += el.children[k].getBoundingClientRect().width;
+      if (need > room) el.style.fontSize = Math.max(13, parseFloat(cs.fontSize) * room / need * 0.985).toFixed(1) + 'px';
+      var tl = el.nextElementSibling;
+      if (tl && tl.classList.contains('v4tail')) tl.style.fontSize = el.style.fontSize || getComputedStyle(el).fontSize;
+    }
+  }
+  window.addEventListener('resize', dashFitLines);
+  function dashTask(f, k) {
+    var day = f && f.day, out = null;
+    ((day && day.tasks) || []).forEach(function (t) { if (t.k === k) out = t; });
+    return out;
+  }
+  function dashPlace(h) {
+    if (!h || !h.page) return '';
+    return h.stage === 3 ? T('ustaz_place_page', { P: h.page })
+      : h.stage === 2 ? T('ustaz_place_half', { P: h.page })
+      : T('ustaz_place', { P: h.page, L: (h.line || 0) + 1 });
+  }
+  var DASH_LOCALE = { ru: 'ru-RU', ky: 'ky-KG', uz: 'uz-UZ', zh: 'zh-CN' };
+  function dashHead(f) {
+    document.getElementById('dash-title-t').textContent = T('tab_today');
+    var d = new Date(), loc = DASH_LOCALE[UI_LANG] || 'ru-RU', txt = '';
+    try { txt = '· ' + d.toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) {}
+    document.getElementById('dash-date').textContent = txt;
+    var day = f && f.day;
+    document.getElementById('dash-count').textContent = day && day.total
+      ? (day.done >= day.total ? T('today_closed') : T('my_day_of', { N: day.done, M: day.total })) : '';
+  }
+  // Переходы из карточки и чек-листа - теми же дверями, что были.
+  function dashGoHifz() {
+    openMushaf('page');
+    setTimeout(function () { var b = document.getElementById('btn-hifz'); if (b && !hifz.on) b.click(); }, 350);
+  }
+  function dashGoRevision() {
+    openMushaf('page');
+    setTimeout(function () { var b = document.getElementById('btn-revision'); if (b) b.click(); }, 350);
+  }
+  function dashGo(k) {
+    if (k === 'm') dashGoHifz();
+    else if (k === 'r') dashGoRevision();
+    else if (k === 't') openTrainer();
+    else if (k === 'j') openTajweed();
+    else if (k === 'n') openNahw();
+    else if (k === 'h') openHadith();
+  }
+  var dashHeroReq = 0;
+  function dashHero(f) {
+    var sura = document.getElementById('dash-hero-sura'), place = document.getElementById('dash-hero-place');
+    var body = document.getElementById('dash-hero-body'), row = document.getElementById('dash-hero-row');
+    var h = f.hifz || {}, m = dashTask(f, 'm'), r = dashTask(f, 'r'), t = dashTask(f, 't');
+    var retake = f.subs && f.subs.retake > 0;
+    var btn = function (k, label, primary, icon) {
+      return '<button class="d-btn' + (primary ? ' primary' : '') + '" data-dash-go="' + k + '">' + (icon || '') + label + '</button>';
+    };
+    sura.textContent = ''; place.textContent = dashPlace(h); body.innerHTML = ''; row.innerHTML = '';
+    var req = ++dashHeroReq;
+    var showLine = function () {
+      if (!h.page) return;
+      dashPage(h.page, function (d) {
+        if (req !== dashHeroReq) return;
+        var lines = dashTextLines(d), n = lines.length;
+        if (!n) return;
+        dashLineFont(d.font_url).then(function (v4) {
+          if (req !== dashHeroReq) return;
+          paint(lines, n, v4);
+          dashFitLines();
+        });
+      });
+    };
+    var paint = function (lines, n, v4) {
+        if (!h.stage || h.stage === 1) {
+          var idx = h.line || 0, line = lines[idx];
+          if (!line) return;
+          var done = function (next, foreign) {
+            if (req !== dashHeroReq) return;
+            var k = dashTailCount(next), tail = next ? next.tokens.slice(0, k) : [];
+            sura.textContent = dashSuraLabel([line, { tokens: tail }]);
+            body.innerHTML = dashLineHtml(line, v4, tail, foreign);
+            dashFitLines();
+          };
+          if (idx + 1 < n) done(lines[idx + 1], false);
+          else if (h.page < LAST_PAGE) { done(null); dashPage(h.page + 1, function (d2) { done(dashTextLines(d2)[0], true); }); }
+          else done(null);
+          return;
+        }
+        // Этап 2 - половина листа (первая floor(n/2) строк, как hifzHalf),
+        // этап 3 - весь лист: карта, первая строка части и «до строчки N».
+        var mid = Math.floor(n / 2), from = 0, to = n - 1;
+        if (h.stage === 2) { if ((h.line || 0) < mid) { to = mid - 1; } else { from = mid; } }
+        place.textContent = T('page_n', { N: h.page }) + ' · ' + T('hero_stage', { S: h.stage });
+        sura.textContent = dashSuraLabel(lines.slice(from, to + 1));
+        var map = '';
+        for (var i = 0; i < n; i++) map += '<i class="' + (i >= from && i <= to ? 'on' : '') + '"></i>';
+        // Строка во всю ширину карточки (как на этапе 1 - тем же кеглем,
+        // что на листе), под ней миниатюра листа и «до строчки N».
+        body.innerHTML = dashLineHtml(lines[from], v4) +
+          '<div class="h-task"><div class="h-map">' + map + '</div>' +
+          '<div class="h-to">' + T('hero_to_line', { N: to + 1 }) + '</div></div>';
+    };
+    if (retake) {
+      place.textContent = dashPlace(h);
+      body.innerHTML = '<p class="h-note">' + T('hero_redo_note', { N: f.subs.retake }) + '</p>';
+      row.innerHTML = btn('subs', T('hero_redo'), true, ICON['rotate-ccw']);
+    } else if (m && !m.done) {
+      showLine();
+      row.innerHTML = btn('m', T('hero_submit'), true, ICON.mic);
+    } else if (r && !r.done) {
+      sura.textContent = T('task_r'); place.textContent = T('hero_rep_s');
+      body.innerHTML = '';
+      row.innerHTML = btn('mushaf', T('hero_open'), false) + btn('r', T('hero_repeat'), true, ICON.repeat);
+    } else if (t && !t.done) {
+      sura.textContent = T('task_t');
+      place.textContent = f.words ? T('daily_n', { N: f.words.done, M: f.words.target }) : '';
+      row.innerHTML = btn('t', T('hero_words'), true);
+    } else {
+      sura.textContent = T('hero_all'); place.textContent = '';
+      var left = ((f.day && f.day.tasks) || []).filter(function (x) { return !x.done; });
+      if (left.length) {
+        body.innerHTML = '<p class="h-note">' + T('hero_left', { N: left.map(function (x) { return dayTaskName(x.k); }).join(', ') }) + '</p>';
+      } else if (m && m.done) {
+        body.innerHTML = '<div class="h-lock">' + ICON.lock + '<span>' + T('hero_next_locked') + '</span></div>';
+      }
+      row.innerHTML = btn('mushaf', T('hero_open'), true, ICON['book-open']);
+    }
+  }
+  function dashChecks(f) {
+    var cap = document.getElementById('dash-checks-cap'), box = document.getElementById('dash-checks');
+    var tasks = (f.day && f.day.tasks) || [];
+    cap.textContent = T('today_checks');
+    if (!tasks.length) { cap.style.display = 'none'; box.style.display = 'none'; return; }
+    cap.style.display = ''; box.style.display = '';
+    var sub = function (k) {
+      if (k === 'm') return dashPlace(f.hifz) || T('task_m');
+      if (k === 'r') return T('hero_rep_s');
+      var x = k === 't' ? f.words : k === 'j' ? f.tajweed : k === 'n' ? f.nahw : k === 'h' ? f.hadith : null;
+      return x && x.target != null ? T('daily_n', { N: x.done, M: x.target }) : '';
+    };
+    var act = function (k) { return k === 'm' ? T('check_rec') : k === 'r' ? T('check_mark') : T('check_go'); };
+    box.innerHTML = tasks.map(function (t) {
+      return '<div class="d-check' + (t.done ? ' done' : '') + '">' +
+        '<span class="mk"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span>' +
+        '<span class="bd"><span class="t">' + dayTaskName(t.k) + '</span><br><span class="s">' + sub(t.k) + '</span></span>' +
+        (t.done ? '' : '<button class="d-btn sm" data-dash-go="' + t.k + '">' + act(t.k) + '</button>') + '</div>';
+    }).join('');
+  }
+  function dashUstazCard(f) {
+    var cap = document.getElementById('dash-ustaz-cap'), card = document.getElementById('dash-ustaz-card');
+    cap.textContent = T('today_ustaz');
+    var pill, t, sdesc, sb = f.subs || {};
+    if (sb.retake > 0) { pill = ['redo', T('subs_verdict_retake')]; t = T('dash_subs_retake', { N: sb.retake }); sdesc = T('hero_redo_s'); }
+    else if (sb.waiting > 0) { pill = ['wait', T('subs_verdict_wait')]; t = T('dash_subs_waiting', { N: sb.waiting }); sdesc = T('hero_wait_s'); }
+    else { pill = ['', T('subs_verdict_ok')]; t = T('dash_subs'); sdesc = T('ustaz_card_sub'); }
+    card.innerHTML = '<span class="d-pill ' + pill[0] + '">' + pill[1] + '</span>' +
+      '<span class="bd"><span class="t">' + t + '</span><br><span class="s">' + sdesc + '</span></span>' +
+      '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+  }
+  function dashUstazRow() {
+    var door = document.getElementById('dash-ustaz'), row = document.getElementById('dash-ustaz-row');
+    var on = door && door.style.display !== 'none';
+    row.style.display = on ? 'flex' : 'none';
+    if (!on) return;
+    document.querySelector('#dash-ustaz-row .d-ustaz-mk').innerHTML = ICON['user-check'];
+    document.getElementById('dash-ustaz-row-t').textContent = T('ustaz_cab_row');
+    var n = document.getElementById('dash-ustaz-count').textContent;
+    document.getElementById('dash-ustaz-row-s').textContent = n ? T('ustaz_cab_sub', { N: n }) : T('dash_ustaz_sub');
+    var pill = document.getElementById('dash-ustaz-row-n');
+    pill.textContent = n; pill.style.display = n ? '' : 'none';
+  }
+  function dashToday(f) {
+    dashHead(f); dashHero(f); dashChecks(f); dashUstazCard(f); dashUstazRow();
+    // Устаз без своих заданий (не студент) - карточку дня и чек-лист не показываем.
+    var hasTasks = !!(f.day && f.day.tasks && f.day.tasks.length);
+    document.getElementById('dash-hero').style.display = hasTasks ? '' : 'none';
+    var sum = document.getElementById('dash-jamaat-sum');
+    if (sum && !sum.textContent) sum.textContent = T('jamaat_today');
+  }
+  document.getElementById('dashboard').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-dash-go]');
+    if (b) {
+      var k = b.getAttribute('data-dash-go');
+      if (k === 'mushaf') openMushaf('page');
+      else if (k === 'subs') openSubs();
+      else dashGo(k);
+      return;
+    }
+    if (e.target.closest('#dash-ustaz-card')) openSubs();
+    else if (e.target.closest('#dash-ustaz-row')) document.getElementById('dash-ustaz').click();
+  });
+  // Счётчик джамаата в свёрнутой строке - зеркало #pulse-count.
+  (function () {
+    var cnt = document.getElementById('pulse-count'), sum = document.getElementById('dash-jamaat-sum');
+    if (!cnt || !sum || !window.MutationObserver) return;
+    new MutationObserver(function () {
+      var n = cnt.textContent, online = (document.getElementById('dash-online') || {}).textContent || '';
+      sum.textContent = T('jamaat_today') + (n ? ' · ' + n + ' ' + T('jamaat_acts') : '') + (online ? ' · ' + online : '');
+    }).observe(cnt, { childList: true, characterData: true, subtree: true });
+  })();
 
   function dashDay(day) {
     var box = document.getElementById('my-day');
@@ -8989,6 +9653,7 @@
 
   function dashFacts(f) {
     dashDay(f.day);
+    mushafDoneMarks();
     if (!document.getElementById('dash-grad').classList.contains('done')) dashGrad(f.prep_grad);
     var mush = document.getElementById('dash-mushaf-sub');
     if (f.hifz && f.hifz.page) {
@@ -9031,6 +9696,11 @@
       }
     }
   }
+
+  // «Сегодня» по макету перерисовывается теми же фактами (см. dashToday).
+  var _dashFactsBase = dashFacts;
+  dashFacts = function (f) { _dashFactsBase(f); try { dashToday(f); } catch (e) { console.error('dashToday', e); } };
+  dashHead(null);
 
   setTimeout(sendHeartbeat, 0);
   setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
@@ -9632,6 +10302,7 @@
   // (не только #dashboard) - иначе повторный вызов из Тренажёра оставлял
   // бы его видимым под #app.
   function openMushaf(tab, mywordsFrom) {
+    if (typeof mushafDoneMarks === 'function') mushafDoneMarks();
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('trainer').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
@@ -9892,6 +10563,7 @@
     var font = MUSHAF_MEASURE_BASE * avail / (w * mushafFitK) * MUSHAF_FIT_SAFETY;
     font = Math.min(mushafMaxFont(), Math.max(MUSHAF_MIN_FONT_SIZE, font));
     el.style.fontSize = font.toFixed(1) + 'px';
+    el.setAttribute('data-fit-base', font.toFixed(1));   // кегль по ширине - для предела по высоте
     return { font: font, capped: false, lines: lines, avail: avail, w: w,
              why: 'table k' + mushafFitK.toFixed(3) };
   }
@@ -9927,6 +10599,7 @@
     var el = document.getElementById('ayah-text');
     var lines = el.querySelectorAll('.mushaf-line');
     if (!lines.length) return null;
+    el.style.maxWidth = '';   // прошлое сужение по высоте не должно влиять на замер
     var avail = el.clientWidth;
     if (!avail) return null;   // #app ещё display:none - меряем позже, см. dash-mushaf
 
@@ -9960,6 +10633,7 @@
       fitted = Math.max(MUSHAF_MIN_FONT_SIZE, fitted * shrink);
       el.style.fontSize = fitted.toFixed(1) + 'px';
     }
+    el.setAttribute('data-fit-base', fitted.toFixed(1));   // кегль по ширине - для предела по высоте
     return { font: fitted, capped: capped, lines: lines.length, avail: avail, maxW: maxW };
   }
 
@@ -9975,17 +10649,49 @@
   // Листа в таблице нет - как до неё: первый удавшийся замер запоминается;
   // если поздний дал другой размер (или первый упёрся в потолок и так и не
   // поправился) - уходит отчёт.
+  /* Второй предел кегля - по высоте (11.11.2026, нижняя панель в мусхафе,
+     перенос из прототипа). Только в режиме «Страница» с панелью и только
+     стоя: лист должен влезать целиком, а не скроллиться; лёжа лист
+     скроллится по замыслу (21.09.2026). Шаг идёт ПОСЛЕ подбора по ширине
+     (табличного или замером) и не трогает его: clampFontToFit и сверка с
+     таблицей остаются как были. Кегль ужат - колонка сужается в той же
+     пропорции, иначе justify растянул бы слова огромными пробелами. */
+  function mushafHeightCap() {
+    var el = document.getElementById('ayah-text');
+    var wrap = document.getElementById('page-wrap');
+    var app = document.getElementById('app');
+    if (!el || !wrap) return;
+    el.style.maxWidth = '';
+    if (!document.body.classList.contains('tabs-mushaf') || app.classList.contains('land')) return;
+    // base - кегль по ширине. Сверка с таблицей возвращает «прежний» кегль,
+    // а он мог быть уже ужат этим же шагом, поэтому кегль по ширине
+    // запоминаем в data-fit-base; подбор по ширине его сбрасывает.
+    var cur = parseFloat(el.style.fontSize);
+    if (!cur || !wrap.clientHeight) return;
+    var base = parseFloat(el.getAttribute('data-fit-base')) || cur;
+    var full = el.clientWidth, font = cur;
+    for (var i = 0; i < 2; i++) {
+      var room = wrap.clientHeight - 12, need = el.scrollHeight;
+      if (!(need > room) || font <= MUSHAF_MIN_FONT_SIZE) break;
+      font = Math.max(MUSHAF_MIN_FONT_SIZE, font * (room / need) * 0.99);
+      el.style.fontSize = font.toFixed(1) + 'px';
+    }
+    if (font < base) el.style.maxWidth = Math.round(full * font / base) + 'px';
+  }
+
   function mushafFitSchedule() {
     var run = ++mushafFitRun;
     var predicted = mushafFitPredict();
+    if (predicted) mushafHeightCap();
     var first = predicted, reported = false;
     var tick = function (why, last) {
       if (run !== mushafFitRun) return;
       if (predicted) {
-        if (last) mushafFitVerify(predicted, why);
+        if (last) { mushafFitVerify(predicted, why); mushafHeightCap(); }
         return;
       }
       var r = clampFontToFit(last);
+      mushafHeightCap();
       if (!r) return;
       if (!first) { first = r; first.why = why; return; }
       var moved = Math.abs(r.font - first.font) > 0.5;
@@ -10205,6 +10911,7 @@
         ? T('ayah_range', { A: firstAyah.ayah, B: lastAyah.ayah })
         : T('ayah_n', { N: firstAyah.ayah });
     document.getElementById('page-indicator').textContent = T('page_n', { N: data.page });
+    document.getElementById('tb-n').textContent = T('page_n', { N: data.page });
 
     // Настоящая построчная вёрстка (QUL/King Fahd Complex, 27.08.2026) -
     // каждая строка мусхафа - свой <div>, а не единый абзац с переносом
@@ -10319,6 +11026,8 @@
 
     document.getElementById('btn-prev').disabled = data.page >= LAST_PAGE;
     document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
+    document.getElementById('tb-prev').disabled = data.page >= LAST_PAGE;
+    document.getElementById('tb-next').disabled = data.page <= FIRST_PAGE;
 
     renderWordsList(data);
     renderMeaning(data);
@@ -12842,6 +13551,7 @@
                         n: (res.ok && res.data.ok) ? 'ok' : String(res.data && res.data.error) });
       if (res.ok && res.data.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        if (typeof mushafDoneMarks === 'function') mushafDoneMarks('m');
         recPartsWipe();     // дошло до устаза - держать на телефоне незачем
         // Пересдача (см. subsRetake): та же единица уходит устазу заново, но
         // указатель "где я" не двигается и повторы не спрашиваются - студент
@@ -13599,14 +14309,18 @@
      встают у 🔖: пункт меню к этому моменту уже скрыт. */
   var bmBtn = document.getElementById('btn-bookmark');
   var bmMenu = document.getElementById('bm-menu');
+  // Откуда открыли меню - у той кнопки и всплывают подсказки (11.11.2026:
+  // в шапке с панелью это номер страницы #tb-page, в строке страниц - 🔖).
+  var bmAnchor = bmBtn;
   function bmClose() { bmMenu.classList.remove('on'); }
-  bmBtn.addEventListener('click', function (e) {
+  function bmOpen(e, anchor) {
     e.stopPropagation();
     if (bmMenu.classList.contains('on')) { bmClose(); return; }
+    bmAnchor = anchor;
     bmMenu.classList.add('on');
     // Под кнопкой, а если снизу не хватает места (полоса теперь внизу
     // экрана, а лёжа - в конце листа) - над ней. Прижато к экрану.
-    var r = bmBtn.getBoundingClientRect(), m = bmMenu.getBoundingClientRect();
+    var r = anchor.getBoundingClientRect(), m = bmMenu.getBoundingClientRect();
     var top = r.bottom + 6;
     if (top + m.height > window.innerHeight - 8) top = r.top - m.height - 6;
     bmMenu.style.top = Math.max(8, top) + 'px';
@@ -13617,19 +14331,33 @@
         document.getElementById('bm-go-sub').textContent = T('page_n', { N: res.data.page });
       }
     });
-  });
-  bmMenu.addEventListener('click', function (e) { if (e.target.closest('button')) bmClose(); });
+  }
+  bmBtn.addEventListener('click', function (e) { bmOpen(e, bmBtn); });
+  document.getElementById('tb-page').addEventListener('click', function (e) { bmOpen(e, document.getElementById('tb-page')); });
+  document.getElementById('tb-next').addEventListener('click', function () { document.getElementById('btn-next').click(); });
+  document.getElementById('tb-prev').addEventListener('click', function () { document.getElementById('btn-prev').click(); });
+  document.getElementById('btn-bm-baqara').addEventListener('click', function () { loadPage(BAQARA_START_PAGE); });
+  var bmJumpInput = document.getElementById('bm-jump-input');
+  function bmJumpGo() {
+    var n = parseInt(bmJumpInput.value, 10);
+    if (n >= FIRST_PAGE && n <= LAST_PAGE) { loadPage(n); bmClose(); }
+  }
+  document.getElementById('bm-jump-go').addEventListener('click', bmJumpGo);
+  bmJumpInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') bmJumpGo(); });
+  bmJumpInput.addEventListener('click', function (e) { e.stopPropagation(); });
+  // Поле ввода внутри меню: тап по нему меню не закрывает, по пунктам - закрывает.
+  bmMenu.addEventListener('click', function (e) { if (e.target.closest('button') && !e.target.closest('#bm-jump')) bmClose(); });
   document.addEventListener('click', function (e) {
     if (bmMenu.classList.contains('on') && !bmMenu.contains(e.target)) bmClose();
   });
   document.getElementById('page-wrap').addEventListener('scroll', bmClose, { passive: true });
   document.getElementById('btn-bookmark-save').addEventListener('click', function () {
     apiCall('/bookmark', { method: 'POST', body: { page: currentPage } }).then(function (res) {
-      if (res.status !== 401) showPopupMessage(bmBtn, T('bookmark_saved', { N: currentPage }));
+      if (res.status !== 401) showPopupMessage(bmAnchor, T('bookmark_saved', { N: currentPage }));
     });
   });
   document.getElementById('btn-bookmark-go').addEventListener('click', function () {
-    var btn = bmBtn;
+    var btn = bmAnchor;
     apiCall('/bookmark').then(function (res) {
       if (res.status === 401) return;
       if (res.data && res.data.page) {
@@ -13655,6 +14383,7 @@
         if (res.data && res.data.error === 'record_required') { meRevisionRecord = true; revisionRecOpen(); return; }
         showPopupMessage(btn, res.data && res.data.credited ?
           T('revision_done') : T('revision_already'));
+        mushafDoneMarks('r');   // засчитано (сейчас или раньше) - кнопка зелёная
       });
     });
   });
@@ -15198,7 +15927,7 @@
       ]
     },
     {
-      id: 'ustaz', mark: '\u2713', name: 'Работа с устазом',
+      id: 'ustaz', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /><circle cx=\"9\" cy=\"7\" r=\"4\" /><polyline points=\"16 11 18 13 22 9\" /></svg>", name: 'Работа с устазом',
       desc: 'Разбор, пометки, пересдача',
       video: 'JED2dRaFJmw',
       steps: [
@@ -15211,7 +15940,7 @@
     {
       // Раздел устаза (08.09.2026). Студенту он не показывается совсем -
       // не «заперт», а не существует: у него этих экранов нет.
-      id: 'review', mark: '\u270d\ufe0e', name: 'Проверка сдач', ustaz: true,
+      id: 'review', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 20h9\" /><path d=\"M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z\" /></svg>", name: 'Проверка сдач', ustaz: true,
       desc: 'Кабинет устаза: очередь, разбор, вердикт',
       steps: [
         ['u_door', 'Дверь «Устаз» — только у тебя',
@@ -15305,7 +16034,7 @@
       ]
     },
     {
-      id: 'r_reports', group: 'rules', mark: '📊', name: 'Отчёты и сообщения',
+      id: 'r_reports', group: 'rules', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\" /><path d=\"M13 8H7\" /><path d=\"M17 12H7\" /></svg>", name: 'Отчёты и сообщения',
       desc: 'Что я пишу и как считаю',
       steps: [
         [null, 'Утро: кто сдал всё за вчера',
@@ -15502,7 +16231,7 @@
           + '<span class="ds">' + feedEsc(desc) + '</span></span>'
           + '<span class="cnt">' + right + '</span></button>';
       });
-      body.innerHTML = html;
+      body.innerHTML = subsLessonsHtml + html;
       var revGo = document.getElementById('subs-rev-go');
       if (revGo) revGo.addEventListener('click', function () {
         // Ведём туда же, куда 🔁 на странице чтения: мусхаф, первая страница
@@ -15822,8 +16551,43 @@
     if (el) el.style.display = on ? 'block' : 'none';
   }
 
+  /* Плитки уроков наверху «Работы с устазом» (11.11.2026, п. 4 правок):
+     у групп с таджвидом и нахвом - те же плитки, что в «Знаниях». */
+  var subsLessonsHtml = '';
+  function subsLessonsTiles() {
+    var f = dashFactsLast || {};
+    if (!(f.learn && f.learn.length)) { subsLessonsHtml = ''; return; }
+    var paint = function (subjects) {
+      if (!subjects.length) { subsLessonsHtml = ''; return; }
+      subsLessonsHtml = '<div class="subs-lessons">' + subjects.map(function (sj) {
+        return '<button class="k-tile" data-subs-subj="' + sj.id + '">' +
+          '<span class="t-mk">' + (sj.id === 'j' ? ICON['book-open-text'] : ICON['graduation-cap']) + '</span>' +
+          '<span class="t-nm">' + (T(SUBJ_TITLE_KEY[sj.id]) || sj.title) + '</span>' +
+          '<span class="t-ds">' + (T('subj_' + sj.id + '_sub') || sj.sub) + '</span>' +
+          '<span class="t-cnt">' + T('learn_open_of', { N: sj.open, M: sj.total }) + '</span></button>';
+      }).join('') + '</div>';
+      var body = document.getElementById('subs-body');
+      if (body && !body.querySelector('.subs-lessons') && !body.querySelector('.subs-empty')) {
+        body.insertAdjacentHTML('afterbegin', subsLessonsHtml);
+      }
+    };
+    if (lessonsCache) { paint(lessonsCache); return; }
+    apiCall('/lessons').then(function (res) {
+      var d = res && res.data;
+      lessonsCache = (d && d.subjects) || [];
+      paint(lessonsCache);
+    }).catch(function () {});
+  }
+  document.getElementById('subs-body').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-subs-subj]');
+    if (!b) return;
+    openLearn(false);
+    lessonsRenderList(b.getAttribute('data-subs-subj'));
+  });
+
   function openSubs(fromWall) {
     subsWallNote(!!fromWall);
+    subsLessonsTiles();
     document.getElementById('dashboard').style.display = 'none';
     // Раньше сюда приходили только с дашборда, и мусхаф гасить было не нужно.
     // С 13.09.2026 сюда же ведёт закрытый ход пересдачи - прямо из заучивания,
@@ -16281,6 +17045,7 @@
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) {
         document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_sent');
+        if (typeof mushafDoneMarks === 'function') mushafDoneMarks('m');
         // Разбор записан - теперь «На пересдачу» пройдёт.
         if (review.sub) review.sub.has_review_audio = true;
         reviewCommentMode = false;
@@ -17356,8 +18121,16 @@
     if (f.hadith) {
       html += trainersRow('trh-hadith', 'ح', T('hadith_title'), T('trainers_hadith_sub'), f.hadith);
     }
+    // Слова из сегодняшней строки и «Мои слова» (11.11.2026, из макета).
+    html += '<details class="tr-fold" id="tr-line-words"><summary>' +
+      '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>' +
+      T('line_words') + '<span class="cnt" id="tr-line-cnt"></span></summary><div class="tr-words" id="tr-line-list"></div></details>';
+    html += trainersRow('trh-mywords', ICON.star, T('tab_mywords'), T('mywords_sub'), null);
     var body = document.getElementById('trainers-body');
     body.innerHTML = html;
+    var myw = document.getElementById('trh-mywords');
+    if (myw) { myw.querySelector('.mk').classList.add('gold'); myw.addEventListener('click', function () { openMushaf('mywords', 'trainer'); }); }
+    trainersLineWords(f.hifz);
     document.getElementById('trh-words').addEventListener('click', openTrainer);
     var tj = document.getElementById('trh-tajweed');
     if (tj) tj.addEventListener('click', openTajweed);
@@ -17365,6 +18138,24 @@
     if (nh) nh.addEventListener('click', openNahw);
     var hd = document.getElementById('trh-hadith');
     if (hd) hd.addEventListener('click', openHadith);
+  }
+
+  function trainersLineWords(h) {
+    var fold = document.getElementById('tr-line-words'), list = document.getElementById('tr-line-list');
+    var cnt = document.getElementById('tr-line-cnt');
+    if (!fold || !h || !h.page || (h.stage && h.stage !== 1)) { if (fold) fold.style.display = 'none'; return; }
+    fold.style.display = '';
+    cnt.textContent = dashPlace(h);
+    dashPage(h.page, function (d) {
+      var line = dashTextLines(d)[h.line || 0];
+      if (!line) { fold.style.display = 'none'; return; }
+      var words = dashLineWords(line);
+      cnt.textContent = words.length + ' · ' + dashPlace(h);
+      list.innerHTML = words.map(function (w, i) {
+        return '<div class="tr-word"><span class="n">' + (i + 1) + '</span><span class="ar">' + dashBare(w.html) + '</span>' +
+          '<span class="ru">' + feedEsc(w.translation || '') + '</span></div>';
+      }).join('');
+    });
   }
 
   function openTajweed() {
@@ -18342,14 +19133,22 @@
   }
   function tabsSettOn() { return settBox.classList.contains('on'); }
 
-  // Какая вкладка подсвечена, или null - панель не нужна. Мусхафа здесь нет
-  // намеренно (решение пользователя 04.11.2026): с панелью лист не помещался
-  // и прокручивался, поэтому в мусхафе её не показываем.
+  // Мусхаф в режиме «Страница» (11.11.2026, перенос из прототипа): панель
+  // есть, строка страниц переехала в шапку, кегль ограничен и по высоте -
+  // лист не скроллится. Заучивание, разбор, проверка, «Смысл» - без панели.
+  function mushafTabsMode() {
+    var app = document.getElementById('app'), page = document.getElementById('view-page');
+    return !!(page && page.classList.contains('active')) &&
+      !app.classList.contains('hifz') && !app.classList.contains('look') && !app.classList.contains('review');
+  }
+
+  // Какая вкладка подсвечена, или null - панель не нужна.
   function tabsCurrent() {
     if (tabsVisible('login') || tabsVisible('wrongbot')) return null;
     // Настройки - шторка поверх любого экрана, живут во вкладке «Ещё».
     if (tabsSettOn()) return 'more';
     if (tabsVisible('dashboard')) return 'today';
+    if (tabsVisible('app') && mushafTabsMode()) return 'mushaf';
     // Внутри тренажёров панель тоже есть (10.11.2026, решение пользователя):
     // карточка «Слов», таджвид, нахв и хадис - те же «Тренажёры».
     if (tabsVisible('trainers') || tabsVisible('trainer') || tabsVisible('tajweed') ||
@@ -18361,7 +19160,11 @@
 
   function tabsSync() {
     var cur = tabsCurrent();
+    var wasMushaf = document.body.classList.contains('tabs-mushaf');
     document.body.classList.toggle('tabs-on', !!cur);
+    document.body.classList.toggle('tabs-mushaf', cur === 'mushaf');
+    // Панель появилась или ушла - высота листа другая, кегль перемеряем.
+    if (wasMushaf !== (cur === 'mushaf') && typeof mushafFitSchedule === 'function') mushafFitSchedule();
     Array.prototype.forEach.call(tabsBox.querySelectorAll('.tabs-btn'), function (b) {
       var on = b.getAttribute('data-tab') === cur;
       b.classList.toggle('on', on);
@@ -18376,7 +19179,7 @@
     requestAnimationFrame(function () { tabsQueued = false; tabsSync(); });
   }
   var tabsObs = new MutationObserver(tabsQueue);
-  TABS_SCREENS.concat(['sett', 'login', 'wrongbot']).forEach(function (id) {
+  TABS_SCREENS.concat(['sett', 'login', 'wrongbot', 'view-page']).forEach(function (id) {
     var el = document.getElementById(id);
     if (el) tabsObs.observe(el, { attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
   });
@@ -18392,6 +19195,7 @@
       if (tab === 'train' && inTrainer) openTrainers();
       return;
     }
+    if (tab === 'today') setTimeout(dashFitLines, 50);
     // Уборка уходящего экрана - то же, что делают их кнопки возврата.
     if (tabsSettOn()) settClose();
     if (onLearn) {
