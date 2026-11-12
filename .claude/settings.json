@@ -29,5 +29,29 @@
       "PowerShell(ssh *)",
       "PowerShell(python *)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/team_sync.py start",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/team_sync.py prompt",
+            "timeout": 45
+          }
+        ]
+      }
+    ]
   }
 }
