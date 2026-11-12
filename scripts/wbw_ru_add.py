@@ -5,13 +5,19 @@
 import json, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
-D = ROOT / "logs" / "wbw_ru_juz1"; REFS = ROOT / "sources" / "wbw_ru_refs"
+# Джуз - переменной WBW_JUZ (по умолчанию 1): папка logs/wbw_ru_juz<N>, аяты - JUZ_KEYS.
+import os
+JUZ = int(os.environ.get("WBW_JUZ", "1"))
+JUZ_KEYS = {1: [f"1:{a}" for a in range(1, 8)] + [f"2:{a}" for a in range(1, 142)],
+            2: [f"2:{a}" for a in range(142, 253)]}
+D = ROOT / "logs" / f"wbw_ru_juz{JUZ}"; REFS = ROOT / "sources" / "wbw_ru_refs"
+D.mkdir(parents=True, exist_ok=True)
 CH = D / "changes.json"; NT = D / "notes.json"
 ch = json.loads(CH.read_text(encoding="utf-8")) if CH.exists() else {}
 nt = json.loads(NT.read_text(encoding="utf-8")) if NT.exists() else {}
 def ref(key): return json.loads((REFS / f"{key.replace(':', '_')}.json").read_text(encoding="utf-8"))
 if "--build" in sys.argv:
-    keys = [f"1:{a}" for a in range(1, 8)] + [f"2:{a}" for a in range(1, 142)]
+    keys = JUZ_KEYS[JUZ]
     full = {}
     for k in keys:
         full[k] = [ch.get(k, {}).get(str(w["pos"]), w["ru_now"]) for w in ref(k)["words"]]

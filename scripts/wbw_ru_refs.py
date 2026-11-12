@@ -70,6 +70,36 @@ def qac_words(s, a):
     return {w: " + ".join(v) for w, v in out.items()}
 
 
+_HARAKAT = re.compile(r"[ً-ٰٟۖ-ۭـۥۦ\s]")
+
+
+def _letters(t):
+    return _HARAKAT.sub("", t or "")
+
+
+def _align_en(rows, en_pairs):
+    """Наши слова -> английские подписи quran.com, когда число слов разное. None - не сошлось."""
+    out, j, buf = [], 0, ""
+    for _, ar, _ru in rows:
+        L = _letters(ar)
+        if buf:
+            if not buf.startswith(L):
+                return None
+            buf = buf[len(L):]
+            out.append("")
+            continue
+        if j >= len(en_pairs):
+            return None
+        E = _letters(en_pairs[j][0])
+        if E == L:
+            out.append(en_pairs[j][1]); j += 1
+        elif E.startswith(L):
+            out.append(en_pairs[j][1]); buf = E[len(L):]; j += 1
+        else:
+            return None
+    return out if j == len(en_pairs) and not buf else None
+
+
 def fetch(s, a):
     path = OUT / f"{s}_{a}.json"
     if path.exists():
@@ -77,7 +107,9 @@ def fetch(s, a):
     key = f"{s}:{a}"
     v = _get(f"{API}/verses/by_key/{key}?words=true&word_fields=text_uthmani&language=en"
              f"&translations={','.join(map(str, TRANSLATIONS))}")["verse"]
-    en_words = [w["translation"]["text"] for w in v["words"] if w.get("char_type_name") == "word"]
+    en_pairs = [(w.get("text_uthmani") or "", w["translation"]["text"])
+                for w in v["words"] if w.get("char_type_name") == "word"]
+    en_words = [t for _, t in en_pairs]
     tr = {TRANSLATIONS[t["resource_id"]]: _clean(t["text"]) for t in v["translations"]}
     taf = {name: _clean(_get(f"{API}/tafsirs/{tid}/by_ayah/{key}")["tafsir"]["text"])
            for tid, name in TAFSIRS.items()}
@@ -86,7 +118,12 @@ def fetch(s, a):
                          "WHERE language='ru' AND surah_number=? AND ayah_number=? ORDER BY position",
                          (s, a)).fetchall()
     if len(rows) != len(en_words):
-        raise SystemExit(f"{key}: у нас слов {len(rows)}, у quran.com {len(en_words)} - позиции не сходятся")
+        # quran.com иногда пишет два наших слова одним («بَعْدَ مَا» в 2:181, у нас второе - «*»).
+        # Сопоставляем по буквам: склеенное слово quran.com достаётся первому из наших.
+        en_words = _align_en(rows, en_pairs)
+        if en_words is None:
+            raise SystemExit(f"{key}: у нас слов {len(rows)}, у quran.com {len(en_pairs)} - позиции не сходятся")
+        print(f"{key}: у quran.com {len(en_pairs)} слов против наших {len(rows)} - сопоставлено по буквам")
     qac = qac_words(s, a)
     data = {
         "key": key,
