@@ -4,7 +4,7 @@
 Решение пользователя: «мы люди забывчивые» - то, что раньше было правилом в CLAUDE.md
 (обновиться, прочитать логи напарника, отправить свой лог, не лезть в те же файлы),
 делает код. Хуки в .claude/settings.json (он в git - действует у всех, кто работает в
-репо через Claude Code):
+репо через Claude Code). Вписать их: python scripts/team_sync.py install (один раз, человек):
 
     SessionStart      -> python scripts/team_sync.py start
     UserPromptSubmit  -> python scripts/team_sync.py prompt
@@ -108,7 +108,34 @@ def push_log(st, say):
         say("Лог закоммичен, но пуш не прошёл (%s) - отправь вручную." % (err.splitlines()[-1][:120] if err else "ошибка"))
 
 
+HOOKS = {"SessionStart": ("python scripts/team_sync.py start", 60),
+         "UserPromptSubmit": ("python scripts/team_sync.py prompt", 45)}
+
+
+def install():
+    """Вписать хуки в .claude/settings.json (общий файл проекта). Запускает человек, один раз:
+    python scripts/team_sync.py install. Повторный запуск ничего не меняет."""
+    path = ROOT / ".claude" / "settings.json"
+    cfg = json.loads(path.read_text("utf-8")) if path.exists() else {}
+    hooks, added = cfg.setdefault("hooks", {}), []
+    for event, (cmd, timeout) in HOOKS.items():
+        entries = hooks.setdefault(event, [])
+        if any(h.get("command") == cmd for e in entries for h in e.get("hooks", [])):
+            continue
+        entries.append({"hooks": [{"type": "command", "command": cmd, "timeout": timeout}]})
+        added.append(event)
+    if added:
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", "utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
+    print("хуки добавлены: " + ", ".join(added) if added else "хуки уже стоят - менять нечего")
+    print("Дальше: закоммитить .claude/settings.json и перезапустить Claude Code (или открыть /hooks).")
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "install":
+        install()
+        return
     if os.environ.get("YASSIR_TEAM_SYNC", "").lower() == "off":
         return
     mode = sys.argv[1] if len(sys.argv) > 1 else "prompt"
