@@ -6,6 +6,7 @@
 скобки/«досл.»/«однозначно»), и пишет HTML для публикации ссылкой (Artifact).
 
     python scripts/wbw_ru_page.py <out.html> [--from 1] [--to 17] [--dir logs/wbw_ru_juz1]
+    python scripts/wbw_ru_page.py mushaf_data/wbw/index.html --to 21 --standalone   # yassirilm.com/wbw/
 """
 import argparse
 import html
@@ -58,6 +59,8 @@ def main():
     ap.add_argument("--from", dest="p_from", type=int, default=1)
     ap.add_argument("--to", dest="p_to", type=int, default=17)
     ap.add_argument("--dir", default=str(ROOT / "logs" / "wbw_ru_juz1"))
+    ap.add_argument("--standalone", action="store_true",
+                    help="своя страница на yassirilm.com (mushaf_data/wbw/), а не Artifact: с doctype")
     a = ap.parse_args()
     rows, total = collect(Path(a.dir), a.p_from, a.p_to)
     tpl = TEMPLATE.read_text(encoding="utf-8")
@@ -66,6 +69,9 @@ def main():
               .replace("__RANGE__", html.escape(f"{a.p_from}–{a.p_to}"))
               .replace("__COUNT__", str(len(rows)))
               .replace("__TOTAL__", str(total)))
+    if a.standalone:
+        out = '<!doctype html>\n<html lang="ru">\n' + out.replace(
+            '<meta name="claude:viewport-fit-sides" content="cover">\n', "")
     Path(a.out).write_text(out, encoding="utf-8")
     print(f"{a.out}: строк {len(rows)} (страницы {a.p_from}–{a.p_to}), всего по папке {total}")
 
