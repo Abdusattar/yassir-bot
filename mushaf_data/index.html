@@ -16258,7 +16258,7 @@
           + '<span class="ds">' + feedEsc(desc) + '</span></span>'
           + '<span class="cnt">' + right + '</span></button>';
       });
-      body.innerHTML = subsLessonsHtml + html;
+      body.innerHTML = html;
       var revGo = document.getElementById('subs-rev-go');
       if (revGo) revGo.addEventListener('click', function () {
         // Ведём туда же, куда 🔁 на странице чтения: мусхаф, первая страница
@@ -16630,7 +16630,7 @@
       var items = (res.data && res.data.items) || [];
       var rejectedRevs = (res.data && res.data.revisions_rejected) || [];
       if (!items.length && !rejectedRevs.length) {
-        body.innerHTML = '<div class="subs-empty">' + T('subs_empty') + '</div>';
+        body.innerHTML = subsLessonsHtml + '<div class="subs-empty">' + T('subs_empty') + '</div>';
         return;
       }
       var today = (res.data && res.data.today) || '';
@@ -16710,7 +16710,7 @@
         '</div>';
       html += '<div class="subs-empty" style="margin-top:6px;font-size:12.5px">' +
         T('subs_retake_hint') + '</div>';
-      body.innerHTML = html;
+      body.innerHTML = subsLessonsHtml + html;   // плитки уроков первым блоком
       subsLoadMonth();
       subsBindRows(document.getElementById('subs-recent-rows'), items);
       var todoBox = document.getElementById('subs-todo-rows');
