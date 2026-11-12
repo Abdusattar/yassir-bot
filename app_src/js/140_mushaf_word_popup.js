@@ -58,6 +58,7 @@
       wordPopup.appendChild(more);
     }
     wordPopup.style.transform = 'translate(-50%, -100%)';
+    wordPopup.classList.remove('below');
     wordPopup.classList.add('visible');
 
     // Мерить ОБЯЗАТЕЛЬНО на нулевой позиции: ширина у position:fixed
@@ -76,10 +77,15 @@
     // важнее не обрезать начало текста, поэтому побеждает левый край.
     center = Math.min(Math.max(center, minCenter), Math.max(maxCenter, minCenter));
 
-    var top = rect.top - POPUP_MARGIN;
+    // Стрелка - над серединой слова, даже когда сам пузырь прижат к краю
+    // (12.11.2026): её место считаем от левого края пузыря.
+    var ax = rect.left + rect.width / 2 - (center - half);
+    wordPopup.style.setProperty('--ax', Math.min(Math.max(ax, 14), pop.width - 14) + 'px');
+    var top = rect.top - POPUP_MARGIN - 6;
     if (top - pop.height < POPUP_MARGIN) {
-      top = rect.bottom + POPUP_MARGIN;
+      top = rect.bottom + POPUP_MARGIN + 6;
       wordPopup.style.transform = 'translate(-50%, 0)';
+      wordPopup.classList.add('below');
     }
 
     wordPopup.style.left = center + 'px';

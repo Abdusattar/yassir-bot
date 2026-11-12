@@ -35,11 +35,16 @@
   #word-popup {
     position: fixed;
     left: 0; top: 0;
-    background: color-mix(in srgb, var(--popup-bg) 88%, transparent);
+    /* Пузырь как в диалоге (12.11.2026, скрин пользователя): непрозрачный
+       акцентный зелёный, белый текст, стрелка к слову (::after, --ax - её
+       место: подсказку у края экрана сдвигаем, стрелка остаётся над словом). */
+    background: var(--popup-bg);
     color: var(--popup-ink);
-    padding: 7px 14px;
-    border-radius: 10px;
-    font-size: 15px;
+    padding: 10px 16px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 500;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
     max-width: 70vw;
     text-align: center;
     pointer-events: none;
@@ -54,16 +59,22 @@
     white-space: nowrap;
   }
   #word-popup.visible { opacity: 1; }
+  #word-popup::after {
+    content: ''; position: absolute; left: var(--ax, 50%); bottom: -8px;
+    transform: translateX(-50%);
+    border: 8px solid transparent; border-top-color: var(--popup-bg); border-bottom: 0;
+  }
+  #word-popup.below::after { bottom: auto; top: -8px; border-top: 0; border-bottom: 8px solid var(--popup-bg); }
   /* Пояснение к слову (12.11.2026). Часть слов одной русской подписью не передать
      (ар-Рахман и ар-Рахим, такъва, «Ра‘ина»...). У таких слов в подсказке вторая
      строка «Подробнее»: нажатие открывает панель с коротким пояснением по тафсиру.
      Подсказка у всех слов та же и так же гаснет - пояснение не навязывается.
      Нажимается подсказка только пока видна: погасшая не должна перехватывать
      касания по строкам под ней. Данные - notes/ru.json (scripts/build_word_notes.py). */
-  #word-popup.wn { padding: 7px 14px 0; cursor: pointer; }
+  #word-popup.wn { padding: 10px 16px 0; cursor: pointer; }
   #word-popup.wn.visible { pointer-events: auto; }
   #word-popup .wn-more {
-    display: block; margin: 6px -14px 0; padding: 6px 14px 7px; font-size: 12.5px;
+    display: block; margin: 8px -16px 0; padding: 6px 16px 8px; font-size: 12.5px;
     /* Золото - тот же цвет, что у ссылки на аят в панели: строка ведёт к тафсиру.
        Подмешиваем цвет текста подсказки: в тёмной теме подсказка светлая, и
        чистое золото на ней не читается. */
