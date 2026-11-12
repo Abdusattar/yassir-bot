@@ -235,7 +235,8 @@
   body.tabs-mushaf #tb-pages { display: flex; }
   body.tabs-mushaf #page-nav { display: none !important; }
   body.tabs-mushaf #mushaf-back, body.tabs-mushaf #ayah-range { display: none; }
-  body.tabs-mushaf #topbar { padding: 6px 6px; padding-top: calc(6px + var(--ios-pwa-top, 0px)); }
+  /* 12px по бокам (12.11.2026, правка пользователя): кнопки стояли впритык к краю. */
+  body.tabs-mushaf #topbar { padding: 6px 12px; padding-top: calc(6px + var(--ios-pwa-top, 0px)); }
   /* Фон под строкой состояния со значка на iPhone (viewport-fit=auto: область
      над страницей iOS красит цветом html). На листе - цвет шапки, иначе над
      ней видна полоса другого оттенка, которую «стекло» iOS 26 ещё и размывает. */

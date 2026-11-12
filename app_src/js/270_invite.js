@@ -232,6 +232,10 @@
       /* Отвергнутая запись повторения (16.09.2026) - своим блоком сверху, как
          «ПЕРЕСДАТЬ» у заучивания: это единственное на экране, что требует
          действия прямо сейчас. Успеет до полуночи - зачёт вернётся. */
+      // «Ваша активность» (12.11.2026, правка пользователя): над всем, что про
+      // свои сдачи - пересдачи, «на проверке», полоса месяца, - не только над полосой.
+      html += '<p class="subs-cap">' + T('subs_cap_activity') + '</p>';
+
       (rejectedRevs || []).forEach(function (rv) {
         html += '<div class="subs-todo"><div class="hd">' + T('subs_rev_title') + '</div>' +
           '<div class="body"><div class="sub-row"><div class="top">' +
@@ -258,10 +262,7 @@
       if (waiting) {
         html += '<div class="subs-quiet">' + T('subs_waiting_quiet', { N: waiting }) + '</div>';
       }
-      // «Ваша активность» (12.11.2026, правка пользователя): отделяет уроки
-      // от маркеров сдач и пропусков.
-      html += '<p class="subs-cap">' + T('subs_cap_activity') + '</p>' +
-        '<div id="subs-month"></div><div id="subs-lesson"></div><div id="subs-absence"></div>' +
+      html += '<div id="subs-month"></div><div id="subs-lesson"></div><div id="subs-absence"></div>' +
         '<div id="subs-recent-rows">' +
         recent.map(function (it) { return subsRow(it, today); }).join('') +
         '</div>';
