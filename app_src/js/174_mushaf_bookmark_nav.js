@@ -31,6 +31,21 @@
       }
     });
   }
+  // Листание кнопками под листом (перенесено из куска заучивания 12.11.2026).
+  document.getElementById('btn-prev').addEventListener('click', function () {
+    loadPage(currentPage + 1);
+  });
+  document.getElementById('btn-next').addEventListener('click', function () {
+    loadPage(currentPage - 1);
+  });
+
+  // Начало суры Аль-Бакара - стр. 2 (проверено 17.08.2026, см. модульный
+  // docstring core/quran_pages.py: "стр. 2 начинает Аль-Бакара с аята 1").
+  var BAQARA_START_PAGE = 2;
+  document.getElementById('btn-go-baqara').addEventListener('click', function () {
+    loadPage(BAQARA_START_PAGE);
+  });
+
   bmBtn.addEventListener('click', function (e) { bmOpen(e, bmBtn); });
   document.getElementById('tb-page').addEventListener('click', function (e) { bmOpen(e, document.getElementById('tb-page')); });
   document.getElementById('tb-next').addEventListener('click', function () { document.getElementById('btn-next').click(); });

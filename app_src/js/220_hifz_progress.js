@@ -407,18 +407,3 @@
       new Promise(function (resolve) { setTimeout(resolve, 2500); })
     ]);
   }
-
-  document.getElementById('btn-prev').addEventListener('click', function () {
-    loadPage(currentPage + 1);
-  });
-  document.getElementById('btn-next').addEventListener('click', function () {
-    loadPage(currentPage - 1);
-  });
-
-  // Начало суры Аль-Бакара - стр. 2 (проверено 17.08.2026, см. модульный
-  // docstring core/quran_pages.py: "стр. 2 начинает Аль-Бакара с аята 1").
-  var BAQARA_START_PAGE = 2;
-  document.getElementById('btn-go-baqara').addEventListener('click', function () {
-    loadPage(BAQARA_START_PAGE);
-  });
-
