@@ -24,6 +24,7 @@
 """
 import contextvars
 import logging
+import html
 import re
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -442,11 +443,17 @@ def mark_notice_seen(phone, feed_id=None, key=None):
         log.error("mark_notice_seen error: %s: %s", type(e).__name__, e)
 
 
+def _plain(text):
+    """Текст бота без HTML-разметки Telegram: строка доски - простой текст
+    (12.11.2026: в объявлении были видны «<b>»)."""
+    return html.unescape(re.sub(r"<[^>]+>", "", text or ""))
+
+
 def _notice_out(rows, titles):
     out = []
     for r, read in rows[:BOARD_MAX]:
         # Значок типа рисует доска - свой эмодзи из начала текста убираем.
-        text = r["notice_title"] or re.sub(r"^\W+", "", (r["text"] or "").strip().split("\n")[0])
+        text = _plain(r["notice_title"]) or re.sub(r"^\W+", "", _plain(r["text"]).strip().split("\n")[0])
         out.append({"id": r["id"], "type": r["notice"], "link": r["notice_link"] or "",
                     "text": text, "chat_id": r["chat_id"], "read": read,
                     "source": titles.get(r["chat_id"]) or ""})

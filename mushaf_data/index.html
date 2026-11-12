@@ -1950,6 +1950,9 @@
     font-size: 10.5px; color: var(--muted); white-space: nowrap;
   }
   #feed .l-txt { font-size: 13px; line-height: 1.42; color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+  #feed .l-txt a { color: var(--accent); }
+  #feed .l-txt blockquote { margin: 4px 0; padding-left: 10px; border-left: 2px solid var(--card-border); }
+  #feed .l-txt code, #feed .l-txt pre { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; margin: 0; }
   #feed .m-voice {
     display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
     font-size: 12px; color: var(--accent); cursor: pointer;
@@ -8744,6 +8747,46 @@
       .replace(/"/g, '&quot;');
   }
 
+  /* Сообщения бота в Telegram уходят с HTML-разметкой (<b>, <i>, ссылки), и
+     лента хранит их ровно так (core/feed.py record_outgoing). Показывать их
+     экранированными - значит видеть «<b>» прямо в тексте (12.11.2026, объявление
+     о пословном переводе). Рисуем только то, что умеет сам Telegram: теги из
+     белого списка, ссылки http(s)/tg; всё прочее и текст между тегами -
+     экранируем. Сообщения людей хранятся простым текстом - им feedEsc, как было. */
+  var FEED_TAG = /<(\/?)(b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote)(?:\s[^>]*)?>|<a\s+href="([^"]*)"[^>]*>|<\/a>/gi;
+  function feedUnent(t) {
+    return t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  }
+  function feedRich(html) {
+    html = String(html == null ? '' : html);
+    var out = '', last = 0, m, open = [];
+    FEED_TAG.lastIndex = 0;
+    while ((m = FEED_TAG.exec(html))) {
+      out += feedEsc(feedUnent(html.slice(last, m.index)));
+      last = FEED_TAG.lastIndex;
+      if (m[2]) {
+        var tag = m[2].toLowerCase();
+        tag = { strong: 'b', em: 'i', ins: 'u', strike: 's', del: 's' }[tag] || tag;
+        if (m[1]) {
+          var at = open.lastIndexOf(tag);
+          if (at < 0) continue;
+          while (open.length > at) out += '</' + open.pop() + '>';
+        } else { out += '<' + tag + '>'; open.push(tag); }
+      } else if (m[3] !== undefined) {
+        var href = feedUnent(m[3]);
+        out += /^(https?:|tg:)/i.test(href)
+          ? '<a href="' + feedEsc(href) + '" target="_blank" rel="noopener">' : '<a>';
+        open.push('a');
+      } else {
+        var ai = open.lastIndexOf('a');
+        if (ai >= 0) while (open.length > ai) out += '</' + open.pop() + '>';
+      }
+    }
+    out += feedEsc(feedUnent(html.slice(last)));
+    while (open.length) out += '</' + open.pop() + '>';
+    return out;
+  }
+
   function feedInitial(name) {
     return (name || '—').trim().charAt(0).toUpperCase();
   }
@@ -8969,7 +9012,7 @@
         + '<span class="l-body">'
         +   '<span class="l-top"><b>' + feedEsc(it.who) + '</b>'
         +     '<u>' + feedEsc(feedWhen(it.at)) + '</u></span>'
-        +   (it.text ? '<span class="l-txt">' + feedEsc(it.text) + '</span>' : '')
+        +   (it.text ? '<span class="l-txt">' + (it.is_bot ? feedRich(it.text) : feedEsc(it.text)) + '</span>' : '')
         +   media
         + '</span></div>';
     });
