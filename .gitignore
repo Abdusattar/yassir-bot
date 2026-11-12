@@ -64,3 +64,6 @@ logs/audio_checks/
 # Записи студентов и голос устаза для R&D таджвида - репо публичный (11.11.2026)
 tajweed_ai/data/umar_corpus/
 tajweed_ai/data/_*.log
+tajweed_ai/data/hear_emb/
+tajweed_ai/data/hear_results.jsonl
+tajweed_ai/data/hear_marked_ids.txt

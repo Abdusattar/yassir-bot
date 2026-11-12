@@ -194,30 +194,151 @@ def _as_list(x):
     return [float(v) for v in (x.tolist() if hasattr(x, "tolist") else x)]
 
 
+def _probs_no_pad(text, probs):
+    """Вероятности по символам text без вставок "[PAD]" (см. evaluate_one).
+    None, если длины всё равно не сошлись - лучше пусто, чем сдвиг."""
+    out, i, k = [], 0, 0
+    while i < len(text) and k < len(probs):
+        if text.startswith("[PAD]", i):
+            i += 5
+        else:
+            out.append(round(probs[k], 3)); i += 1
+        k += 1
+    if i != len(text) or k != len(probs):
+        return None
+    return out
+
+
 def _p(unit):
     return round(unit.prob, 3) if unit is not None else None
+
+
+# ---------- ветка «слух» (12.11.2026): внутренние представления по словам ----------
+# Фильтр по готовым флагам упёрся в потолок (wiki/ai_tajweed_audio.md, 12.11), поэтому
+# сохраняем то, что модель «слышит» до решения о фонеме: скрытые состояния нескольких
+# слоёв, усреднённые по кадрам каждого слова. Включается флагом --emb <папка>.
+EMB_LAYERS = (8, 16, 20, 24)   # средние слои хранят больше акустики, последний - ближе к фонемам
+EMB_DIR = None
+_CAP = {}                       # последний вызов модели: скрытые состояния и id фонем по кадрам
+
+
+def install_capture(muaalem):
+    """Оборачиваем forward модели: библиотека сама hidden_states не просит."""
+    orig = muaalem.model.forward
+
+    def forward(*a, **k):
+        k["output_hidden_states"] = True
+        out = orig(*a, **k)
+        _CAP["hs"] = out[1]
+        _CAP["ids"] = out[0]["phonemes"].argmax(-1)[0].cpu()
+        return out
+    muaalem.model.forward = forward
+
+
+def _ctc_spans(ids, blank):
+    """Кадры [start, end) каждого токена - ровно по логике quran_muaalem.decode.ctc_decode
+    (включая её хвостовой случай), чтобы токены совпали с pred.phonemes.text."""
+    seq = [int(x) for x in ids]
+    out, start = [], 0
+    if len(seq) == 1 and seq[0] != blank:
+        out.append((seq[0], 0, 1))
+    for i in range(len(seq) - 1):
+        cur, nxt = seq[i], seq[i + 1]
+        if i == len(seq) - 2 and cur != blank:
+            if cur == nxt:
+                out.append((cur, start, i + 2))
+            else:
+                out.append((cur, start, i + 1))
+                out.append((nxt, i + 1, i + 2))
+        elif cur != nxt and cur != blank:
+            out.append((cur, start, i + 1)); start = i + 1
+        elif cur == blank:
+            start = i + 1
+    return out
+
+
+def _take_capture(offset):
+    """-> (H [слои, кадры, 1024] float16, [(start, end)] по токенам без [PAD], кадры со сдвигом)."""
+    import numpy as np
+    from quran_muaalem.decode import PAD_TOKEN_IDX
+    hs = _CAP["hs"]
+    H = np.stack([hs[l][0].float().cpu().numpy() for l in EMB_LAYERS]).astype(np.float16)
+    spans = [(s + offset, e + offset) for t, s, e in _ctc_spans(_CAP["ids"], PAD_TOKEN_IDX)
+             if t != PAD_TOKEN_IDX]
+    return H, spans
+
+
+def word_embeddings(cap, ref, word_groups, diffs, tok_off):
+    """Усреднение скрытых состояний по кадрам слова. Токен модели -> символ эталона (diff)
+    -> sifat-группа -> слово. Вставки относим к предыдущему символу эталона: лишняя
+    растяжка после слова - самый частый вид замечаний Умар устаза."""
+    import numpy as np
+    H, spans = cap
+    ph2group = []
+    for gi, s in enumerate(ref.sifat):
+        ph2group.extend([gi] * len(s.phonemes))
+    g2w = {}
+    for wi, (lo, hi) in enumerate(word_groups):
+        if lo is not None:
+            for g in range(lo, hi + 1):
+                g2w.setdefault(g, wi)
+    n = len(word_groups)
+    lo_f, hi_f = [None] * n, [None] * n
+    r, t = 0, tok_off
+    for op, txt in diffs:
+        for _ in txt:
+            if op == -1:
+                r += 1
+                continue
+            ri = r if op == 0 else max(r - 1, 0)
+            # вставка до первого символа эталона (истиаза, басмала, фальстарт) - ничья
+            wi = g2w.get(ph2group[ri]) if ri < len(ph2group) and not (op == 1 and r == 0) else None
+            if wi is not None and t < len(spans):
+                s, e = spans[t]
+                lo_f[wi] = s if lo_f[wi] is None else min(lo_f[wi], s)
+                hi_f[wi] = e if hi_f[wi] is None else max(hi_f[wi], e)
+            t += 1
+            if op == 0:
+                r += 1
+    emb = np.zeros((n, H.shape[0], H.shape[2]), dtype=np.float16)
+    span = np.full((n, 2), -1, dtype=np.int32)
+    for wi in range(n):
+        if lo_f[wi] is not None and hi_f[wi] > lo_f[wi]:
+            emb[wi] = H[:, lo_f[wi]:hi_f[wi]].astype(np.float32).mean(1)
+            span[wi] = (lo_f[wi], hi_f[wi])
+    return emb, span
 
 
 def run_muaalem(muaalem, wave, ref):
     """Инференс кусками с последующей склейкой фонем/сифатов в один
     объект того же вида, что MuaalemOutput (нужны только .phonemes.text и
     .sifat). Эталон каждому куску передаётся целиком - фонемы от него не
-    зависят, сифаты выравниваются приближённо."""
+    зависят, сифаты выравниваются приближённо. Третьим возвращаем захват
+    внутренних слоёв (или None, если --emb не задан)."""
     chunks = split_wave(wave)
     if len(chunks) == 1:
-        return muaalem([wave], [ref], sampling_rate=16000)[0], 1
+        out = muaalem([wave], [ref], sampling_rate=16000)[0]
+        return out, 1, (_take_capture(0) if EMB_DIR else None)
     text, sifat, probs = "", [], []
+    Hs, spans, off = [], [], 0
     for s, e in chunks:
         out = muaalem([wave[s:e]], [ref], sampling_rate=16000)[0]
         text += out.phonemes.text
         probs.extend(_as_list(out.phonemes.probs))
         sifat.extend(out.sifat)
+        if EMB_DIR:
+            H, sp = _take_capture(off)
+            Hs.append(H); spans.extend(sp); off += H.shape[1]
 
     class _Ph:
         pass
     ph = _Ph(); ph.text = text; ph.probs = probs
     merged = _Ph(); merged.phonemes = ph; merged.sifat = sifat
-    return merged, len(chunks)
+    cap = None
+    if EMB_DIR:
+        import numpy as np
+        cap = (np.concatenate(Hs, axis=1), spans)
+    return merged, len(chunks), cap
 
 
 def evaluate_one(muaalem, qt, qm_explain, dmp, rule_hint, moshaf, meta, wave):
@@ -226,7 +347,7 @@ def evaluate_one(muaalem, qt, qm_explain, dmp, rule_hint, moshaf, meta, wave):
     words = unit_words(meta["hifz_page"], meta["hifz_line"] or 0, meta["hifz_stage"] or 1)
     text, ref, word_groups = build_reference(words, qt, moshaf)
     t0 = time.time()
-    pred, n_chunks = run_muaalem(muaalem, wave, ref)
+    pred, n_chunks, cap = run_muaalem(muaalem, wave, ref)
     infer_sec = time.time() - t0
 
     # Студенты часто начинают заново / читают строку дважды / открывают
@@ -234,7 +355,7 @@ def evaluate_one(muaalem, qt, qm_explain, dmp, rule_hint, moshaf, meta, wave):
     # размазывает эталон по двум попыткам и плодит ложные "пропуски".
     # Берём окно предсказания, лучше всего совпадающее с эталоном
     # (rapidfuzz partial_ratio_alignment), и сравниваем только его.
-    pred_text, pred_sifat, window = pred.phonemes.text, pred.sifat, None
+    pred_text, pred_sifat, window, tok_off = pred.phonemes.text, pred.sifat, None, 0
     if len(pred_text) > len(ref.phonemes) * 1.15:
         al = fuzz.partial_ratio_alignment(ref.phonemes, pred_text)
         if al is not None and al.dest_end > al.dest_start:
@@ -248,6 +369,7 @@ def evaluate_one(muaalem, qt, qm_explain, dmp, rule_hint, moshaf, meta, wave):
                 pred_sifat = [pred_sifat[i] for i in keep]
                 pred_text = "".join(s.phonemes_group for s in pred_sifat)
                 window = (al.dest_start, al.dest_end, round(al.score, 1))
+                tok_off = starts[keep[0]]
 
     class _Pred:  # тот же интерфейс, что ждёт rule_hint (predicted.sifat)
         sifat = pred_sifat
@@ -273,6 +395,19 @@ def evaluate_one(muaalem, qt, qm_explain, dmp, rule_hint, moshaf, meta, wave):
                 if hint and not d["hint"]:
                     d["hint"] = hint
                 break
+
+    # ветка «слух»: представления слов в файл <id>.npz. Пишем только если токены модели
+    # сходятся с её же текстом без "[PAD]" - иначе кадры привязались бы не к тем словам.
+    emb_ok = None
+    if cap is not None:
+        import numpy as np
+        flat = pred.phonemes.text.replace("[PAD]", "")
+        emb_ok = (len(cap[1]) == len(flat)
+                  and "".join(s.phonemes_group for s in pred.sifat) == flat)
+        if emb_ok:
+            emb, span = word_embeddings(cap, ref, word_groups, diffs, tok_off)
+            np.savez_compressed(EMB_DIR / f"{meta['submission_id']}.npz", emb=emb, span=span,
+                                layers=np.array(EMB_LAYERS), n_frames=cap[0].shape[1])
 
     coords = {(li, ti): wi for wi, (li, ti, *_rest) in enumerate(words)}
     marks_in, marks_out = [], []
@@ -315,10 +450,17 @@ def evaluate_one(muaalem, qt, qm_explain, dmp, rule_hint, moshaf, meta, wave):
         # уверенность по каждой фонеме pred_phonemes (11.11.2026): признак
         # «насколько модель сама уверена» для фильтра этапа 3. Длина должна
         # совпасть с pred_phonemes - иначе поле не пишем, чтобы не врать.
-        "pred_probs": (lambda pr: [round(v, 3) for v in pr] if len(pr) == len(pred.phonemes.text) else None)(
-            _as_list(pred.phonemes.probs)),
+        # 12.11.2026: библиотека (ctc_decode, ветка «последний элемент») иногда
+        # дописывает в конец куска пустой токен - в тексте это буквально "[PAD]"
+        # (5 символов, одна вероятность). Из-за этого у ~четверти длинных сдач
+        # длины не сходились и поле было пустым. pred_probs идёт по тексту БЕЗ
+        # "[PAD]": pred_phonemes.replace("[PAD]", "") <-> pred_probs.
+        "pred_probs": _probs_no_pad(pred.phonemes.text, _as_list(pred.phonemes.probs)),
         "ref_groups": [s.phonemes for s in ref.sifat],
         "word_groups": word_groups,
+        "emb": emb_ok,
+        "word_texts": word_texts,
+        "student_id": meta.get("student_id"),
     }
 
 
@@ -409,7 +551,12 @@ def main():
     ap.add_argument("--ids", help="через запятую")
     ap.add_argument("--ustaz", default="Умар", help="сводка только по вердиктам этого устаза ('' - все)")
     ap.add_argument("--device", default="cpu", help="cpu | cuda (арендованный GPU, modal_eval.py)")
+    ap.add_argument("--emb", help="папка для представлений слов (ветка «слух», 12.11.2026)")
     args = ap.parse_args()
+    global EMB_DIR
+    if args.emb:
+        EMB_DIR = Path(args.emb)
+        EMB_DIR.mkdir(parents=True, exist_ok=True)
 
     done = load_results()
     if args.summary:
@@ -453,6 +600,8 @@ def main():
         return
 
     muaalem = Muaalem(device=args.device, dtype=torch.float32)
+    if EMB_DIR:
+        install_capture(muaalem)
     for d, m in metas:
         wave, _ = librosa.load(str(d / "student.ogg"), sr=16000, mono=True)
         sec = len(wave) / 16000
