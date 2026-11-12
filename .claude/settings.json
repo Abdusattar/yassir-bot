@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/team_sync.py start",
+            "command": "python -c \"import os,sys,runpy;p=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR','.'),'scripts','team_sync.py');sys.argv=[p,'start'];os.path.exists(p) and runpy.run_path(p,run_name='__main__')\"",
             "timeout": 60
           }
         ]
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/team_sync.py prompt",
+            "command": "python -c \"import os,sys,runpy;p=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR','.'),'scripts','team_sync.py');sys.argv=[p,'prompt'];os.path.exists(p) and runpy.run_path(p,run_name='__main__')\"",
             "timeout": 45
           }
         ]

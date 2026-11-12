@@ -108,8 +108,17 @@ def push_log(st, say):
         say("Лог закоммичен, но пуш не прошёл (%s) - отправь вручную." % (err.splitlines()[-1][:120] if err else "ошибка"))
 
 
-HOOKS = {"SessionStart": ("python scripts/team_sync.py start", 60),
-         "UserPromptSubmit": ("python scripts/team_sync.py prompt", 45)}
+# Команда хука не зависит от текущей папки сессии и от оболочки (bash, cmd, PowerShell):
+# корень берётся из CLAUDE_PROJECT_DIR внутри самого python. Нет файла - молча выход 0.
+# (12.11.2026: относительный путь «python scripts/team_sync.py» после cd в подпапку давал
+# ошибку python с кодом 2, а код 2 у хука UserPromptSubmit БЛОКИРУЕТ сообщение человека.)
+def _cmd(mode):
+    return ("python -c \"import os,sys,runpy;p=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR','.'),"
+            "'scripts','team_sync.py');sys.argv=[p,'%s'];os.path.exists(p) and runpy.run_path(p,run_name='__main__')\"" % mode)
+
+
+HOOKS = {"SessionStart": (_cmd("start"), 60),
+         "UserPromptSubmit": (_cmd("prompt"), 45)}
 
 
 def install():
@@ -122,6 +131,9 @@ def install():
         entries = hooks.setdefault(event, [])
         if any(h.get("command") == cmd for e in entries for h in e.get("hooks", [])):
             continue
+        # прежняя запись team_sync (старый вид команды) - заменить, а не добавлять вторую
+        entries[:] = [e for e in entries
+                      if not any("team_sync.py" in h.get("command", "") for h in e.get("hooks", []))]
         entries.append({"hooks": [{"type": "command", "command": cmd, "timeout": timeout}]})
         added.append(event)
     if added:
