@@ -43,6 +43,9 @@
     if (navigator.standalone === true && /iPhone/.test(navigator.userAgent) &&
         Math.max(screen.width, screen.height) >= 812) {
       document.documentElement.style.setProperty('--ios-pwa-bottom', '34px');
+      // Сверху (12.11.2026): на iOS 26 строка состояния - «стекло» поверх
+      // верхнего отступа, и шапка мусхафа упиралась в него кнопками.
+      document.documentElement.style.setProperty('--ios-pwa-top', '10px');
     }
   } catch (e) {}
 </script>
@@ -112,6 +115,7 @@
        12% акцента (--accent, изумруд обложки мусхафа) - тонкая связь с
        фирменным цветом вместо нейтрального серого. */
     --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 45%, #ffffff);
+    --subj-j: #2f6fd6; --subj-n: #1f7a5c;
     --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
     --muted: #8a8370;
     --popup-bg: #2b2b2b;
@@ -156,6 +160,8 @@
       --mushaf-bg-start: #16150f;
       --mushaf-bg-end: #16150f;
       --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
+    --subj-j: #7fb0ff; --subj-n: #4fbf95;
+      --subj-j: #7fb0ff; --subj-n: #4fbf95;
       --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
       --muted: #a39a7d;
       --popup-bg: #f0ead8;
@@ -282,7 +288,12 @@
   body.tabs-mushaf #tb-pages { display: flex; }
   body.tabs-mushaf #page-nav { display: none !important; }
   body.tabs-mushaf #mushaf-back, body.tabs-mushaf #ayah-range { display: none; }
-  body.tabs-mushaf #topbar { padding: 6px 6px; }
+  body.tabs-mushaf #topbar { padding: 6px 6px; padding-top: calc(6px + var(--ios-pwa-top, 0px)); }
+  /* Фон под строкой состояния со значка на iPhone (viewport-fit=auto: область
+     над страницей iOS красит цветом html). На листе - цвет шапки, иначе над
+     ней видна полоса другого оттенка, которую «стекло» iOS 26 ещё и размывает. */
+  html { background: var(--bg); }
+  html:has(body.tabs-mushaf) { background: var(--chrome-bg); }
   body.tabs-mushaf #topbar .topbar-left, body.tabs-mushaf #topbar .topbar-right { gap: 2px; }
   #tb-page { background: none; border: none; font: inherit; font-size: 13px; color: var(--muted);
     display: flex; align-items: center; gap: 4px; padding: 6px 4px; cursor: pointer; white-space: nowrap; }
@@ -1515,6 +1526,14 @@
   .d-ustaz-mk { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent);
     display: grid; place-items: center; flex: none; }
   .d-ustaz-mk .ic { width: 20px; height: 20px; }
+  /* Кабинет устаза на «Сегодня» заметнее (12.11.2026, правка пользователя):
+     вдвое выше обычной строки, заголовок крупнее и жирнее. */
+  #dash-ustaz-row { min-height: 104px; padding: 18px 16px; gap: 14px; }
+  #dash-ustaz-row .d-ustaz-mk { width: 52px; height: 52px; border-radius: 14px; }
+  #dash-ustaz-row .d-ustaz-mk .ic { width: 28px; height: 28px; }
+  #dash-ustaz-row .t { font-size: 20px; font-weight: 700; line-height: 1.2; }
+  #dash-ustaz-row .s { font-size: 14px; }
+  #dash-ustaz-row .chev { width: 22px; height: 22px; }
   #dash-jamaat { margin-top: 14px; }
   #dash-jamaat .jm-cap { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
   #dash-jamaat #dash-pulse { margin-top: 10px; margin-bottom: 0; border: 0; box-shadow: none; padding: 0; }
@@ -1540,6 +1559,7 @@
     color: var(--ink); -webkit-tap-highlight-color: transparent; }
   .subs-lessons .k-tile:only-child { grid-column: 1 / -1; }
   .subs-lessons .t-mk { color: var(--accent); }
+  .subs-lessons .t-mk .ic { width: 24px; height: 24px; }
   .subs-lessons .t-mk .ic { width: 22px; height: 22px; }
   .subs-lessons .t-nm { font-size: 17px; font-weight: 640; }
   .subs-lessons .t-ds { font-size: 13px; color: var(--muted); line-height: 1.3; }
@@ -2836,6 +2856,8 @@
   }
   #learn-body .k-tile:only-child { grid-column: 1 / -1; }
   #learn-body .k-tile .t-mk { font-size: 19px; line-height: 1.1; margin-bottom: 2px; }
+  #learn-body .k-tile .t-mk .ic { width: 24px; height: 24px; }
+  .t-mk.mk-j { color: var(--subj-j); } .t-mk.mk-n { color: var(--subj-n); }
   #learn-body .k-tile .t-nm { font-size: 17px; font-weight: 640; }
   #learn-body .k-tile .t-ds { font-size: 13px; color: var(--muted); line-height: 1.3; }
   #learn-body .k-tile .t-cnt {
@@ -16167,6 +16189,11 @@
   // на языке интерфейса - из словаря, иначе как пришло (27.10.2026, скрин zh).
   var SUBJ_TITLE_KEY = { j: 'tajweed_title', n: 'nahw_title' };
 
+  /* Значок предмета (12.11.2026): иконка вместо эмодзи с сервера (📘/📗),
+     таджвид синий, нахв зелёный - одинаково в «Знаниях» и на вкладке «Устаз». */
+  function subjMark(id) {
+    return '<span class="t-mk mk-' + id + '">' + (id === 'j' ? ICON['book-open-text'] : ICON['graduation-cap']) + '</span>';
+  }
   function lessonsRenderSubjects(subjects) {
     var box = document.getElementById('k-subjects');
     if (!box) return;                      // ушли с оглавления, пока грузилось
@@ -16179,7 +16206,7 @@
     }
     box.innerHTML = subjects.map(function (s) {
       return '<button class="k-tile" data-subj="' + s.id + '">'
-        + '<span class="t-mk">' + s.mark + '</span>'
+        + subjMark(s.id)
         + '<span class="t-nm">' + (T(SUBJ_TITLE_KEY[s.id]) || s.title) + '</span>'
         + '<span class="t-ds">' + (T('subj_' + s.id + '_sub') || s.sub) + '</span>'
         + '<span class="t-cnt">' + T('learn_open_of', { N: s.open, M: s.total }) + '</span>'
@@ -16231,7 +16258,7 @@
           + '<span class="ds">' + feedEsc(desc) + '</span></span>'
           + '<span class="cnt">' + right + '</span></button>';
       });
-      body.innerHTML = subsLessonsHtml + html;
+      body.innerHTML = html;
       var revGo = document.getElementById('subs-rev-go');
       if (revGo) revGo.addEventListener('click', function () {
         // Ведём туда же, куда 🔁 на странице чтения: мусхаф, первая страница
@@ -16555,19 +16582,21 @@
      у групп с таджвидом и нахвом - те же плитки, что в «Знаниях». */
   var subsLessonsHtml = '';
   function subsLessonsTiles() {
-    var f = dashFactsLast || {};
-    if (!(f.learn && f.learn.length)) { subsLessonsHtml = ''; return; }
+    // По списку предметов /lessons, как в «Знаниях» (12.11.2026): раньше
+    // плитки ждали f.learn, и у того, кому уроки открыты, их тут не было.
     var paint = function (subjects) {
       if (!subjects.length) { subsLessonsHtml = ''; return; }
       subsLessonsHtml = '<div class="subs-lessons">' + subjects.map(function (sj) {
         return '<button class="k-tile" data-subs-subj="' + sj.id + '">' +
-          '<span class="t-mk">' + (sj.id === 'j' ? ICON['book-open-text'] : ICON['graduation-cap']) + '</span>' +
+          subjMark(sj.id) +
           '<span class="t-nm">' + (T(SUBJ_TITLE_KEY[sj.id]) || sj.title) + '</span>' +
           '<span class="t-ds">' + (T('subj_' + sj.id + '_sub') || sj.sub) + '</span>' +
           '<span class="t-cnt">' + T('learn_open_of', { N: sj.open, M: sj.total }) + '</span></button>';
       }).join('') + '</div>';
       var body = document.getElementById('subs-body');
-      if (body && !body.querySelector('.subs-lessons') && !body.querySelector('.subs-empty')) {
+      // Вставляем и при пустом списке сдач (12.11.2026): раньше .subs-empty
+      // блокировал вставку, и плиток на вкладке не было почти ни у кого.
+      if (body && !body.querySelector('.subs-lessons')) {
         body.insertAdjacentHTML('afterbegin', subsLessonsHtml);
       }
     };
@@ -16601,7 +16630,7 @@
       var items = (res.data && res.data.items) || [];
       var rejectedRevs = (res.data && res.data.revisions_rejected) || [];
       if (!items.length && !rejectedRevs.length) {
-        body.innerHTML = '<div class="subs-empty">' + T('subs_empty') + '</div>';
+        body.innerHTML = subsLessonsHtml + '<div class="subs-empty">' + T('subs_empty') + '</div>';
         return;
       }
       var today = (res.data && res.data.today) || '';
@@ -16681,7 +16710,7 @@
         '</div>';
       html += '<div class="subs-empty" style="margin-top:6px;font-size:12.5px">' +
         T('subs_retake_hint') + '</div>';
-      body.innerHTML = html;
+      body.innerHTML = subsLessonsHtml + html;   // плитки уроков первым блоком
       subsLoadMonth();
       subsBindRows(document.getElementById('subs-recent-rows'), items);
       var todoBox = document.getElementById('subs-todo-rows');
