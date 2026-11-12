@@ -1260,6 +1260,22 @@
     white-space: nowrap;
   }
   #word-popup.visible { opacity: 1; }
+  /* Пояснение к слову (12.11.2026). Часть слов одной русской подписью не передать
+     (ар-Рахман и ар-Рахим, такъва, «Ра‘ина»...). У таких слов в подсказке вторая
+     строка «Подробнее»: нажатие открывает панель с коротким пояснением по тафсиру.
+     Подсказка у всех слов та же и так же гаснет - пояснение не навязывается.
+     Нажимается подсказка только пока видна: погасшая не должна перехватывать
+     касания по строкам под ней. Данные - notes/ru.json (scripts/build_word_notes.py). */
+  #word-popup.wn { padding: 7px 14px 0; cursor: pointer; }
+  #word-popup.wn.visible { pointer-events: auto; }
+  #word-popup .wn-more {
+    display: block; margin: 6px -14px 0; padding: 6px 14px 7px; font-size: 12.5px;
+    /* Золото - тот же цвет, что у ссылки на аят в панели: строка ведёт к тафсиру.
+       Подмешиваем цвет текста подсказки: в тёмной теме подсказка светлая, и
+       чистое золото на ней не читается. */
+    color: color-mix(in srgb, var(--marker-color) 62%, var(--popup-ink));
+    border-top: 1px solid color-mix(in srgb, var(--popup-ink) 18%, transparent);
+  }
   /* Слово (или пара слов с одним переводом), на которое нажали, - пока
      виден перевод (28.09.2026). */
   #ayah-text .w-hl { background: var(--accent-soft); border-radius: 6px; box-shadow: 0 0 0 2px var(--accent-soft); }
@@ -1361,6 +1377,34 @@
     animation: as-up 0.18s ease-out;
   }
   #ayah-sheet[hidden], #ayah-sheet-dim[hidden] { display: none; }
+  /* Панель пояснения к слову - тот же вид и место, что у панели аята. */
+  #wn-dim { position: fixed; inset: 0; z-index: 88; background: rgba(30, 25, 10, 0.14); }
+  #wn-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 89;
+    max-width: 640px; margin: 0 auto; max-height: 55vh;
+    display: flex; flex-direction: column;
+    direction: ltr; text-align: left;
+    background: var(--mushaf-bg-start);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 30px rgba(30, 25, 10, 0.16);
+    /* Фон листа теперь ровный (11.11) - в тёмной теме панель без границы сливалась со страницей. */
+    border-top: 1px solid var(--card-border);
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    animation: as-up 0.18s ease-out;
+  }
+  #wn-sheet[hidden], #wn-dim[hidden] { display: none; }
+  @media (orientation: landscape) and (max-height: 500px) { #wn-sheet { max-height: 78vh; } }
+  @media (prefers-reduced-motion: reduce) { #wn-sheet { animation: none; } }
+  #wn-word { font-family: 'Scheherazade New', serif; font-size: 30px; line-height: 1.2; color: var(--ink); }
+  #wn-gloss { padding: 0 18px; font-size: 18px; font-weight: 600; color: var(--ink); }
+  #wn-text { overflow-y: auto; padding: 8px 18px 0; font-size: 17px; line-height: 1.62; color: var(--ink); }
+  #wn-from { padding: 10px 18px 0; font-size: 13px; color: var(--muted); }
+  #wn-close {
+    flex: none; width: 40px; height: 40px; margin: -6px -10px -6px 0;
+    background: none; border: none; font-size: 17px; line-height: 1;
+    color: var(--muted); cursor: pointer; font-family: inherit;
+  }
+  #wn-close .ic { width: 20px; height: 20px; vertical-align: middle; }
   /* Лёжа экран низкий: 55% - это три строки перевода, Абу Аделю тесно. */
   @media (orientation: landscape) and (max-height: 500px) { #ayah-sheet { max-height: 78vh; } }
   @keyframes as-up { from { transform: translateY(24px); opacity: 0; } }
@@ -4292,6 +4336,20 @@
     <button type="button" id="as-prev"></button>
     <button type="button" id="as-next"></button>
   </div>
+</div>
+<!-- Пояснение к слову (12.11.2026) - см. «Пояснение к слову» в стилях и showWordPopup. -->
+<div id="wn-dim" hidden></div>
+<div id="wn-sheet" hidden role="dialog" aria-modal="true">
+  <div class="as-head">
+    <span id="wn-word" dir="rtl"></span>
+    <span class="as-tools">
+      <span class="as-ref" id="wn-ref"></span>
+      <button id="wn-close" type="button" data-i18n-title="mr_close" title="Закрыть" aria-label="Закрыть"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+    </span>
+  </div>
+  <div id="wn-gloss"></div>
+  <div id="wn-text" class="mr-serif"></div>
+  <div id="wn-from"></div>
 </div>
 <div id="mreader" hidden>
   <div class="mr-bar">
@@ -11073,8 +11131,47 @@
      Сверху та же беда на первой строке: там показываем попап ПОД словом. */
   var POPUP_MARGIN = 8;
 
-  function showPopupMessage(el, text) {
+  /* Пояснения к словам (12.11.2026): {"2:104:6": [текст, источник]}, только русские.
+     Файл маленький, берём один раз при старте; нет сети - подсказка работает как раньше. */
+  var wordNotes = null;
+  fetch('notes/ru.json').then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { wordNotes = d; }).catch(function () {});
+  var wnOpenedAt = 0;
+  function wordNoteClose() {
+    document.getElementById('wn-dim').hidden = true;
+    document.getElementById('wn-sheet').hidden = true;
+  }
+  function wordNoteOpen(n) {
+    wordPopup.classList.remove('visible');
+    document.getElementById('wn-word').textContent = n.ar;
+    document.getElementById('wn-ref').textContent = n.key.split(':').slice(0, 2).join(':');
+    document.getElementById('wn-gloss').textContent = n.gloss;
+    document.getElementById('wn-text').textContent = n.note;
+    document.getElementById('wn-from').textContent = n.src;
+    document.getElementById('wn-dim').hidden = false;
+    document.getElementById('wn-sheet').hidden = false;
+    wnOpenedAt = Date.now();
+    trail('word_note', { w: n.key });
+  }
+  wordPopup.addEventListener('click', function () {
+    if (wordPopup._note) wordNoteOpen(wordPopup._note);
+  });
+  document.getElementById('wn-close').addEventListener('click', wordNoteClose);
+  document.getElementById('wn-dim').addEventListener('click', function () {
+    // То же касание, что открыло панель, на телефоне доходит сюда кликом - не закрываемся им.
+    if (Date.now() - wnOpenedAt > 450) wordNoteClose();
+  });
+
+  function showPopupMessage(el, text, note) {
+    wordPopup._note = note || null;
+    wordPopup.classList.toggle('wn', !!note);
     wordPopup.textContent = text;
+    if (note) {
+      var more = document.createElement('span');
+      more.className = 'wn-more';
+      more.textContent = 'Подробнее';   // пояснения есть только на русском - строка не в словаре
+      wordPopup.appendChild(more);
+    }
     wordPopup.style.transform = 'translate(-50%, -100%)';
     wordPopup.classList.add('visible');
 
@@ -11105,7 +11202,7 @@
     clearTimeout(popupHideTimer);
     popupHideTimer = setTimeout(function () {
       wordPopup.classList.remove('visible');
-    }, 1800);
+    }, note ? 4000 : 1800);   // со строкой «Подробнее» - дольше: её ещё надо успеть нажать
   }
   /* Пары слов с одним переводом (28.09.2026, Имран устаз: «أَنصَحَ - тап,
      перевод не выходит»). Источник переводит устойчивое сочетание целиком и
@@ -11186,7 +11283,15 @@
     }
     var text = el.getAttribute('data-tr');
     if (text) {
-      showPopupMessage(el, text);
+      var note = null;
+      var wkey = el.getAttribute('data-w') || el.getAttribute('data-head');
+      if (UI_LANG === 'ru' && wordNotes && wkey && wordNotes[wkey] && el.closest('#ayah-text')) {
+        // Арабское слово - обычным текстом: в самом листе оно набрано глифами шрифта страницы.
+        var tmp = document.createElement('div');
+        tmp.innerHTML = el.getAttribute('data-arabic') || '';
+        note = { key: wkey, ar: tmp.textContent, gloss: text, note: wordNotes[wkey][0], src: wordNotes[wkey][1] };
+      }
+      showPopupMessage(el, text, note);
       if (el.closest('#ayah-text')) highlightWordGroup(el);
     }
   }
