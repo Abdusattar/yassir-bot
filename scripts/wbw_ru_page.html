@@ -1,0 +1,84 @@
+<title>Пословный перевод: правки</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=PT+Sans:wght@400;700&display=swap">
+<style>
+/* Таблица-сверка: шапка с фильтрами, строки сгруппированы по страницам мусхафа */
+:root{
+  --bg:#f6f7f4; --surface:#ffffff; --fg:#1d2420; --muted:#66706a; --line:#dde2dc;
+  --old:#9a5b4f; --new:#22684a; --band:#e8eee8; --chip:#eef3ee;
+  --sans:"PT Sans",system-ui,sans-serif; --ar:"Amiri","Traditional Arabic",serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141916; --surface:#1b211e; --fg:#e4eae5; --muted:#97a29b; --line:#2c3530;
+  --old:#d39486; --new:#7fcba4; --band:#212a25; --chip:#25302a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141916; --surface:#1b211e; --fg:#e4eae5; --muted:#97a29b; --line:#2c3530;
+  --old:#d39486; --new:#7fcba4; --band:#212a25; --chip:#25302a; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:1.45rem;margin:0 0 4px;text-wrap:balance}
+.lead{color:var(--muted);margin:0 0 16px;max-width:70ch}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.bar select,.bar input{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+.bar input[type=search]{flex:1 1 200px;min-width:0}
+.bar label{display:flex;gap:6px;align-items:center;color:var(--muted)}
+.cnt{color:var(--muted);font-variant-numeric:tabular-nums}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-size:.82rem;color:var(--muted);font-weight:700;position:sticky;top:0;background:var(--surface)}
+tr.pg td{background:var(--band);font-weight:700;font-size:.85rem;padding:6px 10px}
+td.k,td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+td.k{font-weight:700}
+td.ar{font-family:var(--ar);font-size:1.4rem;line-height:1.5;direction:rtl;text-align:right;white-space:nowrap}
+td.o{color:var(--old)} td.g{color:var(--new);font-weight:700}
+td.why{color:var(--muted);font-size:.9rem;max-width:46ch}
+.empty{padding:24px;color:var(--muted)}
+input:focus-visible,select:focus-visible{outline:2px solid var(--new);outline-offset:1px}
+@media (max-width:720px){
+  table,tbody,tr,td{display:block} thead{display:none}
+  tr.row{display:grid;grid-template-columns:auto auto 1fr;gap:2px 10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+  tr.row td{border:0;padding:0}
+  td.ar{grid-column:3;grid-row:1;white-space:normal}
+  td.o,td.g,td.why{grid-column:1/-1}
+  td.o::before{content:"было: ";color:var(--muted);font-weight:400}
+  td.g::before{content:"стало: ";color:var(--muted);font-weight:400}
+  td.why{max-width:none}
+}
+</style>
+<div class="wrap">
+  <h1>Пословный русский перевод, 1 джуз: какие подписи изменились</h1>
+  <p class="lead">Страницы __RANGE__. Здесь только подписи, где стали другими сами слова. Подписи, где изменился лишь знак препинания или убраны скобки, «досл.» и «однозначно», не показаны. Черновик: в приложение ещё не загружен.</p>
+  <div class="bar">
+    <select id="page" aria-label="Страница"><option value="">Все страницы</option></select>
+    <input id="q" type="search" placeholder="Поиск: аят 2:30, слово, подпись" aria-label="Поиск">
+    <label><input id="why" type="checkbox"> только с пояснением</label>
+    <span class="cnt" id="cnt"></span>
+  </div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Аят</th><th>№</th><th>Слово</th><th>Было</th><th>Стало</th><th>Почему</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+const ROWS=__DATA__;
+const tb=document.getElementById('tb'),sel=document.getElementById('page'),q=document.getElementById('q'),
+      why=document.getElementById('why'),cnt=document.getElementById('cnt');
+[...new Set(ROWS.map(r=>r.p))].forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent='Страница '+p;sel.appendChild(o)});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function render(){
+  const p=sel.value,t=q.value.trim().toLowerCase(),w=why.checked;
+  const rs=ROWS.filter(r=>(!p||r.p==p)&&(!w||r.why)&&(!t||(r.k+' '+r.ar+' '+r.o+' '+r.g+' '+r.why).toLowerCase().includes(t)));
+  let h='',last=null;
+  for(const r of rs){
+    if(r.p!==last){h+=`<tr class="pg"><td colspan="6">Страница ${r.p}</td></tr>`;last=r.p}
+    h+=`<tr class="row"><td class="k">${r.k}</td><td class="n">${r.n}</td><td class="ar">${esc(r.ar)}</td><td class="o">${esc(r.o)}</td><td class="g">${esc(r.g)}</td><td class="why">${esc(r.why)}</td></tr>`;
+  }
+  tb.innerHTML=h||'<tr><td colspan="6" class="empty">Ничего не найдено. Сбросьте фильтр или поиск.</td></tr>';
+  cnt.textContent=rs.length+' из __COUNT__';
+}
+sel.onchange=q.oninput=why.onchange=render;render();
+</script>
