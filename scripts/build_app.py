@@ -24,6 +24,8 @@ tests/test_app_build.py не даст запушить, если он разош
     python scripts/build_app.py            # собрать app_src -> mushaf_data/index.html
     python scripts/build_app.py --check    # сравнить, ничего не писать (код 1 - разошлись)
     python scripts/build_app.py --adopt    # наоборот: разложить index.html по файлам app_src
+    python scripts/build_app.py --split js/140_x.js 166 142_confirm
+                                           # отрезать от куска хвост со строки 166 в новый кусок
 
 --adopt - для переходного времени и для слияний: если index.html правили напрямую (старая
 ветка, конфликт слияния решён в нём), команда раскладывает его обратно по кускам. Границы
@@ -126,6 +128,28 @@ def adopt():
     print("разложено по app_src; изменились: " + (", ".join(changed) or "ничего"))
 
 
+def split(rel, line, new_name):
+    """Хвост куска со строки line (с 1) - в новый кусок. Сборка от этого не меняется:
+    новый кусок по имени должен встать сразу после старого."""
+    f = SRC / rel
+    kind = f.suffix[1:]
+    new = f.with_name(new_name + "." + kind)
+    lines = read(f).split("\n")
+    head, tail = lines[:line - 1], lines[line - 1:]
+    if not head or not tail[0].strip() or new.exists():
+        raise SystemExit("нельзя: пустая голова, пустая первая строка нового куска или файл уже есть")
+    names = [p.name for p in parts(kind)]
+    after = names.index(f.name)
+    if not (f.name < new.name and (after + 1 == len(names) or new.name < names[after + 1])):
+        raise SystemExit("имя %s не встаёт сразу после %s - порядок сборки изменился бы" % (new.name, f.name))
+    before = build()
+    write(f, "\n".join(head) + "\n")
+    write(new, "\n".join(tail))
+    if build() != before:
+        raise SystemExit("сборка изменилась - это ошибка, откати: git checkout app_src")
+    print("%s: %d строк; %s: %d строк; сборка та же" % (f.name, len(head), new.name, len(tail) - 1))
+
+
 def first_diff(a, b):
     la, lb = a.split("\n"), b.split("\n")
     for i, (x, y) in enumerate(zip(la, lb), 1):
@@ -150,6 +174,10 @@ def main():
         sys.exit(check())
     if "--adopt" in sys.argv:
         adopt()
+        return
+    if "--split" in sys.argv:
+        i = sys.argv.index("--split")
+        split(sys.argv[i + 1], int(sys.argv[i + 2]), sys.argv[i + 3])
         return
     built = build()
     if OUT.exists() and read(OUT) == built:
