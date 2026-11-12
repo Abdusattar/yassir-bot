@@ -1,4 +1,24 @@
 #!/bin/sh
+# Пуш только с логами/вики - без тестов (12.11.2026): логи шлём часто, и ждать
+# минуту ради строки незачем. Список папок - тот же, что paths-ignore в
+# .github/workflows/deploy.yml (такой пуш и ботов не перезапускает). Любой другой
+# файл, новая ветка или непонятный случай - полная проверка.
+docs_only=1
+seen=0
+while read local_ref local_sha remote_ref remote_sha; do
+  seen=1
+  case "$local_sha" in 0000000000000000000000000000000000000000) continue;; esac   # удаление ветки
+  case "$remote_sha" in 0000000000000000000000000000000000000000) docs_only=0; break;; esac
+  files=$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null) || { docs_only=0; break; }
+  [ -n "$files" ] || { docs_only=0; break; }
+  other=$(printf '%s
+' "$files" | grep -v -E '^(logs/|wiki/|context/|CLAUDE\.md$)')
+  [ -z "$other" ] || { docs_only=0; break; }
+done
+if [ "$seen" = 1 ] && [ "$docs_only" = 1 ]; then
+  echo "→ В пуше только логи/вики - тесты и деплой пропускаются"
+  exit 0
+fi
 echo "→ Syntax check..."
 find . -name "*.py" -not -path "./venv/*" -not -path "./.git/*" | xargs python -m py_compile
 if [ $? -ne 0 ]; then
