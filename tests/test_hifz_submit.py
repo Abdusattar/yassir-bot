@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 import core.db as db
 import core.mufradat_bot as mb
 
@@ -260,3 +262,27 @@ def test_hifz_submit_joins_continued_reading(test_db, monkeypatch):
     assert res["ok"] is True
     assert joined == [[b"OGG:A", b"OGG:B"]]
     assert sent["voice"][0][2] == b"OGG:A+OGG:B"
+
+
+def _ffmpeg_ogg(src_filter):
+    import shutil, subprocess
+    if not shutil.which("ffmpeg"):
+        pytest.skip("нет ffmpeg")
+    out = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", src_filter,
+                          "-t", "3", "-c:a", "libopus", "-f", "ogg", "-"], capture_output=True)
+    if out.returncode or not out.stdout:
+        pytest.skip("ffmpeg без libopus")
+    return out.stdout
+
+
+def test_silent_recording_is_not_accepted():
+    """12.11.2026, Дилярам: телефон отдал цифровую тишину, длина файла правильная -
+    сдача уходила устазу пустой. Теперь «silent», а запись со звуком проходит."""
+    silence = _ffmpeg_ogg("anullsrc=r=48000:cl=mono")
+    tone = _ffmpeg_ogg("sine=frequency=300:sample_rate=48000")
+    assert mb.is_silent(asyncio.run(mb.audio_peak_db(silence)))
+    assert not mb.is_silent(asyncio.run(mb.audio_peak_db(tone)))
+    assert asyncio.run(mb._silent_gate(silence, None)) == (None, "silent")
+    assert asyncio.run(mb._silent_gate(tone, None)) == (tone, None)
+    assert not mb.is_silent(None)              # не смогли измерить - не мешаем
+    assert not mb.is_silent(-30.0)             # очень тихая, но настоящая запись

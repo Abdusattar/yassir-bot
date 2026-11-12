@@ -415,6 +415,54 @@ async def audio_seconds(data):
             pass
 
 
+# Запись без звука (12.11.2026, Дилярам, женская prep, Android): три сдачи подряд по
+# 16-22 с - цифровая тишина, пик -91 дБ. Телефон в режиме «микрофон без обработки»
+# (см. hifzRecStream в приложении) отдаёт нули, а длина у файла правильная - проверка
+# lost_tail такое пропускает, устазу уходит пустая запись, студент слышит тишину и не
+# понимает, что делать. Теперь такая сдача не принимается: приложение получает «silent»,
+# переключает телефон на обычный микрофон и просит прочитать ещё раз.
+# Порог по ПИКУ: самая тихая настоящая запись из замеренных - пик около -30 дБ.
+SILENT_PEAK_DB = -75.0
+
+
+async def audio_peak_db(data):
+    """Пик громкости записи в дБ (ffmpeg volumedetect), None - не смогли измерить."""
+    import tempfile, os, re as _re
+    fd, path = tempfile.mkstemp(suffix=".ogg")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-nostdin", "-i", path, "-af", "volumedetect", "-f", "null", "-",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        _, err = await asyncio.wait_for(proc.communicate(), timeout=60)
+        m = _re.search(r"max_volume:\s*(-?[\d.]+)\s*dB", err.decode("utf-8", "replace"))
+        return float(m.group(1)) if m else None
+    except (FileNotFoundError, OSError, ValueError, asyncio.TimeoutError) as e:
+        log.error("ffmpeg volumedetect: %s: %s", type(e).__name__, e)
+        return None
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def is_silent(peak_db):
+    """Не смогли измерить - не мешаем (как lost_tail)."""
+    return peak_db is not None and peak_db < SILENT_PEAK_DB
+
+
+async def _silent_gate(ogg, err):
+    if not ogg or err:
+        return ogg, err
+    peak = await audio_peak_db(ogg)
+    if is_silent(peak):
+        log.warning("запись без звука: пик %.1f дБ, %d байт - не принята", peak, len(ogg))
+        return None, "silent"
+    return ogg, None
+
+
 # Начало потока записи: у webm (Chrome/Android) это заголовок EBML, у mp4
 # (Safari/iOS) - коробка ftyp. Один поток MediaRecorder - один заголовок.
 _STREAM_HEADS = (bytes.fromhex("1a45dfa3"), b"ftyp")
@@ -447,7 +495,7 @@ async def transcode_checked_parts(parts, client_ms):
     parts = [p for p in parts if p]
     _warn_glued(parts)
     if len(parts) <= 1:
-        return await transcode_checked(parts[0] if parts else b"", client_ms)
+        return await _silent_gate(*await transcode_checked(parts[0] if parts else b"", client_ms))
     ogg = await transcode_parts_to_ogg(parts)
     if not ogg:
         return None, "bad_audio"
@@ -455,7 +503,7 @@ async def transcode_checked_parts(parts, client_ms):
     if lost_tail(sec, client_ms):
         log.warning("склеенная запись короче таймера: %s с из %.1f", sec, (client_ms or 0) / 1000)
         return None, "incomplete"
-    return ogg, None
+    return await _silent_gate(ogg, None)
 
 
 async def transcode_checked(audio_bytes, client_ms):

@@ -5723,6 +5723,7 @@
       hifz_rec_lost: 'Запись сохранилась на телефоне не целиком — запиши заново. Лучше без паузы',
       hifz_rec_empty: 'Микрофон не записал звук — нажми «Записать» ещё раз',
       hifz_rec_incomplete: 'Запись дошла не целиком — запиши заново. Лучше без паузы',
+      hifz_rec_silent: 'В записи нет звука — микрофон отдал тишину. Нажми «Перезаписать» и прочитай ещё раз. Если повторится — закрой приложения, которые занимают микрофон, и открой Яссир заново',
       hifz_rec_hint_sending: 'Отправляю…',
       hifz_rec_no_mic: 'Не получилось включить микрофон. Разреши доступ в настройках Telegram',
       hifz_rec_sent: 'Отправлено устазу в группу 🤲',
@@ -6473,6 +6474,7 @@
       hifz_rec_lost: 'Жазуу телефондо толук сакталган жок — кайра жаз. Тынымсыз жазган жакшы',
       hifz_rec_empty: 'Микрофон үн жазган жок — «Жазуу» баскычын дагы бир жолу бас',
       hifz_rec_incomplete: 'Жазуу толук жеткен жок — кайра жаз. Тынымсыз жазган жакшы',
+      hifz_rec_silent: 'Жазууда үн жок — микрофон үн берген жок. «Кайра жазуу» баскычын басып, дагы бир жолу оку. Кайталанса — микрофонду ээлеген колдонмолорду жаап, Яссирди кайра ач',
       hifz_rec_hint_sending: 'Жөнөтүлүүдө…',
       hifz_rec_no_mic: 'Микрофонду күйгүзүү мүмкүн болбоду. Telegram жөндөөлөрүнөн уруксат бер',
       hifz_rec_sent: 'Топко, устазга жөнөтүлдү 🤲',
@@ -7285,6 +7287,7 @@
       hifz_rec_lost: 'Ёзув телефонда тўлиқ сақланмади — қайта ёзиб ол. Паузасиз ёзган маъқул',
       hifz_rec_empty: 'Микрофон овоз ёзмади — «Ёзиб олиш»ни яна бир марта бос',
       hifz_rec_incomplete: 'Ёзув тўлиқ етиб келмади — қайта ёзиб ол. Паузасиз ёзган маъқул',
+      hifz_rec_silent: 'Ёзувда овоз йўқ — микрофон овоз бермади. «Қайта ёзиш»ни босиб, яна бир марта ўқи. Такрорланса — микрофонни банд қилган иловаларни ёпиб, Яссирни қайта оч',
       hifz_rec_hint_sending: 'Юборилмоқда…',
       hifz_rec_no_mic: 'Микрофонни ёқиб бўлмади. Telegram созламаларида рухсат бер',
       hifz_rec_sent: 'Гуруҳга, устозга юборилди 🤲',
@@ -8099,6 +8102,7 @@
       hifz_rec_lost: '录音没有完整保存在手机上 — 请重新录。最好不要暂停',
       hifz_rec_empty: '麦克风没有录到声音 — 请再点一次「录音」',
       hifz_rec_incomplete: '录音没有完整传上来 — 请重新录。最好不要暂停',
+      hifz_rec_silent: '录音里没有声音 — 麦克风没有传来声音。请点「重新录音」再读一遍。如果还是这样，请关闭占用麦克风的应用，然后重新打开 Yassir',
       hifz_rec_hint_sending: '发送中…',
       hifz_rec_no_mic: '无法打开麦克风。请在 Telegram 设置里允许访问',
       hifz_rec_sent: '已发送到小组给老师 🤲',
@@ -14161,6 +14165,20 @@
         // оборвали на полуслове.
         document.getElementById('hifz-rec-hint').textContent =
           T(rec.hitLimit ? 'hifz_rec_hint_limit' : 'hifz_rec_hint_done');
+        // Тишина вместо звука (12.11.2026, Дилярам, Android): микрофон «без
+        // обработки» на её телефоне отдаёт нули - 23 с записи весили 1,7 КБ
+        // (обычно ~8 КБ в секунду; тишина - заголовок ~1,2 КБ и десятки байт
+        // в секунду, стенд: 7 с = 1,8 КБ). Она слушала, не слышала ничего и не
+        // отправляла - сервер об этом так и не узнавал. Ловим по весу сразу
+        // после «Стоп»: говорим прямо и запоминаем обычный микрофон, со
+        // следующей записи телефон пишет через него. Порог с большим запасом;
+        // где тишина весит много (AAC на iPhone) - поймает сервер («silent»).
+        var segSec = recSegMs(rec.ms, rec.segBaseMs) / 1000;
+        if (segSec >= 3 && rec.blob.size < 1500 + 400 * segSec) {
+          trail('rec', { n: 'silent local ' + rec.blob.size + 'b ' + Math.round(segSec) + 's' });
+          hifzMicPlain();
+          document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_silent');
+        }
         hifzRecButtons('done');
       };
       // Кусками, а не одним куском в памяти (20.09.2026): оборвалась вкладка -
@@ -14317,10 +14335,15 @@
         return;
       }
       if (err === 'incomplete') hifzMicPlain();
+      // В записи нет звука (12.11.2026, Дилярам): телефон в режиме «без обработки»
+      // отдал тишину. Сервер такую сдачу не принимает; телефон запоминает обычный
+      // микрофон, следующая запись пойдёт уже через него.
+      if (err === 'silent') { hifzMicPlain(); trail('rec', { n: 'silent' }); }
       rec.resent = false;
       document.getElementById('hifz-rec-hint').textContent =
         err === 'retake_pending' ? T('hifz_retake_pending', { P: res.data.place || '' })
         : err === 'incomplete' ? T('hifz_rec_incomplete')
+        : err === 'silent' ? T('hifz_rec_silent')
         : err === 'too_short' ? T('hifz_rec_short_unit')
         : err === 'wrong_bot' ? T('wrong_bot')
         : (err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed'));
@@ -14464,9 +14487,11 @@
           return;
         }
         if (err === 'incomplete') hifzMicPlain();
+        if (err === 'silent') { hifzMicPlain(); trail('rec', { n: 'silent' }); }
         rec.resent = false;
         document.getElementById('hifz-rec-hint').textContent =
           err === 'incomplete' ? T('hifz_rec_incomplete')
+          : err === 'silent' ? T('hifz_rec_silent')
           : err === 'wrong_bot' ? T('wrong_bot')
           : err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
         hifzRecButtons('done');

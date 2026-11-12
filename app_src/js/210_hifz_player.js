@@ -418,6 +418,20 @@
         // оборвали на полуслове.
         document.getElementById('hifz-rec-hint').textContent =
           T(rec.hitLimit ? 'hifz_rec_hint_limit' : 'hifz_rec_hint_done');
+        // Тишина вместо звука (12.11.2026, Дилярам, Android): микрофон «без
+        // обработки» на её телефоне отдаёт нули - 23 с записи весили 1,7 КБ
+        // (обычно ~8 КБ в секунду; тишина - заголовок ~1,2 КБ и десятки байт
+        // в секунду, стенд: 7 с = 1,8 КБ). Она слушала, не слышала ничего и не
+        // отправляла - сервер об этом так и не узнавал. Ловим по весу сразу
+        // после «Стоп»: говорим прямо и запоминаем обычный микрофон, со
+        // следующей записи телефон пишет через него. Порог с большим запасом;
+        // где тишина весит много (AAC на iPhone) - поймает сервер («silent»).
+        var segSec = recSegMs(rec.ms, rec.segBaseMs) / 1000;
+        if (segSec >= 3 && rec.blob.size < 1500 + 400 * segSec) {
+          trail('rec', { n: 'silent local ' + rec.blob.size + 'b ' + Math.round(segSec) + 's' });
+          hifzMicPlain();
+          document.getElementById('hifz-rec-hint').textContent = T('hifz_rec_silent');
+        }
         hifzRecButtons('done');
       };
       // Кусками, а не одним куском в памяти (20.09.2026): оборвалась вкладка -
@@ -574,10 +588,15 @@
         return;
       }
       if (err === 'incomplete') hifzMicPlain();
+      // В записи нет звука (12.11.2026, Дилярам): телефон в режиме «без обработки»
+      // отдал тишину. Сервер такую сдачу не принимает; телефон запоминает обычный
+      // микрофон, следующая запись пойдёт уже через него.
+      if (err === 'silent') { hifzMicPlain(); trail('rec', { n: 'silent' }); }
       rec.resent = false;
       document.getElementById('hifz-rec-hint').textContent =
         err === 'retake_pending' ? T('hifz_retake_pending', { P: res.data.place || '' })
         : err === 'incomplete' ? T('hifz_rec_incomplete')
+        : err === 'silent' ? T('hifz_rec_silent')
         : err === 'too_short' ? T('hifz_rec_short_unit')
         : err === 'wrong_bot' ? T('wrong_bot')
         : (err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed'));
@@ -721,9 +740,11 @@
           return;
         }
         if (err === 'incomplete') hifzMicPlain();
+        if (err === 'silent') { hifzMicPlain(); trail('rec', { n: 'silent' }); }
         rec.resent = false;
         document.getElementById('hifz-rec-hint').textContent =
           err === 'incomplete' ? T('hifz_rec_incomplete')
+          : err === 'silent' ? T('hifz_rec_silent')
           : err === 'wrong_bot' ? T('wrong_bot')
           : err === 'no_group' ? T('hifz_rec_no_group') : T('hifz_rec_failed');
         hifzRecButtons('done');
