@@ -23,6 +23,9 @@
   // маленький скрипт в <head>, а не внизу с основной логикой, чтобы не
   // было вспышки "не той" темы на долю секунды при загрузке (основной
   // <script> внизу body выполнился бы уже после первой отрисовки).
+  // Иконки Lucide (ISC); «Смысл» в шапке мусхафа - Tabler notes (MIT), выбор пользователя 11.11.2026.
+  // См. wiki/mushaf_yassirapp.md «Иконки вместо эмодзи».
+  var ICON = {"settings": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\" /><circle cx=\"12\" cy=\"12\" r=\"3\" /></svg>", "user-check": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /><circle cx=\"9\" cy=\"7\" r=\"4\" /><polyline points=\"16 11 18 13 22 9\" /></svg>", "book-open-text": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 7v14\" /><path d=\"M16 12h2\" /><path d=\"M16 8h2\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" /><path d=\"M6 12h2\" /><path d=\"M6 8h2\" /></svg>", "dumbbell": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" /></svg>", "chevron-down": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\" /></svg>", "book-open-check": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 21V7\" /><path d=\"m16 12 2 2 4-4\" /><path d=\"M22 6V4a1 1 0 0 0-1-1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h6a3 3 0 0 1 3 3 3 3 0 0 1 3-3h6a1 1 0 0 0 1-1v-1.3\" /></svg>", "repeat": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" /></svg>", "languages": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m5 8 6 6\" /><path d=\"m4 14 6-6 2-3\" /><path d=\"M2 5h12\" /><path d=\"M7 2h1\" /><path d=\"m22 22-5-10-5 10\" /><path d=\"M14 18h6\" /></svg>", "bookmark": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z\" /></svg>", "undo-2": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 14 4 9l5-5\" /><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" /></svg>", "arrow-up-to-line": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 3h14\" /><path d=\"m18 13-6-6-6 6\" /><path d=\"M12 7v14\" /></svg>", "x": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 6 6 18\" /><path d=\"m6 6 12 12\" /></svg>", "volume-2": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z\" /><path d=\"M16 9a5 5 0 0 1 0 6\" /><path d=\"M19.364 18.364a9 9 0 0 0 0-12.728\" /></svg>", "mic": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z\" /><path d=\"M19 10v2a7 7 0 0 1-14 0v-2\" /><line x1=\"12\" x2=\"12\" y1=\"19\" y2=\"22\" /></svg>", "play": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polygon points=\"6 3 20 12 6 21 6 3\" /></svg>", "pause": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"14\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" /><rect x=\"6\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" /></svg>", "square": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /></svg>", "rewind": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polygon points=\"11 19 2 12 11 5 11 19\" /><polygon points=\"22 19 13 12 22 5 22 19\" /></svg>", "fast-forward": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polygon points=\"13 19 22 12 13 5 13 19\" /><polygon points=\"2 19 11 12 2 5 2 19\" /></svg>", "rotate-ccw": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><path d=\"M3 3v5h5\" /></svg>", "circle-check": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m9 12 2 2 4-4\" /></svg>", "circle-x": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m15 9-6 6\" /><path d=\"m9 9 6 6\" /></svg>", "triangle-alert": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /><path d=\"M12 9v4\" /><path d=\"M12 17h.01\" /></svg>", "clock": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><polyline points=\"12 6 12 12 16 14\" /></svg>", "book-open": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" /></svg>", "star": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" /></svg>", "star-off": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8.34 8.34 2 9.27l5 4.87L5.82 21 12 17.77 18.18 21l-.59-3.43\" /><path d=\"M18.42 12.76 22 9.27l-6.91-1L12 2l-1.44 2.91\" /><line x1=\"2\" x2=\"22\" y1=\"2\" y2=\"22\" /></svg>", "trophy": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 9H4.5a2.5 2.5 0 0 1 0-5H6\" /><path d=\"M18 9h1.5a2.5 2.5 0 0 0 0-5H18\" /><path d=\"M4 22h16\" /><path d=\"M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22\" /><path d=\"M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22\" /><path d=\"M18 2H6v7a6 6 0 0 0 12 0V2Z\" /></svg>", "medal": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15\" /><path d=\"M11 12 5.12 2.2\" /><path d=\"m13 12 5.88-9.8\" /><path d=\"M8 7h8\" /><circle cx=\"12\" cy=\"17\" r=\"5\" /><path d=\"M12 18v-2h-.5\" /></svg>", "trending-up": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\" /><polyline points=\"16 7 22 7 22 13\" /></svg>", "trending-down": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polyline points=\"22 17 13.5 8.5 8.5 13.5 2 7\" /><polyline points=\"16 17 22 17 22 11\" /></svg>", "gauge": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 14 4-4\" /><path d=\"M3.34 19a10 10 0 1 1 17.32 0\" /></svg>", "list-todo": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"6\" height=\"6\" rx=\"1\" /><path d=\"m3 17 2 2 4-4\" /><path d=\"M13 6h8\" /><path d=\"M13 12h8\" /><path d=\"M13 18h8\" /></svg>", "flame": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" /></svg>", "video": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5\" /><rect x=\"2\" y=\"6\" width=\"14\" height=\"12\" rx=\"2\" /></svg>", "radio-tower": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4.9 16.1C1 12.2 1 5.8 4.9 1.9\" /><path d=\"M7.8 4.7a6.14 6.14 0 0 0-.8 7.5\" /><circle cx=\"12\" cy=\"9\" r=\"2\" /><path d=\"M16.2 4.8c2 2 2.26 5.11.8 7.47\" /><path d=\"M19.1 1.9a9.96 9.96 0 0 1 0 14.1\" /><path d=\"M9.5 18h5\" /><path d=\"m8 22 4-11 4 11\" /></svg>", "gem": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3h12l4 6-10 13L2 9Z\" /><path d=\"M11 3 8 9l4 13 4-13-3-6\" /><path d=\"M2 9h20\" /></svg>", "calendar": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2v4\" /><path d=\"M16 2v4\" /><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\" /><path d=\"M3 10h18\" /></svg>", "hourglass": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 22h14\" /><path d=\"M5 2h14\" /><path d=\"M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22\" /><path d=\"M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2\" /></svg>", "lock": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\" /><path d=\"M7 11V7a5 5 0 0 1 10 0v4\" /></svg>", "graduation-cap": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\" /><path d=\"M22 10v6\" /><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\" /></svg>", "sun": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"4\" /><path d=\"M12 2v2\" /><path d=\"M12 20v2\" /><path d=\"m4.93 4.93 1.41 1.41\" /><path d=\"m17.66 17.66 1.41 1.41\" /><path d=\"M2 12h2\" /><path d=\"M20 12h2\" /><path d=\"m6.34 17.66-1.41 1.41\" /><path d=\"m19.07 4.93-1.41 1.41\" /></svg>", "moon": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\" /></svg>", "sun-moon": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4\" /><path d=\"M12 2v2\" /><path d=\"M12 20v2\" /><path d=\"m4.9 4.9 1.4 1.4\" /><path d=\"m17.7 17.7 1.4 1.4\" /><path d=\"M2 12h2\" /><path d=\"M20 12h2\" /><path d=\"m6.3 17.7-1.4 1.4\" /><path d=\"m19.1 4.9-1.4 1.4\" /></svg>"};
   try {
     var _t = localStorage.getItem('yassir_theme');
     if (_t === 'light' || _t === 'dark') document.documentElement.setAttribute('data-theme', _t);
@@ -1086,6 +1089,21 @@
      пользователя "подбери тематически") - тёплое золото (--marker-color),
      тот же цвет, что у номеров-маркеров аятов на странице чтения -
      смысловая связь "это про отметки в тексте", не случайный акцент. */
+  /* Векторные иконки вместо эмодзи (11.11.2026, набор Lucide, ISC): одинаковы
+     на всех телефонах и красятся в currentColor. Размер от шрифта кнопки;
+     у иконок без подписи - свой. */
+  .ic { width: 1.15em; height: 1.15em; vertical-align: -0.22em; display: inline-block; flex: none; }
+  .ic + span, span + .ic { margin-inline-start: .35em; }
+  /* Кнопка с иконкой и подписью читается слева направо и в rtl-контейнерах
+     мусхафа: иконка слева, подпись справа. */
+  .tab-btn, #page-nav button, #bm-menu button > span, #hifz-submit, #hifz-big-submit { direction: ltr; unicode-bidi: isolate; }
+  #btn-profile .ic, .hifz-listen-btn .ic { width: 22px; height: 22px; vertical-align: middle; }
+  #topbar .ic { width: 24px; height: 24px; vertical-align: middle; }
+  .dash-row .mark .ic { width: 24px; height: 24px; vertical-align: middle; }
+  .icon-gold .ic { width: 1em; height: 1em; vertical-align: -0.15em; }
+  #look-play .ic, #rec-review-play .ic, #hifz-rec-play .ic { width: 16px; height: 16px; vertical-align: middle; fill: currentColor; stroke: none; }
+  .ic.ok { color: var(--ok); } .ic.no { color: var(--no); }
+  #as-close .ic, #surah-close .ic, #hifz-close .ic, #hifz-rec-close .ic { width: 20px; height: 20px; vertical-align: middle; }
   .icon-gold {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.6em; height: 1.6em; border-radius: 50%;
@@ -3830,7 +3848,7 @@
          именем, годом рождения и местом. Угол справа - привычное место
          для настроек, и строка освобождается под «Мой день». -->
     <div id="dash-settings">
-      <button id="btn-profile" title="Настройки" aria-label="Настройки" data-i18n-title="sett_title">⚙</button>
+      <button id="btn-profile" title="Настройки" aria-label="Настройки" data-i18n-title="sett_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg></button>
     </div>
   </div>
   <!-- Строка ленты (11.09.2026). Стоит между шапкой и дверями: свежее перед
@@ -3864,7 +3882,7 @@
        увидит пустой список с объяснением, а не отсутствие двери (иначе
        непонятно, куда потом смотреть). -->
   <div class="dash-row" id="dash-subs" tabindex="0" role="button">
-    <span class="mark">◴</span>
+    <span class="mark"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></svg></span>
     <span class="text"><span class="label" data-i18n="dash_subs">Работа с устазом</span><span class="sub" id="dash-subs-sub" data-i18n="dash_subs_sub">Мои записи, разбор и пересдача</span></span>
     <span class="badge" id="dash-subs-count" style="display:none"></span>
   </div>
@@ -3889,7 +3907,7 @@
        приложения. Видна всем, не только новичку - за правилами возвращаются
        и через полгода. -->
   <div class="dash-row" id="dash-learn" tabindex="0" role="button">
-    <span class="mark">✎</span>
+    <span class="mark"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14" /><path d="M16 12h2" /><path d="M16 8h2" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /><path d="M6 12h2" /><path d="M6 8h2" /></svg></span>
     <span class="text"><span class="label" data-i18n="dash_learn">Знания</span><span class="sub" id="dash-learn-sub" data-i18n="dash_learn_how">Как работаем</span></span>
   </div>
   </div>
@@ -4027,8 +4045,8 @@
     </div>
     <label class="s-lab s-lab2" data-i18n="sett_theme">Тема</label>
     <div class="s-seg" id="sett-theme">
-      <button data-theme="light" data-i18n="sett_theme_day">☀️ День</button>
-      <button data-theme="dark" data-i18n="sett_theme_night">🌙 Ночь</button>
+      <button data-theme="light"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg><span data-i18n="sett_theme_day">День</span></button>
+      <button data-theme="dark"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg><span data-i18n="sett_theme_night">Ночь</span></button>
     </div>
   </div>
 
@@ -4067,7 +4085,7 @@
     <span class="as-ref" id="as-ref"></span>
     <span class="as-tools">
       <span class="mr-seg" id="as-seg"><button type="button" data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
-      <button id="as-close" type="button" data-i18n-title="mr_close" title="Закрыть" aria-label="Закрыть">✕</button>
+      <button id="as-close" type="button" data-i18n-title="mr_close" title="Закрыть" aria-label="Закрыть"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
     </span>
   </div>
   <div id="as-text" class="mr-serif"></div>
@@ -4107,8 +4125,8 @@
     <span class="c-bar"><i></i></span>
   </button>
   <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
-    <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen">🔊</button>
-    <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer" data-i18n="hifz_submit">🎙 Сдать</button>
+    <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /></svg></button>
+    <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer" ><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg><span data-i18n="hifz_submit">Сдать</span></button>
   </div>
 </div>
 
@@ -4130,7 +4148,7 @@
   <div class="surah-sheet">
     <div class="surah-sheet-head">
       <span data-i18n="surah_list_title">Суры</span>
-      <button id="surah-close">✕</button>
+      <button id="surah-close"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
     </div>
     <div id="surah-list"></div>
   </div>
@@ -4158,10 +4176,10 @@
            🔁 «Повторение» намеренно: это два из трёх дневных заданий, и оба
            теперь делаются там, где студент и так находится. Третье (слова) —
            тренажёр. -->
-      <button id="btn-hifz" title="Заучивание 40+40" data-i18n-title="btn_hifz_title">📖</button>
-      <button id="btn-revision" title="Отметить повторение" data-i18n-title="btn_revision_title">🔁</button>
+      <button id="btn-hifz" title="Заучивание 40+40" data-i18n-title="btn_hifz_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V7" /><path d="m16 12 2 2 4-4" /><path d="M22 6V4a1 1 0 0 0-1-1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h6a3 3 0 0 1 3 3 3 3 0 0 1 3-3h6a1 1 0 0 0 1-1v-1.3" /></svg></button>
+      <button id="btn-revision" title="Отметить повторение" data-i18n-title="btn_revision_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></button>
       <!-- 📜 «Смысл» наверху (22.09.2026): нижнего меню больше нет. -->
-      <button id="btn-meaning" title="Смысл" data-i18n-title="btn_meaning_title">📜</button>
+      <button id="btn-meaning" title="Смысл" data-i18n-title="btn_meaning_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z" /><path d="M9 7l6 0" /><path d="M9 11l6 0" /><path d="M9 15l4 0" /></svg></button>
       <button id="read-gloss-btn" title="Перевод под словами" data-i18n-title="hifz_gloss" aria-pressed="false"><span class="g-ar">ب</span><span class="g-tr">а</span></button>
       <span id="ayah-range"></span>
     </div>
@@ -4170,7 +4188,7 @@
   <!-- Режим заучивания: своя шапка вместо #page-nav и своя нижняя полоса
        вместо #tabbar. Место не отнимается — обе панели просто подменяются. -->
   <div id="hifz-head">
-    <button id="hifz-close" title="Выйти из режима" data-i18n-title="hifz_close_title">✕</button>
+    <button id="hifz-close" title="Выйти из режима" data-i18n-title="hifz_close_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
     <div class="where">
       <b><span id="hifz-where">—</span><span class="fix" id="hifz-fix">поправить</span></b>
       <small id="hifz-sub">—</small>
@@ -4221,7 +4239,7 @@
          открывает мусхаф и повторяет с начала Бакары каждый день, в меню 🔖
          это было два тапа. Словом, не значком - «» путали с «в начало/конец».
          Первый в DOM = справа на экране (rtl), под большим пальцем. -->
-    <button id="btn-go-baqara" class="page-nav-util" data-i18n="bm_baqara_short">⤒ Бакара</button>
+    <button id="btn-go-baqara" class="page-nav-util"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14" /><path d="m18 13-6-6-6 6" /><path d="M12 7v14" /></svg><span data-i18n="bm_baqara_short">Бакара</span></button>
     <button id="btn-next">‹</button>
     <span id="page-indicator">—</span>
     <input id="page-jump-input" type="number" inputmode="numeric">
@@ -4230,11 +4248,11 @@
          « и » читались как «в начало/в конец», а значили закладку и
          начало Бакары. Сохранение теперь пункт меню - случайный тап при
          листании больше не перезаписывает место. -->
-    <button id="btn-bookmark" class="page-nav-util" title="Закладка" data-i18n-title="btn_bookmark_title"><span class="icon-gold">🔖</span></button>
+    <button id="btn-bookmark" class="page-nav-util" title="Закладка" data-i18n-title="btn_bookmark_title"><span class="icon-gold"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg></span></button>
   </div>
   <div id="bm-menu">
-    <button id="btn-bookmark-save"><span data-i18n="bm_save">🔖 Сохранить закладку здесь</span><small data-i18n="bm_save_sub">эта страница станет закладкой</small></button>
-    <button id="btn-bookmark-go"><span data-i18n="bm_go">↩ К закладке</span><small id="bm-go-sub" data-i18n="bm_go_sub">страница, где остановился</small></button>
+    <button id="btn-bookmark-save"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg><span data-i18n="bm_save">Сохранить закладку здесь</span></span><small data-i18n="bm_save_sub">эта страница станет закладкой</small></button>
+    <button id="btn-bookmark-go"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg><span data-i18n="bm_go">К закладке</span></span><small id="bm-go-sub" data-i18n="bm_go_sub">страница, где остановился</small></button>
   </div>
 
   <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
@@ -4268,15 +4286,15 @@
         <div id="review-track"><div class="wave" id="review-wave"></div><div id="review-fill"></div></div>
         <div class="t"><span id="review-cur">0:00</span><span id="review-total">0:00</span></div>
       </div>
-      <button id="review-back10" data-i18n="review_back10">↺ 10 сек</button>
+      <button id="review-back10"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 19 2 12 11 5 11 19" /><polygon points="22 19 13 12 22 5 22 19" /></svg><span data-i18n="review_back10">10 сек</span></button>
     </div>
     <div class="row">
-      <button id="review-mine" style="display:none">▶ Мой разбор</button>
-      <button id="review-comment" data-i18n="review_comment">🎙 Замечание</button>
+      <button id="review-mine" style="display:none"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg><span id="review-mine-t">Мой разбор</span></button>
+      <button id="review-comment"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg><span data-i18n="review_comment">Замечание</span></button>
     </div>
     <div class="row">
-      <button id="review-accept" class="ok" data-i18n="review_accept">✅ Принято</button>
-      <button id="review-retake" class="no" data-i18n="review_retake">↺ На пересдачу</button>
+      <button id="review-accept" class="ok"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg><span data-i18n="review_accept">Принято</span></button>
+      <button id="review-retake" class="no"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg><span data-i18n="review_retake">На пересдачу</span></button>
     </div>
   </div>
 
@@ -4286,7 +4304,7 @@
   <div id="look-foot">
     <div class="who"><b id="look-who">Замечание устаза</b><span class="dur" id="look-dur">—</span></div>
     <div class="player">
-      <button id="look-play" title="Слушать" data-i18n-title="listen_title">▶</button>
+      <button id="look-play" title="Слушать" data-i18n-title="listen_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg></button>
       <div class="bar">
         <div id="look-track"><div id="look-fill"></div></div>
         <div class="t"><span id="look-cur">0:00</span><span id="look-total">0:00</span></div>
@@ -4308,7 +4326,7 @@
     <!-- Перевод под словами лёжа - вкл/выкл (19.10.2026). Значок - то, что
          он делает: арабская буква, под ней буква перевода. -->
     <button id="hifz-gloss-btn" title="Перевод под словами" data-i18n-title="hifz_gloss" aria-pressed="false"><span class="g-ar">ب</span><span class="g-tr" id="hifz-gloss-tr">а</span></button>
-    <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen">🔊</button>
+    <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /></svg></button>
     <!-- Счётчик 40+40 (11.09.2026). Стоит у 🔊 по просьбе пользователя: низ
          удобнее тапать, рука и так там, а Хусари включают ровно перед
          повторами. Число то же самое, что копила панель «сколько сделал
@@ -4318,7 +4336,7 @@
       <span class="c-cap"></span><span class="c-n"><b>0</b><i>/40</i></span>
       <span class="c-bar"><i></i></span>
     </button>
-    <button id="hifz-submit" class="primary">🎙 Сдать</button>
+    <button id="hifz-submit" class="primary"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg><span id="hifz-submit-t">Сдать</span></button>
     <!-- Выбор единицы — только пока идёт выбор места (02.09.2026). Студент
          может стартовать не с первой строки, а сразу с половины или всей
          страницы, если эту часть он уже знает. -->
@@ -4332,10 +4350,10 @@
   <!-- Запись сдачи: сначала слушаешь себя, только потом отправляешь. -->
   <div id="hifz-rec">
     <div class="card">
-      <button id="hifz-rec-close" title="Закрыть" data-i18n-title="close_title">✕</button>
+      <button id="hifz-rec-close" title="Закрыть" data-i18n-title="close_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
       <!-- Пересдача: разбор сворачивается сюда, чтобы переслушать замечание,
            не выходя из записи. -->
-      <div id="rec-review"><button id="rec-review-play" title="Слушать" data-i18n-title="listen_title">▶</button><span id="rec-review-text">Замечание устаза</span></div>
+      <div id="rec-review"><button id="rec-review-play" title="Слушать" data-i18n-title="listen_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg></button><span id="rec-review-text">Замечание устаза</span></div>
       <div class="place" id="hifz-rec-place">—</div>
       <div class="timer" id="hifz-rec-timer">0:00</div>
       <div class="hint" id="hifz-rec-hint"></div>
@@ -4343,7 +4361,7 @@
            <audio controls> выглядит по-своему на каждом телефоне и спорит со
            всем остальным в приложении; тег остаётся, но только как мотор. -->
       <div id="hifz-rec-player" class="player" style="display:none">
-        <button id="hifz-rec-play" title="Слушать" data-i18n-title="listen_title">▶</button>
+        <button id="hifz-rec-play" title="Слушать" data-i18n-title="listen_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg></button>
         <div class="bar">
           <div id="hifz-rec-track"><div id="hifz-rec-fill"></div></div>
           <div class="t"><span id="hifz-rec-cur">0:00</span><span id="hifz-rec-total">0:00</span></div>
@@ -4416,8 +4434,8 @@
   <!-- Прямой переход в Мусхаф/Мои слова без дашборда (30.08.2026, решение
        пользователя, симметрично 🌱 в #tabbar мусхафа). -->
   <div id="trainer-tabbar">
-    <button id="trainer-tab-mywords" class="tab-btn" data-i18n="tab_mywords">⭐ Мои слова</button>
-    <button id="trainer-tab-mushaf" class="tab-btn" data-i18n="tab_mushaf">📗 Мусхаф</button>
+    <button id="trainer-tab-mywords" class="tab-btn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><span data-i18n="tab_mywords">Мои слова</span></button>
+    <button id="trainer-tab-mushaf" class="tab-btn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></svg><span data-i18n="tab_mushaf">Мусхаф</span></button>
   </div>
 </div>
 
@@ -5115,7 +5133,7 @@
       subs_wait: 'на проверке',
       subs_done: 'сдано',
       subs_my_record: '▶ Моя запись',
-      subs_retake: '🎙 Пересдать',
+      subs_retake: 'Пересдать',
       subs_redo: 'Перезаписать',
       subs_review_open: 'Разбор устаза',
       subs_series_n: '%N% подряд',
@@ -5125,8 +5143,8 @@
       look_no_audio: 'Устаз отметил слова без голосового разбора',
       look_failed: 'Не удалось проиграть запись',
       look_back: '← Заучивания',
-      look_back10: '↺ 10 сек назад',
-      look_retake: '🎙 Пересдать',
+      look_back10: '10 сек назад',
+      look_retake: 'Пересдать',
       look_sub: 'разбор устаза',
       rec_review_text: 'Замечание устаза — переслушать',
       subs_todo_title: 'ПЕРЕСДАТЬ — %N%',
@@ -5136,7 +5154,7 @@
       subs_waiting_quiet: 'на проверке %N% — ждёт устаза, от тебя ничего не нужно',
       subs_review_from: 'Ответил %N%',
       subs_review_voice: 'голосовой разбор',
-      subs_playing: '⏸ Стоп',
+      subs_playing: 'Стоп',
       subs_audio_failed: 'Не удалось проиграть запись',
       review_tap_words: 'Тапни по словам, где были ошибки',
       review_marked: 'Отмечено слов: %N%',
@@ -5145,16 +5163,16 @@
       review_done_retake: 'Отправлено на пересдачу',
       review_failed: 'Не получилось — попробуй ещё раз',
       review_need_comment: 'Сначала запиши замечание — без него пересдача не уйдёт',
-      review_play: '▶ Прослушать сдачу',
-      review_play_mine: '▶ Мой разбор',
+      review_play: 'Прослушать сдачу',
+      review_play_mine: 'Мой разбор',
       review_src_own: 'Сдача',
       review_src_mine: 'Мой разбор',
       review_frozen: 'Студент уже пересдал — новая запись ждёт разбора в «Ждут»',
       review_next: 'Дальше: %N% · стр. %P% ›',
       review_to_list: 'К списку',
       review_left: 'в группе ждут ещё %N%',
-      review_stop: '⏸ Стоп',
-      review_back10: '↺ 10 сек',
+      review_stop: 'Стоп',
+      review_back10: '10 сек',
       subs_verdict_ok: 'принято',
       subs_verdict_retake: 'на пересдачу',
       subs_verdict_redone: 'пересдал — ждёт устаза',
@@ -5226,7 +5244,7 @@
       ustaz_misses_no_limit: 'пропусков %N%',
       ustaz_lesson_misses: 'пропущено онлайн-уроков: %N% из 3',
       ustaz_strip_legend: 'Месяц по дням: чем светлее столбик, тем меньше сдано',
-      lesson_title: '🕌 Онлайн-урок',
+      lesson_title: 'Онлайн-урок',
       lesson_hint: 'отметь после урока',
       lesson_btn: 'Я был',
       lesson_btn_f: 'Я была',
@@ -5274,15 +5292,15 @@
       ustaz_rev_fold: 'Повторения · %N%',
       ustaz_rev_hint: 'записи чтения — слушать выборочно',
       ustaz_rev_title: 'Повторения',
-      ustaz_rev_short: '⚠ коротко',
+      ustaz_rev_short: 'коротко',
       ustaz_rev_span: 'стр. %A%–%B%',
       ustaz_rev_from: 'со стр. %A%',
-      ustaz_rev_play: '▶ слушать',
-      ustaz_rev_stop: '■ стоп',
-      ustaz_rev_back: '↺ 30 сек',
-      ustaz_rev_fwd: '30 сек ↻',
-      ustaz_rev_back5: '↺ 5 мин',
-      ustaz_rev_fwd5: '5 мин ↻',
+      ustaz_rev_play: 'слушать',
+      ustaz_rev_stop: 'стоп',
+      ustaz_rev_back: '30 сек',
+      ustaz_rev_fwd: '30 сек',
+      ustaz_rev_back5: '5 мин',
+      ustaz_rev_fwd5: '5 мин',
       ustaz_rev_reject: 'Отвергнуть',
       ustaz_rev_accept: 'Принято',
       ustaz_rev_rejected: 'Отвергнуто · балл за день снят, ребёнок читает заново',
@@ -5290,7 +5308,7 @@
       subs_rev_title: 'ПОВТОРЕНИЕ НЕ ПРИНЯТО',
       subs_rev_meta: '%D% · %S% · запись %T%',
       subs_rev_hint: 'Прочитай повторение заново и запиши целиком — успеешь сегодня, зачёт за день вернётся.',
-      subs_rev_go: '🔁 Прочитать заново',
+      subs_rev_go: 'Прочитать заново',
       ustaz_waits: 'ждёт %N%',
       ustaz_older: 'Ещё %N% старше — показать',
       ustaz_older_title: 'Старше последних дней',
@@ -5334,7 +5352,7 @@
       back_trainer: '← Тренажёр',
       review_back: '← Устаз',
       trainer_rating_title: 'Рейтинг',
-      tab_mywords: '⭐ Мои слова',
+      tab_mywords: 'Мои слова',
       surah_list_title: 'Суры',
       hifz_pick: 'С какой строчки начинаем?',
       hifz_pick_sub: 'тапни по строке',
@@ -5343,18 +5361,18 @@
       hifz_pick_half_sub: 'тапни по половине',
       hifz_pick_cancel: 'Место не изменено',
       trainer_range_to: 'словарь: до стр. %N%',
-      grad_title: '🎓 Ты прошёл подготовительную',
-      grad_title_f: '🎓 Ты прошла подготовительную',
+      grad_title: 'Ты прошёл подготовительную',
+      grad_title_f: 'Ты прошла подготовительную',
       grad_ask: '%N% полных дней. Знаешь наизусть страницы 1–22 Корана? Ответ определит твою группу.',
       grad_yes: 'Знаю 1–22 наизусть',
       grad_no: 'Не знаю',
       grad_pending: 'Устаз проверит и сам решит, в какую группу тебя взять. Ждём его ответа.',
       grad_moved: 'Ты в группе «%G%». Задания уже засчитываются там.',
-      bm_save: '🔖 Сохранить закладку здесь',
+      bm_save: 'Сохранить закладку здесь',
       bm_save_sub: 'эта страница станет закладкой',
-      bm_go: '↩ К закладке',
+      bm_go: 'К закладке',
       bm_go_sub: 'страница, где остановился',
-      bm_baqara_short: '⤒ Бакара',
+      bm_baqara_short: 'Бакара',
       hifz_rotate_hint: 'Поверните телефон — строки станут крупнее',
       hifz_rotate_hint_lock: 'не поворачивается — снимите блокировку поворота',
       hifz_unit_line: 'Строка',
@@ -5370,7 +5388,7 @@
       hifz_stage3: 'этап 3 — вся страница, 40+40',
       hifz_big: 'Крупно',
       hifz_fix: 'поправить',
-      hifz_submit: '🎙 Сдать',
+      hifz_submit: 'Сдать',
       hifz_rec_start: 'Записать',
       hifz_rec_stop: 'Стоп',
       hifz_rec_pause: 'Пауза',
@@ -5402,9 +5420,9 @@
       hifz_progress_own_hint: 'Это итог по этому месту, не добавка.',
       hifz_progress_save: 'Готово',
       hifz_progress_close: 'Дальше: %P%',
-      tab_mushaf: '📗 Мусхаф',
-      btn_finish: '✅ Закончить',
-      btn_rating: '🏆 Рейтинг',
+      tab_mushaf: 'Мусхаф',
+      btn_finish: 'Закончить',
+      btn_rating: 'Рейтинг',
       btn_start: 'Начать',
       btn_yes: 'Да',
       btn_cancel: 'Отмена',
@@ -5413,16 +5431,16 @@
       ayah_n: 'аят %N%',
       ayah_range: 'аят %A%–%B%',
       word_from_page_n: 'слово со стр. %N%',
-      correct_today: '✅ верно сегодня %N%/%M%',
+      correct_today: 'верно сегодня %N%/%M%',
       daily_n: '%N%/%M% сегодня',
-      daily_words_n: '%N%/%M% сегодня · ✅ %C%/%K%',
+      daily_words_n: '%N%/%M% сегодня · %C%/%K%',
       overall_score: 'Общий вес',
       mastered_of: 'закреплено %N% из %M% слов',
-      which_page_range: '📖 Какая страница мусхафа? (стр. %A%–%B%)',
-      bookmark_saved: '🔖 Закладка: стр. %N%',
+      which_page_range: 'Какая страница мусхафа? (стр. %A%–%B%)',
+      bookmark_saved: 'Закладка: стр. %N%',
       session_done: 'Сессия завершена 🤲',
-      delta_up: '📈 Вырос за сеанс на +%N%',
-      delta_down: '📉 Снизился за сеанс на %N%',
+      delta_up: 'Вырос за сеанс на +%N%',
+      delta_down: 'Снизился за сеанс на %N%',
       delta_same: 'Вес за сеанс не изменился — попробуй ещё раз, каждый верный ответ его двигает 🤲',
       // «Выучено N%» вместо «Общий вес 9.81/10» (11.11.2026, решение
       // пользователя): доля ПОЛНОСТЬЮ выученных слов, вниз - 100% только
@@ -5445,16 +5463,16 @@
       lb_words_one: '%N% слово',
       lb_words_few: '%N% слова',
       lb_words_many: '%N% слов',
-      rank_line: '🏆 Место в %D%: %X%',
+      rank_line: 'Место в %D%: %X%',
       x_of_y: '%P% из %T%',
-      btn_new_card: '🔁 Новая карточка',
-      top_title: '🏆 Топ по муфрадату',
+      btn_new_card: 'Новая карточка',
+      top_title: 'Топ по муфрадату',
       no_rank_yet: 'Пока никто не тренировал муфрадат достаточно, чтобы попасть в рейтинг 🤲',
-      division_1: '🥇 Дивизион 1 (стр. 11+)',
-      division_2: '🥈 Дивизион 2 (стр. 1-10)',
-      daily_left: '📝 Ещё %N% разных слов сегодня — и дневное задание «Слова» будет засчитано',
-      daily_left_both: '📝 Ещё %N% слов и %C% верных сегодня — и дневное задание «Слова» будет засчитано',
-      daily_left_correct: '📝 %M% слов уже есть, для зачёта «Слова» ещё %C% верных',
+      division_1: 'Дивизион 1 (стр. 11+)',
+      division_2: 'Дивизион 2 (стр. 1-10)',
+      daily_left: 'Ещё %N% разных слов сегодня — и дневное задание «Слова» будет засчитано',
+      daily_left_both: 'Ещё %N% слов и %C% верных сегодня — и дневное задание «Слова» будет засчитано',
+      daily_left_correct: '%M% слов уже есть, для зачёта «Слова» ещё %C% верных',
       mywords_empty: 'Пока пусто. Дважды нажми на слово во время чтения — оно попадёт сюда.',
       mywords_new: 'Новые',
       mywords_old: 'Забытые',
@@ -5467,7 +5485,7 @@
       btn_to_my_place: 'На моё место',
       revision_ask: 'Вы сделали повторение с начала суры Аль-Бакара?',
       revision_ask_hafiz: 'Вы сделали сегодняшнее повторение?',
-      revision_done: '✅ Повторение засчитано',
+      revision_done: 'Повторение засчитано',
       revision_already: 'Уже засчитано сегодня',
       revision_rec_place: 'Повторение записью',
       revision_rec_start: 'Записать всё повторение',
@@ -5482,14 +5500,14 @@
       rec_mic_lost_again: 'Микрофон отключился — нажми «Записать» ещё раз',
       rec_fresh: 'Начать заново',
       rec_continue_hint: 'Читай дальше с того места, где остановился',
-      added_mywords: '✅ В «Мои слова»',
+      added_mywords: 'В «Мои слова»',
       bookmark_none: 'Закладка ещё не сохранена',
       meaning_missing: 'перевод смысла для этой страницы ещё не загружен',
       trainer_empty: 'Слова на твоей закладке пока закончились 🤲 Сдвинь страницу дальше.',
       trainer_review: 'Все слова до стр. %N% выучены, МашаАллах 🤲 Повторяем выученное. Новые слова — нажми ➕',
       session_expired: 'Сессия Telegram истекла 🤲 Перезайди в приложение.',
       tab_meaning_full: '📜 Смысл',
-      tab_trainer_full: '🌱 Тренажёр',
+      tab_trainer_full: 'Тренажёр',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Мои слова',
       online_now_n: 'сейчас в онлайне учатся %N%',
       my_day: 'мой день',
@@ -5553,8 +5571,8 @@
       sett_country_ph: 'Какая страна?',
       sett_lang: 'Язык',
       sett_theme: 'Тема',
-      sett_theme_day: '☀️ День',
-      sett_theme_night: '🌙 Ночь',
+      sett_theme_day: 'День',
+      sett_theme_night: 'Ночь',
       sett_layout_madani: 'Мединский',
       sett_layout_dm: 'Дар аль-Маариф (египетский)',
       sett_logout: 'Выйти из приложения',
@@ -5622,9 +5640,9 @@
       hifz_progress_plus: 'плюс один повтор',
       listen_title: 'Слушать',
       close_title: 'Закрыть',
-      review_comment: '🎙 Замечание',
-      review_accept: '✅ Принято',
-      review_retake: '↺ На пересдачу',
+      review_comment: 'Замечание',
+      review_accept: 'Принято',
+      review_retake: 'На пересдачу',
       lesson_date: '%D% %M%',
       month_1: 'января',
       month_2: 'февраля',
@@ -5688,14 +5706,14 @@
       back_more: '← Дагы',
       more_learn_sub: 'Эрежелер, кантип иштейбиз, сабактар',
       more_sett_sub: 'Аты, тил, көрүнүш, дос чакыруу',
-      tab_mywords: '⭐ Менин сөздөрүм',
+      tab_mywords: 'Менин сөздөрүм',
       // Строки режима заучивания (hifz_*) намеренно только по-русски
       // (01.09.2026): фича ещё шлифуется, локализуем одним проходом,
       // когда устоится. T() сам откатывается на русский по ключу.
       surah_list_title: 'Сүрөлөр',
-      tab_mushaf: '📗 Мусхаф',
-      btn_finish: '✅ Бүтүрүү',
-      btn_rating: '🏆 Рейтинг',
+      tab_mushaf: 'Мусхаф',
+      btn_finish: 'Бүтүрүү',
+      btn_rating: 'Рейтинг',
       btn_start: 'Баштоо',
       btn_yes: 'Ооба',
       btn_cancel: 'Жокко чыгаруу',
@@ -5707,11 +5725,11 @@
       daily_n: 'бүгүн %N%/%M%',
       overall_score: 'Жалпы балл',
       mastered_of: '%M% сөздөн %N% сөз жатталды',
-      which_page_range: '📖 Мусхафтын кайсы бети? (%A%–%B%-бет)',
-      bookmark_saved: '🔖 Кыстарма: %N%-бет',
+      which_page_range: 'Мусхафтын кайсы бети? (%A%–%B%-бет)',
+      bookmark_saved: 'Кыстарма: %N%-бет',
       session_done: 'Сеанс аяктады 🤲',
-      delta_up: '📈 Сеанста +%N% өстү',
-      delta_down: '📉 Сеанста %N% төмөндөдү',
+      delta_up: 'Сеанста +%N% өстү',
+      delta_down: 'Сеанста %N% төмөндөдү',
       delta_same: 'Сеанста балл өзгөргөн жок — дагы аракет кыл, ар бир туура жооп аны жылдырат 🤲',
       learned_line: '%N%-бетке чейин сөздөрдүн %P%% жатталды',
       learned_of: '%M% сөздөн %N% · калды %R%',
@@ -5731,27 +5749,27 @@
       lb_words_one: '%N% сөз',
       lb_words_few: '%N% сөз',
       lb_words_many: '%N% сөз',
-      rank_line: '🏆 %D% ичиндеги орун: %X%',
+      rank_line: '%D% ичиндеги орун: %X%',
       x_of_y: '%T% ичинен %P%',
-      btn_new_card: '🔁 Жаңы карточка',
-      top_title: '🏆 Муфрадат боюнча топ',
+      btn_new_card: 'Жаңы карточка',
+      top_title: 'Муфрадат боюнча топ',
       no_rank_yet: 'Азырынча эч ким рейтингге кире турганчалык машыкканы жок 🤲',
-      division_1: '🥇 1-дивизион (11+ бет)',
-      division_2: '🥈 2-дивизион (1–10-бет)',
-      daily_left: '📝 Бүгүн дагы %N% ар башка сөз — ошондо «Сөздөр» күндүк тапшырмасы аткарылат',
+      division_1: '1-дивизион (11+ бет)',
+      division_2: '2-дивизион (1–10-бет)',
+      daily_left: 'Бүгүн дагы %N% ар башка сөз — ошондо «Сөздөр» күндүк тапшырмасы аткарылат',
       mywords_empty: 'Азырынча бош. Окуп жатканда сөздү эки жолу бассаң, ал бул жерге кошулат.',
       rank_among: 'Бардык катышуучулардын арасындагы орун: %X%',
       revision_ask: 'Бакара сүрөсүн башынан кайталадыңбы?',
-      revision_done: '✅ Кайталоо эсептелди',
+      revision_done: 'Кайталоо эсептелди',
       revision_already: 'Бүгүн эсептелген',
-      added_mywords: '✅ «Менин сөздөрүмө» кошулду',
+      added_mywords: '«Менин сөздөрүмө» кошулду',
       bookmark_none: 'Кыстарма азырынча сактала элек',
       meaning_missing: 'бул беттин маанилик котормосу азырынча жүктөлө элек',
       trainer_empty: 'Кыстармаңдагы сөздөр азырынча түгөндү 🤲 Бетти алдыга жылдыр.',
       trainer_review: '%N%-бетке чейинки бардык сөздөр жатталды, МашаАллах 🤲 Үйрөнгөндү кайталайбыз. Жаңы сөздөр — ➕ бас',
       session_expired: 'Telegram сессиясы бүттү 🤲 Колдонмого кайра кир.',
       tab_meaning_full: '📜 Мааниси',
-      tab_trainer_full: '🌱 Машыгуу',
+      tab_trainer_full: 'Машыгуу',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Менин сөздөрүм',
       online_now_n: 'азыр онлайн окуп жатышат %N%',
       // 28.09.2026: 393 строки - черновик Claude, проверка Gemini 3.1 Pro
@@ -5870,7 +5888,7 @@
       subs_wait: 'текшерүүдө',
       subs_done: 'тапшырылды',
       subs_my_record: '▶ Менин жазуум',
-      subs_retake: '🎙 Кайра тапшыруу',
+      subs_retake: 'Кайра тапшыруу',
       subs_redo: 'Кайра жазуу',
       subs_review_open: 'Устаздын талдоосу',
       subs_series_n: 'катары менен %N%',
@@ -5880,8 +5898,8 @@
       look_no_audio: 'Устаз сөздөрдү үн менен талдабай белгиледи',
       look_failed: 'Жазууну ойнотуу мүмкүн болбоду',
       look_back: '← Жаттоолор',
-      look_back10: '↺ 10 сек артка',
-      look_retake: '🎙 Кайра тапшыруу',
+      look_back10: '10 сек артка',
+      look_retake: 'Кайра тапшыруу',
       look_sub: 'устаздын талдоосу',
       rec_review_text: 'Устаздын эскертүүсү — кайра угуу',
       subs_todo_title: 'КАЙРА ТАПШЫРУУ — %N%',
@@ -5891,7 +5909,7 @@
       subs_waiting_quiet: 'текшерүүдө %N% — устазды күтүүдө, сенден эч нерсе талап кылынбайт',
       subs_review_from: '%N% жооп берди',
       subs_review_voice: 'үн менен талдоо',
-      subs_playing: '⏸ Токтотуу',
+      subs_playing: 'Токтотуу',
       subs_audio_failed: 'Жазууну ойнотуу мүмкүн болбоду',
       review_tap_words: 'Ката кеткен сөздөрдү бас',
       review_marked: 'Белгиленген сөздөр: %N%',
@@ -5900,16 +5918,16 @@
       review_done_retake: 'Кайра тапшырууга жөнөтүлдү',
       review_failed: 'Болбой калды — дагы аракет кыл',
       review_need_comment: 'Адегенде эскертүүнү жаз — ансыз кайра тапшыруу жөнөтүлбөйт',
-      review_play: '▶ Тапшырууну угуу',
-      review_play_mine: '▶ Менин талдоом',
+      review_play: 'Тапшырууну угуу',
+      review_play_mine: 'Менин талдоом',
       review_src_own: 'Тапшыруу',
       review_src_mine: 'Менин талдоом',
       review_frozen: 'Студент кайра тапшырып койду — жаңы жазуу «Күтүүдө» бөлүмүндө талдоону күтүп жатат',
       review_next: 'Кийинки: %N% · %P%-бет ›',
       review_to_list: 'Тизмеге',
       review_left: 'топто дагы %N% күтүүдө',
-      review_stop: '⏸ Токтотуу',
-      review_back10: '↺ 10 сек',
+      review_stop: 'Токтотуу',
+      review_back10: '10 сек',
       subs_verdict_ok: 'кабыл алынды',
       subs_verdict_retake: 'кайра тапшырууга',
       subs_verdict_redone: 'кайра тапшырды — устазды күтүүдө',
@@ -5957,7 +5975,7 @@
       ustaz_misses_no_limit: 'калтырылган: %N%',
       ustaz_lesson_misses: 'калтырылган онлайн-сабактар: 3 ичинен %N%',
       ustaz_strip_legend: 'Ай күндөр боюнча: мамыча канчалык ачык болсо, ошончолук аз тапшырылган',
-      lesson_title: '🕌 Онлайн-сабак',
+      lesson_title: 'Онлайн-сабак',
       lesson_hint: 'сабактан кийин белгиле',
       lesson_btn: 'Катыштым',
       lesson_btn_f: 'Катыштым',
@@ -6005,15 +6023,15 @@
       ustaz_rev_fold: 'Кайталоолор · %N%',
       ustaz_rev_hint: 'окуу жазуулары — тандап угуу',
       ustaz_rev_title: 'Кайталоолор',
-      ustaz_rev_short: '⚠ кыска',
+      ustaz_rev_short: 'кыска',
       ustaz_rev_span: '%A%–%B%-беттер',
       ustaz_rev_from: '%A%-беттен',
-      ustaz_rev_play: '▶ угуу',
-      ustaz_rev_stop: '■ токтотуу',
-      ustaz_rev_back: '↺ 30 сек',
-      ustaz_rev_fwd: '30 сек ↻',
-      ustaz_rev_back5: '↺ 5 мүн',
-      ustaz_rev_fwd5: '5 мүн ↻',
+      ustaz_rev_play: 'угуу',
+      ustaz_rev_stop: 'токтотуу',
+      ustaz_rev_back: '30 сек',
+      ustaz_rev_fwd: '30 сек',
+      ustaz_rev_back5: '5 мүн',
+      ustaz_rev_fwd5: '5 мүн',
       ustaz_rev_reject: 'Четке кагуу',
       ustaz_rev_accept: 'Кабыл алынды',
       ustaz_rev_rejected: 'Четке кагылды · күндүк балл алынды, бала кайра окуйт',
@@ -6021,7 +6039,7 @@
       subs_rev_title: 'КАЙТАЛОО КАБЫЛ АЛЫНГАН ЖОК',
       subs_rev_meta: '%D% · %S% · жазуу %T%',
       subs_rev_hint: 'Кайталоону кайра окуп, толугу менен жаздыр — бүгүн үлгүрсөң, күндүк эсеп кайтып келет.',
-      subs_rev_go: '🔁 Кайра окуу',
+      subs_rev_go: 'Кайра окуу',
       ustaz_waits: '%N% күтүүдө',
       ustaz_older: 'Дагы %N% эскиси — көрсөтүү',
       ustaz_older_title: 'Акыркы күндөрдөн эскилери',
@@ -6060,18 +6078,18 @@
       hifz_pick_half_sub: 'жарымын бас',
       hifz_pick_cancel: 'Орун өзгөргөн жок',
       trainer_range_to: 'сөздүк: %N%-бетке чейин',
-      grad_title: '🎓 Даярдоо тобун бүтүрдүң',
-      grad_title_f: '🎓 Даярдоо тобун бүтүрдүң',
+      grad_title: 'Даярдоо тобун бүтүрдүң',
+      grad_title_f: 'Даярдоо тобун бүтүрдүң',
       grad_ask: '%N% толук күн. Курандын 1–22-беттерин жатка билесиңби? Жообуңа жараша тобуң аныкталат.',
       grad_yes: '1–22-беттерди жатка билем',
       grad_no: 'Билбейм',
       grad_pending: 'Устаз текшерип, сени кайсы топко аларын өзү чечет. Анын жообун күтөбүз.',
       grad_moved: 'Сен «%G%» тобундасың. Тапшырмалар ошол жерде эсептелип жатат.',
-      bm_save: '🔖 Кыстарманы ушул жерге сактоо',
+      bm_save: 'Кыстарманы ушул жерге сактоо',
       bm_save_sub: 'бул бет кыстарма болуп калат',
-      bm_go: '↩ Кыстармага',
+      bm_go: 'Кыстармага',
       bm_go_sub: 'токтогон бетиң',
-      bm_baqara_short: '⤒ Бакара',
+      bm_baqara_short: 'Бакара',
       hifz_rotate_hint: 'Телефонду бур — саптар чоңоёт',
       hifz_rotate_hint_lock: 'бурулбай жатабы — буруунун кулпусун ач',
       hifz_unit_line: 'Сап',
@@ -6087,7 +6105,7 @@
       hifz_stage3: '3-баскыч — бүт бет, 40+40',
       hifz_big: 'Чоң',
       hifz_fix: 'оңдоо',
-      hifz_submit: '🎙 Тапшыруу',
+      hifz_submit: 'Тапшыруу',
       hifz_rec_start: 'Жазуу',
       hifz_rec_stop: 'Токтотуу',
       hifz_rec_pause: 'Тыным',
@@ -6119,10 +6137,10 @@
       hifz_progress_own_hint: 'Бул ушул жер боюнча жыйынтык, кошумча эмес.',
       hifz_progress_save: 'Даяр',
       hifz_progress_close: 'Кийинки: %P%',
-      correct_today: '✅ бүгүн туура %N%/%M%',
-      daily_words_n: 'бүгүн %N%/%M% · ✅ %C%/%K%',
-      daily_left_both: '📝 Бүгүн дагы %N% сөз жана %C% туура жооп — ошондо «Сөздөр» күндүк тапшырмасы аткарылат',
-      daily_left_correct: '📝 %M% сөз бар, «Сөздөр» аткарылышы үчүн дагы %C% туура жооп керек',
+      correct_today: 'бүгүн туура %N%/%M%',
+      daily_words_n: 'бүгүн %N%/%M% · %C%/%K%',
+      daily_left_both: 'Бүгүн дагы %N% сөз жана %C% туура жооп — ошондо «Сөздөр» күндүк тапшырмасы аткарылат',
+      daily_left_correct: '%M% сөз бар, «Сөздөр» аткарылышы үчүн дагы %C% туура жооп керек',
       mywords_new: 'Жаңылар',
       mywords_old: 'Унутулгандар',
       my_result: 'Сенин жыйынтыгың: %R%',
@@ -6228,8 +6246,8 @@
       sett_country_ph: 'Кайсы өлкө?',
       sett_lang: 'Тил',
       sett_theme: 'Көрүнүш',
-      sett_theme_day: '☀️ Күндүз',
-      sett_theme_night: '🌙 Түн',
+      sett_theme_day: 'Күндүз',
+      sett_theme_night: 'Түн',
       sett_layout_madani: 'Медина',
       sett_layout_dm: 'Дар аль-Маариф (Мисир)',
       sett_logout: 'Колдонмодон чыгуу',
@@ -6285,9 +6303,9 @@
       hifz_progress_plus: 'бир кайталоо кошуу',
       listen_title: 'Угуу',
       close_title: 'Жабуу',
-      review_comment: '🎙 Эскертүү',
-      review_accept: '✅ Кабыл алынды',
-      review_retake: '↺ Кайра тапшырууга',
+      review_comment: 'Эскертүү',
+      review_accept: 'Кабыл алынды',
+      review_retake: 'Кайра тапшырууга',
       lesson_date: '%D%-%M%',
       month_1: 'январь',
       month_2: 'февраль',
@@ -6470,14 +6488,14 @@
       back_more: '← Яна',
       more_learn_sub: 'Қоидалар, қандай ишлаймиз, дарслар',
       more_sett_sub: 'Исм, тил, кўриниш, дўстни таклиф қилиш',
-      tab_mywords: '⭐ Менинг сўзларим',
+      tab_mywords: 'Менинг сўзларим',
       surah_list_title: 'Суралар',
-      tab_mushaf: '📗 Мусҳаф',
+      tab_mushaf: 'Мусҳаф',
       tab_meaning_full: '📜 Маъноси',
-      tab_trainer_full: '🌱 Машқ',
+      tab_trainer_full: 'Машқ',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> Менинг сўзларим',
-      btn_finish: '✅ Тугатиш',
-      btn_rating: '🏆 Рейтинг',
+      btn_finish: 'Тугатиш',
+      btn_rating: 'Рейтинг',
       btn_start: 'Бошлаш',
       btn_yes: 'Ҳа',
       btn_cancel: 'Бекор қилиш',
@@ -6489,11 +6507,11 @@
       daily_n: 'бугун %N%/%M%',
       overall_score: 'Умумий балл',
       mastered_of: '%M% та сўздан %N% таси мустаҳкамланди',
-      which_page_range: '📖 Мусҳафнинг қайси бети? (%A%–%B%-бет)',
-      bookmark_saved: '🔖 Хатчўп: %N%-бет',
+      which_page_range: 'Мусҳафнинг қайси бети? (%A%–%B%-бет)',
+      bookmark_saved: 'Хатчўп: %N%-бет',
       session_done: 'Сеанс тугади 🤲',
-      delta_up: '📈 Сеансда +%N% га ошди',
-      delta_down: '📉 Сеансда %N% га камайди',
+      delta_up: 'Сеансда +%N% га ошди',
+      delta_down: 'Сеансда %N% га камайди',
       delta_same: 'Сеансда балл ўзгармади — яна уриниб кўр, ҳар бир тўғри жавоб уни кўтаради 🤲',
       learned_line: '%N%-бетгача сўзларнинг %P%% и ёдланди',
       learned_of: '%M% тадан %N% та · қолди %R%',
@@ -6513,20 +6531,20 @@
       lb_words_one: '%N% та сўз',
       lb_words_few: '%N% та сўз',
       lb_words_many: '%N% та сўз',
-      rank_line: '🏆 %D% даги ўрин: %X%',
+      rank_line: '%D% даги ўрин: %X%',
       x_of_y: '%T% тадан %P%',
-      btn_new_card: '🔁 Янги карточка',
-      top_title: '🏆 Муфрадат рейтинги',
+      btn_new_card: 'Янги карточка',
+      top_title: 'Муфрадат рейтинги',
       no_rank_yet: 'Ҳозирча ҳеч ким рейтингга тушадиган даражада машқ қилмади 🤲',
-      division_1: '🥇 1-дивизион (11+ бет)',
-      division_2: '🥈 2-дивизион (1–10-бет)',
-      daily_left: '📝 Бугун яна %N% та турли сўз — шунда «Сўзлар» кунлик топшириғи ҳисобга олинади',
+      division_1: '1-дивизион (11+ бет)',
+      division_2: '2-дивизион (1–10-бет)',
+      daily_left: 'Бугун яна %N% та турли сўз — шунда «Сўзлар» кунлик топшириғи ҳисобга олинади',
       mywords_empty: 'Ҳозирча бўш. Ўқиш пайтида сўзни икки марта боссанг, у шу ерга қўшилади.',
       rank_among: 'Барча машқ қилувчилар орасидаги ўрин: %X%',
       revision_ask: 'Бақара сурасини бошидан такрорладингми?',
-      revision_done: '✅ Такрорлаш ҳисобга олинди',
+      revision_done: 'Такрорлаш ҳисобга олинди',
       revision_already: 'Бугун ҳисобга олинган',
-      added_mywords: '✅ «Менинг сўзларим»га қўшилди',
+      added_mywords: '«Менинг сўзларим»га қўшилди',
       bookmark_none: 'Хатчўп ҳозирча сақланмаган',
       meaning_missing: 'бу бетнинг маънолар таржимаси ҳозирча юкланмаган',
       trainer_empty: 'Хатчўпингдаги сўзлар ҳозирча тугади 🤲 Кейинги бетга ўт.',
@@ -6649,7 +6667,7 @@
       subs_wait: 'текширувда',
       subs_done: 'топширилди',
       subs_my_record: '▶ Менинг ёзувим',
-      subs_retake: '🎙 Қайта топшириш',
+      subs_retake: 'Қайта топшириш',
       subs_redo: 'Қайта ёзиш',
       subs_review_open: 'Устоз таҳлили',
       subs_series_n: 'кетма-кет %N%',
@@ -6659,8 +6677,8 @@
       look_no_audio: 'Устоз сўзларни овозли таҳлилсиз белгилади',
       look_failed: 'Ёзувни ўйнатиб бўлмади',
       look_back: '← Ёдлашлар',
-      look_back10: '↺ 10 сония орқага',
-      look_retake: '🎙 Қайта топшириш',
+      look_back10: '10 сония орқага',
+      look_retake: 'Қайта топшириш',
       look_sub: 'устоз таҳлили',
       rec_review_text: 'Устоз изоҳи — қайта тинглаш',
       subs_todo_title: 'ҚАЙТА ТОПШИРИШ — %N%',
@@ -6670,7 +6688,7 @@
       subs_waiting_quiet: 'текширувда %N% — устозни кутяпти, сендан ҳеч нарса талаб қилинмайди',
       subs_review_from: '%N% жавоб берди',
       subs_review_voice: 'овозли таҳлил',
-      subs_playing: '⏸ Тўхтатиш',
+      subs_playing: 'Тўхтатиш',
       subs_audio_failed: 'Ёзувни ўйнатиб бўлмади',
       review_tap_words: 'Хато бўлган сўзларни бос',
       review_marked: 'Белгиланган сўзлар: %N%',
@@ -6679,16 +6697,16 @@
       review_done_retake: 'Қайта топширишга юборилди',
       review_failed: 'Бўлмади — яна уриниб кўр',
       review_need_comment: 'Аввал изоҳ қолдир — усиз қайта топшириш юборилмайди',
-      review_play: '▶ Топширишни тинглаш',
-      review_play_mine: '▶ Менинг таҳлилим',
+      review_play: 'Топширишни тинглаш',
+      review_play_mine: 'Менинг таҳлилим',
       review_src_own: 'Топшириқ',
       review_src_mine: 'Менинг таҳлилим',
       review_frozen: 'Талаба қайта топширди — янги ёзув «Кутмоқда» бўлимида таҳлилни кутяпти',
       review_next: 'Кейингиси: %N% · %P%-бет ›',
       review_to_list: 'Рўйхатга',
       review_left: 'гуруҳда яна %N% кутяпти',
-      review_stop: '⏸ Тўхтатиш',
-      review_back10: '↺ 10 сония',
+      review_stop: 'Тўхтатиш',
+      review_back10: '10 сония',
       subs_verdict_ok: 'қабул қилинди',
       subs_verdict_retake: 'қайта топширишга',
       subs_verdict_redone: 'қайта топширди — устозни кутяпти',
@@ -6736,7 +6754,7 @@
       ustaz_misses_no_limit: 'қолдирилган: %N%',
       ustaz_lesson_misses: 'қолдирилган онлайн-дарслар: 3 тадан %N%',
       ustaz_strip_legend: 'Ой кунлар бўйича: устунча қанча очроқ бўлса, шунча кам топширилган',
-      lesson_title: '🕌 Онлайн-дарс',
+      lesson_title: 'Онлайн-дарс',
       lesson_hint: 'дарсдан кейин белгила',
       lesson_btn: 'Қатнашдим',
       lesson_btn_f: 'Қатнашдим',
@@ -6784,15 +6802,15 @@
       ustaz_rev_fold: 'Такрорлашлар · %N%',
       ustaz_rev_hint: 'ўқиш ёзувлари — танлаб тинглаш',
       ustaz_rev_title: 'Такрорлашлар',
-      ustaz_rev_short: '⚠ қисқа',
+      ustaz_rev_short: 'қисқа',
       ustaz_rev_span: '%A%–%B%-бетлар',
       ustaz_rev_from: '%A%-бетдан',
-      ustaz_rev_play: '▶ тинглаш',
-      ustaz_rev_stop: '■ тўхтатиш',
-      ustaz_rev_back: '↺ 30 сония',
-      ustaz_rev_fwd: '30 сония ↻',
-      ustaz_rev_back5: '↺ 5 дақ',
-      ustaz_rev_fwd5: '5 дақ ↻',
+      ustaz_rev_play: 'тинглаш',
+      ustaz_rev_stop: 'тўхтатиш',
+      ustaz_rev_back: '30 сония',
+      ustaz_rev_fwd: '30 сония',
+      ustaz_rev_back5: '5 дақ',
+      ustaz_rev_fwd5: '5 дақ',
       ustaz_rev_reject: 'Рад этиш',
       ustaz_rev_accept: 'Қабул қилинди',
       ustaz_rev_rejected: 'Рад этилди · кунлик балл олиб ташланди, бола қайта ўқийди',
@@ -6800,7 +6818,7 @@
       subs_rev_title: 'ТАКРОРЛАШ ҚАБУЛ ҚИЛИНМАДИ',
       subs_rev_meta: '%D% · %S% · ёзув %T%',
       subs_rev_hint: 'Такрорлашни қайта ўқиб, тўлиқ ёзиб ол — бугун улгурсанг, кунлик балл қайтади.',
-      subs_rev_go: '🔁 Қайта ўқиш',
+      subs_rev_go: 'Қайта ўқиш',
       ustaz_waits: '%N% кутяпти',
       ustaz_older: 'Яна %N% та эскироғи — кўрсатиш',
       ustaz_older_title: 'Сўнгги кунлардан эскилари',
@@ -6839,18 +6857,18 @@
       hifz_pick_half_sub: 'ярмини бос',
       hifz_pick_cancel: 'Жой ўзгармади',
       trainer_range_to: 'луғат: %N%-бетгача',
-      grad_title: '🎓 Тайёрлов гуруҳини тугатдинг',
-      grad_title_f: '🎓 Тайёрлов гуруҳини тугатдинг',
+      grad_title: 'Тайёрлов гуруҳини тугатдинг',
+      grad_title_f: 'Тайёрлов гуруҳини тугатдинг',
       grad_ask: '%N% тўлиқ кун. Қуръоннинг 1–22-бетларини ёддан биласанми? Жавобингга қараб гуруҳинг аниқланади.',
       grad_yes: '1–22-бетларни ёддан биламан',
       grad_no: 'Билмайман',
       grad_pending: 'Устоз текшириб, сени қайси гуруҳга олишни ўзи ҳал қилади. Унинг жавобини кутамиз.',
       grad_moved: 'Сен «%G%» гуруҳидасан. Топшириқлар энди ўша ерда ҳисобга олинади.',
-      bm_save: '🔖 Хатчўпни шу ерга сақлаш',
+      bm_save: 'Хатчўпни шу ерга сақлаш',
       bm_save_sub: 'бу бет хатчўп бўлади',
-      bm_go: '↩ Хатчўпга',
+      bm_go: 'Хатчўпга',
       bm_go_sub: 'тўхтаган бетинг',
-      bm_baqara_short: '⤒ Бақара',
+      bm_baqara_short: 'Бақара',
       hifz_rotate_hint: 'Телефонни айлантир — қаторлар катталашади',
       hifz_rotate_hint_lock: 'айланмаяптими — айланиш қулфини оч',
       hifz_unit_line: 'Қатор',
@@ -6866,7 +6884,7 @@
       hifz_stage3: '3-босқич — бутун бет, 40+40',
       hifz_big: 'Йирик',
       hifz_fix: 'тузатиш',
-      hifz_submit: '🎙 Топшириш',
+      hifz_submit: 'Топшириш',
       hifz_rec_start: 'Ёзиб олиш',
       hifz_rec_stop: 'Тўхтатиш',
       hifz_rec_pause: 'Пауза',
@@ -6898,10 +6916,10 @@
       hifz_progress_own_hint: 'Бу шу жой бўйича якун, қўшимча эмас.',
       hifz_progress_save: 'Тайёр',
       hifz_progress_close: 'Кейингиси: %P%',
-      correct_today: '✅ бугун тўғри %N%/%M%',
-      daily_words_n: 'бугун %N%/%M% · ✅ %C%/%K%',
-      daily_left_both: '📝 Бугун яна %N% та сўз ва %C% та тўғри жавоб — шунда «Сўзлар» кунлик топшириғи ҳисобга олинади',
-      daily_left_correct: '📝 %M% та сўз бор, «Сўзлар» ҳисобга олиниши учун яна %C% та тўғри жавоб керак',
+      correct_today: 'бугун тўғри %N%/%M%',
+      daily_words_n: 'бугун %N%/%M% · %C%/%K%',
+      daily_left_both: 'Бугун яна %N% та сўз ва %C% та тўғри жавоб — шунда «Сўзлар» кунлик топшириғи ҳисобга олинади',
+      daily_left_correct: '%M% та сўз бор, «Сўзлар» ҳисобга олиниши учун яна %C% та тўғри жавоб керак',
       mywords_new: 'Янгилар',
       mywords_old: 'Унутилганлар',
       my_result: 'Сенинг натижанг: %R%',
@@ -7007,8 +7025,8 @@
       sett_country_ph: 'Қайси давлат?',
       sett_lang: 'Тил',
       sett_theme: 'Кўриниш',
-      sett_theme_day: '☀️ Кундуз',
-      sett_theme_night: '🌙 Тун',
+      sett_theme_day: 'Кундуз',
+      sett_theme_night: 'Тун',
       sett_layout_madani: 'Мадина',
       sett_layout_dm: 'Дор ул-Маориф (Миср)',
       sett_logout: 'Иловадан чиқиш',
@@ -7064,9 +7082,9 @@
       hifz_progress_plus: 'битта такрор қўшиш',
       listen_title: 'Тинглаш',
       close_title: 'Ёпиш',
-      review_comment: '🎙 Изоҳ',
-      review_accept: '✅ Қабул қилинди',
-      review_retake: '↺ Қайта топширишга',
+      review_comment: 'Изоҳ',
+      review_accept: 'Қабул қилинди',
+      review_retake: 'Қайта топширишга',
       lesson_date: '%D% %M%',
       month_1: 'январь',
       month_2: 'февраль',
@@ -7252,14 +7270,14 @@
       back_more: '← 更多',
       more_learn_sub: '规则、使用方法、课程',
       more_sett_sub: '名字、语言、主题、邀请朋友',
-      tab_mywords: '⭐ 我的生词',
+      tab_mywords: '我的生词',
       surah_list_title: '章目',
-      tab_mushaf: '📗 古兰经',
+      tab_mushaf: '古兰经',
       tab_meaning_full: '📜 释义',
-      tab_trainer_full: '🌱 练习',
+      tab_trainer_full: '练习',
       tab_mywords_gold: '<span class="icon-gold">⭐</span> 我的生词',
-      btn_finish: '✅ 结束',
-      btn_rating: '🏆 排行榜',
+      btn_finish: '结束',
+      btn_rating: '排行榜',
       btn_start: '开始',
       btn_yes: '是',
       btn_cancel: '取消',
@@ -7271,11 +7289,11 @@
       daily_n: '今天 %N%/%M%',
       overall_score: '总分',
       mastered_of: '已巩固 %N% / %M% 个词',
-      which_page_range: '📖 古兰经的哪一页？（第%A%–%B%页）',
-      bookmark_saved: '🔖 书签：第%N%页',
+      which_page_range: '古兰经的哪一页？（第%A%–%B%页）',
+      bookmark_saved: '书签：第%N%页',
       session_done: '本轮结束 🤲',
-      delta_up: '📈 本轮提高了 +%N%',
-      delta_down: '📉 本轮下降了 %N%',
+      delta_up: '本轮提高了 +%N%',
+      delta_down: '本轮下降了 %N%',
       delta_same: '本轮分数没有变化 — 再试一次，每答对一次都会推动它 🤲',
       learned_line: '第%N%页之前的词已掌握 %P%%',
       learned_of: '%N% / %M% · 剩余 %R%',
@@ -7295,20 +7313,20 @@
       lb_words_one: '%N% 个词',
       lb_words_few: '%N% 个词',
       lb_words_many: '%N% 个词',
-      rank_line: '🏆 %D%中的名次：%X%',
+      rank_line: '%D%中的名次：%X%',
       x_of_y: '%P% / %T%',
-      btn_new_card: '🔁 换一张卡片',
-      top_title: '🏆 词汇排行榜',
+      btn_new_card: '换一张卡片',
+      top_title: '词汇排行榜',
       no_rank_yet: '还没有人的词汇练习量足以进入排行榜 🤲',
-      division_1: '🥇 第一组（第11页以后）',
-      division_2: '🥈 第二组（第1–10页）',
-      daily_left: '📝 今天再答 %N% 个不同的词，「词汇」日任务就算完成',
+      division_1: '第一组（第11页以后）',
+      division_2: '第二组（第1–10页）',
+      daily_left: '今天再答 %N% 个不同的词，「词汇」日任务就算完成',
       mywords_empty: '这里还是空的。阅读时双击一个词，它就会出现在这里。',
       rank_among: '在所有练习者中的名次：%X%',
       revision_ask: '你从黄牛章开头复习了吗？',
-      revision_done: '✅ 复习已记录',
+      revision_done: '复习已记录',
       revision_already: '今天已经记录过了',
-      added_mywords: '✅ 已加入「我的生词」',
+      added_mywords: '已加入「我的生词」',
       bookmark_none: '还没有保存书签',
       meaning_missing: '这一页的释义还没有加载',
       trainer_empty: '你书签范围内的词暂时练完了 🤲 把书签往后移一页吧。',
@@ -7430,7 +7448,7 @@
       subs_wait: '待审',
       subs_done: '已交',
       subs_my_record: '▶ 我的录音',
-      subs_retake: '🎙 重交',
+      subs_retake: '重交',
       subs_redo: '重新录音',
       subs_review_open: '老师点评',
       subs_series_n: '连续 %N% 次',
@@ -7440,8 +7458,8 @@
       look_no_audio: '老师标出了词语，但没有语音点评',
       look_failed: '无法播放录音',
       look_back: '← 背记',
-      look_back10: '↺ 后退10秒',
-      look_retake: '🎙 重交',
+      look_back10: '后退10秒',
+      look_retake: '重交',
       look_sub: '老师点评',
       rec_review_text: '老师的意见 — 再听一遍',
       subs_todo_title: '需要重交 — %N%',
@@ -7451,7 +7469,7 @@
       subs_waiting_quiet: '待审 %N% — 等老师审，你不需要做什么',
       subs_review_from: '%N% 已回复',
       subs_review_voice: '语音点评',
-      subs_playing: '⏸ 停止',
+      subs_playing: '停止',
       subs_audio_failed: '无法播放录音',
       review_tap_words: '点出有错误的词',
       review_marked: '已标记词数：%N%',
@@ -7460,16 +7478,16 @@
       review_done_retake: '已退回重交',
       review_failed: '没有成功 — 请再试一次',
       review_need_comment: '请先录下意见 — 没有意见，重交不能发出',
-      review_play: '▶ 听学生的录音',
-      review_play_mine: '▶ 我的点评',
+      review_play: '听学生的录音',
+      review_play_mine: '我的点评',
       review_src_own: '录音',
       review_src_mine: '我的点评',
       review_frozen: '学生已经重交 — 新录音在「待审」里等你点评',
       review_next: '下一个：%N% · 第%P%页 ›',
       review_to_list: '回到列表',
       review_left: '本组还有 %N% 个待审',
-      review_stop: '⏸ 停止',
-      review_back10: '↺ 10秒',
+      review_stop: '停止',
+      review_back10: '10秒',
       subs_verdict_ok: '通过',
       subs_verdict_retake: '需重交',
       subs_verdict_redone: '已重交 — 等老师审',
@@ -7517,7 +7535,7 @@
       ustaz_misses_no_limit: '缺交 %N%',
       ustaz_lesson_misses: '缺席线上课：%N% / 3',
       ustaz_strip_legend: '按天显示本月：柱子越浅，交得越少',
-      lesson_title: '🕌 线上课',
+      lesson_title: '线上课',
       lesson_hint: '课后签到',
       lesson_btn: '我参加了',
       lesson_btn_f: '我参加了',
@@ -7565,15 +7583,15 @@
       ustaz_rev_fold: '复习 · %N%',
       ustaz_rev_hint: '诵读录音 — 抽查收听',
       ustaz_rev_title: '复习',
-      ustaz_rev_short: '⚠ 太短',
+      ustaz_rev_short: '太短',
       ustaz_rev_span: '第%A%–%B%页',
       ustaz_rev_from: '从第%A%页起',
-      ustaz_rev_play: '▶ 收听',
-      ustaz_rev_stop: '■ 停止',
-      ustaz_rev_back: '↺ 30秒',
-      ustaz_rev_fwd: '30秒 ↻',
-      ustaz_rev_back5: '↺ 5分钟',
-      ustaz_rev_fwd5: '5分钟 ↻',
+      ustaz_rev_play: '收听',
+      ustaz_rev_stop: '停止',
+      ustaz_rev_back: '30秒',
+      ustaz_rev_fwd: '30秒',
+      ustaz_rev_back5: '5分钟',
+      ustaz_rev_fwd5: '5分钟',
       ustaz_rev_reject: '不通过',
       ustaz_rev_accept: '通过',
       ustaz_rev_rejected: '不通过 · 当天的分已撤销，孩子需要重新诵读',
@@ -7581,7 +7599,7 @@
       subs_rev_title: '复习未通过',
       subs_rev_meta: '%D% · %S% · 录音 %T%',
       subs_rev_hint: '重新诵读复习内容，完整录下来 — 今天完成的话，当天的记录会恢复。',
-      subs_rev_go: '🔁 重新诵读',
+      subs_rev_go: '重新诵读',
       ustaz_waits: '待审 %N%',
       ustaz_older: '还有 %N% 个更早的 — 显示',
       ustaz_older_title: '早于最近几天',
@@ -7620,18 +7638,18 @@
       hifz_pick_half_sub: '点其中一半',
       hifz_pick_cancel: '位置没有改变',
       trainer_range_to: '词汇范围：到第%N%页',
-      grad_title: '🎓 你完成了预备组',
-      grad_title_f: '🎓 你完成了预备组',
+      grad_title: '你完成了预备组',
+      grad_title_f: '你完成了预备组',
       grad_ask: '完整天数 %N% 天。你能背出古兰经第1–22页吗？你的回答决定你进哪个小组。',
       grad_yes: '我能背出第1–22页',
       grad_no: '背不出',
       grad_pending: '老师会考核，然后决定把你分到哪个小组。请等待他的答复。',
       grad_moved: '你已在「%G%」小组。任务已经在那里记录。',
-      bm_save: '🔖 在这里保存书签',
+      bm_save: '在这里保存书签',
       bm_save_sub: '这一页将成为书签',
-      bm_go: '↩ 回到书签',
+      bm_go: '回到书签',
       bm_go_sub: '你停下的那一页',
-      bm_baqara_short: '⤒ 黄牛章',
+      bm_baqara_short: '黄牛章',
       hifz_rotate_hint: '把手机横过来 — 字会变大',
       hifz_rotate_hint_lock: '转不过来 — 请关闭屏幕旋转锁定',
       hifz_unit_line: '一行',
@@ -7647,7 +7665,7 @@
       hifz_stage3: '第3阶段 — 整页，40+40',
       hifz_big: '大字',
       hifz_fix: '修改',
-      hifz_submit: '🎙 交作业',
+      hifz_submit: '交作业',
       hifz_rec_start: '录音',
       hifz_rec_stop: '停止',
       hifz_rec_pause: '暂停',
@@ -7679,10 +7697,10 @@
       hifz_progress_own_hint: '这是这一处的总数，不是追加。',
       hifz_progress_save: '完成',
       hifz_progress_close: '下一处：%P%',
-      correct_today: '✅ 今天答对 %N%/%M%',
-      daily_words_n: '今天 %N%/%M% · ✅ %C%/%K%',
-      daily_left_both: '📝 今天再答 %N% 个词、答对 %C% 个，「词汇」日任务就算完成',
-      daily_left_correct: '📝 已经答了 %M% 个词，「词汇」还差答对 %C% 个',
+      correct_today: '今天答对 %N%/%M%',
+      daily_words_n: '今天 %N%/%M% · %C%/%K%',
+      daily_left_both: '今天再答 %N% 个词、答对 %C% 个，「词汇」日任务就算完成',
+      daily_left_correct: '已经答了 %M% 个词，「词汇」还差答对 %C% 个',
       mywords_new: '新词',
       mywords_old: '遗忘的',
       my_result: '你的成绩：%R%',
@@ -7786,8 +7804,8 @@
       sett_country_ph: '哪个国家？',
       sett_lang: '语言',
       sett_theme: '主题',
-      sett_theme_day: '☀️ 白天',
-      sett_theme_night: '🌙 夜间',
+      sett_theme_day: '白天',
+      sett_theme_night: '夜间',
       sett_layout_madani: '麦地那版',
       sett_layout_dm: 'Dar al-Maarif（埃及版）',
       sett_logout: '退出应用',
@@ -7882,9 +7900,9 @@
       hifz_progress_plus: '加一遍',
       listen_title: '收听',
       close_title: '关闭',
-      review_comment: '🎙 意见',
-      review_accept: '✅ 通过',
-      review_retake: '↺ 退回重交',
+      review_comment: '意见',
+      review_accept: '通过',
+      review_retake: '退回重交',
       lesson_date: '%M%%D%日',
       month_1: '1月',
       month_2: '2月',
@@ -11462,7 +11480,7 @@
       where.textContent = T('page_n', { N: currentPage }) + ' · ' + T('hifz_whole');
       sub.textContent = hifzProgressSubText(3, 0);
     }
-    document.getElementById('hifz-submit').textContent = T('hifz_submit');
+    document.getElementById('hifz-submit-t').textContent = T('hifz_submit');
     document.getElementById('hifz-submit').disabled = hifz.picking;
     fix.textContent = T('hifz_fix');
     /* В пересдаче место не меняют: пересдаётся ровно то, что сдавал (так и
@@ -12294,7 +12312,7 @@
 
   function hifzRecPlayerShow(on) {
     document.getElementById('hifz-rec-player').style.display = on ? 'flex' : 'none';
-    document.getElementById('hifz-rec-play').textContent = '▶';
+    document.getElementById('hifz-rec-play').innerHTML = ICON.play;
     document.getElementById('hifz-rec-fill').style.width = '0';
     document.getElementById('hifz-rec-cur').textContent = '0:00';
     document.getElementById('hifz-rec-total').textContent =
@@ -12327,11 +12345,11 @@
     else { recAudio.pause(); }
   });
   recAudio.addEventListener('play', function () {
-    document.getElementById('hifz-rec-play').textContent = '❚❚';
+    document.getElementById('hifz-rec-play').innerHTML = ICON.pause;
   });
   ['pause', 'ended'].forEach(function (ev) {
     recAudio.addEventListener(ev, function () {
-      document.getElementById('hifz-rec-play').textContent = '▶';
+      document.getElementById('hifz-rec-play').innerHTML = ICON.play;
       if (!rec.micBack || !hifzRecPanelOpen()) return;
       rec.micBack = false;
       hifzRecStream().then(function () {
@@ -14444,7 +14462,7 @@
     defs.forEach(function (d) {
       var b = document.createElement('button');
       b.id = d[0];
-      b.textContent = T(d[1]);
+      b.innerHTML = (d[1] === 'look_retake' ? ICON.mic + ' ' : d[1] === 'look_back10' ? ICON.rewind + ' ' : '') + T(d[1]);
       if (d[2]) b.className = 'primary';
       box.appendChild(b);
     });
@@ -14520,9 +14538,9 @@
     try { lookAudio.pause(); } catch (e) {}
     look.playing = false;
     var b = document.getElementById('look-play');
-    if (b) b.textContent = '▶';
+    if (b) b.innerHTML = ICON.play;
     var rb = document.getElementById('rec-review-play');
-    if (rb) rb.textContent = '▶';
+    if (rb) rb.innerHTML = ICON.play;
   }
 
   function lookFreeAudio() {
@@ -14562,9 +14580,9 @@
   lookAudio.addEventListener('play', function () {
     look.playing = true;
     var b = document.getElementById('look-play');
-    if (b) b.textContent = '❚❚';
+    if (b) b.innerHTML = ICON.pause;
     var rb = document.getElementById('rec-review-play');
-    if (rb) rb.textContent = '❚❚';
+    if (rb) rb.innerHTML = ICON.pause;
   });
   lookAudio.addEventListener('pause', lookStopAudio);
   lookAudio.addEventListener('ended', lookStopAudio);
@@ -14764,7 +14782,7 @@
       t.detail = dayDetail(t);
       out += t.done
         ? '<div class="ok">✓ ' + t.name + (t.at ? ' ' + t.at : '') + (t.detail ? ' · ' + ustazEsc(t.detail) : '') + '</div>'
-        : '<div class="no">✗ ' + t.name + ' — ' + T('day_not_done') + '</div>';
+        : '<div class="no">' + ICON['circle-x'] + ' ' + t.name + ' — ' + T('day_not_done') + '</div>';
     });
     if (r.pause) out += '<div class="ok">' + T('day_pause') + '</div>';
     if (r.excuse != null) out += '<div class="ok">' + T('day_excuse') + (r.excuse ? ': ' + ustazEsc(r.excuse) : '') + '</div>';
@@ -14920,7 +14938,7 @@
         : '';
       return;
     }
-    box.innerHTML = '<div class="lesson-row"><div class="t"><b>' + T('lesson_title') +
+    box.innerHTML = '<div class="lesson-row"><div class="t"><b>' + ICON.video + ' ' + T('lesson_title') +
       '</b><span>' + T('lesson_hint') + '</span></div><button id="subs-lesson-btn">' +
       T(lessonFemale() ? 'lesson_btn_f' : 'lesson_btn') + '</button></div>';
     document.getElementById('subs-lesson-btn').addEventListener('click', function () {
@@ -15117,7 +15135,7 @@
      довести до конца, чем дать быстрый доступ; за возврат отвечает оглавление. */
   var LEARN = [
     {
-      id: 'hifz', mark: '\u25f4', name: 'Заучивание',
+      id: 'hifz', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 21V7\" /><path d=\"m16 12 2 2 4-4\" /><path d=\"M22 6V4a1 1 0 0 0-1-1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h6a3 3 0 0 1 3 3 3 3 0 0 1 3-3h6a1 1 0 0 0 1-1v-1.3\" /></svg>", name: 'Заучивание',
       desc: 'Как сдать 40+40 из Мусхафа',
       // Видео-инструкция (27.10.2026): id ролика на YouTube. У раздела с ним
       // первым открывается видео, шаги со снимками - кнопкой под ним.
@@ -15140,7 +15158,7 @@
       ]
     },
     {
-      id: 'revision', mark: '🔁', name: 'Повторение',
+      id: 'revision', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" /></svg>", name: 'Повторение',
       desc: 'Что читать каждый день',
       video: 'LnvB8Zf_Hsk',
       steps: [
@@ -15224,7 +15242,7 @@
        MISS_THRESHOLDS, PREP_DAYS/PREP_MIN_DAYS, LESSON_MARKS_PER_WEEK -
        поменяли там, поправить здесь. */
     {
-      id: 'r_day', group: 'rules', mark: '☀︎', name: 'Учебный день',
+      id: 'r_day', group: 'rules', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"4\" /><path d=\"M12 2v2\" /><path d=\"M12 20v2\" /><path d=\"m4.93 4.93 1.41 1.41\" /><path d=\"m17.66 17.66 1.41 1.41\" /><path d=\"M2 12h2\" /><path d=\"M20 12h2\" /><path d=\"m6.34 17.66-1.41 1.41\" /><path d=\"m19.07 4.93-1.41 1.41\" /></svg>", name: 'Учебный день',
       desc: 'Три задания, до трёх ночи, узр',
       steps: [
         [null, 'Три задания каждый день',
@@ -15238,7 +15256,7 @@
       ]
     },
     {
-      id: 'r_points', group: 'rules', mark: '💎', name: 'Баллы и серия',
+      id: 'r_points', group: 'rules', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3h12l4 6-10 13L2 9Z\" /><path d=\"M11 3 8 9l4 13 4-13-3-6\" /><path d=\"M2 9h20\" /></svg>", name: 'Баллы и серия',
       desc: 'За что сколько, почему серия обнулилась',
       steps: [
         [null, 'Баллы',
@@ -15250,7 +15268,7 @@
       ]
     },
     {
-      id: 'r_month', group: 'rules', mark: '📅', name: 'Мой месяц',
+      id: 'r_month', group: 'rules', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2v4\" /><path d=\"M16 2v4\" /><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\" /><path d=\"M3 10h18\" /></svg>", name: 'Мой месяц',
       desc: 'Цвета дней, точка урока, запас',
       steps: [
         ['month', 'Что значит цвет дня',
@@ -15260,7 +15278,7 @@
       ]
     },
     {
-      id: 'r_misses', group: 'rules', mark: '⏳', name: 'Пропуски и переводы',
+      id: 'r_misses', group: 'rules', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 22h14\" /><path d=\"M5 2h14\" /><path d=\"M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22\" /><path d=\"M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2\" /></svg>", name: 'Пропуски и переводы',
       desc: 'Когда переводят в Тадаббур и как вернуться',
       steps: [
         [null, 'Что такое пропуск',
@@ -15274,7 +15292,7 @@
       ]
     },
     {
-      id: 'r_lesson', group: 'rules', mark: '📡', name: 'Онлайн-урок',
+      id: 'r_lesson', group: 'rules', mark: "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4.9 16.1C1 12.2 1 5.8 4.9 1.9\" /><path d=\"M7.8 4.7a6.14 6.14 0 0 0-.8 7.5\" /><circle cx=\"12\" cy=\"9\" r=\"2\" /><path d=\"M16.2 4.8c2 2 2.26 5.11.8 7.47\" /><path d=\"M19.1 1.9a9.96 9.96 0 0 1 0 14.1\" /><path d=\"M9.5 18h5\" /><path d=\"m8 22 4-11 4 11\" /></svg>", name: 'Онлайн-урок',
       desc: 'Когда нажимать «Я был»',
       steps: [
         [null, 'Одна отметка в неделю',
@@ -15468,7 +15486,7 @@
         }
         n += 1;
         // ▶ у открытого урока с видеоуроком (10.11.2026).
-        var right = it.open ? (it.video ? '▶' : '') : '🔒';
+        var right = it.open ? (it.video ? ICON.play : '') : ICON.lock;
         // «Откроется в четверг» — только у ближайшего закрытого: у всех
         // остальных это было бы неправдой.
         var desc = it.open ? lessonDate(it.at)
@@ -15874,7 +15892,7 @@
             D: ustazDayLabel(rv.date, today), S: revSpanText(rv),
             T: revFmt(rv.duration) }) + '</span></div></div>' +
           '<div class="subs-todo-hint">' + T('subs_rev_hint') + '</div>' +
-          '<div class="subs-rev-go"><button id="subs-rev-go">' + T('subs_rev_go') + '</button></div>' +
+          '<div class="subs-rev-go"><button id="subs-rev-go">' + ICON.repeat + ' ' + T('subs_rev_go') + '</button></div>' +
           '</div></div>';
       });
       if (todo.length) {
@@ -15995,7 +16013,7 @@
     document.getElementById('review-src').textContent = T('review_src_own');
     var mine = document.getElementById('review-mine');
     mine.classList.remove('on');
-    mine.textContent = T('review_play_mine');
+    document.getElementById('review-mine-t').textContent = T('review_play_mine');
   }
   function reviewTotalLabel(sec) {
     var dur = ustazDur(sec);
@@ -16445,11 +16463,11 @@
   function ustazRevRow(it) {
     var dur = ustazDur(it.duration);
     var right = (dur ? '<span class="sub-pill dur">' + dur + '</span>' : '') +
-      (it.short ? '<span class="sub-pill short">' + T('ustaz_rev_short') + '</span>' : '');
+      (it.short ? '<span class="sub-pill short">' + ICON['triangle-alert'] + ' ' + T('ustaz_rev_short') + '</span>' : '');
     var meta = [revSpanText(it)];
     var when = ustazTimeOnly(it.sent_at);
     if (when) meta.push(when);
-    if (!it.verdict) meta.push('<b class="rev-play">' + T('ustaz_rev_play') + '</b>');
+    if (!it.verdict) meta.push('<b class="rev-play">' + ICON.play + ' ' + T('ustaz_rev_play') + '</b>');
     /* Плеер и вердикт живут в самой карточке (16.09.2026): отдельный экран
        разбора здесь не нужен - устаз слушает выборочно и решает на месте.
        Уже разобранная запись показывает итог вместо кнопок. */
@@ -16463,10 +16481,10 @@
             }).join('') + '</div><div class="rev-fill"></div></div>' +
           '<span class="rev-time">0:00 / ' + (dur ? dur.replace('⏱ ', '') : '—') + '</span></div>' +
           '<div class="rev-skips">' +
-            '<button data-skip="-300">' + T('ustaz_rev_back5') + '</button>' +
-            '<button data-skip="-30">' + T('ustaz_rev_back') + '</button>' +
-            '<button data-skip="30">' + T('ustaz_rev_fwd') + '</button>' +
-            '<button data-skip="300">' + T('ustaz_rev_fwd5') + '</button>' +
+            '<button data-skip="-300">' + ICON.rewind + ' ' + T('ustaz_rev_back5') + '</button>' +
+            '<button data-skip="-30">' + ICON.rewind + ' ' + T('ustaz_rev_back') + '</button>' +
+            '<button data-skip="30">' + T('ustaz_rev_fwd') + ' ' + ICON['fast-forward'] + '</button>' +
+            '<button data-skip="300">' + T('ustaz_rev_fwd5') + ' ' + ICON['fast-forward'] + '</button>' +
           '</div>' +
           '<div class="rev-acts">' +
             '<button class="no" data-verdict="rejected">' + T('ustaz_rev_reject') + '</button>' +
@@ -16707,7 +16725,7 @@
     var label = ustazEsc(cur.title) +
       (withCounts && cur.waiting ? ' · ' + T('ustaz_group_waiting', { N: cur.waiting }) : '');
     return '<div class="ustaz-picker" id="ustaz-picker"><span>' + label + '</span>' +
-      '<span class="caret">▼</span></div>' +
+      '<span class="caret">' + ICON['chevron-down'] + '</span></div>' +
       '<div class="ustaz-groups" id="ustaz-group-list">' + list + '</div>';
   }
 
@@ -17938,7 +17956,7 @@
   // ответ сервера без номера не должен ломать экран.
   function divisionLabel(obj) {
     if (obj && obj.division_no && I18N[UI_LANG]['division_' + obj.division_no]) {
-      return T('division_' + obj.division_no);
+      return ICON.medal + ' ' + T('division_' + obj.division_no);
     }
     return (obj && obj.label) || '';
   }
@@ -17954,7 +17972,7 @@
     // на запоминание и в случае верного ответа, а одинаковое место и
     // формат избавляют от поиска информации заново.
     var cls = feedback.correct ? 'ok' : 'no';
-    var icon = feedback.correct ? '✅' : '❌';
+    var icon = feedback.correct ? ICON['circle-check'].replace('class="ic"', 'class="ic ok"') : ICON['circle-x'].replace('class="ic"', 'class="ic no"');
     var ar = feedback.arabic
       ? '<span class="trainer-feedback-ar">' + feedback.arabic + '</span> — ' : '';
     var html = '<div class="trainer-feedback ' + cls + '">' + icon + ' ' + ar +
@@ -18067,8 +18085,8 @@
       '<span class="trainer-range">' + T('trainer_range_to', { N: d.bookmark_page }) + '</span>' +
       '<button id="tr-inc">➕</button></div>';
     html += trainerPlaceHint(d);
-    html += '<div class="trainer-actions"><button id="tr-end">' + T('btn_finish') +
-      '</button><button id="tr-top">' + T('btn_rating') + '</button></div>';
+    html += '<div class="trainer-actions"><button id="tr-end">' + ICON['circle-check'] + ' ' + T('btn_finish') +
+      '</button><button id="tr-top">' + ICON.trophy + ' ' + T('btn_rating') + '</button></div>';
     body.innerHTML = html;
 
     Array.prototype.forEach.call(body.querySelectorAll('.trainer-opt'), function (btn) {
@@ -18256,12 +18274,12 @@
         }) + '</div>';
       }
       if (d.rank) {
-        html += '<div class="trainer-info">' + T('rank_line', {
+        html += '<div class="trainer-info">' + ICON.trophy + ' ' + T('rank_line', {
           D: divisionLabel(d.rank),
           X: T('x_of_y', { P: d.rank.place, T: d.rank.total }),
         }) + '</div>';
       }
-      html += '<div class="trainer-actions"><button id="tr-restart">' + T('btn_new_card') + '</button></div>';
+      html += '<div class="trainer-actions"><button id="tr-restart">' + ICON.repeat + ' ' + T('btn_new_card') + '</button></div>';
       document.getElementById('trainer-body').innerHTML = html;
       document.getElementById('tr-restart').addEventListener('click', openTrainer);
     });
@@ -18270,7 +18288,7 @@
   function showLeaderboard() {
     setTrainerScreen('rating');
     withAuthCheck(apiCall('/leaderboard'), function (d) {
-      var html = '<div class="trainer-msg">' + T('top_title') + '</div>' +
+      var html = '<div class="trainer-msg">' + ICON.trophy + ' ' + T('top_title') + '</div>' +
         '<div class="trainer-lb-order">' + T('lb_order') + '</div>';
       if (!d.in_group) {
         html += d.personal
