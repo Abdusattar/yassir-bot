@@ -1552,8 +1552,11 @@
   body.tabs-on #trainers-back, body.tabs-on #subs-back { display: none; }
   body.tabs-on #subs-topbar .subs-wall-note { font-size: 13px; font-weight: 500; margin-left: auto; }
   /* Плитки уроков наверху «Устаза» (п. 4) и блоки тренажёров (п. 3). */
-  .subs-lessons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; direction: ltr;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .subs-lessons { margin: 0 0 14px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .subs-lessons .subs-cap { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 8px; font-size: 11px;
+    font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .subs-lessons .subs-cap i { font-style: normal; font-weight: 400; letter-spacing: 0; }
+  .subs-lessons .subs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .subs-lessons .k-tile { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--card-bg);
     border: 1px solid var(--card-border); border-radius: 16px; padding: 12px 13px 11px; cursor: pointer; font: inherit;
     color: var(--ink); -webkit-tap-highlight-color: transparent; }
@@ -16586,13 +16589,14 @@
     // плитки ждали f.learn, и у того, кому уроки открыты, их тут не было.
     var paint = function (subjects) {
       if (!subjects.length) { subsLessonsHtml = ''; return; }
-      subsLessonsHtml = '<div class="subs-lessons">' + subjects.map(function (sj) {
+      subsLessonsHtml = '<div class="subs-lessons"><p class="subs-cap">' + T('learn_cap_lessons') +
+        '<i>' + T('learn_lessons_note') + '</i></p><div class="subs-grid">' + subjects.map(function (sj) {
         return '<button class="k-tile" data-subs-subj="' + sj.id + '">' +
           subjMark(sj.id) +
           '<span class="t-nm">' + (T(SUBJ_TITLE_KEY[sj.id]) || sj.title) + '</span>' +
           '<span class="t-ds">' + (T('subj_' + sj.id + '_sub') || sj.sub) + '</span>' +
           '<span class="t-cnt">' + T('learn_open_of', { N: sj.open, M: sj.total }) + '</span></button>';
-      }).join('') + '</div>';
+      }).join('') + '</div></div>';
       var body = document.getElementById('subs-body');
       // Вставляем и при пустом списке сдач (12.11.2026): раньше .subs-empty
       // блокировал вставку, и плиток на вкладке не было почти ни у кого.
@@ -16610,6 +16614,9 @@
   document.getElementById('subs-body').addEventListener('click', function (e) {
     var b = e.target.closest('[data-subs-subj]');
     if (!b) return;
+    // openLearn гасит дашборд и «Ещё», а «Устаз» лежал поверх «Знаний» -
+    // плитка выглядела некликабельной (12.11.2026, прод).
+    document.getElementById('subs').style.display = 'none';
     openLearn(false);
     lessonsRenderList(b.getAttribute('data-subs-subj'));
   });
