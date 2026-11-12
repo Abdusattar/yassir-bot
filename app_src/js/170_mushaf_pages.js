@@ -62,12 +62,8 @@
   function mushafWarmFont(url) {
     if (!url || typeof FontFace === 'undefined') return Promise.resolve();
     if (mushafWarmFonts[url]) return mushafWarmFonts[url];
-    var p = new FontFace('mushaf-warm', "url('" + url + "')").load()
-      .catch(function () {
-        // основной CDN не ответил - греем тот же файл с зеркала (см. loadV4Face)
-        var alt = v4MirrorUrl(url);
-        return alt ? new FontFace('mushaf-warm', "url('" + alt + "')").load() : Promise.reject();
-      })
+    // тот же порядок адресов, что при показе: свой сервер, tarteel, зеркало
+    var p = loadV4Face('mushaf-warm', url)
       .catch(function () { delete mushafWarmFonts[url]; });
     mushafWarmFonts[url] = p;
     return p;

@@ -201,6 +201,17 @@ Cloudflare сознательно не ставили: от блокировки
 Иконки (`icon-*.png`, `apple-touch-icon.png`) сознательно БЕЗ `no-cache`:
 они не меняются, а понадобится замена — проще дать новое имя файла.
 
+## Свои шрифты мусхафа /v4/ (12.11.2026)
+604 файла `p{N}.woff2` (QPC V4, 50 МБ) лежат в `/var/www/yassir-app/v4/` — настоящая папка,
+не симлинк и не git (деплой её не трогает). Собираются и сверяются по кодам слов локально
+`scripts/mirror_v4_fonts.py` → `sources/v4_fonts/woff2/`, на сервер — архивом (scp + tar от
+`stursunkul`). nginx: `location ^~ /v4/` с `Cache-Control: public, max-age=31536000, immutable`
+(`scripts/patch_nginx_v4.py`, бэкап `yassir-app.bak-20261112_1053`). Приложение берёт шрифт
+листа сначала отсюда, потом tarteel, потом quran.foundation (`loadV4Face`,
+`app_src/js/120_mushaf_fonts.js`). Зачем: шрифт (86 КБ) — главный вес листа; tarteel даёт кэш
+4 часа, а внутри Telegram service worker'а нет — шрифты качались заново каждый день; оттуда же
+сбои стр. 328 (02.11) и 246 (12.11). При переезде сервера папку перенести вместе с сайтом.
+
 ## Сжатие nginx (11.10.2026)
 `/etc/nginx/nginx.conf`: `gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml; gzip_comp_level 5; gzip_min_length 1024;` (раньше `gzip_types` был закомментирован — сжимался только HTML). page*.json 47 КБ → ~6 КБ. Бэкап: `/etc/nginx/nginx.conf.bak-20261011`. Мусхаф заранее грузит соседние листы n+1, n+2, n+3 и n−1 (JSON + шрифт V4, `mushafPrefetch` в index.html).
 

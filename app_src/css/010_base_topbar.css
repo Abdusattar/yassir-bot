@@ -11,7 +11,7 @@
      src переписывается в JS на каждую загрузку страницы (см.
      #v4-font-face), сам @font-palette-values - фиксированная декларация,
      держит одно и то же имя семейства 'mushaf-v4' между страницами.
-     Хотлинк на CDN QUL, не самохостинг - см. font_url_for_page. */
+     С 12.11.2026 первым идёт свой сервер (/v4/), CDN QUL - запасной: см. loadV4Face. */
   @font-palette-values --V4Light { font-family: 'mushaf-v4'; base-palette: 0; }
   @font-palette-values --V4Dark { font-family: 'mushaf-v4'; base-palette: 1; }
   .v4-word {

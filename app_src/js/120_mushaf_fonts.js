@@ -21,15 +21,27 @@
      ответил - пробуем зеркало. Проверка всех 604: scripts/check_v4_fonts.py. */
   var V4_CDN_MAIN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/';
   var V4_CDN_MIRROR = 'https://verses.quran.foundation/fonts/quran/hafs/v4/colrv1/woff2/';
-  function v4MirrorUrl(url) {
-    return url && url.indexOf(V4_CDN_MAIN) === 0 ? V4_CDN_MIRROR + url.slice(V4_CDN_MAIN.length) : null;
+  /* Свой сервер - первым (12.11.2026, решение пользователя: «переложить в
+     постоянку»). Шрифт листа - главный вес страницы (86 КБ), а tarteel даёт
+     телефону держать его только 4 часа; внутри Telegram service worker'а нет,
+     и шрифты качались заново каждый день. Теперь те же 604 файла лежат на
+     yassirilm.com/v4/ с кэшем на год (scripts/mirror_v4_fonts.py,
+     scripts/patch_nginx_v4.py) - телефон скачивает каждый один раз. Порядок:
+     свой сервер -> tarteel -> зеркало quran.foundation. В данных листа
+     (font_url) адрес остаётся tarteel: он же ключ и запасной путь. */
+  var V4_OWN = '/v4/';
+  function v4Sources(url) {
+    if (!url || url.indexOf(V4_CDN_MAIN) !== 0) return [url];
+    var file = url.slice(V4_CDN_MAIN.length);
+    return [V4_OWN + file, url, V4_CDN_MIRROR + file];
   }
   function loadV4Face(family, url) {
-    return new FontFace(family, "url('" + url + "')").load().catch(function (err) {
-      var alt = v4MirrorUrl(url);
-      if (!alt) throw err;
-      return new FontFace(family, "url('" + alt + "')").load();
-    });
+    var list = v4Sources(url), i = 0;
+    var next = function (err) {
+      if (i >= list.length) throw err;
+      return new FontFace(family, "url('" + list[i++] + "')").load().catch(next);
+    };
+    return next(new Error('no font url'));
   }
 
   // v4Req (02.11.2026) - номер запроса шрифта листа. Опоздавший ответ

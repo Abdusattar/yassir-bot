@@ -64,7 +64,7 @@
      src переписывается в JS на каждую загрузку страницы (см.
      #v4-font-face), сам @font-palette-values - фиксированная декларация,
      держит одно и то же имя семейства 'mushaf-v4' между страницами.
-     Хотлинк на CDN QUL, не самохостинг - см. font_url_for_page. */
+     С 12.11.2026 первым идёт свой сервер (/v4/), CDN QUL - запасной: см. loadV4Face. */
   @font-palette-values --V4Light { font-family: 'mushaf-v4'; base-palette: 0; }
   @font-palette-values --V4Dark { font-family: 'mushaf-v4'; base-palette: 1; }
   .v4-word {
@@ -10952,15 +10952,27 @@
      ответил - пробуем зеркало. Проверка всех 604: scripts/check_v4_fonts.py. */
   var V4_CDN_MAIN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/';
   var V4_CDN_MIRROR = 'https://verses.quran.foundation/fonts/quran/hafs/v4/colrv1/woff2/';
-  function v4MirrorUrl(url) {
-    return url && url.indexOf(V4_CDN_MAIN) === 0 ? V4_CDN_MIRROR + url.slice(V4_CDN_MAIN.length) : null;
+  /* Свой сервер - первым (12.11.2026, решение пользователя: «переложить в
+     постоянку»). Шрифт листа - главный вес страницы (86 КБ), а tarteel даёт
+     телефону держать его только 4 часа; внутри Telegram service worker'а нет,
+     и шрифты качались заново каждый день. Теперь те же 604 файла лежат на
+     yassirilm.com/v4/ с кэшем на год (scripts/mirror_v4_fonts.py,
+     scripts/patch_nginx_v4.py) - телефон скачивает каждый один раз. Порядок:
+     свой сервер -> tarteel -> зеркало quran.foundation. В данных листа
+     (font_url) адрес остаётся tarteel: он же ключ и запасной путь. */
+  var V4_OWN = '/v4/';
+  function v4Sources(url) {
+    if (!url || url.indexOf(V4_CDN_MAIN) !== 0) return [url];
+    var file = url.slice(V4_CDN_MAIN.length);
+    return [V4_OWN + file, url, V4_CDN_MIRROR + file];
   }
   function loadV4Face(family, url) {
-    return new FontFace(family, "url('" + url + "')").load().catch(function (err) {
-      var alt = v4MirrorUrl(url);
-      if (!alt) throw err;
-      return new FontFace(family, "url('" + alt + "')").load();
-    });
+    var list = v4Sources(url), i = 0;
+    var next = function (err) {
+      if (i >= list.length) throw err;
+      return new FontFace(family, "url('" + list[i++] + "')").load().catch(next);
+    };
+    return next(new Error('no font url'));
   }
 
   // v4Req (02.11.2026) - номер запроса шрифта листа. Опоздавший ответ
@@ -12010,12 +12022,8 @@
   function mushafWarmFont(url) {
     if (!url || typeof FontFace === 'undefined') return Promise.resolve();
     if (mushafWarmFonts[url]) return mushafWarmFonts[url];
-    var p = new FontFace('mushaf-warm', "url('" + url + "')").load()
-      .catch(function () {
-        // основной CDN не ответил - греем тот же файл с зеркала (см. loadV4Face)
-        var alt = v4MirrorUrl(url);
-        return alt ? new FontFace('mushaf-warm', "url('" + alt + "')").load() : Promise.reject();
-      })
+    // тот же порядок адресов, что при показе: свой сервер, tarteel, зеркало
+    var p = loadV4Face('mushaf-warm', url)
       .catch(function () { delete mushafWarmFonts[url]; });
     mushafWarmFonts[url] = p;
     return p;
