@@ -1596,8 +1596,13 @@
   body.tabs-on #trainers-back, body.tabs-on #subs-back { display: none; }
   body.tabs-on #subs-topbar .subs-wall-note { font-size: 13px; font-weight: 500; margin-left: auto; }
   /* Плитки уроков наверху «Устаза» (п. 4) и блоки тренажёров (п. 3). */
-  .subs-lessons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; direction: ltr;
+  .subs-lessons { margin: 0 0 14px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #subs-body .subs-cap { display: flex; align-items: baseline; gap: 8px; margin: 4px 2px -2px; font-size: 11px;
+    font-weight: 700; letter-spacing: .08em; color: var(--muted);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .subs-lessons .subs-cap { margin: 0 2px 8px; }
+  #subs-body .subs-cap i { font-style: normal; font-weight: 400; letter-spacing: 0; }
+  .subs-lessons .subs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .subs-lessons .k-tile { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--card-bg);
     border: 1px solid var(--card-border); border-radius: 16px; padding: 12px 13px 11px; cursor: pointer; font: inherit;
     color: var(--ink); -webkit-tap-highlight-color: transparent; }
@@ -5409,6 +5414,7 @@
       learn_cap_how: 'КАК РАБОТАТЬ В ПРИЛОЖЕНИИ',
       learn_cap_rules: 'ПРАВИЛА',
       learn_cap_lessons: 'УРОКИ',
+      subs_cap_activity: 'ВАША АКТИВНОСТЬ',
       learn_lessons_note: 'новый каждый четверг',
       learn_open_of: '%N% из %M%',
       lesson_locked: 'ещё не открыт',
@@ -6196,6 +6202,7 @@
       learn_lead: '',
       learn_cap_how: 'КОЛДОНМОДО КАНТИП ИШТЕШ КЕРЕК',
       learn_cap_lessons: 'САБАКТАР',
+      subs_cap_activity: 'СИЗДИН АКТИВДҮҮЛҮГҮҢҮЗ',
       learn_lessons_note: 'ар бейшембиде жаңысы',
       learn_open_of: '%M% ичинен %N%',
       lesson_locked: 'азырынча ачыла элек',
@@ -7007,6 +7014,7 @@
       learn_lead: '',
       learn_cap_how: 'ИЛОВАДА ҚАНДАЙ ИШЛАШ КЕРАК',
       learn_cap_lessons: 'ДАРСЛАР',
+      subs_cap_activity: 'СИЗНИНГ ФАОЛЛИГИНГИЗ',
       learn_lessons_note: 'ҳар пайшанба янгиси',
       learn_open_of: '%M% тадан %N%',
       lesson_locked: 'ҳали очилмаган',
@@ -7818,6 +7826,7 @@
       learn_lead: '',
       learn_cap_how: '应用使用方法',
       learn_cap_lessons: '课程',
+      subs_cap_activity: '你的活动',
       learn_lessons_note: '每周四更新一课',
       learn_open_of: '%N% / %M%',
       subj_j_sub: '发音部位、字母属性',
@@ -16691,13 +16700,14 @@
     // плитки ждали f.learn, и у того, кому уроки открыты, их тут не было.
     var paint = function (subjects) {
       if (!subjects.length) { subsLessonsHtml = ''; return; }
-      subsLessonsHtml = '<div class="subs-lessons">' + subjects.map(function (sj) {
+      subsLessonsHtml = '<div class="subs-lessons"><p class="subs-cap">' + T('learn_cap_lessons') +
+        '<i>' + T('learn_lessons_note') + '</i></p><div class="subs-grid">' + subjects.map(function (sj) {
         return '<button class="k-tile" data-subs-subj="' + sj.id + '">' +
           subjMark(sj.id) +
           '<span class="t-nm">' + (T(SUBJ_TITLE_KEY[sj.id]) || sj.title) + '</span>' +
           '<span class="t-ds">' + (T('subj_' + sj.id + '_sub') || sj.sub) + '</span>' +
           '<span class="t-cnt">' + T('learn_open_of', { N: sj.open, M: sj.total }) + '</span></button>';
-      }).join('') + '</div>';
+      }).join('') + '</div></div>';
       var body = document.getElementById('subs-body');
       // Вставляем и при пустом списке сдач (12.11.2026): раньше .subs-empty
       // блокировал вставку, и плиток на вкладке не было почти ни у кого.
@@ -16715,6 +16725,9 @@
   document.getElementById('subs-body').addEventListener('click', function (e) {
     var b = e.target.closest('[data-subs-subj]');
     if (!b) return;
+    // openLearn гасит дашборд и «Ещё», а «Устаз» лежал поверх «Знаний» -
+    // плитка выглядела некликабельной (12.11.2026, прод).
+    document.getElementById('subs').style.display = 'none';
     openLearn(false);
     lessonsRenderList(b.getAttribute('data-subs-subj'));
   });
@@ -16809,7 +16822,10 @@
       if (waiting) {
         html += '<div class="subs-quiet">' + T('subs_waiting_quiet', { N: waiting }) + '</div>';
       }
-      html += '<div id="subs-month"></div><div id="subs-lesson"></div><div id="subs-absence"></div>' +
+      // «Ваша активность» (12.11.2026, правка пользователя): отделяет уроки
+      // от маркеров сдач и пропусков.
+      html += '<p class="subs-cap">' + T('subs_cap_activity') + '</p>' +
+        '<div id="subs-month"></div><div id="subs-lesson"></div><div id="subs-absence"></div>' +
         '<div id="subs-recent-rows">' +
         recent.map(function (it) { return subsRow(it, today); }).join('') +
         '</div>';
