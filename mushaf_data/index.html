@@ -11154,7 +11154,28 @@
     // висим бесконечно; PUA-глифы без своего шрифта покажутся "тофу"-
     // прямоугольниками в запасном шрифте - хуже, чем пустая страница, но
     // студент хотя бы поймёт, что что-то не так, а не решит, что бот завис.
-    loadV4Fonts(data).then(function () { reveal(false); }, function () { reveal(true); });
+    // Шрифт не пришёл - лист обычным текстом, но не навсегда (12.11.2026,
+    // скрин пользователя materials/246.jpeg: стр. 246 текстом, низ экрана
+    // пустой - обычный текст ниже глифов). Раньше шрифт больше не просили до
+    // перезахода; теперь повторяем через 4, 15, 45 с и при возврате сети.
+    // Получилось - лист перерисовывается глифами на месте. Сбой - в журнал.
+    loadV4Fonts(data).then(function () { reveal(false); }, function () {
+      reveal(true);
+      trail('v4_font_fail', { p: data.page });
+      var done = false;
+      var retry = function () {
+        if (done || currentPageData !== data) return;
+        loadV4Fonts(data).then(function () {
+          if (done || currentPageData !== data) return;
+          done = true;
+          window.removeEventListener('online', retry);
+          trail('v4_font_retry_ok', { p: data.page });
+          reveal(false);
+        }, function () {});
+      };
+      [4000, 15000, 45000].forEach(function (ms) { setTimeout(retry, ms); });
+      window.addEventListener('online', retry);
+    });
 
     document.getElementById('btn-prev').disabled = data.page >= LAST_PAGE;
     document.getElementById('btn-next').disabled = data.page <= FIRST_PAGE;
