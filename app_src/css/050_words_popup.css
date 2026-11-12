@@ -45,7 +45,7 @@
     pointer-events: none;
     opacity: 0;
     transform: translate(-50%, -100%);
-    transition: opacity 0.25s ease;
+    transition: opacity 0.1s ease;   /* было 0.25s: подсказка должна читаться сразу (12.11.2026) */
     /* Выше #hifz-big (55) и #hifz-rec (60): перевод по тапу нужен и на
        крупном экране, где студент делает повторы (02.09.2026). */
     z-index: 70;
