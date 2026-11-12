@@ -16594,7 +16594,9 @@
           '<span class="t-cnt">' + T('learn_open_of', { N: sj.open, M: sj.total }) + '</span></button>';
       }).join('') + '</div>';
       var body = document.getElementById('subs-body');
-      if (body && !body.querySelector('.subs-lessons') && !body.querySelector('.subs-empty')) {
+      // Вставляем и при пустом списке сдач (12.11.2026): раньше .subs-empty
+      // блокировал вставку, и плиток на вкладке не было почти ни у кого.
+      if (body && !body.querySelector('.subs-lessons')) {
         body.insertAdjacentHTML('afterbegin', subsLessonsHtml);
       }
     };
