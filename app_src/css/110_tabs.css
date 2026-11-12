@@ -1,0 +1,265 @@
+  /* Нижняя панель разделов (04.11.2026, перенос из прототипа «Хифз ·
+     Сегодня»): Сегодня, Мусхаф, Тренажёры, Устаз, Ещё. Видна на
+     дашборде, в хабе «Тренажёров», в «Работе с устазом», в «Ещё», в
+     «Знаниях» и в настройках. В мусхафе и на глубоких экранах (карточка
+     тренажёра, заучивание, разбор) её нет: там внизу стоят действия, и
+     правило «низ - только действия» остаётся. Когда панель видна,
+     корневой «← Дашборд» в шапке не нужен: его роль берёт «Сегодня».
+
+     Панель фиксирована внизу, а место под неё освобождает padding у body:
+     все экраны - height: 100% от body, ничего не уходит под неё.
+
+     Размеры (04.11.2026, решение пользователя после проверки на iPhone) -
+     один в один с панелью приложения «Коран — строчка в день» (app.css,
+     .tabs/.tab): иконка 23px, подпись 10.5px с межстрочным 1.5 (16px),
+     отступы кнопки 5/3px, у панели 5px сверху и 4px + системный отступ
+     «домика» снизу. Кнопка 49px, панель 59px + отступ «домика». Перед
+     этим были два захода: 46px и «минус 14px» («слишком низкая»), 54px и
+     крупный шрифт («слишком огромная»). Отступ Telegram учитываем так
+     же, как в #page-nav. Высоту панели задаём явно (--tabs-h), чтобы
+     padding у body совпадал с ней до пикселя. */
+  :root {
+    /* --ios-pwa-bottom - приложение со значка на iPhone, см. скрипт в <head>. */
+    --tabs-safe: max(env(safe-area-inset-bottom, 0px),
+                     var(--tg-safe-area-inset-bottom, 0px),
+                     var(--ios-pwa-bottom, 0px));
+    --tabs-h: calc(59px + var(--tabs-safe));
+  }
+  #tabs {
+    display: none;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    height: var(--tabs-h);
+    padding: 5px max(6px, env(safe-area-inset-right, 0px)) calc(4px + var(--tabs-safe)) max(6px, env(safe-area-inset-left, 0px));
+    background: var(--chrome-bg);
+    border-top: 1px solid var(--chrome-border);
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  body.tabs-on #tabs { display: flex; }
+  body.tabs-on { padding-bottom: var(--tabs-h); }
+  .tabs-btn {
+    flex: 1 1 0; min-width: 0; height: 49px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+    border: 0; background: none; border-radius: 10px; padding: 5px 0 3px;
+    font: inherit; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; line-height: 16px;
+    color: var(--muted); cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabs-btn svg {
+    width: 23px; height: 23px; flex: 0 0 auto;
+    fill: none; stroke: currentColor; stroke-width: 1.6;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .tabs-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs-btn.on { color: var(--accent); }
+  .tabs-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* В мусхафе панели нет (решение пользователя 04.11.2026): с ней лист
+     не помещался и прокручивался. Мусхаф - во всю высоту, как раньше, и
+     возврат «← Дашборд» в его шапке остаётся. */
+  body.tabs-on #subs-back { display: none; }
+  /* Настройки и «Знания» - с панелью (решение пользователя 04.11.2026).
+     Настройки - шторка position: fixed во весь экран: поднимаем её низ над
+     панелью. У подвала «Знаний» отступ под «домик» теперь у панели. */
+  body.tabs-on #sett { bottom: var(--tabs-h); }
+  body.tabs-on #learn-foot { padding-bottom: 16px; }
+  /* В шапке «Тренажёров» заголовок по центру (space-between на трёх
+     элементах) - прячем возврат, но оставляем его место. */
+  body.tabs-on #trainers-back { visibility: hidden; }
+  /* Панель есть и внутри тренажёров (10.11.2026, решение пользователя).
+     В карточке «Слов» свой нижний бар «Мои слова · Мусхаф»: «Мусхаф»
+     дублирует вкладку - прячем, «Мои слова» остаётся. */
+  body.tabs-on #trainer-tab-mushaf { display: none; }
+  #more-topbar { justify-content: center; min-height: 47px; }
+  .tr-hub .mk svg {
+    width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  /* Карточка таджвида: одна буква - крупнее слова в «Словах», её форму
+     надо узнать с расстояния руки. Подпись под буквой - только у و и ي,
+     которые выходят из двух мест (согласная и мадд). */
+  .tj-glyph {
+    font-family: 'Scheherazade New', serif; font-size: 88px; line-height: 1.2;
+    color: var(--ink);
+  }
+  /* Сдвиг по вертикали ставит tajweedCenterGlyph: у ي и ج хвост ниже строки,
+     у ا и ل буква тянется вверх, а у шрифта ещё и запас над буквой под
+     харакаты - по строке центр не совпадает с «чернилами» (замер 14.09.2026:
+     от -16 до +39 px). Высота строки прежняя, карточка не прыгает. */
+  .tj-glyph span { display: inline-block; }
+  .tj-note { font-size: 15px; color: var(--muted); margin-top: 2px; }
+  /* Арабское слово-пример - главное в подписи: крупнее и тёмным. Только
+     размер и цвет, без direction/unicode-bidi (та же ловушка, что с .k-ar). */
+  .tj-note .tj-ar { font-size: 1.35em; color: var(--ink); }
+  .tj-q { font-size: 15px; font-weight: 600; color: var(--ink); }
+  /* До трёх строк на кнопке: надпись - ужатый эталон лекции. */
+  /* Вариантов четыре, а не восемь (22.09.2026) - кнопки выше и крупнее:
+     надписи мест до трёх строк, палец попадает без прицеливания. */
+  .trainer-opt.tj-opt { font-size: 16px; line-height: 1.3; min-height: 88px; padding: 10px 10px; }
+  .trainer-opt.tj-opt:disabled { opacity: .55; }
+  /* Нечётный последний вариант (сифаты на три: شدة/توسط/رخاوة) - во всю ширину. */
+  .trainer-opt.tj-opt:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 64px; }
+  /* Итог ответа - на самих кнопках (14.09.2026): нажатая краснеет при
+     ошибке, верная зеленеет всегда. Плашка сверху сдвигала карточку, а
+     взгляд в момент ответа - на кнопках. */
+  .trainer-opt.tj-opt.ok, .trainer-opt.tj-opt.no { opacity: 1; font-weight: 600; }
+  .trainer-opt.tj-opt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .trainer-opt.tj-opt.no { background: var(--no-soft); border-color: var(--no); color: var(--no); }
+  /* Ход захода точками: число в шапке - норма дня, второй счётчик рядом
+     путал бы, что к чему. */
+  .tj-dots { display: flex; gap: 7px; justify-content: center; align-items: center; min-height: 18px; }
+  .tj-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--card-border); }
+  .tj-dots i.on { background: var(--accent); }
+  .tj-dots i.cur { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .tj-dots span { font-size: 13px; color: var(--muted); margin-left: 4px; }
+  /* «норма дня закрыта» - спокойная отметка, не поздравление: человек
+     продолжает по своей воле, и экран не должен его останавливать. */
+  .tj-dots span.tj-day-done { color: var(--ok, #15803d); font-weight: 600; }
+  .tj-sum { font-size: 15px; color: var(--ink); line-height: 1.5; }
+  .tj-sum b { font-family: 'Scheherazade New', serif; font-size: 1.6em; font-weight: 400; }
+  /* «Почему» после ответа на сифат (03.11.2026): фразы-ключи пары, где
+     буква есть - подсвечена. Студенты угадывали, не видя логики. До ответа
+     не показываем - иначе ответ на экране. */
+  #tj-after { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  #tj-after:empty { display: none; }
+  .tj-why { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+  .tj-why .row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 12px; border-radius: 14px; border: 1px solid var(--card-border); min-width: 0; }
+  .tj-why .row.hit { border-color: var(--ok); background: var(--ok-soft); }
+  .tj-why .lbl { font-size: 14px; color: var(--muted); }
+  .tj-why .row.hit .lbl { color: var(--ok); font-weight: 600; }
+  .tj-why .key { display: flex; flex-direction: column; align-items: flex-end; }
+  .tj-why .ph { font-family: 'Scheherazade New', serif; font-size: 26px; line-height: 1.45;
+    direction: rtl; color: var(--ink); }
+  /* Буквы фразы по одной, искомая обведена. Отдельными буквами, а не
+     цветом внутри слова: iOS рвёт вязь на цветных вставках. */
+  .tj-why .lt { direction: rtl; display: flex; gap: 0; font-family: 'Scheherazade New', serif;
+    font-size: 20px; line-height: 1; color: var(--ink); opacity: .7; }
+  .tj-why .row.hit .lt { opacity: .85; }
+  .tj-why .lt b { font-weight: 400; width: 23px; height: 26px; display: inline-flex;
+    align-items: center; justify-content: center; border-radius: 50%; }
+  .tj-why .lt b.me { color: var(--ok); opacity: 1; box-shadow: inset 0 0 0 1.5px var(--ok); }
+  .tj-why .say { font-size: 15px; color: var(--ink); text-align: center; line-height: 1.45; margin-top: 2px; }
+  .tj-why .say .tj-ar { font-family: 'Scheherazade New', serif; font-size: 1.5em; }
+  .tj-go {
+    background: var(--accent); color: #fff; border: 0; border-radius: 14px;
+    padding: 13px 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    width: 100%; max-width: 320px;
+  }
+  /* Тренажёр нахва (17.09.2026). Слово показывается в аяте - вид слова
+     узнаётся по соседям (харф джарр перед исмом, قَدْ перед фиалем), -
+     но только окном вокруг него: длинный аят не должен вытеснять вопрос.
+     Выделение подложкой, не цветом букв: у слитного слова выделена часть,
+     и цвет по полбуквы читался бы как ошибка письма. */
+  .nh-ayah {
+    font-family: 'Scheherazade New', serif; direction: rtl;
+    font-size: 30px; line-height: 2; color: var(--ink);
+  }
+  /* Черта снизу - чтобы и одна буква (بِ, وَ) была видна: одной
+     подложки на такой ширине почти не видно (17.09.2026). Отступов нет -
+     они разорвали бы вязь внутри слова. */
+  .nh-ayah .hl {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    box-shadow: inset 0 -4px 0 var(--accent);
+    border-radius: 4px;
+  }
+  .nh-hint { font-size: 13px; color: var(--muted); max-width: 420px; line-height: 1.4; }
+  .nh-ayah .gap { color: var(--muted); }
+  .nh-ref { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .nh-q { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .nh-opts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: 100%; max-width: 420px; }
+  .nh-opts.n2, .nh-opts.n4 { grid-template-columns: 1fr 1fr; }
+  .nh-q .ar { font-family: 'Scheherazade New', serif; font-size: 1.45em; }
+  .trainer-opt.nh-opt { padding: 8px 6px 10px; }
+  .nh-opt .ar { display: block; font-family: 'Scheherazade New', serif; font-size: 30px; line-height: 1.35; }
+  .nh-opt .ru { display: block; font-size: 13px; color: var(--muted); }
+  .trainer-opt.nh-opt:disabled { opacity: .55; }
+  .trainer-opt.nh-opt.ok, .trainer-opt.nh-opt.no { opacity: 1; }
+  .trainer-opt.nh-opt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .trainer-opt.nh-opt.no { background: var(--no-soft); border-color: var(--no); color: var(--no); }
+  .nh-fb {
+    width: 100%; max-width: 420px; box-sizing: border-box; text-align: left;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .nh-fb .exp { font-size: 15px; line-height: 1.45; color: var(--ink); }
+  .nh-fb .ar { font-family: 'Scheherazade New', serif; font-size: 1.3em; }
+  .nh-fb .mean { font-size: 13px; color: var(--muted); }
+  /* Тренажёр хадисов (23.09.2026). Слово дня растёт прямо из своей фразы:
+     крупнее и зелёное, как решили на макете, - человек видит его там, где
+     оно живёт в хадисе. Отдельной карточки «слово / перевод / фраза» нет. */
+  .hd-where { font-size: 13px; color: var(--muted); width: 100%; max-width: 420px; }
+  .hd-bar { width: 100%; max-width: 420px; height: 4px; border-radius: 2px; background: var(--card-border); overflow: hidden; }
+  .hd-bar i { display: block; height: 100%; background: var(--accent); }
+  .hd-phrase {
+    font-family: 'Scheherazade New', serif; direction: rtl;
+    font-size: 30px; line-height: 2.1; color: var(--ink);
+  }
+  .hd-phrase .hl { font-size: 1.55em; font-weight: 700; color: var(--accent); line-height: 1; }
+  .hd-gloss { font-size: 22px; font-weight: 600; color: var(--ink); }
+  .hd-mean { font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 420px; }
+  .hd-ask-ru { font-size: 22px; font-weight: 600; color: var(--ink); max-width: 420px; }
+  /* Варианты квадратиками 2×2 (24.09.2026, решение пользователя): в столбик
+     они занимали пол-экрана, и под ними не оставалось места тексту хадиса.
+     Шрифт не мельчим; не влез в половину ширины - кнопка на всю ширину
+     (.wide, ставится после отрисовки), как в таджвиде. */
+  .hd-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 420px; }
+  .trainer-opt.hd-opt { text-align: center; font-size: 16px; line-height: 1.3; padding: 10px 8px;
+                        min-height: 60px; }
+  .trainer-opt.hd-opt.ar { direction: rtl; font-family: 'Scheherazade New', serif; font-size: 27px; padding: 4px 8px; }
+  .trainer-opt.hd-opt.wide, .trainer-opt.hd-opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* Весь хадис под вопросом (24.09.2026): арабский и смысловой перевод
+     целиком, фраза текущего слова подсвечена в обоих. Прокручивается весь
+     экран, не вложенное окошко - на айфоне вложенная прокрутка неудобна. */
+  .hd-full { width: 100%; max-width: 420px; margin-top: 10px; padding: 14px 16px 16px;
+             background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+             text-align: left; }
+  .hd-full-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .hd-full-ar { font-family: 'Scheherazade New', serif; direction: rtl; text-align: right;
+                font-size: 24px; line-height: 2; color: var(--ink); }
+  .hd-full-ru { font-size: 16px; line-height: 1.55; color: var(--ink); margin-top: 10px;
+                padding-top: 10px; border-top: 1px solid var(--card-border); }
+  .hd-full-isnad { font-size: 14px; line-height: 1.45; color: var(--muted); margin-bottom: 4px; }
+  .hd-full-src { font-size: 14px; color: var(--muted); margin-top: 8px; }
+  .hd-full .cur { background: var(--accent-soft); border-radius: 6px; box-decoration-break: clone;
+                  -webkit-box-decoration-break: clone; transition: background .3s; }
+  /* Вопрос «перевод → слово»: подсвеченная фраза выдала бы ответ, поэтому
+     подсветка появляется только после ответа. */
+  .hd-full.hide-cur .cur { background: transparent; }
+  .trainer-opt.hd-opt:disabled { opacity: .55; }
+  .trainer-opt.hd-opt.ok, .trainer-opt.hd-opt.no { opacity: 1; }
+  .trainer-opt.hd-opt.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .trainer-opt.hd-opt.no { background: var(--no-soft); border-color: var(--no); color: var(--no); }
+  .hd-list { width: 100%; max-width: 420px; text-align: left; }
+  .hd-list div { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+                 padding: 8px 0; border-top: 1px solid var(--card-border); font-size: 14.5px; }
+  .hd-list .ar { font-family: 'Scheherazade New', serif; font-size: 24px; direction: rtl; }
+  .hd-list .mk { color: var(--ok); font-size: 13px; white-space: nowrap; }
+  .hd-list .mk.no { color: var(--no); }
+  .hd-pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%; max-width: 420px; }
+  .hd-pick button { padding: 10px 0; }
+  .hd-words { font-family: 'Scheherazade New', serif; direction: rtl; font-size: 26px; line-height: 2.1; max-width: 420px; }
+  .hd-words button { font: inherit; background: none; border: 0; padding: 0 3px; border-radius: 6px; color: var(--ink); cursor: pointer; }
+  .hd-words button:active, .hd-words button:focus-visible { background: var(--accent-soft); outline: none; }
+  .hd-link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 4px; }
+  /* Разбор слова по частям - справа налево, как читается слово. */
+  .nh-bd { display: flex; flex-wrap: wrap; gap: 6px; direction: rtl; }
+  .nh-bd span {
+    display: inline-flex; flex-direction: column; align-items: center;
+    padding: 2px 10px 5px; border-radius: 10px; border: 1px solid var(--card-border);
+  }
+  .nh-bd span.asked { border-color: var(--accent); background: var(--accent-soft); }
+  .nh-bd b { font-family: 'Scheherazade New', serif; font-weight: 400; font-size: 24px; line-height: 1.5; color: var(--ink); }
+  .nh-bd i { font-family: 'Scheherazade New', serif; font-style: normal; font-size: 16px; color: var(--muted); }
+  .nh-sum { font-size: 15px; color: var(--ink); line-height: 1.5; max-width: 420px; }
+  .nh-sum b { font-weight: 600; }
+  .nh-sum .ar { font-family: 'Scheherazade New', serif; font-size: 1.3em; }
+  .nh-src { font-size: 11px; color: var(--muted); }
+  .nh-src a { color: inherit; }
+  .trainer-info, .trainer-session { font-size: 13px; color: var(--muted); }
+  .trainer-score { font-size: 13px; color: var(--muted); }
+  /* «Выучено N% слов до стр. B» (11.11.2026) - главная цифра студента. */
+  .trainer-learned { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+  .trainer-learned b { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .trainer-learned span { font-size: 12.5px; color: var(--muted); }
+  .trainer-lb-order { font-size: 12px; color: var(--muted); align-self: flex-start; text-align: left; line-height: 1.4; }
+

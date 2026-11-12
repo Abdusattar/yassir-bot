@@ -1,0 +1,110 @@
+  /* ── Экран входа (10.09.2026) ───────────────────────────────────────────
+     Виден только когда приложение открыто как САЙТ: внутри Telegram нас
+     узнаёт initData, и этого экрана не существует.
+
+     direction: ltr обязателен - <html dir="rtl"> (нужен арабскому тексту
+     мусхафа) иначе перевернёт и порядок кнопок, и сами направленные знаки
+     (см. wiki/mushaf_yassirapp.md, "Ловушка: RTL-контейнер зеркалит и
+     порядок, и сами символы"). */
+  /* #wrongbot (18.09.2026) - тот же экран-карточка, что и вход: приложение
+     открыто через бот другой половины, дальше идти нельзя. */
+  #login, #wrongbot {
+    position: fixed; inset: 0; z-index: 100;
+    direction: ltr;
+    /* body задаёт 'Scheherazade New' - шрифт арабского текста мусхафа.
+       Весь остальной интерфейс живёт на системном, экран входа тоже. */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    overflow-y: auto;
+  }
+  .login-card {
+    width: 100%; max-width: 360px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-md);
+    padding: 28px 22px 22px;
+    text-align: center;
+  }
+  /* Арабский глиф в латинском кегле рисуется мельче - свой размер, как у
+     знаков на дверях дашборда. */
+  .login-mark {
+    /* Знак сажды рисуем арабским шрифтом сознательно: в системном он у
+       части устройств вырождается в квадрат. */
+    font-family: 'Scheherazade New', serif;
+    font-size: 44px; line-height: 1;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .login-card h1 {
+    margin: 0 0 6px; font-size: 22px; font-weight: 700; color: var(--ink);
+  }
+  .login-sub { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .login-q { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
+  .login-alt, .login-go, .login-plain {
+    display: block; width: 100%;
+    font: inherit; font-size: 15px;
+    padding: 13px 14px; margin-bottom: 10px;
+    border-radius: 14px; cursor: pointer;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg); color: var(--ink);
+  }
+  .login-alt:hover { border-color: var(--accent); }
+  /* Единственная закрашенная кнопка на экран - остальное outline
+     (см. "Дизайн-система" в wiki). */
+  .login-go {
+    background: var(--accent); color: var(--accent-ink);
+    border-color: var(--accent); font-weight: 600;
+    text-decoration: none; box-sizing: border-box;
+  }
+  .login-plain {
+    border: none; background: none; color: var(--muted);
+    font-size: 13px; padding: 6px; margin: 0;
+  }
+  .login-status { margin: 14px 0 6px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .login-status.bad { color: var(--no); }
+  #login-step-go { margin-top: 4px; }
+  #login-mail-open { margin-top: 4px; text-decoration: underline; text-underline-offset: 3px; }
+  #login-step-mail .login-q { text-align: left; color: var(--muted); font-size: 13px; margin: 0 0 6px 2px; }
+  .login-field {
+    display: block; width: 100%; box-sizing: border-box;
+    font: inherit; font-size: 16px;          /* меньше 16 - iOS приближает экран при вводе */
+    padding: 13px 14px; margin-bottom: 14px;
+    border-radius: 14px; border: 1px solid var(--card-border);
+    background: var(--card-bg); color: var(--ink);
+  }
+  .login-field:focus { outline: none; border-color: var(--accent); }
+  .login-code {
+    text-align: center; font-size: 26px; font-weight: 600;
+    letter-spacing: 10px; padding-left: 24px;
+    font-variant-numeric: tabular-nums;
+  }
+  .login-ios {
+    margin: 18px 0 0; padding-top: 14px;
+    border-top: 1px solid var(--card-border);
+    font-size: 12.5px; line-height: 1.5; color: var(--muted);
+  }
+
+  #dash-logout {
+    display: block; margin: 18px auto 6px;
+    font: inherit; font-size: 12.5px;
+    color: var(--muted); background: none; border: none;
+    cursor: pointer; padding: 6px 10px;
+  }
+  #dash-logout:hover { color: var(--ink); }
+  #dash-logout.sure { color: var(--no); font-weight: 600; }
+
+  /* Атрибут hidden гасится браузерным правилом [hidden]{display:none}, а у
+     него специфичность класса - любое наше правило по id её перебивает, и
+     элемент остаётся на экране (10.09.2026, поймано живьём: человек вошёл,
+     приложение под ним работало и слало heartbeat, а сверху намертво висел
+     экран выбора стороны с мёртвыми кнопками - обработчики на них не
+     навешивались, потому что showLogin() при живой сессии не вызывается).
+     Правило по id возвращает hidden его смысл. Общее [hidden]{...!important}
+     не годится: приложение переключает экраны через style.display, и
+     !important в таблице стилей перебил бы даже inline-стиль. */
+  #login[hidden], #wrongbot[hidden], #dash-logout[hidden],
+  #login .login-plain[hidden], #login .login-alt[hidden], #login .login-go[hidden] { display: none; }
+

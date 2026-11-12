@@ -1,0 +1,133 @@
+  /* ─── Заучивание лёжа (22.09.2026, решение пользователя) ───────────────
+     Лёжа и есть «Крупно», на всех трёх этапах, и строка при этом как в
+     мусхафе - целиком. Остаются только строки своей единицы и переход
+     (.hifz-off прячет остальное, ставит hifzApply). Справа узкая колонка -
+     счётчик, 🔊, Сдать: лёжа мало высоты, а не ширины, и колонка в 78px
+     отнимает у букв ~9%. Справа - под большой палец правой руки (23.09.2026,
+     решение пользователя; сначала была слева, у конца арабской строки, но
+     телефон держат правой рукой, и счётчик должен быть под ней). Колонка не прячется
+     никогда; шапка - как при чтении (.bare). Выбор места - весь лист и
+     шапка на месте: это вопрос человеку, прятать его нельзя. */
+  /* Вырез камеры лёжа сбоку: колонка шире на его ширину, иначе он съедал
+     бы её. Вырез берём из обоих источников, как и отступ колонки ниже
+     (05.10.2026, айфоны): в Telegram на iOS env() часто 0, а вырез приходит
+     переменной Telegram - колонка оставалась 78px, отступ съедал 47 из них,
+     кнопкам доставалось ~23px («Стр», вылезающие «Половина», съехавший 🔊). */
+  #app.land.hifz { --rail-w: calc(78px + max(env(safe-area-inset-right, 0px), var(--tg-safe-area-inset-right, 0px))); }
+  #app.land.hifz #hifz-head {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 41;
+    padding-top: calc(5px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    padding-left: max(12px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  #app.land.hifz.bare #hifz-head { transform: translateY(-100%); box-shadow: none; }
+  #app.land.hifz #hifz-foot {
+    position: absolute; right: 0; top: 0; bottom: 0; z-index: 40;
+    width: var(--rail-w); box-sizing: border-box;
+    flex-direction: column; justify-content: center; gap: 10px;
+    padding: 10px max(8px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)) 8px;
+    border-top: none; border-left: 1px solid var(--chrome-border);
+  }
+  #app.land.hifz #hifz-foot button { width: 100%; }
+  #app.land.hifz #hifz-foot .hifz-listen-btn { width: 44px; height: 44px; align-self: center; }
+  /* Счётчик в колонке - высокая мишень: по нему тапают вслепую. */
+  #app.land.hifz #hifz-count { align-self: stretch; padding: 14px 4px 10px; border-radius: 14px; }
+  #app.land.hifz #hifz-count .c-n b { font-size: 30px; }
+  #app.land.hifz #hifz-count .c-bar { height: 5px; margin-top: 8px; }
+  #app.land.hifz #hifz-submit { padding: 10px 2px; font-size: 12px; white-space: normal; line-height: 1.25; }
+  #app.land.hifz #hifz-units { flex-direction: column; flex: 0 0 auto; align-self: stretch; }
+  #app.land.hifz #hifz-units button { padding: 10px 2px; font-size: 11.5px; }
+  /* Сверху отступ на высоту шапки: при входе она видна, и без него верх
+     первой строки уходил под неё. Отступ только в начале листа - при
+     прокрутке уезжает вместе с текстом. */
+  #app.land.hifz #page-wrap {
+    padding-right: calc(var(--rail-w) + 12px);
+    padding-top: calc(40px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    scroll-padding-top: calc(40px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  }
+  /* Единица короче экрана (строка, половина на большом телефоне) - по
+     центру высоты. Длиннее - auto схлопывается в 0, верх не срезается. */
+  #app.land.hifz:not(.hifz-pick) #ayah-text { margin-top: auto; margin-bottom: auto; }
+  #app.land.hifz:not(.hifz-pick) #ayah-text > .hifz-off { display: none; }
+  /* Подложка своей строки нужна, чтобы отличить её от приглушённых. Лёжа
+     приглушённых нет - всё на экране своё, и сплошные полосы только шумят.
+     Выделенным остаётся переход. */
+  #app.land.hifz:not(.hifz-pick) .mushaf-line.hifz-lit { background: none; box-shadow: none; }
+  /* Перевод под словом лёжа (19.10.2026, просьба пользователя: заучивая
+     строку, попутно запоминать слова). Подпись - второй голос строки:
+     мелко, цветом полей мусхафа, под своим словом, не шире пары слов.
+     Абсолютная позиция - ширина строки и подгонка кегля не меняются;
+     место под подписи даёт нижний отступ строки. Переключатель - .gloss
+     на #app (кнопка «ب/а» в колонке). */
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit,
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail,
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail,
+  #app.land.gloss:not(.hifz) .mushaf-line {
+    padding-bottom: calc(clamp(10.5px, .25em, 13px) * (2.7 + 1.18 * var(--gl-extra, 0)));
+  }
+  /* Переходное слово читают на каждом повторе - перевод и ему (решение
+     пользователя), бледнее: это уже следующая строка. */
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit > span[data-gl],
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl],
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl],
+  #app.land.gloss:not(.hifz) .mushaf-line > span[data-gl] { position: relative; }
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl]::after,
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after { opacity: .7; }
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-lit > span[data-gl]::after,
+  #app.land.hifz.gloss:not(.hifz-pick) .mushaf-line.hifz-has-tail > span.hifz-tail[data-gl]::after,
+  #app.land.hifz.gloss:not(.hifz-pick) .hifz-xtail > span[data-gl]::after,
+  #app.land.gloss:not(.hifz) .mushaf-line > span[data-gl]::after {
+    content: attr(data-gl);
+    position: absolute; top: 100%; left: calc(50% + var(--gl-x, 0px)); transform: translateX(-50%);
+    width: var(--gl-w, max(100%, 5.2em)); max-width: 8.5em;
+    font: 400 clamp(10.5px, .25em, 13px)/1.18 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-palette: normal; direction: ltr; unicode-bidi: isolate;
+    text-align: center; color: var(--muted); letter-spacing: .01em;
+    display: block;
+    -webkit-hyphens: manual; hyphens: manual; overflow-wrap: anywhere;
+    pointer-events: none;
+  }
+  /* Крайние слова строки (21.10.2026): подпись шире слова вылезала за край
+     строки, подгонка кегля (clampFontToFit, mushafWorstOverflowRatio)
+     принимала это за переполнение и ужимала весь лист - на SE лёжа на
+     треть. Было правило :first-child/:last-child; в заучивании оно
+     проигрывало правилам .hifz наполовину - right:0 при left:50%, а в rtl
+     такой спор решается в пользу right, и подпись уезжала со своего слова
+     (29.10.2026). Теперь край и ширину решает glossFit(): --gl-w, --gl-x.
+     Подписи - одним рядом (30.10.2026): тесно - уже и в несколько строк, без обрезки
+     с переносом по слогам (мягкие переносы ставит glossText). */
+  /* Замер кегля (clampFontToFit, .measuring и самопроверка, .gl-off) - по
+     одним словам: подпись с рамкой от прошлого кегля раздувала scrollWidth
+     строки, и лист ужимался (стр. 600 на SE: 39 -> 27px). */
+  #app.land.gloss #ayah-text.measuring span[data-gl]::after,
+  #app.land.gloss #ayah-text.gl-off span[data-gl]::after { display: none !important; }
+  #hifz-gloss-btn { display: none; }
+  #app.land.hifz:not(.hifz-pick) #hifz-gloss-btn { display: flex; }
+  #app.land.hifz #hifz-foot #hifz-gloss-btn {
+    width: 44px; height: 44px; align-self: center; padding: 0 !important;
+    border-radius: 50%; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1; color: var(--muted);
+  }
+  /* Чтение лёжа (21.10.2026, просьба пользователя: повторяя, заодно
+     смотреть переводы) - подписи под всеми строками листа. Лист остаётся
+     чистым текстом: та же «ب/а» живёт в шапке, которая сама уезжает и
+     возвращается касанием. Настройка одна на чтение и заучивание. */
+  #read-gloss-btn { display: none; }
+  #app.land #read-gloss-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0; border-radius: 50%; cursor: pointer;
+    background: none; border: 1px solid transparent; line-height: 1; color: var(--muted);
+  }
+  #hifz-gloss-btn .g-ar, #read-gloss-btn .g-ar { font: 20px/0.9 'Scheherazade New', serif; }
+  #hifz-gloss-btn .g-tr, #read-gloss-btn .g-tr { font: 600 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin-top: 1px; }
+  #read-gloss-btn .g-ar { font-size: 16px; }
+  #read-gloss-btn .g-tr { font-size: 9px; }
+  #app.gloss #read-gloss-btn,
+  #app.gloss #hifz-gloss-btn {
+    background: var(--accent-soft) !important; border-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
+    color: var(--accent);
+  }
+  #app.land.hifz #hifz-rec { right: var(--rail-w); }
+  #app.land.hifz #hifz-rec .card { border-radius: 12px 12px 0 0; }

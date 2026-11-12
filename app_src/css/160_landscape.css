@@ -1,0 +1,84 @@
+  /* ─── Чтение лёжа (21.09.2026) ─────────────────────────────────────────
+     Просьба братьев: стоя экран узкий, буквы мелкие. Лёжа (класс .land
+     ставит mushafOrientationApply по MUSHAF_LAND_QUERY - телефон, не
+     планшет) колонка идёт во всю ширину, а кегль за ней (mushafMaxFont).
+     По высоте лёжа всего ~390px, поэтому хром ужат: меню внизу убрано,
+     строка страниц уехала в конец листа, шапка тоньше. Класса нет на
+     «Смысле», «Моих словах» и в заучивании - там всё как стоя.
+     Вырез камеры лёжа сбоку: без viewport-fit=cover Safari сам держит
+     страницу в безопасной зоне, env() здесь - для WebView, где это не так. */
+  #app.land #ayah-text { max-width: none; }
+  /* justify-content с центра на начало: в колонке «по центру» лист выше
+     экрана вылезал ВВЕРХ, за край, куда прокрутка не достаёт, - верх листа
+     срезало «потолком» (пользователь со своего Android, 21.09.2026). */
+  #app.land #page-wrap {
+    flex-direction: column; align-items: stretch; justify-content: flex-start;
+    padding-left: max(12px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px));
+  }
+  #app.land #topbar {
+    padding-top: 3px; padding-bottom: 3px;
+    padding-left: max(10px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px));
+  }
+  /* Прокрутка лёжа встаёт на границу строки (21.09.2026, пользователь со
+     своего телефона: верхняя строка срезана наполовину). Строка лёжа ~100px,
+     остановка посреди неё - строку не прочесть; теперь сверху всегда целая
+     строка: название суры, басмала или строка мусхафа. Строка страниц в
+     конце - своя точка, чтобы до неё можно было докрутить. */
+  #app.land #page-wrap { scroll-snap-type: y mandatory; }
+  #app.land #ayah-text > * { scroll-snap-align: start; }
+  #app.land #page-wrap > #page-nav { scroll-snap-align: end; }
+  /* Строка страниц в конце листа - обычный блок под текстом. */
+  #app.land #page-wrap > #page-nav {
+    margin: 18px 0 8px; border: 1px solid var(--chrome-border);
+    border-radius: 12px; padding: 6px 10px;
+  }
+
+  /* Лёжа - только текст (22.09.2026, решение пользователя): шапка висит
+     НАД листом, а не в потоке, и сама уезжает вверх через несколько секунд
+     (класс .bare, landChromeShow). Касание по пустому месту листа
+     возвращает её. В потоке она при каждом появлении сдвигала бы весь
+     текст. Отступы --tg-* - полный экран Telegram (requestFullscreen): там
+     его кнопки «закрыть/меню» лежат поверх нашей страницы, шапка и первая
+     строка листа встают под них, а не за них. Без полного экрана эти
+     переменные нулевые. */
+  #app.land { position: relative; }
+  #app.land #topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 40;
+    padding-top: calc(3px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  #app.land.bare #topbar { transform: translateY(-100%); box-shadow: none; }
+  #app.land #page-wrap {
+    /* 36px - высота шапки: пока она видна, начало листа не уходит под неё. */
+    padding-top: calc(36px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    /* Равен отступу сверху: иначе прилипание к строке оставляло лист на
+       прокрутке 6px, и новый лист открывался «не с начала» (сверка снимков). */
+    scroll-padding-top: calc(36px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    padding-left: max(12px, env(safe-area-inset-left), var(--tg-safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right), var(--tg-safe-area-inset-right, 0px));
+  }
+
+  /* Запись лёжа - одна низкая строка вместо шторки в полэкрана: время,
+     подсказка, кнопки в ряд. Место под ней добирает hifzRecPad. С 22.09 -
+     и запись сдачи 40+40, не только повторения. Исключение - подтверждение
+     повторов после отправки (.prog, hifzProgressOpen): там две строки
+     методики и «−/+», в полосу они не ложатся, остаётся карточка. */
+  #app.land #hifz-rec:not(.prog) .card {
+    max-width: none; display: flex; align-items: center; gap: 12px;
+    /* Снизу - полоска «домой» айфона: без отступа кнопки ложились на неё. */
+    padding: 8px 44px max(8px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left));
+    border-radius: 12px 12px 0 0;
+  }
+  #app.land #hifz-rec:not(.prog) .place { display: none; }
+  #app.land #hifz-rec:not(.prog) .timer { font-size: 22px; margin: 0; flex: 0 0 auto; }
+  #app.land #hifz-rec:not(.prog) .hint { flex: 1 1 0; min-width: 0; text-align: left; min-height: 0; }
+  /* Плеер не сжимается в точку на узком SE: уступает подсказка. */
+  #app.land #hifz-rec:not(.prog) .player { flex: 1 1 auto; min-width: 170px; margin: 0; }
+  #app.land #hifz-rec:not(.prog) .actions { margin: 0; flex: 0 0 auto; }
+  #app.land #hifz-rec:not(.prog) .actions button { flex: 0 0 auto; min-width: 104px; padding: 9px 12px; }
+  #app.land #hifz-rec:not(.prog) #hifz-rec-close { top: 50%; transform: translateY(-50%); }
+  #app.land #hifz-rec.prog .card { max-height: 100dvh; overflow-y: auto; }
+

@@ -1,0 +1,366 @@
+  /* ── Лента (11.09.2026) ──────────────────────────────────────────────
+     Строка под шапкой: что нового в группе, в Тадаббуре и лично. Не блок в
+     три сообщения (так было в макете 10.09) - строка не отодвигает двери за
+     первый экран, а за вторым сообщением проще открыть саму ленту.
+
+     direction: ltr обязателен - страница целиком RTL ради арабского текста
+     мусхафа, без него аватар уезжает вправо, а счётчик влево (та же ловушка,
+     что записана в wiki/mushaf_yassirapp.md). */
+  #dash-brief {
+    display: none; align-items: center; gap: 10px;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; box-shadow: var(--shadow-sm);
+    padding: 8px 12px 8px 8px; margin-bottom: 10px; cursor: pointer;
+  }
+  #dash-brief.on { display: flex; }
+  /* Доска важного (17.09.2026): урок открылся, предупреждение, объявление,
+     пересдача, перевод, новое задание. Янтарная, не красная: красное здесь -
+     только долг по сдачам. Без color-mix - на iOS до 16.2 его нет. Пустая
+     доска места не занимает. */
+  /* Сообщение, на которое привела доска важного: янтарная подложка гаснет
+     сама за несколько секунд. */
+  #feed .l-row.hit { animation: feed-hit 4s ease-out forwards; border-radius: 12px; }
+  @keyframes feed-hit {
+    0%, 55% { background: var(--warn-soft); box-shadow: 0 0 0 6px var(--warn-soft); }
+    100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
+  }
+  /* Карточка выпускника подготовительной - единственное место дашборда, где
+     ждут ответа, поэтому она заметнее доски: акцентная рамка, две кнопки. */
+  #dash-grad {
+    display: none; flex: 0 0 auto; margin: 14px 0 12px; padding: 15px 15px 14px;
+    background: var(--card-bg); border: 1.5px solid var(--accent); border-radius: 18px;
+    box-shadow: var(--shadow-sm); direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #dash-grad.on { display: block; }
+  #dash-grad .g-h { font-size: 15px; font-weight: 700; color: var(--ink); }
+  #dash-grad .g-t { font-size: 13.5px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+  #dash-grad .g-btns { display: flex; gap: 8px; margin-top: 12px; }
+  #dash-grad .g-btns button {
+    flex: 1; padding: 11px 8px; border-radius: 12px; cursor: pointer;
+    font: 600 13.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    border: 1px solid var(--card-border); background: transparent; color: var(--ink);
+  }
+  #dash-grad .g-btns button:first-child { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  #dash-grad .g-btns button:disabled { opacity: .5; }
+  #dash-grad.wait .g-btns { display: none; }
+  #dash-board { display: none; flex: 0 0 auto; flex-direction: column; margin: 20px 0 0; overflow: hidden;
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #dash-board.on { display: flex; }
+  /* Доска - ОДНО место (замечание пользователя 17.09.2026), и тихое: главное
+     на экране - двери. Карточка нейтральная; непрочитанную строку отмечают
+     янтарная полоска слева и плитка значка, а не заливка - три залитые строки
+     выходили жёлтой плитой тяжелее дверей. */
+  #dash-board.hot { border-color: var(--warn); }
+  #dash-board .bd-row {
+    position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 11px;
+    cursor: pointer; padding: 11px 12px 11px 15px; -webkit-tap-highlight-color: transparent;
+  }
+  #dash-board .bd-row::before {
+    content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px;
+    border-radius: 0 3px 3px 0; background: var(--warn);
+  }
+  #dash-board .bd-row + .bd-row { border-top: 1px solid var(--card-border); }
+  #dash-board .bd-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #dash-board .bd-ic {
+    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px;
+    background: var(--warn-soft); color: var(--warn-ink);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #dash-board .bd-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor;
+    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #dash-board .bd-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  #dash-board .bd-h { font-size: 12.5px; font-weight: 700; color: var(--ink);
+    display: flex; align-items: baseline; gap: 6px; }
+  #dash-board .bd-h > span { flex: 0 0 auto; }
+  #dash-board .bd-h i { min-width: 0; font-style: normal; font-size: 10.5px; font-weight: 400;
+    color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dash-board .bd-t { font-size: 13px; line-height: 1.35; color: var(--ink); overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  #dash-board .bd-go { flex: 0 0 auto; color: var(--muted); font-size: 15px; }
+  /* Прочитанное объявление висит до своей даты, но уже без акцента. */
+  #dash-board .bd-row.read::before { display: none; }
+  #dash-board .bd-row.read .bd-ic { background: var(--accent-soft); color: var(--accent); }
+  #dash-board .bd-row.read .bd-h { font-weight: 600; }
+  #dash-board .bd-row.read .bd-h, #dash-board .bd-row.read .bd-t { color: var(--muted); }
+  #dash-brief .b-ava {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  #dash-brief .b-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  #dash-brief .b-who {
+    font-size: 12.5px; font-weight: 600; color: var(--ink);
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  #dash-brief .b-who i {
+    font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #dash-brief .b-txt {
+    font-size: 12px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Счётчик спокойный (--accent, не --no): непрочитанное в ленте - не долг.
+     Красным в этом приложении помечены только сдачи. Считается в нём ТОЛЬКО
+     адресованное тебе (см. brief в core/feed.py): групповой шум превратил бы
+     цифру в несбрасываемое пятно. */
+  #dash-brief .b-n {
+    flex: 0 0 auto; background: var(--accent); color: var(--accent-ink);
+    border-radius: 11px; min-width: 22px; height: 22px; padding: 0 6px;
+    display: none; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  #dash-brief .b-n.on { display: flex; }
+  /* Точка «есть и другое новое» - без числа. */
+  #dash-brief .b-dot {
+    flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--card-border); display: none;
+  }
+  #dash-brief .b-dot.on { display: block; }
+  #dash-brief .b-go { flex: 0 0 auto; color: var(--muted); font-size: 15px; line-height: 1; }
+
+  /* Экран ленты. Полноэкранный слой с возвратом «← Дашборд» - как #sett и
+     #learn, а не попап: попап здесь (#word-popup, #confirm-overlay) - это
+     две строки текста, а лента листается, носит медиа и хранит неделю. */
+  #feed {
+    position: fixed; inset: 0; z-index: 90; display: none;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    flex-direction: column;
+  }
+  #feed.on { display: flex; }
+  #feed .l-head {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+    min-height: 38px; padding: 14px 16px 10px;
+  }
+  #feed-back {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font: inherit; font-size: 14px; color: var(--accent);
+  }
+  #feed .l-title {
+    margin-left: auto; margin-right: auto;
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+  /* Ряд чипов прокручивается вбок: у Умар устаза их пять, и в 390 точек
+     они не помещаются. Полоса прокрутки скрыта - край последнего чипа сам
+     показывает, что ряд длиннее экрана. */
+  #feed .l-chips {
+    flex: 0 0 auto; display: flex; gap: 6px; padding: 0 14px 10px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  #feed .l-chips::-webkit-scrollbar { display: none; }
+  #feed .l-chips button {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 12.5px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card-bg);
+    color: var(--muted); border-radius: 14px; padding: 6px 11px;
+    max-width: 45vw; white-space: nowrap;
+  }
+  #feed .l-chips button > span.t { overflow: hidden; text-overflow: ellipsis; }
+  #feed .l-chips button.on {
+    border-color: var(--accent); background: var(--accent);
+    color: var(--accent-ink); font-weight: 600;
+  }
+  /* Счётчик на чипе - то же спокойное правило, что и на строке дашборда:
+     считается только адресованное тебе. */
+  #feed .l-chips button i {
+    font-style: normal; font-size: 11px; font-weight: 700;
+    background: var(--accent); color: var(--accent-ink);
+    border-radius: 9px; min-width: 18px; height: 18px; padding: 0 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+  #feed .l-chips button.on i { background: var(--accent-ink); color: var(--accent); }
+  #feed .l-scroll { flex: 1; overflow-y: auto; padding: 0 14px 12px; }
+  #feed .l-day {
+    text-align: center; font-size: 11px; color: var(--muted);
+    margin: 10px 0 8px; letter-spacing: .04em;
+  }
+  #feed .l-row {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; box-shadow: var(--shadow-sm);
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  /* Бот отличается фоном, а не подписью «бот»: имя у него своё, как в
+     Telegram, и лишнее слово в каждой строке только шумит. */
+  #feed .l-row.bot { background: var(--accent-soft); border-color: transparent; }
+  #feed .l-ava {
+    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13.5px; font-weight: 600;
+  }
+  #feed .l-row.bot .l-ava { background: var(--card-bg); }
+  #feed .l-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  #feed .l-top { display: flex; align-items: baseline; gap: 7px; }
+  #feed .l-top b { font-size: 13px; font-weight: 600; color: var(--ink); }
+  /* Откуда сообщение - в совмещённой ленте без этого не понять, группа это,
+     Тадаббур или личное. */
+  #feed .l-top i {
+    font-style: normal; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--card-border); border-radius: 6px; padding: 1px 5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%;
+  }
+  #feed .l-top u {
+    margin-left: auto; text-decoration: none;
+    font-size: 10.5px; color: var(--muted); white-space: nowrap;
+  }
+  #feed .l-txt { font-size: 13px; line-height: 1.42; color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+  #feed .l-txt a { color: var(--accent); }
+  #feed .l-txt blockquote { margin: 4px 0; padding-left: 10px; border-left: 2px solid var(--card-border); }
+  #feed .l-txt code, #feed .l-txt pre { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; margin: 0; }
+  #feed .m-voice {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    font-size: 12px; color: var(--accent); cursor: pointer;
+    background: var(--accent-soft); border: none; border-radius: 9px; padding: 6px 10px;
+    font-family: inherit;
+  }
+  #feed .m-photo {
+    margin-top: 2px; border-radius: 10px; overflow: hidden;
+    background: var(--accent-soft); min-height: 40px;
+  }
+  #feed .m-photo img { display: block; width: 100%; height: auto; }
+  #feed .l-empty { text-align: center; font-size: 12.5px; color: var(--muted); padding: 40px 20px; line-height: 1.5; }
+  /* "Сейчас онлайн" (30.08.2026) - ненавязчивая строка над карточками, не
+     бейдж на конкретной карточке (не должна выглядеть как реклама одного
+     раздела - решение пользователя). Пустая (не занимает места) до первого
+     ответа heartbeat, чтобы не мигать "0" на долю секунды при открытии. */
+  #dash-online {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin-top: -8px;
+    /* direction: ltr (30.08.2026) - #dashboard наследует dir="rtl" от
+       <html> (см. wiki/mushaf_yassirapp.md, "Ловушка: RTL-контейнер
+       зеркалит..."), без этого "точка-число-текст" в DOM переставлялись
+       бы визуально в "текст-число-точка". Проверено скриншотом. */
+    direction: ltr;
+    margin: 0;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #dash-online:empty { display: none; }
+  #dash-online .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #2fbf6e; flex: 0 0 auto;
+  }
+  /* «Дыхание Яссира» (07.09.2026) - первое, что видит человек на главном
+     экране: сердце из точек-людей и волна суток. Показывает не персональный
+     прогресс, а то, что джамаат живой - кто-то прямо сейчас сдаёт, устаз
+     разбирает. Данные общие для мужского и женского ботов (core/pulse.py):
+     свои 100 человек выглядят бедно, весь джамаат - совсем другое дело.
+     direction: ltr - та же ловушка RTL-контейнера, что у #dash-online. */
+  #dash-pulse {
+    direction: ltr;
+    /* Пульс - отдельная мысль, а не пятая дверь: между ним и «Как работаем»
+       зазор должен быть больше, чем между плитками (10.09.2026). */
+    margin-top: 22px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 13px 14px 10px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-sm);
+    display: none;              /* до первого ответа /pulse ничего не мигает */
+    /* Сердце слева, число и разбивка сбоку справа, волна суток во всю
+       ширину под ними (10.09.2026, решение пользователя). Раньше всё шло в
+       столбик и блок занимал ~370px - почти пол-экрана, из-за чего двери
+       уезжали за сгиб. Сердце при этом не портится: pulseFit() берёт
+       clientWidth и перерисовывает фигуру под новый размер, а не сжимает
+       готовую картинку. */
+    grid-template-columns: 52% 1fr;
+    grid-template-areas: "heart count" "heart split" "online online" "days days";
+    column-gap: 12px; row-gap: 2px; align-items: center;
+  }
+  #dash-pulse #pulse-heart { grid-area: heart; height: auto; }
+  /* В узкой колонке число и подпись в одну строку не живут: «0» крупное, а
+     подпись длинная, и текст обтекал его рваными кусками. Ставим друг под
+     друга (10.09.2026). */
+  #dash-pulse .p-count {
+    grid-area: count; align-self: end;
+    flex-direction: column; align-items: flex-start; gap: 1px;
+  }
+  #dash-pulse .p-count span { font-size: 11.5px; line-height: 1.3; }
+  #dash-pulse .p-split { grid-area: split; align-self: start; }
+  /* Своя строка во всю ширину, а не колонка рядом с сердцем: «сейчас в
+     онлайне учатся 7» в узкой колонке переносилось, и число оставалось
+     сиротой на второй строке (10.09.2026). Пустая строка схлопывается сама -
+     у #dash-online есть :empty { display: none }. */
+  #dash-pulse #dash-online {
+    grid-area: online; align-self: center;
+    font-size: 11.5px; margin: 4px 0 0;
+  }
+  #dash-pulse .p-days { grid-area: days; }
+  /* На компьютере доля в процентах давала чудовище: при 1920px сердце
+     выходило 836px высотой. Колонку фиксируем - телефона это не касается
+     (10.09.2026). */
+  @media (min-width: 520px) {
+    #dash-pulse { grid-template-columns: 250px 1fr; }
+  }
+  #dash-pulse .p-count { display: flex; align-items: baseline; gap: 7px; }
+  /* Число живое: по цифрам медленно проходит волна света - от чернил к
+     акценту и обратно (07.09.2026, просьба пользователя «пусть переливается»).
+     Градиент по тексту, а не мигание прозрачностью: цифры остаются читаемыми
+     всё время. При «щелчке» (пришло событие) перелив уступает место сплошному
+     акценту - иначе вспышка не читалась бы на фоне волны. */
+  #dash-pulse .p-count b {
+    font-size: 25px; font-weight: 700;
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+    background: linear-gradient(100deg,
+      var(--ink) 18%, var(--accent) 42%, var(--ink) 66%);
+    background-size: 240% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: pulse-shine 5s linear infinite;
+  }
+  @keyframes pulse-shine {
+    from { background-position: 130% 0; }
+    to { background-position: -30% 0; }
+  }
+  #dash-pulse .p-count b.hit {
+    background: none; color: var(--accent); animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #dash-pulse .p-count b { background: none; color: var(--ink); animation: none; }
+  }
+  #dash-pulse .p-count span { font-size: 12px; color: var(--muted); }
+  #dash-pulse .p-split {
+    display: flex; flex-wrap: wrap; gap: 3px 10px;
+    font-size: 10.5px; color: var(--muted); margin-bottom: 1px;
+  }
+  #dash-pulse .p-split i { font-style: normal; display: inline-flex; align-items: center; gap: 4px; }
+  #dash-pulse .p-split u {
+    width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+    text-decoration: none;
+  }
+  #dash-pulse canvas { display: block; width: 100%; }
+  #dash-pulse .p-days {
+    border-top: 1px solid var(--card-border); margin-top: 4px; padding-top: 6px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  #dash-pulse .p-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  #dash-pulse .p-row b { color: var(--ink); font-size: 11.5px; font-weight: 600; }
+  #dash-pulse .p-arrow {
+    border: 1px solid var(--card-border); background: var(--card-bg);
+    color: var(--muted); border-radius: 8px; width: 26px; height: 24px;
+    font: inherit; font-size: 13px; line-height: 1; padding: 0; cursor: pointer;
+  }
+  #dash-pulse .p-arrow:disabled { opacity: .35; cursor: default; }
+  #dash-pulse .p-dots { display: flex; gap: 4px; align-items: center; margin-left: auto; }
+  #dash-pulse .p-dots i {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--card-border); display: block;
+  }
+  #dash-pulse .p-dots i.on { background: var(--accent); }
+  #dash-pulse .p-foot { justify-content: space-between; }
+

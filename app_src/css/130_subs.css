@@ -1,0 +1,64 @@
+  /* Кабинет студента "Сдачи" (04.09.2026) - делит каркас с кабинетом
+     устаза ниже: топбар + прокручиваемое тело, список сверху вниз. */
+  #subs {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  #subs-topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    direction: ltr; flex: 0 0 auto;
+  }
+  #subs-topbar button {
+    background: none; border: none; color: var(--accent);
+    font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
+    font-family: inherit;
+  }
+  /* Раздел «Как работаем» (08.09.2026) - объяснение по шагам, экран за
+     экраном. Вход - оглавление разделов: сдача заучивания и разбор устаза
+     разведены намеренно, это разные места и разные моменты. Внутри раздела
+     один шаг на экран (решение пользователя): онбординг читают один раз и
+     тогда, когда растерялись, - там важнее довести до конца, чем дать
+     быстрый доступ; за возврат отвечает оглавление. */
+  #learn {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  #learn-topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    direction: ltr; flex: 0 0 auto;
+  }
+  #learn-topbar button {
+    font: inherit; font-size: 12.5px; font-weight: 600;
+    background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 2px;
+  }
+  #learn-body > .learn-lead, #learn-body > .learn-item { max-width: 520px; width: 100%; align-self: center; }
+  /* Блоки не сжимаются под высоту экрана - лента прокручивается (11.10.2026):
+     во флекс-колонке у детей flex-shrink: 1, а у .k-card overflow: hidden, и
+     на телефоне карточки ужимались и резали низ («9 из 9» у края, последний
+     пункт «Как работать» срезан посередине). */
+  #learn-body > * { flex-shrink: 0; }
+  #learn-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  .learn-lead { font-size: 12.5px; color: var(--muted); margin: 0 2px 4px; }

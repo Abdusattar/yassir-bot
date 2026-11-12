@@ -151,6 +151,10 @@ def apply(layout="madani"):
         raise SystemExit("в index.html нет метки %s" % begin)
     html = re.sub(re.escape(begin) + r".*?" + re.escape(end), lambda _: block, html, flags=re.S)
     INDEX.write_text(html, "utf-8")
+    # index.html - результат сборки из app_src (scripts/build_app.py): таблицу вписали в
+    # готовый файл, теперь раскладываем её обратно по исходникам, иначе тест сборки упадёт.
+    import build_app
+    build_app.adopt()
     ws = sorted(pages.values())
     print("вписано 604 листа; ширина при %dpx: %d–%d, медиана %d"
           % (data["base"], ws[0], ws[-1], ws[len(ws) // 2]))

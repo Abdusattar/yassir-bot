@@ -1,0 +1,134 @@
+  /* "Мои слова" (29.08.2026) - тот же паттерн, что и #ayah-text: колонка
+     книжной ширины по центру экрана, не растянута во всю ширину широкого
+     монитора/планшета (иначе арабский слева и перевод справа разъедутся на
+     разные концы экрана - тот же баг, что чинили для #ayah-text 27.08). */
+  #mywords-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px 16px;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .mywords-row { cursor: pointer; }
+  .mywords-row:active { background: var(--accent-soft); }
+  /* Деление "Новые"/"Забытые" (03.09.2026, пункт 7 старого макета 40+40) -
+     заголовок секции появляется только когда есть хоть одно "Новое" слово
+     (see renderMyWords) - до тех пор список выглядит как раньше, без
+     лишнего "Забытые" над всем и так привычным списком. */
+  .mywords-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 2px 4px;
+  }
+  .mywords-section-title:first-child { padding-top: 2px; }
+
+  /* Тап по слову на странице чтения - всплывающий перевод (28.08.2026),
+     --popup-bg/--popup-ink были заведены заранее для этого же, до этого не
+     использовались нигде. color-mix даёт полупрозрачность независимо от
+     конкретного hex переменной (светлая/тёмная тема - разные значения). */
+  #word-popup {
+    position: fixed;
+    left: 0; top: 0;
+    background: color-mix(in srgb, var(--popup-bg) 88%, transparent);
+    color: var(--popup-ink);
+    padding: 7px 14px;
+    border-radius: 10px;
+    font-size: 15px;
+    max-width: 70vw;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -100%);
+    transition: opacity 0.25s ease;
+    /* Выше #hifz-big (55) и #hifz-rec (60): перевод по тапу нужен и на
+       крупном экране, где студент делает повторы (02.09.2026). */
+    z-index: 70;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    white-space: nowrap;
+  }
+  #word-popup.visible { opacity: 1; }
+  /* Пояснение к слову (12.11.2026). Часть слов одной русской подписью не передать
+     (ар-Рахман и ар-Рахим, такъва, «Ра‘ина»...). У таких слов в подсказке вторая
+     строка «Подробнее»: нажатие открывает панель с коротким пояснением по тафсиру.
+     Подсказка у всех слов та же и так же гаснет - пояснение не навязывается.
+     Нажимается подсказка только пока видна: погасшая не должна перехватывать
+     касания по строкам под ней. Данные - notes/ru.json (scripts/build_word_notes.py). */
+  #word-popup.wn { padding: 7px 14px 0; cursor: pointer; }
+  #word-popup.wn.visible { pointer-events: auto; }
+  #word-popup .wn-more {
+    display: block; margin: 6px -14px 0; padding: 6px 14px 7px; font-size: 12.5px;
+    /* Золото - тот же цвет, что у ссылки на аят в панели: строка ведёт к тафсиру.
+       Подмешиваем цвет текста подсказки: в тёмной теме подсказка светлая, и
+       чистое золото на ней не читается. */
+    color: color-mix(in srgb, var(--marker-color) 62%, var(--popup-ink));
+    border-top: 1px solid color-mix(in srgb, var(--popup-ink) 18%, transparent);
+  }
+  /* Слово (или пара слов с одним переводом), на которое нажали, - пока
+     виден перевод (28.09.2026). */
+  #ayah-text .w-hl { background: var(--accent-soft); border-radius: 6px; box-shadow: 0 0 0 2px var(--accent-soft); }
+
+  /* Подтверждение (30.08.2026) - общая модалка "да/отмена", сейчас только
+     для 🔁 "повторение", но написана обобщённо на случай будущих
+     похожих подтверждений. */
+  #confirm-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 60; padding: 20px;
+    direction: ltr;
+  }
+  #confirm-overlay.visible { display: flex; }
+  .confirm-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+    padding: 20px;
+    max-width: 320px; width: 100%;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .confirm-card p {
+    margin: 0 0 16px; font-size: 15px; color: var(--ink); line-height: 1.4;
+  }
+  .confirm-card .confirm-actions { display: flex; gap: 10px; justify-content: center; }
+  .confirm-card button {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; box-shadow: var(--shadow-sm);
+    padding: 9px 18px; font-size: 14px; font-weight: 500;
+    color: var(--ink); cursor: pointer; font-family: inherit;
+  }
+  #confirm-yes {
+    background: var(--accent); border-color: var(--accent);
+    color: var(--accent-ink); font-weight: 600;
+  }
+
+  #meaning-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 18px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  .meaning-row { padding: 10px 0 16px; }
+  .meaning-row .ayah-num {
+    display: inline-block;
+    color: var(--marker-color);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .meaning-row .meaning-text {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+

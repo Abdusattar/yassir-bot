@@ -1,0 +1,369 @@
+  @font-face {
+    font-family: 'Scheherazade New';
+    src: url('ScheherazadeNew-Regular.ttf') format('truetype');
+    font-display: swap;
+  }
+
+  /* Настоящий шрифт QPC V4 Tajweed (King Fahd Complex) - цвета таджвида
+     зашиты В САМ ШРИФТ через COLR/CPAL-таблицы, не через CSS-классы ниже
+     (28.08.2026, см. scripts/export_mushaf_page.py: get_code_v4). Шрифт
+     свой на КАЖДУЮ страницу (as static-cdn.tarteel.ai/.../p{N}.woff2) -
+     src переписывается в JS на каждую загрузку страницы (см.
+     #v4-font-face), сам @font-palette-values - фиксированная декларация,
+     держит одно и то же имя семейства 'mushaf-v4' между страницами.
+     Хотлинк на CDN QUL, не самохостинг - см. font_url_for_page. */
+  @font-palette-values --V4Light { font-family: 'mushaf-v4'; base-palette: 0; }
+  @font-palette-values --V4Dark { font-family: 'mushaf-v4'; base-palette: 1; }
+  .v4-word {
+    font-family: 'mushaf-v4', 'Scheherazade New', serif;
+    font-palette: --V4Light;
+  }
+  /* Ручной переключатель темы (30.08.2026, кнопка на дашборде) - system-
+     тема остаётся дефолтом (":not([data-theme=light])" пропускает явный
+     светлый выбор мимо системной тёмной), а ":root[data-theme=dark]" даёт
+     тёмную ПРИНУДИТЕЛЬНО, даже если система светлая. См. тот же паттерн
+     ниже у переменных :root. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .v4-word { font-palette: --V4Dark; }
+  }
+  :root[data-theme="dark"] .v4-word { font-palette: --V4Dark; }
+  /* Второй шрифт листа (23.09.2026, раскладка Дар аль-Маариф): строка 1405H
+     бывает собрана из слов двух мединских листов, а глиф V4 живёт только в
+     шрифте своего листа. Слово с чужого листа (t.fp) рисуется семейством
+     'mushaf-v4-b' - у палитры своё имя, @font-palette-values привязан к
+     семейству. Больше двух листов на одной странице 1405 не бывает
+     (проверено по всем 604). */
+  @font-palette-values --V4LightB { font-family: 'mushaf-v4-b'; base-palette: 0; }
+  @font-palette-values --V4DarkB { font-family: 'mushaf-v4-b'; base-palette: 1; }
+  .v4-word.v4-b { font-family: 'mushaf-v4-b', 'Scheherazade New', serif; font-palette: --V4LightB; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .v4-word.v4-b { font-palette: --V4DarkB; }
+  }
+  :root[data-theme="dark"] .v4-word.v4-b { font-palette: --V4DarkB; }
+
+  :root {
+    --bg: #ffffff;
+    --ink: #1a1a1a;
+    /* Фон мусхаф-ридера (30.08.2026, прогнано через frontend-design,
+       второй заход) - ОТДЕЛЬНЫЕ токены от --dash-bg-*, те остаются только
+       у #trainer/#dashboard (решение пользователя - не трогать их). Тёплый
+       "бумажный" тон (как страница настоящего печатного мусхафа), не
+       холодный мятный - специально светлый и нейтральный, чтобы не
+       спорить с таджвидной раскраской (зашита в сам шрифт, несколько
+       ярких цветов на буквах). --mushaf-bg-end чуть глубже старта -
+       лёгкий намёк на состаренную бумагу, не плоский цвет. */
+    --mushaf-bg-start: #faf7f0;
+    --mushaf-bg-end: #faf7f0;
+    /* chrome (topbar/page-nav/tabbar) - часть той же "бумажной"
+       поверхности, не отдельная белая полоса поверх нее (#page-wrap/
+       #ayah-text не имеют своего непрозрачного фона). color-mix - доля
+       --mushaf-bg-start в белом (45%, чуть светлее самого градиента -
+       chrome читается тише контента), а не число с потолка. Граница -
+       12% акцента (--accent, изумруд обложки мусхафа) - тонкая связь с
+       фирменным цветом вместо нейтрального серого. */
+    --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 45%, #ffffff);
+    --subj-j: #2f6fd6; --subj-n: #1f7a5c;
+    --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
+    --muted: #8a8370;
+    --popup-bg: #2b2b2b;
+    --popup-ink: #ffffff;
+    --marker-color: #b08d2e;
+    --dash-bg-start: #f2f3ec;
+    --dash-bg-end: #f2f3ec;
+    /* Акцент - приглушённый изумрудный (цвет обложки мусхафа), НЕ ярко-
+       зелёный "успех" из обычных UI-китов - решение 29.08.2026, "высший
+       класс дизайнера": один тон на всё приложение (кнопки, прогресс,
+       бейдж иконки), не мешанина из синего/зелёного/жёлтого. */
+    --accent: #1f7a5c;
+    --accent-ink: #ffffff;
+    --accent-soft: #dcefe6;
+    --card-bg: #ffffff;
+    --card-border: #e6e1d2;
+    --shadow-sm: 0 1px 2px rgba(30, 25, 10, 0.05), 0 1px 6px rgba(30, 25, 10, 0.04);
+    --shadow-md: 0 6px 20px rgba(30, 25, 10, 0.08), 0 2px 6px rgba(30, 25, 10, 0.05);
+    --ok: #1f7a52;
+    --ok-soft: #e3f2e8;
+    --no: #b3403a;
+    /* Важное (доска на дашборде): янтарь, не красный - красное только долг. */
+    --warn: #d9a21b;
+    --warn-soft: #fbefc9;
+    --warn-ink: #5a4100;
+    --no-soft: #fbe9e7;
+  }
+  /* Ручной переключатель темы (30.08.2026) - system-тема (media query)
+     остаётся дефолтом, но уступает явному выбору студента:
+     ":not([data-theme=light])" не даёт системной тьме перебить явный
+     светлый выбор, а отдельный ":root[data-theme=dark]" ниже (без media
+     query) даёт тёмную ПРИНУДИТЕЛЬНО, даже если система/Telegram
+     светлые. Кнопка - #btn-theme-toggle на дашборде (см. JS), выбор
+     хранится в localStorage, переживает переоткрытие. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16140f;
+      --ink: #f0ead8;
+      /* Тёплый тёмно-коричневый ("переплёт книги"), НЕ тот же зеленоватый
+         тёмный, что у #trainer/#dashboard (--dash-bg-* ниже) - своя
+         идентичность мусхафа и в тёмной теме тоже (30.08.2026). */
+      --mushaf-bg-start: #16150f;
+      --mushaf-bg-end: #16150f;
+      --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
+    --subj-j: #7fb0ff; --subj-n: #4fbf95;
+      --subj-j: #7fb0ff; --subj-n: #4fbf95;
+      --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
+      --muted: #a39a7d;
+      --popup-bg: #f0ead8;
+      --popup-ink: #16140f;
+      --marker-color: #d4af37;
+      --dash-bg-start: #15181a;
+      --dash-bg-end: #15181a;
+      --accent: #4fbf95;
+      --accent-ink: #0d1a12;
+      --accent-soft: #1d3a30;
+      --card-bg: #22262a;
+      --card-border: #33383a;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 6px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+      --ok: #4cae83;
+      --ok-soft: #1e3126;
+      --no: #e0776f;
+      --warn: #e0b341;
+      --warn-soft: #3b3016;
+      --warn-ink: #f3dfa6;
+      --no-soft: #33201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16140f;
+    --ink: #f0ead8;
+    --mushaf-bg-start: #16150f;
+    --mushaf-bg-end: #16150f;
+    --chrome-bg: color-mix(in srgb, var(--mushaf-bg-start) 82%, var(--ink));
+    --chrome-border: color-mix(in srgb, var(--accent) 12%, var(--chrome-bg));
+    --muted: #a39a7d;
+    --popup-bg: #f0ead8;
+    --popup-ink: #16140f;
+    --marker-color: #d4af37;
+    --dash-bg-start: #15181a;
+    --dash-bg-end: #15181a;
+    --accent: #4fbf95;
+    --accent-ink: #0d1a12;
+    --accent-soft: #1d3a30;
+    --card-bg: #22262a;
+    --card-border: #33383a;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 6px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+    --ok: #4cae83;
+    --ok-soft: #1e3126;
+    --no: #e0776f;
+    --warn: #e0b341;
+    --warn-soft: #3b3016;
+    --warn-ink: #f3dfa6;
+    --no-soft: #33201e;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button:focus-visible, .dash-card:focus-visible, .dash-row:focus-visible,
+  .trainer-opt:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  }
+  html, body {
+    margin: 0; padding: 0;
+    /* Автоувеличение текста в iOS Safari — ВЫКЛ (13.09.2026).
+       Без этого iOS сам раздувает шрифт, оценивая ширину блока относительно
+       экрана, и коэффициент считает для КАЖДОЙ страницы свой. Отсюда жалоба
+       пользователя: «в мусхафе шрифты то меньше, то больше при листании, и
+       текст выходит за горизонтальные края». Лист рушится вдвойне: наш
+       clampFontToFit подбирает кегль и строит justify под один размер, а
+       Safari рисует другим. Настольные Chrome и WebKit этого не делают —
+       функция только для iOS, потому и не ловилась замерами с машины
+       (scripts/measure_mushaf_fit.py: ноль вылезаний на 39 страницах в обоих
+       движках). 100%, а не none: пользовательский зум остаётся. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Порядок важен: побеждает последнее объявление, и это должен быть dvh
+       (10.09.2026, поймал пользователь: «нижнюю часть в вебе не могу
+       сдвинуть пальцем»).
+
+       100vh - это ВЫСОТА С АДРЕСНОЙ СТРОКОЙ браузера, то есть больше того,
+       что видно. При overflow: hidden низ экрана оказывался физически за
+       пределами видимой области, и достать его было нечем. 100dvh считает
+       ровно видимую часть и меняется, когда адресная строка прячется.
+
+       Строка написана 27.08.2026, когда приложение жило только внутри
+       Telegram: там своей адресной строки нет, vh и dvh совпадали, и
+       порядок ничего не решал. С выходом в браузер - решает. */
+    height: 100vh; height: 100dvh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Scheherazade New', serif;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    /* Свой тёплый "бумажный" фон (30.08.2026, второй заход, прогнано
+       через frontend-design) - НЕ --dash-bg-* (те только у #trainer/
+       #dashboard, решение пользователя их не трогать). Виден только там,
+       где нет своего непрозрачного фона у дочерних элементов (topbar/
+       page-nav уже opaque var(--chrome-bg), сам текст Корана - нет). */
+    background: linear-gradient(180deg, var(--mushaf-bg-start), var(--mushaf-bg-end));
+  }
+
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--chrome-bg);
+    border-bottom: 1px solid var(--chrome-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    direction: ltr;
+    flex: 0 0 auto;
+  }
+  #topbar .topbar-left { display: flex; align-items: center; gap: 8px; }
+  /* Листание в шапке (11.11.2026) - только в режиме «Страница» с панелью. */
+  #tb-pages { display: none; align-items: center; gap: 0; }
+  body.tabs-mushaf #tb-pages { display: flex; }
+  body.tabs-mushaf #page-nav { display: none !important; }
+  body.tabs-mushaf #mushaf-back, body.tabs-mushaf #ayah-range { display: none; }
+  body.tabs-mushaf #topbar { padding: 6px 6px; padding-top: calc(6px + var(--ios-pwa-top, 0px)); }
+  /* Фон под строкой состояния со значка на iPhone (viewport-fit=auto: область
+     над страницей iOS красит цветом html). На листе - цвет шапки, иначе над
+     ней видна полоса другого оттенка, которую «стекло» iOS 26 ещё и размывает. */
+  html { background: var(--bg); }
+  html:has(body.tabs-mushaf) { background: var(--chrome-bg); }
+  body.tabs-mushaf #topbar .topbar-left, body.tabs-mushaf #topbar .topbar-right { gap: 2px; }
+  #tb-page { background: none; border: none; font: inherit; font-size: 13px; color: var(--muted);
+    display: flex; align-items: center; gap: 4px; padding: 6px 4px; cursor: pointer; white-space: nowrap; }
+  #tb-page b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #tb-pages .nav-btn { padding: 4px 8px; }
+  #bm-menu #btn-bm-baqara { color: var(--accent); }
+  #bm-jump { display: flex; gap: 8px; align-items: center; padding: 10px 12px 6px; margin-top: 4px;
+    border-top: 1px solid var(--card-border); font-size: 13px; color: var(--muted); }
+  #bm-jump input { width: 64px; font: inherit; font-size: 15px; padding: 6px 8px; border: 1px solid var(--card-border);
+    border-radius: 8px; background: var(--bg); color: var(--ink); }
+  #bm-jump > span { white-space: nowrap; }
+  /* Два id в селекторе: общее правило #bm-menu button ниже по файлу иначе перебивает. */
+  #bm-menu #bm-jump button { display: inline-block; width: auto; flex: none; padding: 7px 12px; border-radius: 8px;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer; text-align: center; }
+  #topbar .topbar-right { display: flex; align-items: center; gap: 8px; }
+  /* Кнопки шапки как в макете Quran-stroka (11.11.2026, решение
+     пользователя): квадратики 34px с тонкой рамкой на подложке, включённая -
+     светло-зелёная с зелёной рамкой. Иконки прежние. */
+  #btn-hifz, #btn-revision, #btn-meaning, #read-gloss-btn, #tb-pages .nav-btn {
+    min-width: 34px; height: 34px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 9px; color: var(--ink);
+    font-size: 18px; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #topbar .topbar-right { gap: 6px; }
+  #tb-pages { gap: 6px; }
+  /* Сдано сегодня (11.11.2026, просьба пользователя): заучивание и
+     повторение, которые уже засчитаны, подсвечены мягким зелёным - по
+     фактам дня с дашборда (dashFactsLast.day.tasks). */
+  #btn-hifz.done, #btn-revision.done, #read-gloss-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  #topbar .topbar-back {
+    background: none; border: none; color: var(--accent);
+    font-size: 13px; font-weight: 600; padding: 4px 0; cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #topbar .surah-name { font-weight: 600; color: var(--ink); }
+
+  /* Переход по названию суры (31.08.2026) - точкой входа в список 114 сур
+     служит САМО название суры в шапке, а не новая кнопка. Причина: в
+     #page-nav места уже нет (6 элементов на экране 360px, см. историю
+     30.08.2026), а высоту у текста мусхафа отнимать нельзя - список
+     всплывает оверлеем поверх страницы и закрывается, постоянного места
+     не занимает вообще. */
+  #btn-surah-pick {
+    background: none; border: none; padding: 4px 2px; cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+    font-family: inherit; color: inherit; line-height: 1.2;
+  }
+  /* Шеврон - CSS-треугольник на границах, а не символ: шрифтовые ▾/⌄ сидят
+     в своём em-квадрате по-разному в разных фолбек-шрифтах и всплывают над
+     строкой (поймано headless-скриншотом 31.08.2026). Треугольнику ещё и
+     нечем зеркалиться в RTL. */
+  .surah-caret {
+    width: 0; height: 0; margin-top: 2px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid var(--muted);
+  }
+  #btn-surah-pick:disabled { cursor: default; }
+  #btn-surah-pick:disabled .surah-caret { display: none; }
+
+  /* Оверлей со списком сур. Отдельный от #confirm-overlay (тот - модалка
+     "да/нет" с фиксированной .confirm-card), здесь нужен прокручиваемый
+     лист снизу на 114 строк. */
+  #surah-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: flex-end; justify-content: center;
+    z-index: 70;
+    direction: ltr;
+  }
+  #surah-overlay.visible { display: flex; }
+  .surah-sheet {
+    background: var(--card-bg);
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow-md);
+    width: 100%; max-width: 520px; max-height: 78vh;
+    display: flex; flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .surah-sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--card-border);
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+  #surah-close {
+    background: none; border: none; font-size: 17px; line-height: 1;
+    color: var(--muted); cursor: pointer; padding: 4px 6px;
+    font-family: inherit;
+  }
+  #surah-list {
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 4px 0 10px;
+  }
+  .surah-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 16px; cursor: pointer;
+    /* direction: ltr - строка живёт внутри #app, наследующего dir="rtl"
+       (см. правило 30.08.2026 про RTL-контейнеры). Само арабское имя
+       внутри своего span всё равно раскладывается справа налево - это
+       делает bidi по сильным символам, контейнер тут ни при чём. */
+    direction: ltr;
+  }
+  .surah-row:active { background: var(--chrome-border); }
+  .surah-row.current { background: var(--chrome-bg); }
+  .surah-row.current .s-ar { color: var(--accent); }
+  .surah-row .s-num {
+    flex: 0 0 26px; text-align: center;
+    font-size: 12px; color: var(--muted); direction: ltr;
+  }
+  .surah-row .s-ar { flex: 1 1 auto; font-size: 19px; color: var(--ink); }
+  .surah-row .s-page {
+    flex: 0 0 auto; font-size: 12px; color: var(--muted);
+    /* direction: ltr обязателен - кыргызская и узбекская формы начинаются
+       с числа ("50-бет"), в rtl-контексте bidi показал бы "бет-50"
+       (тот же дефект, что был у #page-indicator 30.08.2026). */
+    direction: ltr;
+  }
+  #topbar .nav-btn {
+    background: none; border: none; color: var(--ink);
+    font-size: 20px; padding: 4px 10px; cursor: pointer; line-height: 1;
+  }
+  #topbar .nav-btn:disabled { color: var(--chrome-border); }
+

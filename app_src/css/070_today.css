@@ -1,0 +1,226 @@
+  /* Дашборд YassirApp (28.08.2026, редизайн 29.08.2026) - первый экран
+     при открытии. Мусхаф и Тренажёр оба переключают вид внутри этой же
+     страницы (см. openTrainer/dash-mushaf в скрипте ниже) - карточки
+     визуально равноправны, никакая не "главнее" другой. */
+  /* Экран собран сверху вниз, а не по центру (07.09.2026). Пока дверей было
+     три, центрирование выглядело опрятно; с дыханием джамаата наверху оно
+     начало гулять - блок то выше, то ниже в зависимости от того, показана ли
+     дверь устаза. Теперь порядок постоянный: заголовок, дыхание, двери. */
+  /* ══ «Сегодня» по макету «Хифз · Сегодня» (11.11.2026, решение пользователя) ══
+     Заголовок слева, лента, карточка дня с одной главной кнопкой, чек-лист
+     «Сдача на сегодня» по заданиям группы, карточка устаза, джамаат
+     свёрнут. Двери убраны: их заменила нижняя панель. */
+  #dash-title { flex: 1; min-width: 0; font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+  #dash-title span { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+  #dash-head { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #dash-count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #dash-head #my-day, #dash-settings { display: none !important; }
+  #dash-doors { display: none !important; }
+  .dash-eyebrow { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); margin: 18px 0 8px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .td-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+    padding: 14px 16px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--ink); box-shadow: var(--shadow-sm); }
+  #dash-hero .h-where { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  #dash-hero .h-sura { font-weight: 600; font-size: 16px; }
+  #dash-hero .h-place { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  #dash-hero .h-line { direction: rtl; text-align: center; font-family: 'Scheherazade New', serif; font-size: 27px;
+    line-height: 1.9; margin: 12px -6px 0; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); }
+  #dash-hero .h-note { margin: 12px 0 0; font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+  #dash-hero .h-lock { display: flex; gap: 10px; align-items: center; margin: 12px 0 0; padding: 10px 12px;
+    border-radius: 12px; background: var(--dash-bg-start); font-size: 13.5px; color: var(--muted); }
+  #dash-hero .h-row { display: flex; gap: 8px; margin-top: 14px; }
+  .d-btn { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--card-border);
+    background: var(--card-bg); color: var(--ink); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; -webkit-tap-highlight-color: transparent; }
+  .d-btn.primary { flex: 1; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .d-btn.sm { min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .d-btn .ic { width: 18px; height: 18px; }
+  .d-check { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 0; }
+  .d-check + .d-check { border-top: 1px solid var(--card-border); }
+  .d-check .mk { width: 26px; height: 26px; border-radius: 50%; flex: none; border: 1.7px solid var(--card-border);
+    display: grid; place-items: center; color: #fff; }
+  .d-check .mk svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2.4; fill: none;
+    stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+  .d-check.done .mk { background: var(--accent); border-color: var(--accent); }
+  .d-check.done .mk svg { opacity: 1; }
+  .d-check .bd { flex: 1; min-width: 0; }
+  .d-check .t { font-weight: 500; }
+  .d-check.done .t { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--card-border); }
+  .d-check .s { font-size: 12.5px; color: var(--muted); }
+  .d-row { display: flex; align-items: center; gap: 12px; cursor: pointer; width: 100%; text-align: left; }
+  .d-row .bd { flex: 1; min-width: 0; }
+  .d-row .t { font-weight: 500; }
+  .d-row .s { font-size: 12.5px; color: var(--muted); }
+  .d-row .chev { width: 18px; height: 18px; color: var(--muted); flex: none; }
+  .d-pill { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--accent-soft);
+    color: var(--accent); flex: none; white-space: nowrap; }
+  .d-pill.wait { background: var(--warn-soft); color: var(--warn); }
+  .d-pill.redo { background: var(--no-soft); color: var(--no); }
+  .d-ustaz-mk { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; flex: none; }
+  .d-ustaz-mk .ic { width: 20px; height: 20px; }
+  /* Кабинет устаза на «Сегодня» заметнее (12.11.2026, правка пользователя):
+     вдвое выше обычной строки, заголовок крупнее и жирнее. */
+  #dash-ustaz-row { min-height: 104px; padding: 18px 16px; gap: 14px; }
+  #dash-ustaz-row .d-ustaz-mk { width: 52px; height: 52px; border-radius: 14px; }
+  #dash-ustaz-row .d-ustaz-mk .ic { width: 28px; height: 28px; }
+  #dash-ustaz-row .t { font-size: 20px; font-weight: 700; line-height: 1.2; }
+  #dash-ustaz-row .s { font-size: 14px; }
+  #dash-ustaz-row .chev { width: 22px; height: 22px; }
+  #dash-jamaat { margin-top: 14px; }
+  #dash-jamaat .jm-cap { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  #dash-jamaat #dash-pulse { margin-top: 10px; margin-bottom: 0; border: 0; box-shadow: none; padding: 0; }
+  /* Карточка дня на этапах 2 и 3: карта листа с подсвеченной частью,
+     первая строка части и «до строчки N» (11.11.2026). */
+  #dash-hero .h-task { display: flex; gap: 14px; align-items: center; margin-top: 10px; }
+  #dash-hero .h-map { flex: none; width: 52px; display: grid; gap: 2px; align-content: center; padding: 7px 7px;
+    background: var(--dash-bg-start); border: 1px solid var(--card-border); border-radius: 8px; }
+  #dash-hero .h-map i { display: block; height: 3px; border-radius: 2px; background: var(--card-border); }
+  #dash-hero .h-map i.on { background: var(--accent); }
+  #dash-hero .h-task .h-to { font-size: 14px; color: var(--muted); }
+  /* Заголовок вкладки слева, как в макете (п. 6). */
+  body.tabs-on #trainers-topbar, body.tabs-on #subs-topbar, body.tabs-on #more-topbar {
+    justify-content: flex-start; background: transparent; border-bottom: 0; padding: 18px 16px 2px;
+    font-size: 24px; font-weight: 700; min-height: 0; }
+  body.tabs-on #trainers-back, body.tabs-on #subs-back { display: none; }
+  body.tabs-on #subs-topbar .subs-wall-note { font-size: 13px; font-weight: 500; margin-left: auto; }
+  /* Плитки уроков наверху «Устаза» (п. 4) и блоки тренажёров (п. 3). */
+  .subs-lessons { margin: 0 0 14px; direction: ltr; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #subs-body .subs-cap { display: flex; align-items: baseline; gap: 8px; margin: 4px 2px -2px; font-size: 11px;
+    font-weight: 700; letter-spacing: .08em; color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .subs-lessons .subs-cap { margin: 0 2px 8px; }
+  #subs-body .subs-cap i { font-style: normal; font-weight: 400; letter-spacing: 0; }
+  .subs-lessons .subs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .subs-lessons .k-tile { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--card-bg);
+    border: 1px solid var(--card-border); border-radius: 16px; padding: 12px 13px 11px; cursor: pointer; font: inherit;
+    color: var(--ink); -webkit-tap-highlight-color: transparent; }
+  .subs-lessons .k-tile:only-child { grid-column: 1 / -1; }
+  .subs-lessons .t-mk { color: var(--accent); }
+  .subs-lessons .t-mk .ic { width: 24px; height: 24px; }
+  .subs-lessons .t-mk .ic { width: 22px; height: 22px; }
+  .subs-lessons .t-nm { font-size: 17px; font-weight: 640; }
+  .subs-lessons .t-ds { font-size: 13px; color: var(--muted); line-height: 1.3; }
+  .subs-lessons .t-cnt { font-size: 12.5px; color: var(--accent); font-weight: 600; margin-top: 2px; }
+  details.tr-fold { width: 100%; max-width: 520px; align-self: center; box-sizing: border-box; background: var(--card-bg);
+    border: 1px solid var(--card-border); border-radius: 20px; box-shadow: var(--shadow-sm); padding: 0 16px; }
+  details.tr-fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    min-height: 56px; font-weight: 600; font-size: 16px; }
+  details.tr-fold > summary::-webkit-details-marker { display: none; }
+  details.tr-fold > summary .chev { width: 16px; height: 16px; color: var(--muted); transition: transform .15s; }
+  details.tr-fold[open] > summary .chev { transform: rotate(90deg); }
+  details.tr-fold > summary .cnt { margin-left: auto; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .tr-words { padding: 0 0 12px; }
+  .tr-word { display: grid; grid-template-columns: 26px 1fr 1fr; gap: 10px; align-items: center; min-height: 44px;
+    padding: 5px 0; border-top: 1px solid var(--card-border); }
+  .tr-word .n { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tr-word .ar { direction: rtl; text-align: right; font-family: 'Scheherazade New', serif; font-size: 24px; line-height: 1.3; }
+  .tr-word .ru { font-size: 13.5px; line-height: 1.3; }
+  .tr-hub .mk.gold { background: color-mix(in srgb, var(--marker-color) 18%, transparent); color: var(--marker-color); }
+  /* Иконки шапки мусхафа подальше друг от друга (п. 1). */
+  body.tabs-mushaf #topbar .topbar-right { gap: 6px; }
+
+  #dashboard {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    align-items: stretch;
+    gap: 0;
+    padding: 18px 16px 24px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  /* Шапка одной строкой: название, «онлайн», справа язык и тема. Кнопки
+     раньше висели абсолютно в углу - при центрированном экране это работало,
+     но теперь дыхание начинается сразу под заголовком, и кнопки садились
+     прямо на его карточку (07.09.2026). В потоке они честно занимают своё
+     место и отступ до карточки виден. */
+  #dash-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px; min-height: 38px;
+    direction: ltr;
+  }
+  /* Переключатель темы (30.08.2026) - абсолютное позиционирование, не
+     flex-элемент строки - физические left/right не зависят от dir="rtl"
+     (в отличие от порядка flex-детей, см. wiki/mushaf_yassirapp.md про
+     RTL-ловушку), поэтому здесь безопасно без дополнительных проверок. */
+  /* Настройки дашборда - язык и тема рядом, в одном углу (30.08.2026).
+     Язык меняют один раз, поэтому ему не место на рабочих экранах; здесь
+     же он находится там, где студент и так ищет настройки. */
+  #dash-settings {
+    margin-left: auto; flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+  }
+  /* Шестерёнка (10.09.2026) - единственная кнопка в шапке. Была пара
+     «RU» и «луна», каждая со своим поведением; теперь обе живут внутри
+     настроек переключателями, где видно ВЫБРАННОЕ, а не то, куда попадёшь
+     следующим тапом. */
+  #btn-profile {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    box-shadow: var(--shadow-sm); border-radius: 50%;
+    width: 38px; height: 38px;
+    font-size: 17px; line-height: 1; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Экран настроек (10.09.2026). Отдельный экран, а не панель под кнопкой:
+     здесь не два переключателя, а профиль - имя, год рождения, место.
+     Возврат слева вверху и подписан, как во всех экранах приложения. */
+  #sett {
+    position: fixed; inset: 0; z-index: 90; overflow-y: auto;
+    display: none;
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(160deg, var(--dash-bg-start), var(--dash-bg-end));
+    padding: 14px 16px 24px;
+  }
+  #sett.on { display: block; }
+  #sett .s-head { display: flex; align-items: center; gap: 10px; min-height: 38px; margin-bottom: 14px; }
+  #sett-back {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font: inherit; font-size: 14px; color: var(--accent);
+  }
+  #sett .s-title {
+    margin-left: auto; margin-right: auto;
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+  #sett .s-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; box-shadow: var(--shadow-sm);
+    padding: 14px 15px 16px; margin-bottom: 12px;
+  }
+  #sett .s-lab {
+    display: block; font-size: 12px; font-weight: 600; color: var(--ink);
+    margin-bottom: 7px;
+  }
+  #sett .s-lab.s-lab2 { margin-top: 16px; }
+  /* «по желанию» стоит прямо в подписи, а не мелким текстом под полем:
+     обязательное здесь только имя, и это должно быть видно до того, как
+     человек начал заполнять. */
+  #sett .s-lab i { font-style: normal; font-weight: 400; color: var(--muted); }
+  #sett .s-inp {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 15px;
+    padding: 11px 12px; border-radius: 13px;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--ink);
+  }
+  #sett .s-inp:focus { outline: none; border-color: var(--accent); }
+  #sett .s-hint { margin: 8px 2px 0; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  #sett .s-hint.bad { color: var(--no); }
+  #sett .s-hint.ok { color: var(--accent); }
+  #sett .s-seg { display: flex; gap: 6px; }
+  #sett .s-seg[hidden] { display: none; }
+  #sett .s-seg button {
+    flex: 1; font: inherit; font-size: 13px; padding: 10px 4px;
+    border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--muted);
+  }
+  #sett .s-seg button.on {
+    border-color: var(--accent); color: var(--accent-ink);
+    background: var(--accent); font-weight: 600;
+  }
+

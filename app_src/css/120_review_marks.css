@@ -1,0 +1,144 @@
+  /* Слово с ошибкой (04.09.2026). Подложкой, а не подчёркиванием: под
+     арабской вязью с огласовками линия лезет на знаки и читается как часть
+     письма. Один и тот же вид у устаза (пока отмечает) и у студента (когда
+     смотрит, что отметили) - это должна быть буквально одна картинка. */
+  .mushaf-line > span.err {
+    background: color-mix(in srgb, var(--no) 20%, transparent);
+    border-radius: 4px;
+  }
+  /* Нижняя полоса проверки у устаза - вместо студенческой (Крупно/Сдать). */
+  #review-foot {
+    display: none;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px 14px;
+    background: var(--chrome-bg, var(--card-bg));
+    border-top: 1px solid var(--card-border);
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #app.review #review-foot { display: flex; }
+  #app.review #hifz-foot { display: none !important; }
+  #review-foot .row { display: flex; gap: 8px; }
+  #review-foot button {
+    flex: 1 1 auto;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 10px;
+    font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer;
+  }
+  #review-foot button.ok {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  }
+  #review-foot button.no {
+    background: var(--no); border-color: var(--no); color: #fff; font-weight: 600;
+  }
+  #review-foot button:disabled { opacity: .5; cursor: default; }
+  #review-foot .hint { font-size: 12px; color: var(--muted); text-align: center; }
+  /* «К списку» по своему тексту, остальное - «Дальше»: это главный ход. */
+  #review-foot #review-to-list { flex: 0 0 auto; }
+
+  /* Разбор устаза глазами студента (07.09.2026). Та же нижняя полоса, что
+     и у проверки, только вместо вердикта - голос устаза. В ПОТОКЕ колонки
+     (flex: 0 0 auto), а не поверх листа: тогда странице не нужен добавочный
+     отступ снизу, она сама занимает остаток высоты и скроллится - половина
+     и целая страница в экран не влезают. */
+  #look-foot {
+    display: none;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px 14px;
+    background: var(--chrome-bg, var(--card-bg));
+    border-top: 1px solid var(--card-border);
+    direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #app.look #look-foot { display: flex; }
+  #app.look #hifz-foot { display: none !important; }
+  #look-foot .who { font-size: 12px; color: var(--muted); display: flex; gap: 6px;
+    align-items: baseline; }
+  #look-foot .who b { color: var(--ink); font-size: 12.5px; font-weight: 600; }
+  #look-foot .who span.dur { margin-left: auto; font-variant-numeric: tabular-nums; }
+  #look-foot .player,
+  #review-foot .player,
+  #hifz-rec .player { display: flex; align-items: center; gap: 10px; }
+  #look-play,
+  #review-pp,
+  #hifz-rec-play {
+    width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%;
+    background: var(--accent); border: none; color: #fff; font-size: 15px;
+    cursor: pointer; font-family: inherit;
+  }
+  #look-play:disabled,
+  #review-pp:disabled,
+  #hifz-rec-play:disabled { opacity: .5; cursor: default; }
+  /* В подвале проверки кнопки растягиваются (#review-foot button) - у плеера
+     свои размеры: круглая пауза и короткий «↺ 10 сек» у правого края. */
+  #review-foot #review-pp { flex: 0 0 auto; padding: 0; width: 38px; height: 38px; border-radius: 50%;
+    background: var(--accent); border: none; color: #fff; font-size: 15px; }
+  #review-pp svg, .rev-player .pp svg { width: 16px; height: 16px; fill: currentColor; display: block; margin: 0 auto; }
+  #review-foot .who { font-size: 12px; color: var(--muted); display: flex; gap: 6px; margin-bottom: 6px; }
+  #review-foot .who b { color: var(--ink); font-size: 12.5px; font-weight: 600; }
+  #review-foot #review-mine.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  /* Волна громкости (11.11.2026): столбики по пикам записи, проигранные -
+     зелёные. Есть столбики - полосы и ползунка нет, как в Telegram. */
+  .wave { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: none; align-items: center; gap: 2px; }
+  .wave i { flex: 1 1 0; min-width: 0; min-height: 3px; border-radius: 2px; background: var(--card-border); }
+  .wave i.on { background: var(--accent); }
+  #review-track.has-wave, .rev-track.has-wave { height: 30px; background: none; }
+  #review-track.has-wave .wave, .rev-track.has-wave .wave { display: flex; }
+  #review-track.has-wave #review-fill, .rev-track.has-wave .rev-fill { display: none; }
+  #review-foot .player #review-back10 { flex: 0 0 auto; padding: 8px 10px; font-size: 12px; }
+  #look-foot .bar,
+  #review-foot .bar,
+  #hifz-rec .bar { flex: 1 1 auto; min-width: 0; }
+  #look-track,
+  #review-track,
+  #hifz-rec-track { height: 4px; border-radius: 999px; background: var(--card-border);
+    position: relative; cursor: pointer; touch-action: none; }
+  /* Зона захвата шире самой полосы (10.11.2026): 4 px пальцем не поймать,
+     а ползунок тянут. */
+  #look-track::before,
+  #review-track::before,
+  #hifz-rec-track::before { content: ''; position: absolute; left: 0; right: 0; top: -12px; bottom: -12px; }
+  #look-fill,
+  #review-fill,
+  #hifz-rec-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0;
+    border-radius: 999px; background: var(--accent); }
+  /* Ползунок на конце заполнения - видно, за что тянуть. */
+  #look-fill::after,
+  #review-fill::after,
+  #hifz-rec-fill::after { content: ''; position: absolute; right: -7px; top: 50%; width: 14px; height: 14px;
+    margin-top: -7px; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  #look-foot .t,
+  #review-foot .t,
+  #hifz-rec .t { display: flex; justify-content: space-between; font-size: 10.5px;
+    color: var(--muted); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  #look-foot .row { display: flex; gap: 8px; }
+  #look-foot .row button {
+    flex: 1 1 auto;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 10px;
+    font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer;
+  }
+  #look-foot .row button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  }
+
+  /* Свёрнутый разбор внутри панели записи: пересдавая, студент должен иметь
+     возможность переслушать замечание, не бросая запись. */
+  #rec-review {
+    display: none; align-items: center; gap: 8px;
+    background: var(--accent-soft, var(--card-bg));
+    border: 1px solid var(--card-border);
+    border-radius: 10px; padding: 7px 10px; margin-bottom: 8px;
+    font-size: 11.5px; color: var(--ink);
+  }
+  #rec-review.on { display: flex; }
+  #rec-review button {
+    width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%;
+    background: var(--accent); border: none; color: #fff; font-size: 10px;
+    cursor: pointer; font-family: inherit;
+  }
+

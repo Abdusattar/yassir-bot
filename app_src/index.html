@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="google" content="notranslate">
+<title>Мусхаф — Яссир</title>
+
+<!-- Приложение на экране телефона (10.09.2026). Магазины сознательно
+     пропущены: правим приложение почти каждый день, а ревью Apple на каждое
+     обновление убило бы этот темп. Manifest + иконка дают то же, что нужно
+     студенту — свой значок, полный экран, работа без сети.
+     На Android установку предлагает сам браузер, на iPhone её делают руками
+     («Поделиться → На экран Домой») — там работает apple-touch-icon. -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1f7a52">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="YassirApp">
+<script>
+  // Применяем сохранённую тему ДО рендера (30.08.2026) - отдельный
+  // маленький скрипт в <head>, а не внизу с основной логикой, чтобы не
+  // было вспышки "не той" темы на долю секунды при загрузке (основной
+  // <script> внизу body выполнился бы уже после первой отрисовки).
+  // Иконки Lucide (ISC); «Смысл» в шапке мусхафа - Tabler notes (MIT), выбор пользователя 11.11.2026.
+  // См. wiki/mushaf_yassirapp.md «Иконки вместо эмодзи».
+  var ICON = {"settings": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\" /><circle cx=\"12\" cy=\"12\" r=\"3\" /></svg>", "user-check": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /><circle cx=\"9\" cy=\"7\" r=\"4\" /><polyline points=\"16 11 18 13 22 9\" /></svg>", "book-open-text": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 7v14\" /><path d=\"M16 12h2\" /><path d=\"M16 8h2\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" /><path d=\"M6 12h2\" /><path d=\"M6 8h2\" /></svg>", "dumbbell": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" /></svg>", "chevron-down": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\" /></svg>", "book-open-check": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 21V7\" /><path d=\"m16 12 2 2 4-4\" /><path d=\"M22 6V4a1 1 0 0 0-1-1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h6a3 3 0 0 1 3 3 3 3 0 0 1 3-3h6a1 1 0 0 0 1-1v-1.3\" /></svg>", "repeat": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" /></svg>", "languages": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m5 8 6 6\" /><path d=\"m4 14 6-6 2-3\" /><path d=\"M2 5h12\" /><path d=\"M7 2h1\" /><path d=\"m22 22-5-10-5 10\" /><path d=\"M14 18h6\" /></svg>", "bookmark": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z\" /></svg>", "undo-2": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 14 4 9l5-5\" /><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" /></svg>", "arrow-up-to-line": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 3h14\" /><path d=\"m18 13-6-6-6 6\" /><path d=\"M12 7v14\" /></svg>", "x": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 6 6 18\" /><path d=\"m6 6 12 12\" /></svg>", "volume-2": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z\" /><path d=\"M16 9a5 5 0 0 1 0 6\" /><path d=\"M19.364 18.364a9 9 0 0 0 0-12.728\" /></svg>", "mic": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z\" /><path d=\"M19 10v2a7 7 0 0 1-14 0v-2\" /><line x1=\"12\" x2=\"12\" y1=\"19\" y2=\"22\" /></svg>", "play": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polygon points=\"6 3 20 12 6 21 6 3\" /></svg>", "pause": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"14\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" /><rect x=\"6\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" /></svg>", "square": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /></svg>", "rewind": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polygon points=\"11 19 2 12 11 5 11 19\" /><polygon points=\"22 19 13 12 22 5 22 19\" /></svg>", "fast-forward": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polygon points=\"13 19 22 12 13 5 13 19\" /><polygon points=\"2 19 11 12 2 5 2 19\" /></svg>", "rotate-ccw": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><path d=\"M3 3v5h5\" /></svg>", "circle-check": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m9 12 2 2 4-4\" /></svg>", "circle-x": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m15 9-6 6\" /><path d=\"m9 9 6 6\" /></svg>", "triangle-alert": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /><path d=\"M12 9v4\" /><path d=\"M12 17h.01\" /></svg>", "clock": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><polyline points=\"12 6 12 12 16 14\" /></svg>", "book-open": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" /></svg>", "star": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" /></svg>", "star-off": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8.34 8.34 2 9.27l5 4.87L5.82 21 12 17.77 18.18 21l-.59-3.43\" /><path d=\"M18.42 12.76 22 9.27l-6.91-1L12 2l-1.44 2.91\" /><line x1=\"2\" x2=\"22\" y1=\"2\" y2=\"22\" /></svg>", "trophy": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 9H4.5a2.5 2.5 0 0 1 0-5H6\" /><path d=\"M18 9h1.5a2.5 2.5 0 0 0 0-5H18\" /><path d=\"M4 22h16\" /><path d=\"M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22\" /><path d=\"M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22\" /><path d=\"M18 2H6v7a6 6 0 0 0 12 0V2Z\" /></svg>", "medal": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15\" /><path d=\"M11 12 5.12 2.2\" /><path d=\"m13 12 5.88-9.8\" /><path d=\"M8 7h8\" /><circle cx=\"12\" cy=\"17\" r=\"5\" /><path d=\"M12 18v-2h-.5\" /></svg>", "trending-up": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\" /><polyline points=\"16 7 22 7 22 13\" /></svg>", "trending-down": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polyline points=\"22 17 13.5 8.5 8.5 13.5 2 7\" /><polyline points=\"16 17 22 17 22 11\" /></svg>", "gauge": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 14 4-4\" /><path d=\"M3.34 19a10 10 0 1 1 17.32 0\" /></svg>", "list-todo": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"6\" height=\"6\" rx=\"1\" /><path d=\"m3 17 2 2 4-4\" /><path d=\"M13 6h8\" /><path d=\"M13 12h8\" /><path d=\"M13 18h8\" /></svg>", "flame": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" /></svg>", "video": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5\" /><rect x=\"2\" y=\"6\" width=\"14\" height=\"12\" rx=\"2\" /></svg>", "radio-tower": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4.9 16.1C1 12.2 1 5.8 4.9 1.9\" /><path d=\"M7.8 4.7a6.14 6.14 0 0 0-.8 7.5\" /><circle cx=\"12\" cy=\"9\" r=\"2\" /><path d=\"M16.2 4.8c2 2 2.26 5.11.8 7.47\" /><path d=\"M19.1 1.9a9.96 9.96 0 0 1 0 14.1\" /><path d=\"M9.5 18h5\" /><path d=\"m8 22 4-11 4 11\" /></svg>", "gem": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3h12l4 6-10 13L2 9Z\" /><path d=\"M11 3 8 9l4 13 4-13-3-6\" /><path d=\"M2 9h20\" /></svg>", "calendar": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2v4\" /><path d=\"M16 2v4\" /><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\" /><path d=\"M3 10h18\" /></svg>", "hourglass": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 22h14\" /><path d=\"M5 2h14\" /><path d=\"M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22\" /><path d=\"M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2\" /></svg>", "lock": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\" /><path d=\"M7 11V7a5 5 0 0 1 10 0v4\" /></svg>", "graduation-cap": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\" /><path d=\"M22 10v6\" /><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\" /></svg>", "sun": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"4\" /><path d=\"M12 2v2\" /><path d=\"M12 20v2\" /><path d=\"m4.93 4.93 1.41 1.41\" /><path d=\"m17.66 17.66 1.41 1.41\" /><path d=\"M2 12h2\" /><path d=\"M20 12h2\" /><path d=\"m6.34 17.66-1.41 1.41\" /><path d=\"m19.07 4.93-1.41 1.41\" /></svg>", "moon": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\" /></svg>", "sun-moon": "<svg class=\"ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4\" /><path d=\"M12 2v2\" /><path d=\"M12 20v2\" /><path d=\"m4.9 4.9 1.4 1.4\" /><path d=\"m17.7 17.7 1.4 1.4\" /><path d=\"M2 12h2\" /><path d=\"M20 12h2\" /><path d=\"m6.3 17.7-1.4 1.4\" /><path d=\"m19.1 4.9-1.4 1.4\" /></svg>"};
+  try {
+    var _t = localStorage.getItem('yassir_theme');
+    if (_t === 'light' || _t === 'dark') document.documentElement.setAttribute('data-theme', _t);
+  } catch (e) {}
+  // Отступ «домика» в приложении с экрана iPhone (05.11.2026, снимок
+  // пользователя: нижняя панель прижата к полоске жеста, а в Telegram -
+  // нормально). В Telegram отступ даёт сам Telegram
+  // (--tg-safe-area-inset-bottom). Со значка его должен дать Safari через
+  // env(), но без viewport-fit=cover env() там 0, а страница при этом
+  // доходит до самого низа экрана. viewport-fit=cover на всё приложение не
+  // включаем: шапки всех экранов ушли бы под строку состояния. Поэтому
+  // точечно: со значка на iPhone с «домиком» (экран от 812pt, у SE его
+  // нет) - системные 34pt. Читает только нижняя панель (--tabs-safe).
+  try {
+    if (navigator.standalone === true && /iPhone/.test(navigator.userAgent) &&
+        Math.max(screen.width, screen.height) >= 812) {
+      document.documentElement.style.setProperty('--ios-pwa-bottom', '34px');
+      // Сверху (12.11.2026): на iOS 26 строка состояния - «стекло» поверх
+      // верхнего отступа, и шапка мусхафа упиралась в него кнопками.
+      document.documentElement.style.setProperty('--ios-pwa-top', '10px');
+    }
+  } catch (e) {}
+</script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+/*@@APP_CSS@@*/
+</style>
+</head>
+<body>
+<div id="dashboard">
+  <div id="dash-head">
+    <!-- Заголовок как в макете «Хифз · Сегодня» (11.11.2026): название и
+         дата слева, счёт дел дня справа. «Мой день» и шестерёнка скрыты
+         стилями (#dash-head #my-day, #dash-settings): настройки живут в «Ещё». -->
+    <div id="dash-title"><span id="dash-title-t"></span><span id="dash-date"></span></div>
+    <span id="dash-count"></span>
+    <!-- «Мой день» переехал сюда 10.09.2026 (решение пользователя): строка
+         шапки пустовала на девять десятых, а карточка «Мой день» занимала
+         ~90px и отодвигала двери за первый экран. Разметка та же, меняется
+         только раскладка - см. #dash-head #my-day в стилях. -->
+    <div id="my-day">
+      <span class="cap" id="my-day-cap"></span>
+      <span class="bars" id="my-day-bars"></span>
+      <span class="names" id="my-day-names"></span>
+      <!-- Хвост суток (20.09.2026): до трёх ночи отметки выше - вчерашние.
+           Без этой строки человек в час ночи видел бы закрытый день и решил,
+           что сегодня уже сдано. -->
+      <span class="night" id="my-day-night" style="display:none"></span>
+    </div>
+    <!-- Настройки собраны под одну шестерёнку (10.09.2026): язык и тема
+         были двумя кнопками в шапке, а теперь живут внутри вместе с
+         именем, годом рождения и местом. Угол справа - привычное место
+         для настроек, и строка освобождается под «Мой день». -->
+    <div id="dash-settings">
+      <button id="btn-profile" title="Настройки" aria-label="Настройки" data-i18n-title="sett_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg></button>
+    </div>
+  </div>
+  <!-- Строка ленты (11.09.2026). Стоит между шапкой и дверями: свежее перед
+       глазами, но двери остаются на первом экране. В строке НЕ последнее по
+       времени, а самое важное непрочитанное - см. brief в core/feed.py. -->
+  <div id="dash-brief" tabindex="0" role="button">
+    <span class="b-ava" id="brief-ava"></span>
+    <span class="b-body">
+      <span class="b-who"><span id="brief-who"></span><i id="brief-src"></i></span>
+      <span class="b-txt" id="brief-txt"></span>
+    </span>
+    <span class="b-n" id="brief-n"></span>
+    <span class="b-dot" id="brief-dot"></span>
+    <span class="b-go">›</span>
+  </div>
+  <!-- Выпуск из подготовительной (22.09.2026, «теперь истина - база»):
+       вопрос про джуз задаёт карточка, а не только личка бота. Ответ
+       переводит в группу сразу, в базе - вступать в Telegram-группу для
+       этого не нужно. Показывает dashGrad по факту prep_grad из пульса. -->
+  <div id="dash-grad">
+    <div class="g-h" id="grad-h"></div>
+    <div class="g-t" id="grad-t"></div>
+    <div class="g-btns" id="grad-btns">
+      <button id="grad-yes"></button>
+      <button id="grad-no"></button>
+    </div>
+  </div>
+  <!-- Кабинет устаза (п. 9): только у устаза, перед карточкой дня. Тап -
+       та же дверь #dash-ustaz (скрыта), чтобы обработчики не дублировать. -->
+  <button class="td-card d-row" id="dash-ustaz-row" style="display:none">
+    <span class="d-ustaz-mk"></span>
+    <span class="bd"><span class="t" id="dash-ustaz-row-t"></span><br><span class="s" id="dash-ustaz-row-s"></span></span>
+    <span class="d-pill calm" id="dash-ustaz-row-n" style="display:none"></span>
+    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+  <!-- Карточка дня (п. 2): экран сам решает, что первое - пересдача,
+       заучивание, повтор, слова, «на сегодня всё». -->
+  <div class="td-card" id="dash-hero" style="margin-top:12px">
+    <div class="h-where"><span class="h-sura" id="dash-hero-sura"></span><span class="h-place" id="dash-hero-place"></span></div>
+    <div id="dash-hero-body"></div>
+    <div class="h-row" id="dash-hero-row"></div>
+  </div>
+  <p class="dash-eyebrow" id="dash-checks-cap"></p>
+  <div class="td-card" id="dash-checks" style="padding-block:4px"></div>
+  <p class="dash-eyebrow" id="dash-ustaz-cap"></p>
+  <button class="td-card d-row" id="dash-ustaz-card"></button>
+  <div id="dash-doors" class="three">
+  <!-- Своя дверь студента (04.09.2026, экран "Сдачи" из макета 01.09): свои
+       сдачи, ответ устаза и пересдача. Видна всем - у кого сдач ещё нет,
+       увидит пустой список с объяснением, а не отсутствие двери (иначе
+       непонятно, куда потом смотреть). -->
+  <div class="dash-row" id="dash-subs" tabindex="0" role="button">
+    <span class="mark"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></svg></span>
+    <span class="text"><span class="label" data-i18n="dash_subs">Работа с устазом</span><span class="sub" id="dash-subs-sub" data-i18n="dash_subs_sub">Мои записи, разбор и пересдача</span></span>
+    <span class="badge" id="dash-subs-count" style="display:none"></span>
+  </div>
+  <div class="dash-row" id="dash-mushaf" tabindex="0" role="button">
+    <span class="mark">۩</span>
+    <span class="text"><span class="label" data-i18n="dash_mushaf">Мусхаф</span><span class="sub" id="dash-mushaf-sub" data-i18n="dash_mushaf_sub">Чтение с таджвидом и переводом</span></span>
+  </div>
+  <!-- 4-я дверь, только у устаза (03.09.2026, пункт 13 старого макета
+       40+40) - роль узнаём из heartbeat, дверь скрыта, пока ответ не
+       пришёл (нет мигания "было-стало" при открытии). Счётчик спокойный:
+       очередь разбора - это работа, а не долг. -->
+  <div class="dash-row" id="dash-ustaz" tabindex="0" role="button" style="display:none">
+    <span class="mark">✓</span>
+    <span class="text"><span class="label" data-i18n="dash_ustaz">Устаз</span><span class="sub" id="dash-ustaz-sub" data-i18n="dash_ustaz_sub">Сдачи на проверке</span></span>
+    <span class="badge calm" id="dash-ustaz-count" style="display:none"></span>
+  </div>
+  <div class="dash-row" id="dash-trainer" tabindex="0" role="button">
+    <span class="mark">ن</span>
+    <span class="text"><span class="label" data-i18n="dash_trainer">Тренажёры</span><span class="sub" id="dash-trainer-sub" data-i18n="dash_trainer_sub">Муфрадат — учи слова Корана</span></span>
+  </div>
+  <!-- «Как работаем» (08.09.2026): объяснение по шагам на снимках самого
+       приложения. Видна всем, не только новичку - за правилами возвращаются
+       и через полгода. -->
+  <div class="dash-row" id="dash-learn" tabindex="0" role="button">
+    <span class="mark"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14" /><path d="M16 12h2" /><path d="M16 8h2" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /><path d="M6 12h2" /><path d="M6 8h2" /></svg></span>
+    <span class="text"><span class="label" data-i18n="dash_learn">Знания</span><span class="sub" id="dash-learn-sub" data-i18n="dash_learn_how">Как работаем</span></span>
+  </div>
+  </div>
+
+  <!-- Дыхание джамаата (07.09.2026) - см. #dash-pulse в стилях и pulseInit()
+       в скрипте. Пустой каркас: наполняется после ответа /pulse.
+       Стоит ПОД дверями с 10.09.2026: двери - это то, ради чего человек
+       открыл приложение, а пульс смотрят между делом. Раньше он шёл
+       первым и отодвигал двери за первый экран. -->
+  <!-- Доска важного (17.09.2026): над пульсом, под дверями - двери остаются
+       на первом экране. См. boardRender и core/feed.py. -->
+<div id="dash-board"></div>
+  <!-- Джамаат свёрнут (п. 2, как в макете): одна строка, раскрывается тапом. -->
+  <div id="dash-jamaat" class="td-card">
+    <div class="jm-cap" id="dash-jamaat-sum"></div>
+  <div id="dash-pulse">
+    <div class="p-count"><b id="pulse-count">0</b><span id="pulse-sub"></span></div>
+    <div class="p-split" id="pulse-split"></div>
+    <!-- «Сейчас в онлайне» переехало сюда из шапки (10.09.2026, поймал
+         пользователь). Там оно стояло рядом с прогрессом заданий: текст
+         длинный и без переносов, он выдавливал карточку прогресса и ломал
+         «0 из 3» на три строки внахлёст. По смыслу это тоже про джамаат -
+         пульс и есть его место. -->
+    <span id="dash-online"></span>
+    <!-- Пропорция 330x288, а не 330x168 (10.09.2026). pulseFit держит
+           высоту холста строго по этому отношению, а масштаб фигуры -
+           min(w/3.5, h/3.0). В половине ширины низкий холст упирал сердце
+           в высоту, и оно съёживалось втрое сильнее нужного, оставляя под
+           собой пустоту. При этом отношении ограничителем снова становится
+           ширина - сердце занимает свою половину целиком. -->
+      <canvas id="pulse-heart" width="330" height="288"></canvas>
+    <div class="p-days">
+      <div class="p-row">
+        <button class="p-arrow" id="pulse-prev" aria-label="день назад" data-i18n-aria="pulse_prev">&lsaquo;</button>
+        <b id="pulse-day">&nbsp;</b>
+        <span class="p-dots" id="pulse-dots"></span>
+        <button class="p-arrow" id="pulse-next" aria-label="день вперёд" data-i18n-aria="pulse_next">&rsaquo;</button>
+      </div>
+      <canvas id="pulse-wave" width="330" height="70"></canvas>
+      <div class="p-row p-foot"><span id="pulse-sum"></span><span id="pulse-peak"></span></div>
+    </div>
+  </div>
+  </div>
+</div>
+<!-- Настройки (10.09.2026). Обязательное здесь одно - имя: его видит устаз
+     в отчётах и вся группа в рейтинге. Год рождения и место человек говорит
+     по желанию; те же сведения раньше собирала анкета в личке, и пишутся они
+     в те же колонки (users.survey_*), см. update_profile в core/db.py.
+     Кнопки «Сохранить» нет намеренно: поле сохраняется, когда с него уходят,
+     и подтверждает это тихой строкой - так устроены настройки на телефоне,
+     а кнопку легко не заметить и уйти, думая что сохранил. -->
+<!-- Экран ленты (11.09.2026). Только чтение: из приложения в группу ничего
+     не уходит, отвечают по-прежнему в Telegram - об этом прямо сказано в
+     подвале, иначе человек ищет поле ввода и не находит.
+     Тексты пока только по-русски (правило «сначала ru, локализация одним
+     проходом позже»), T() сам откатывается на русский. -->
+<div id="feed">
+  <div class="l-head">
+    <button id="feed-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span class="l-title" data-i18n="feed_title">Лента</span>
+  </div>
+  <!-- Чипы чатов (11.09.2026). Вкладки «Всё» намеренно нет: это
+       единственный режим, где группы смешиваются в один поток - ровно та
+       каша, от которой чипы и заводились. Где новое, видно по счётчикам, а
+       строка дашборда открывает ленту сразу на нужном чате. -->
+  <div class="l-chips" id="feed-chips"></div>
+  <div class="l-scroll" id="feed-scroll"></div>
+</div>
+
+<div id="sett">
+  <div class="s-head">
+    <button id="sett-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span class="s-title" data-i18n="sett_title">Настройки</span>
+  </div>
+
+  <div class="s-card">
+    <label class="s-lab" for="sett-name" data-i18n="sett_name">Имя</label>
+    <input class="s-inp" id="sett-name" maxlength="60" autocomplete="off">
+    <p class="s-hint" id="sett-name-hint" data-i18n="sett_name_hint">Это имя видят устаз в отчётах и вся группа в рейтинге.</p>
+  </div>
+
+  <div class="s-card">
+    <label class="s-lab" for="sett-year"><span data-i18n="sett_year">Год рождения</span> <i>по желанию</i></label>
+    <input class="s-inp" id="sett-year" inputmode="numeric" maxlength="4"
+           placeholder="например, 1994" data-i18n-ph="sett_year_ph" autocomplete="off">
+    <label class="s-lab s-lab2" for="sett-place"><span data-i18n="sett_place">Откуда сдаёшь задания</span> <i data-i18n="sett_optional">по желанию</i></label>
+    <select class="s-inp" id="sett-place">
+      <option value="" data-i18n="place_none">Не указано</option>
+      <option value="Бишкек" data-i18n="place_bishkek">Бишкек</option>
+      <option value="Ош" data-i18n="place_osh_city">Ош</option>
+      <option value="Чуйская область" data-i18n="place_chui">Чуйская область</option>
+      <option value="Ошская область" data-i18n="place_osh">Ошская область</option>
+      <option value="Джалал-Абадская область" data-i18n="place_jalal">Джалал-Абадская область</option>
+      <option value="Иссык-Кульская область" data-i18n="place_issyk">Иссык-Кульская область</option>
+      <option value="Нарынская область" data-i18n="place_naryn">Нарынская область</option>
+      <option value="Таласская область" data-i18n="place_talas">Таласская область</option>
+      <option value="Баткенская область" data-i18n="place_batken">Баткенская область</option>
+      <option value="__other" data-i18n="place_other">Другая страна</option>
+    </select>
+    <!-- Живущим не в Кыргызстане область не подходит - им хватает страны. -->
+    <input class="s-inp s-lab2" id="sett-country" hidden maxlength="60"
+           placeholder="Какая страна?" data-i18n-ph="sett_country_ph" autocomplete="off">
+    <p class="s-hint" id="sett-place-hint"></p>
+  </div>
+
+  <!-- «Позвать друга» (20.09.2026). На дашборде не держим: главный экран
+       отвечает на вопрос «что мне сделать сейчас», а приглашают раз в
+       месяц. Ссылка ведёт в ЛИЧКУ бота нужной половины - там новичка
+       спросят, брат он или сестра (core/side.py), поэтому её не страшно
+       пересылать. Отправляет сам человек: открываем телеграмное окно
+       «кому», бот ничего никому не шлёт. -->
+  <div class="s-card">
+    <label class="s-lab" data-i18n="invite_call">Позвать друга</label>
+    <p class="s-hint" id="invite-say" data-i18n="invite_who">Кому отправишь ссылку?</p>
+    <div class="s-seg" id="invite-pick">
+      <button type="button" id="invite-male" data-i18n="invite_brother">Брату</button>
+      <button type="button" id="invite-female" data-i18n="invite_sister">Сестре</button>
+    </div>
+    <!-- Одна ссылка на @YassirAppBot (22.09.2026): он сам спросит новичка,
+         брат он или сестра. Показывается вместо двух кнопок, когда сервер
+         отдал inviteLinks.app. -->
+    <div class="s-seg" id="invite-one" hidden>
+      <button type="button" id="invite-app" data-i18n="invite_send">Отправить ссылку</button>
+      <!-- Переписка бывает не в Telegram (22.09.2026, вопрос пользователя):
+           телеграмное окно «кому» WhatsApp не показывает, а скопированный
+           текст вставляется куда угодно. Сам Telegram другу всё равно
+           нужен - ссылка t.me, - но доставить её можно чем угодно. -->
+      <button type="button" id="invite-copy" data-i18n="invite_copy">Скопировать</button>
+    </div>
+  </div>
+
+  <div class="s-card">
+    <label class="s-lab" data-i18n="sett_lang">Язык</label>
+    <div class="s-seg" id="sett-lang">
+      <button data-lang="ru">Русский</button>
+      <button data-lang="ky">Кыргызча</button>
+      <button data-lang="uz">Ўзбекча</button>
+      <button data-lang="zh">中文</button>
+    </div>
+    <label class="s-lab s-lab2" data-i18n="sett_theme">Тема</label>
+    <div class="s-seg" id="sett-theme">
+      <button data-theme="light"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg><span data-i18n="sett_theme_day">День</span></button>
+      <button data-theme="dark"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg><span data-i18n="sett_theme_night">Ночь</span></button>
+    </div>
+  </div>
+
+  <!-- Раскладка мусхафа (23.09.2026): кто учит по египетской таджвидной
+       книге Дар аль-Маарифа, видит листы и строки один в один с ней. -->
+  <div class="s-card">
+    <label class="s-lab" data-i18n="dash_mushaf">Мусхаф</label>
+    <div class="s-seg" id="sett-layout">
+      <button data-layout="madani" data-i18n="sett_layout_madani">Мединский</button>
+      <button data-layout="dm" data-i18n="sett_layout_dm">Дар аль-Маариф (египетский)</button>
+    </div>
+    <p class="s-hint" id="sett-layout-hint" data-i18n="layout_hint">Выбери тот, по которому учишь с книги: страницы и строки будут как в ней.</p>
+  </div>
+
+  <!-- Переводчик смысла (02.11.2026) - только у русского, у ky/uz/zh перевод
+       один. Тот же выбор переключается прямо в окне перевода. -->
+  <div class="s-card" id="sett-mtr-card">
+    <label class="s-lab" data-i18n="mr_title">Смысловой перевод</label>
+    <div class="s-seg" id="sett-mtr">
+      <button data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button>
+      <button data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button>
+    </div>
+    <p class="s-hint" data-i18n="mr_sett_hint">Его можно переключить и прямо в окне перевода.</p>
+  </div>
+
+  <!-- Выход - только у сессии сайта. Внутри Telegram выходить не из чего:
+       там нас узнаёт сам Telegram при каждом открытии. -->
+  <button id="dash-logout" hidden data-i18n="sett_logout">Выйти из приложения</button>
+</div>
+<div id="word-popup"></div>
+<!-- Смысловой перевод (02.11.2026): панель аята по удержанию и отдельное
+     чтение со своей закладкой. JS - «Смысловой перевод» ниже. -->
+<div id="ayah-sheet-dim" hidden></div>
+<div id="ayah-sheet" hidden role="dialog" aria-modal="true">
+  <div class="as-head">
+    <span class="as-ref" id="as-ref"></span>
+    <span class="as-tools">
+      <span class="mr-seg" id="as-seg"><button type="button" data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+      <button id="as-close" type="button" data-i18n-title="mr_close" title="Закрыть" aria-label="Закрыть"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+    </span>
+  </div>
+  <div id="as-text" class="mr-serif"></div>
+  <div class="as-foot">
+    <button type="button" id="as-prev"></button>
+    <button type="button" id="as-next"></button>
+  </div>
+</div>
+<!-- Пояснение к слову (12.11.2026) - см. «Пояснение к слову» в стилях и showWordPopup. -->
+<div id="wn-dim" hidden></div>
+<div id="wn-sheet" hidden role="dialog" aria-modal="true">
+  <div class="as-head">
+    <span id="wn-word" dir="rtl"></span>
+    <span class="as-tools">
+      <span class="as-ref" id="wn-ref"></span>
+      <button id="wn-close" type="button" data-i18n-title="mr_close" title="Закрыть" aria-label="Закрыть"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+    </span>
+  </div>
+  <div id="wn-gloss"></div>
+  <div id="wn-text" class="mr-serif"></div>
+  <div id="wn-from"></div>
+</div>
+<div id="mreader" hidden>
+  <div class="mr-bar">
+    <button type="button" id="mr-back" data-i18n="mr_back">← Мусхаф</button>
+    <span class="mr-seg" id="mr-seg"><button type="button" data-mtr="ru_kuliev" data-i18n="tr_kuliev">Кулиев</button><button type="button" data-mtr="ru_abuadel" data-i18n="tr_abuadel">Абу Адель</button></span>
+  </div>
+  <div id="mr-scroll"><div id="mr-text" class="mr-serif"></div></div>
+  <div class="mr-nav">
+    <button type="button" id="mr-prev"></button>
+    <button type="button" id="mr-next"></button>
+  </div>
+</div>
+<div id="hifz-big">
+  <!-- Возврат стоит в шапке слева, а не внизу (09.09.2026, общее правило
+       навигации): низ — только действия, здесь 🔊 и «Сдать». -->
+  <div id="hifz-big-head" style="flex:0 0 auto">
+    <button id="hifz-big-close" class="nav-back" data-i18n="back_page">← Страница</button>
+    <span id="hifz-big-where"></span>
+  </div>
+  <div class="big-inner"><div class="big-words" id="hifz-big-words"></div></div>
+  <!-- Мишень счёта стоит МЕЖДУ строкой и кнопками, во всю ширину
+       (11.09.2026, замечание пользователя: «в крупно же место есть»).
+       Здесь студент и делает свои сорок, тапая вслепую — чем больше
+       площадь, тем вернее попадание. Текст она не перекрывает: кегль в
+       «Крупно» подбирается под свободную область, и мишень входит в расчёт,
+       потому что лежит в разметке, а не дорисовывается после. -->
+  <button id="big-count" title="Отметить повтор" data-i18n-title="hifz_count_title">
+    <span class="c-cap"></span>
+    <span class="c-n"><b>0</b><i>/40</i></span>
+    <span class="c-bar"><i></i></span>
+  </button>
+  <div style="flex:0 0 auto;padding:10px 14px 14px;display:flex;gap:8px;direction:ltr">
+    <button id="hifz-big-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /></svg></button>
+    <button id="hifz-big-submit" style="flex:1;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer" ><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg><span data-i18n="hifz_submit">Сдать</span></button>
+  </div>
+</div>
+
+<div id="abs-veil"></div>
+<div id="abs-sheet" role="dialog" aria-modal="true"></div>
+<div id="confirm-overlay">
+  <div class="confirm-card">
+    <p id="confirm-text"></p>
+    <div class="confirm-actions">
+      <button id="confirm-cancel" data-i18n="btn_cancel">Отмена</button>
+      <button id="confirm-yes" data-i18n="btn_yes">Да</button>
+    </div>
+  </div>
+</div>
+
+<!-- Список сур (31.08.2026) - для тех, кто уже вышел за Аль-Бакару и
+     не должен помнить номера страниц наизусть. -->
+<div id="surah-overlay">
+  <div class="surah-sheet">
+    <div class="surah-sheet-head">
+      <span data-i18n="surah_list_title">Суры</span>
+      <button id="surah-close"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+    </div>
+    <div id="surah-list"></div>
+  </div>
+</div>
+<div id="app" style="display:none">
+  <div id="topbar">
+    <div class="topbar-left">
+      <button id="mushaf-back" class="topbar-back" data-i18n="back_dashboard">← Дашборд</button>
+      <!-- Название суры само и есть кнопка списка сур (31.08.2026) - новых
+           элементов в хроме не появилось, текст мусхафа не потеснён. -->
+      <button id="btn-surah-pick">
+        <span class="surah-name" id="surah-name">—</span>
+        <span class="surah-caret"></span>
+      </button>
+    </div>
+    <!-- Мусхаф с нижней панелью (11.11.2026, перенос из прототипа «Хифз ·
+         Сегодня»): листание и номер страницы переезжают из #page-nav сюда,
+         строка страниц внизу уступает место панели вкладок. Номер страницы -
+         меню (#bm-menu): закладка, к закладке, в начало Бакары, переход по
+         номеру. Видно только при body.tabs-mushaf (режим «Страница»); в
+         заучивании, разборе и «Смысле» всё как прежде. ‹ слева = следующая
+         страница (вправо по мусхафу), как и в #page-nav. -->
+    <div class="topbar-pages" id="tb-pages">
+      <button id="tb-next" class="nav-btn" aria-label="Следующая страница">‹</button>
+      <button id="tb-page" aria-label="Страница и закладка"><b id="tb-n">—</b><span class="surah-caret"></span></button>
+      <button id="tb-prev" class="nav-btn" aria-label="Предыдущая страница">›</button>
+    </div>
+    <div class="topbar-right">
+      <!-- Отметка "повторение" (30.08.2026) - студент сам подтверждает, что
+           перечитал от начала Аль-Бакары до места, где остановился;
+           засчитывает дневное задание "r" (то же, что обычная текстовая
+           сдача "повторение" в группе, core/handlers.py) и шлёт короткое
+           сообщение в группу. Видна только на вкладке "Страница" (см.
+           switchTab) - #topbar уже direction:ltr (в отличие от #page-nav),
+           поэтому RTL-зеркалирование тут не грозит. -->
+      <!-- 📖 Заучивание (01.09.2026) — вход в режим 40+40. Стоит рядом с
+           🔁 «Повторение» намеренно: это два из трёх дневных заданий, и оба
+           теперь делаются там, где студент и так находится. Третье (слова) —
+           тренажёр. -->
+      <button id="btn-hifz" title="Заучивание 40+40" data-i18n-title="btn_hifz_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V7" /><path d="m16 12 2 2 4-4" /><path d="M22 6V4a1 1 0 0 0-1-1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h6a3 3 0 0 1 3 3 3 3 0 0 1 3-3h6a1 1 0 0 0 1-1v-1.3" /></svg></button>
+      <button id="btn-revision" title="Отметить повторение" data-i18n-title="btn_revision_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></button>
+      <!-- 📜 «Смысл» наверху (22.09.2026): нижнего меню больше нет. -->
+      <button id="btn-meaning" title="Смысл" data-i18n-title="btn_meaning_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z" /><path d="M9 7l6 0" /><path d="M9 11l6 0" /><path d="M9 15l4 0" /></svg></button>
+      <button id="read-gloss-btn" title="Перевод под словами" data-i18n-title="hifz_gloss" aria-pressed="false"><span class="g-ar">ب</span><span class="g-tr">а</span></button>
+      <span id="ayah-range"></span>
+    </div>
+  </div>
+
+  <!-- Режим заучивания: своя шапка вместо #page-nav и своя нижняя полоса
+       вместо #tabbar. Место не отнимается — обе панели просто подменяются. -->
+  <div id="hifz-head">
+    <button id="hifz-close" title="Выйти из режима" data-i18n-title="hifz_close_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+    <div class="where">
+      <b><span id="hifz-where">—</span><span class="fix" id="hifz-fix">поправить</span></b>
+      <small id="hifz-sub">—</small>
+    </div>
+  </div>
+
+  <div id="view-page" class="view">
+    <div id="page-wrap">
+      <div id="ayah-text"></div>
+    </div>
+  </div>
+
+  <div id="view-words" class="view">
+    <div id="words-list"></div>
+  </div>
+
+  <!-- Ссылка на "Слова" убрана из низа мусхафа (28.08.2026) - пословный
+       перевод теперь через тап по слову прямо на странице чтения (см.
+       #word-popup). #view-words и renderWordsList() ниже НЕ удалены -
+       вьюха просто больше не достижима из UI, код на будущее. Вместо неё -
+       "Смысл": целостный перевод аятов страницы (Кулиев, api.quran.com,
+       разрешение правообладателя на постоянное размещение подтверждено
+       пользователем лично 28.08.2026). Переход на след./пред. страницу
+       перевода - через #page-nav, назад на мусхаф - через "← Мусхаф" в
+       шапке (#mushaf-back), они уже общие для всех вьюх, отдельной
+       навигации внутри "Смысла" не нужно. -->
+  <div id="view-meaning" class="view">
+    <div id="meaning-list"></div>
+  </div>
+
+  <!-- "Мои слова" (29.08.2026) - личный список слов, отмеченных двойным
+       тапом/кликом прямо на странице чтения ("встретил забытое слово по
+       ходу чтения"). Простой список для чтения (арабский+перевод), клик по
+       строке ничего не открывает - решение пользователя, не квиз, не связан
+       с движком тренажёра муфрадата. Убрать слово - тем же двойным
+       тапом/кликом, но уже здесь, по строке (см. #mywords-list ниже). -->
+  <div id="view-mywords" class="view">
+    <div id="mywords-list"></div>
+  </div>
+
+  <!-- Строка страниц ВНИЗУ (22.09.2026, решение пользователя): в печатном
+       мушафе номер страницы стоит внизу, и низ - то, чем работаешь во время
+       чтения (листание, закладка); вверху - что начать (📖 🔁 📜). Нижнего
+       меню больше нет. #page-nav наследует dir="rtl": flex переставляет детей
+       в обратном порядке, на экране слева направо 🔖 ‹ стр. N ›. -->
+  <div id="page-nav">
+    <!-- «Бакара» снова на виду (24.09.2026, решение пользователя): взрослый
+         открывает мусхаф и повторяет с начала Бакары каждый день, в меню 🔖
+         это было два тапа. Словом, не значком - «» путали с «в начало/конец».
+         Первый в DOM = справа на экране (rtl), под большим пальцем. -->
+    <button id="btn-go-baqara" class="page-nav-util"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14" /><path d="m18 13-6-6-6 6" /><path d="M12 7v14" /></svg><span data-i18n="bm_baqara_short">Бакара</span></button>
+    <button id="btn-next">‹</button>
+    <span id="page-indicator">—</span>
+    <input id="page-jump-input" type="number" inputmode="numeric">
+    <button id="btn-prev">›</button>
+    <!-- 🔖 - одна кнопка с меню вместо трёх значков 🔖 « » (22.09.2026):
+         « и » читались как «в начало/в конец», а значили закладку и
+         начало Бакары. Сохранение теперь пункт меню - случайный тап при
+         листании больше не перезаписывает место. -->
+    <button id="btn-bookmark" class="page-nav-util" title="Закладка" data-i18n-title="btn_bookmark_title"><span class="icon-gold"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg></span></button>
+  </div>
+  <div id="bm-menu">
+    <button id="btn-bookmark-save"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg><span data-i18n="bm_save">Сохранить закладку здесь</span></span><small data-i18n="bm_save_sub">эта страница станет закладкой</small></button>
+    <button id="btn-bookmark-go"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg><span data-i18n="bm_go">К закладке</span></span><small id="bm-go-sub" data-i18n="bm_go_sub">страница, где остановился</small></button>
+    <!-- Пункты для шапки с панелью (11.11.2026): из #page-nav сюда переехали
+         «⤒ Бакара» и переход по номеру страницы. -->
+    <button id="btn-bm-baqara"><span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14" /><path d="m18 13-6-6-6 6" /><path d="M12 7v14" /></svg><span data-i18n="bm_baqara">В начало Бакары</span></span><small data-i18n="bm_baqara_sub">стр. 2 — ежедневный повтор</small></button>
+    <div id="bm-jump"><span data-i18n="bm_jump">К странице</span><input id="bm-jump-input" type="number" inputmode="numeric" min="1" max="604"><button id="bm-jump-go" data-i18n="bm_jump_go">Открыть</button></div>
+  </div>
+
+  <!-- Только два действия (02.09.2026). Вперёд двигает СДАЧА, а не стрелка:
+       метод 40+40 не предусматривает "проскочить единицу, не сдав её".
+       Поправить место можно всегда - "поправить" в шапке. -->
+  <!-- Проверка сдачи устазом (04.09.2026): та же страница мусхафа, что
+       видит студент, но снизу - вердикт. Тап по слову отмечает ошибку. -->
+  <div id="review-foot">
+    <div class="hint" id="review-hint"></div>
+    <!-- После вердикта (13.09.2026): следующая сдача той же группы, не выходя
+         в список, см. reviewAfterVerdict. Стоит ПЕРВЫМ рядом, а не последним:
+         снимки онбординга подсвечивают вердикт как .row:last-child. -->
+    <div class="row" id="review-after" style="display:none">
+      <button id="review-to-list">К списку</button>
+      <button id="review-next" class="ok"></button>
+    </div>
+    <!-- Плеер с дорожкой (10.11.2026, решение пользователя): устаз слушал
+         15-минутную сдачу с одной кнопкой «↺ 10 сек» - перемотать на любое
+         место было нельзя. Та же полоса, что у разбора студента (#look-foot):
+         пауза, дорожка с перетаскиванием, время. Появляется, когда запись
+         пошла, и прячется со стопом. -->
+    <!-- Плеер виден сразу, с ▶ (11.11.2026, просьба Умар устаза убрать «Стоп»):
+         запуск и пауза - круглая кнопка, отдельных «Прослушать сдачу» и «Стоп»
+         нет. Дорожка - волна громкости из 60 столбиков (sub.peaks считает
+         сервер при приёме сдачи, как у голосовых Telegram); без столбиков -
+         ровная полоса. «Мой разбор» переключает источник внутри плеера. -->
+    <div class="player" id="review-player">
+      <button id="review-pp" title="Слушать"><svg viewBox="0 0 24 24"><path d="M8.6 5.2v13.6c0 .9 1 1.4 1.7.9l10.3-6.8c.7-.4.7-1.4 0-1.8L10.3 4.3c-.7-.5-1.7 0-1.7.9z"/></svg></button>
+      <div class="bar">
+        <div class="who"><b id="review-src">Сдача</b></div>
+        <div id="review-track"><div class="wave" id="review-wave"></div><div id="review-fill"></div></div>
+        <div class="t"><span id="review-cur">0:00</span><span id="review-total">0:00</span></div>
+      </div>
+      <button id="review-back10"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 19 2 12 11 5 11 19" /><polygon points="22 19 13 12 22 5 22 19" /></svg><span data-i18n="review_back10">10 сек</span></button>
+    </div>
+    <div class="row">
+      <button id="review-mine" style="display:none"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg><span id="review-mine-t">Мой разбор</span></button>
+      <button id="review-comment"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg><span data-i18n="review_comment">Замечание</span></button>
+    </div>
+    <div class="row">
+      <button id="review-accept" class="ok"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg><span data-i18n="review_accept">Принято</span></button>
+      <button id="review-retake" class="no"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg><span data-i18n="review_retake">На пересдачу</span></button>
+    </div>
+  </div>
+
+  <!-- Разбор устаза у студента (07.09.2026): голос и лист в одном кадре.
+       Раньше голос жил в списке "Сдачи", а пометки - на странице, и слушать
+       разбор, глядя на свою строку, было нельзя вообще. -->
+  <div id="look-foot">
+    <div class="who"><b id="look-who">Замечание устаза</b><span class="dur" id="look-dur">—</span></div>
+    <div class="player">
+      <button id="look-play" title="Слушать" data-i18n-title="listen_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg></button>
+      <div class="bar">
+        <div id="look-track"><div id="look-fill"></div></div>
+        <div class="t"><span id="look-cur">0:00</span><span id="look-total">0:00</span></div>
+      </div>
+    </div>
+    <div class="row" id="look-actions"></div>
+  </div>
+
+  <div id="hifz-foot">
+    <!-- «Крупно» убрано 22.09.2026 (решение пользователя): крупно теперь
+         лёжа, на всех этапах и строкой как в мусхафе, а про поворот
+         говорит подсказка (rotateHintMaybe). Сам экран #hifz-big и его код
+         остались, но с интерфейса больше не достижимы. -->
+    <!-- Прослушать Хусари (Muallim) — вкл/выкл, играет ТЕКУЩУЮ единицу
+         по кругу с паузой между повторами (02.09.2026). Та же кнопка
+         живёт и в «Крупно» (#hifz-big-listen-btn) — состояние общее,
+         один <audio> на оба места, там же где студент делает 40
+         повторов открывать заново не нужно. -->
+    <!-- Перевод под словами лёжа - вкл/выкл (19.10.2026). Значок - то, что
+         он делает: арабская буква, под ней буква перевода. -->
+    <button id="hifz-gloss-btn" title="Перевод под словами" data-i18n-title="hifz_gloss" aria-pressed="false"><span class="g-ar">ب</span><span class="g-tr" id="hifz-gloss-tr">а</span></button>
+    <button id="hifz-listen-btn" class="hifz-listen-btn" title="Прослушать" data-i18n-title="hifz_listen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /></svg></button>
+    <!-- Счётчик 40+40 (11.09.2026). Стоит у 🔊 по просьбе пользователя: низ
+         удобнее тапать, рука и так там, а Хусари включают ровно перед
+         повторами. Число то же самое, что копила панель «сколько сделал
+         сегодня» (mushaf_hifz_progress, 0-80): сорок глядя, сорок по
+         памяти. Значит цифры переживают выход и видны с другого телефона. -->
+    <button id="hifz-count" title="Отметить повтор" data-i18n-title="hifz_count_title">
+      <span class="c-cap"></span><span class="c-n"><b>0</b><i>/40</i></span>
+      <span class="c-bar"><i></i></span>
+    </button>
+    <button id="hifz-submit" class="primary"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg><span id="hifz-submit-t">Сдать</span></button>
+    <!-- Выбор единицы — только пока идёт выбор места (02.09.2026). Студент
+         может стартовать не с первой строки, а сразу с половины или всей
+         страницы, если эту часть он уже знает. -->
+    <div id="hifz-units">
+      <button data-unit="line">Строка</button>
+      <button data-unit="half">Половина</button>
+      <button data-unit="page">Страница</button>
+    </div>
+  </div>
+
+  <!-- Запись сдачи: сначала слушаешь себя, только потом отправляешь. -->
+  <div id="hifz-rec">
+    <div class="card">
+      <button id="hifz-rec-close" title="Закрыть" data-i18n-title="close_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+      <!-- Пересдача: разбор сворачивается сюда, чтобы переслушать замечание,
+           не выходя из записи. -->
+      <div id="rec-review"><button id="rec-review-play" title="Слушать" data-i18n-title="listen_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg></button><span id="rec-review-text">Замечание устаза</span></div>
+      <div class="place" id="hifz-rec-place">—</div>
+      <div class="timer" id="hifz-rec-timer">0:00</div>
+      <div class="hint" id="hifz-rec-hint"></div>
+      <!-- Свой плеер, тот же что в разборе устаза (13.09.2026). Системный
+           <audio controls> выглядит по-своему на каждом телефоне и спорит со
+           всем остальным в приложении; тег остаётся, но только как мотор. -->
+      <div id="hifz-rec-player" class="player" style="display:none">
+        <button id="hifz-rec-play" title="Слушать" data-i18n-title="listen_title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg></button>
+        <div class="bar">
+          <div id="hifz-rec-track"><div id="hifz-rec-fill"></div></div>
+          <div class="t"><span id="hifz-rec-cur">0:00</span><span id="hifz-rec-total">0:00</span></div>
+        </div>
+      </div>
+      <audio id="hifz-rec-audio" style="display:none"></audio>
+      <div class="actions" id="hifz-rec-actions"></div>
+
+      <!-- Захват прогресса 40+40 (03.09.2026) - только этапы 2/3, после
+           успешной отправки. Строка (этап 1) закрывается одной сдачей,
+           этой панели не видит. -->
+      <!-- Панель подтверждает, а не спрашивает (20.09.2026, аудит по просьбе
+           пользователя). Было: «Сколько сделал сегодня?» + чипы +10/+20/+40,
+           то есть ВТОРОЙ способ ввести то же число, которое человек весь
+           вечер набивал счётчиком у 🔊 - отсюда и «натапал 20, вписал 20,
+           стало 40». Теперь панель показывает, что уже засчитано, тем же
+           языком, что счётчик и шапка («глядя 40/40», «по памяти 12/40», не
+           «52 из 80» - вопрос пользователя 20.09), и даёт поправить. -->
+      <div id="hifz-progress">
+        <div class="hp-rows">
+          <div class="hp-row" id="hp-row-look">
+            <span class="lbl" data-i18n="hifz_count_looking">глядя</span>
+            <span class="val"><b id="hp-look-n">0</b><i>/40</i></span>
+          </div>
+          <div class="hp-row" id="hp-row-mem">
+            <span class="lbl" data-i18n="hifz_count_memory">по памяти</span>
+            <span class="val"><b id="hp-mem-n">0</b><i>/40</i></span>
+          </div>
+        </div>
+        <div class="hp-bar"><i id="hifz-progress-bar"></i><u></u></div>
+        <div class="hp-adjust">
+          <button type="button" id="hifz-progress-minus" aria-label="минус один повтор" data-i18n-aria="hifz_progress_minus">−</button>
+          <b id="hifz-progress-count">0</b>
+          <button type="button" id="hifz-progress-plus" aria-label="плюс один повтор" data-i18n-aria="hifz_progress_plus">+</button>
+        </div>
+        <div class="hp-chips" id="hifz-progress-chips">
+          <button type="button" id="hifz-progress-own" data-i18n="hifz_progress_own">вписать число</button>
+        </div>
+        <!-- Кнопки «ок» рядом с полем больше нет (10.09.2026, решение
+             пользователя). Она была мелкой и стояла в двух шагах от большой
+             «Сохранить и продолжить» - человек набирал число и жал большую,
+             логично считая, что этого хватит. Хватает: с 08.09 большая
+             кнопка сперва досохраняет набранное. Значит «ок» ничего не
+             добавляла, только предлагала лишний тап и сомнение, засчиталось
+             ли. Enter в поле работает как раньше - для тех, кто хочет
+             добавить ещё раз, не закрывая панель. -->
+        <div class="hp-own-row" id="hifz-progress-own-row" style="display:none">
+          <input id="hifz-progress-own-input" type="number" min="0" max="80"
+                 inputmode="numeric" data-i18n-ph="hifz_progress_own_ph"
+                 placeholder="всего повторов">
+          <p class="hp-hint" data-i18n="hifz_progress_own_hint">Это итог по этому месту, не добавка.</p>
+        </div>
+        <button type="button" id="hifz-progress-save" class="hp-save" data-i18n="hifz_progress_save">Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Нижнего меню (#tabbar: Смысл, Мои слова, Тренажёр) нет с 22.09.2026:
+       📜 - наверху, «Мои слова» - в тренажёре слов, тренажёры - с дашборда.
+       Внизу строка страниц. -->
+</div>
+
+<div id="trainer">
+  <div id="trainer-topbar">
+    <button id="trainer-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span id="trainer-bookmark" data-i18n="trainers_words">Слова</span>
+    <span id="trainer-daily"></span>
+  </div>
+  <div id="trainer-body"></div>
+  <!-- Прямой переход в Мусхаф/Мои слова без дашборда (30.08.2026, решение
+       пользователя, симметрично 🌱 в #tabbar мусхафа). -->
+  <div id="trainer-tabbar">
+    <button id="trainer-tab-mywords" class="tab-btn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg><span data-i18n="tab_mywords">Мои слова</span></button>
+    <button id="trainer-tab-mushaf" class="tab-btn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></svg><span data-i18n="tab_mushaf">Мусхаф</span></button>
+  </div>
+</div>
+
+<!-- «Тренажёры» (14.09.2026) - вход через одну дверь дашборда. Внутри пока
+     «Слова» и «Таджвид»; «Нахв» добавится третьей строкой. Таджвид виден
+     только группам с этим заданием (и устазам) - строку решает сервер. -->
+<div id="trainers">
+  <div id="trainers-topbar">
+    <button id="trainers-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span data-i18n="trainers_title">Тренажёры</span>
+    <span></span>
+  </div>
+  <div id="trainers-body"></div>
+</div>
+
+<!-- Тренажёр нахва (17.09.2026, core/nahw_trainer.py). -->
+<div id="nahw">
+  <div id="nahw-topbar">
+    <button id="nahw-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span data-i18n="nahw_title">Нахв</span>
+    <span id="nahw-daily"></span>
+  </div>
+  <div id="nahw-body"></div>
+</div>
+
+<!-- Тренажёр хадисов (23.09.2026, core/hadith_trainer.py). -->
+<div id="hadith">
+  <div id="hadith-topbar">
+    <button id="hadith-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span data-i18n="hadith_title">Хадис</span>
+    <span id="hadith-daily"></span>
+  </div>
+  <div id="hadith-body"></div>
+</div>
+
+<!-- Тренажёр таджвида (14.09.2026, core/tajweed_trainer.py). -->
+<div id="tajweed">
+  <div id="tajweed-topbar">
+    <button id="tajweed-back" data-i18n="back_trainers">← Тренажёры</button>
+    <span data-i18n="tajweed_title">Таджвид</span>
+    <span id="tajweed-daily"></span>
+  </div>
+  <div id="tajweed-body"></div>
+</div>
+
+<!-- Кабинет устаза (03.09.2026, пункт 13 старого макета 40+40) - только
+     дверь + список "ждут проверки", без действий: приём/отклонение сдачи
+     по-прежнему идёт реплаем в группе. "Студенты"/"Проверено" (пункт 14)
+     и гейт "пересдача блокирует этап" (пункт 11) намеренно не здесь -
+     отложены отдельно (см. лог сессии). -->
+<div id="subs">
+  <div id="subs-topbar">
+    <button id="subs-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span data-i18n="subs_title">Работа с устазом</span>
+    <span id="subs-wall-note" class="subs-wall-note" data-i18n="subs_wall_note" style="display:none">Сначала пересдай, потом дальше</span>
+  </div>
+  <div id="subs-body"></div>
+</div>
+
+<div id="learn">
+  <div id="learn-topbar">
+    <button id="learn-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span id="learn-title" data-i18n="learn_title">Знания</span>
+  </div>
+  <div id="learn-body"></div>
+  <div id="learn-zoom"><img alt=""></div>
+  <div id="learn-foot" style="display:none">
+    <div id="learn-dots"></div>
+    <div id="learn-buttons">
+      <button id="learn-prev" data-i18n="learn_prev">Назад</button>
+      <button id="learn-next" class="go" data-i18n="learn_next">Дальше</button>
+    </div>
+  </div>
+</div>
+
+<div id="ustaz">
+  <div id="ustaz-topbar">
+    <button id="ustaz-back" data-i18n="back_dashboard">← Дашборд</button>
+    <span data-i18n="ustaz_title">Устаз</span>
+  </div>
+  <div id="ustaz-body"></div>
+</div>
+
+<!-- «Ещё» (04.11.2026) - пятая вкладка нижней панели: то, что не ежедневная
+     работа. Пока две строки - «Знания» и «Настройки»; обе открывают уже
+     существующие экраны, своего содержимого здесь нет. -->
+<div id="more">
+  <div id="more-topbar">
+    <span data-i18n="tab_more">Ещё</span>
+  </div>
+  <div id="more-body">
+    <button class="tr-hub" id="more-learn">
+      <span class="mk"><svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2z"/><path d="M8 7h7M8 11h5"/></svg></span>
+      <span><span class="nm" data-i18n="dash_learn">Знания</span><span class="ds" data-i18n="more_learn_sub">Правила, как работаем, уроки</span></span>
+    </button>
+    <button class="tr-hub" id="more-sett">
+      <span class="mk"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>
+      <span><span class="nm" data-i18n="sett_title">Настройки</span><span class="ds" data-i18n="more_sett_sub">Имя, язык, тема, позвать друга</span></span>
+    </button>
+  </div>
+</div>
+
+<!-- Нижняя панель разделов (04.11.2026). Видимость и активную вкладку
+     решает tabsSync() по тому, какой экран сейчас открыт, - сами экраны
+     о панели не знают. Иконки - из прототипа «Хифз · Сегодня». -->
+<nav id="tabs" aria-label="Разделы">
+  <button class="tabs-btn" data-tab="today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.3 2.3 4.7-5"/></svg><span data-i18n="tab_today">Сегодня</span></button>
+  <button class="tabs-btn" data-tab="mushaf"><svg viewBox="0 0 24 24"><path d="M4 5.5A2 2 0 0 1 6 4h4.5a2 2 0 0 1 1.5.7A2 2 0 0 1 13.5 4H18a2 2 0 0 1 2 2v13.5h-6.5a2 2 0 0 0-1.5.7 2 2 0 0 0-1.5-.7H4z"/><path d="M12 5v14.5"/></svg><span data-i18n="dash_mushaf">Мусхаф</span></button>
+  <button class="tabs-btn" data-tab="train"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 10l2 2-2 2M12.5 14h3.5"/></svg><span data-i18n="trainers_title">Тренажёры</span></button>
+  <button class="tabs-btn" data-tab="ustaz"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M15.5 10.5l2 2 3.5-4"/></svg><span data-i18n="tab_ustaz">Устаз</span></button>
+  <button class="tabs-btn" data-tab="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span data-i18n="tab_more">Ещё</span></button>
+</nav>
+
+<!-- Экран входа (10.09.2026) - показывается только вне Telegram, см. JS.
+     Тексты здесь по-русски и без data-i18n намеренно: до входа язык
+     студента ещё неизвестен (он хранится на сервере, по Telegram ID), а
+     ky/uz делаем одним проходом, когда всё отшлифуется. -->
+<div id="login" hidden>
+  <div class="login-card">
+    <div class="login-mark">۩</div>
+    <h1>YassirApp</h1>
+    <p class="login-sub" data-i18n-html="login_sub">Мусхаф, заучивание и слова Корана —<br>для тех, кто учится в Яссире.</p>
+
+    <!-- Сторону (мужская/женская) человек не выбирает (18.09.2026, решение
+         пользователя): ссылка всегда ведёт в мужской бот, тот ищет по обеим
+         базам и подтверждает вход для того бота, где человек учится. -->
+    <div id="login-step-side">
+      <p id="login-wrong-side" class="login-status bad" hidden data-i18n="login_wrong_side">
+        Я не нашёл тебя среди учащихся. Приложение открывается тем, кто уже
+        учится в Яссире 🤲 Ответь мне в Telegram на вопрос — покажу, с чего начать.
+      </p>
+      <button id="login-start" class="login-go" data-i18n="login_tg">Войти через Telegram</button>
+      <!-- Запасная дверь (07.10.2026, core/email_login.py): Telegram на новом
+           телефоне иногда просит Premium. Тихой ссылкой, не второй кнопкой -
+           главный путь по-прежнему Telegram. -->
+      <button id="login-mail-open" class="login-plain" data-i18n="login_mail_open">Войти по почте</button>
+    </div>
+
+    <div id="login-step-mail" hidden>
+      <p class="login-q" data-i18n="login_mail_q">Почта, привязанная к твоему аккаунту</p>
+      <input id="login-mail" class="login-field" type="email" inputmode="email"
+             autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="name@mail.ru">
+      <div id="login-mail-code-box" hidden>
+        <p class="login-q" data-i18n="login_code_q">Код из письма</p>
+        <input id="login-mail-code" class="login-field login-code" type="text" inputmode="numeric"
+               autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+      </div>
+      <button id="login-mail-go" class="login-go" data-i18n="login_mail_send">Прислать код</button>
+      <p id="login-mail-status" class="login-status"></p>
+      <button id="login-mail-again" class="login-plain" hidden data-i18n="login_mail_again">Прислать код ещё раз</button>
+      <button id="login-mail-back" class="login-alt" data-i18n="login_back">← Назад</button>
+    </div>
+
+    <div id="login-step-go" hidden>
+      <!-- target="_blank": Telegram открывается отдельно, а эта вкладка
+           остаётся жить и ждать подтверждения. Уйди мы по ссылке в том же
+           окне - опрос оборвался бы на полпути. -->
+      <a id="login-link" class="login-go" target="_blank" rel="noopener" data-i18n="login_open_tg">Открыть Telegram</a>
+      <p id="login-status" class="login-status" data-i18n="login_wait">Открой ссылку и нажми «Начать» — я жду подтверждения.</p>
+      <button id="login-back" class="login-alt" data-i18n="login_back">← Назад</button>
+    </div>
+
+    <!-- Подсказка только для iPhone (10.09.2026). Android предлагает
+         установку сам, iOS — никогда: там это делается руками, и человек об
+         этом не догадается, если не сказать. Показываем на входе, потому что
+         это первый и единственный экран, который видят все. -->
+    <p id="login-ios" class="login-ios" hidden data-i18n="login_ios">
+      На iPhone: «Поделиться» → «На экран Домой» — и приложение будет
+      открываться со своего значка, как обычное.
+    </p>
+  </div>
+</div>
+
+<!-- Открыто через бот другой половины (18.09.2026). Сервер отвечает 403
+     wrong_bot на любой запрос (core/mufradat_api.py), приложение дальше не
+     идёт: один экран и кнопка в свой бот. Кнопка, а не автопереход -
+     молчаливый прыжок между ботами путает сильнее (решение пользователя). -->
+<div id="wrongbot" hidden>
+  <div class="login-card">
+    <div class="login-mark">۩</div>
+    <h1>YassirApp</h1>
+    <p class="login-sub" id="wrongbot-text"></p>
+    <a id="wrongbot-link" class="login-go" href="#" data-i18n="wrongbot_open">Открыть мой YassirApp</a>
+    <p class="login-status" data-i18n="wrongbot_note">Там твоя группа, сдачи и задания. Здесь я тебя не записываю, чтобы ничего не перепуталось.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+/*@@APP_JS@@*/
+})();
+</script>
+</body>
+</html>

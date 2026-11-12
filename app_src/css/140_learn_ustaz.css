@@ -1,0 +1,855 @@
+  /* ── Блоки «Знаний» (11.09.2026) ──────────────────────────────────────
+     Карточка с подписью и строками внутри — тот же приём, что у карточек
+     настроек (#sett .s-card). Блок не уводит на свой экран: пункты видны
+     сразу, и до темы по-прежнему два тапа, а не три. */
+  #learn-body .k-card {
+    max-width: 520px; width: 100%; align-self: center;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; box-shadow: var(--shadow-sm);
+    padding: 12px 0 2px; margin-bottom: 2px; overflow: hidden;
+  }
+  #learn-body .k-head {
+    display: flex; align-items: baseline; gap: 8px;
+    margin: 0 14px 6px; font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; color: var(--muted);
+  }
+  #learn-body .k-head i {
+    font-style: normal; font-weight: 400; letter-spacing: 0; font-size: 11px;
+  }
+  /* Внутри карточки строка — ряд списка, а не отдельная плитка. */
+  #learn-body .k-card .learn-item {
+    background: none; border: none; box-shadow: none; border-radius: 0;
+    margin: 0; width: 100%; box-sizing: border-box; padding: 11px 14px;
+  }
+  /* Разделитель во всю ширину: укороченная линия с отступами по бокам
+     читается как рамка вокруг строки, то есть как плитка внутри плитки
+     (поймано на снимке 11.09.2026). */
+  #learn-body .k-card .learn-item + .learn-item {
+    border-top: 1px solid var(--card-border);
+  }
+  /* Предметы — плитками: их ровно два, имена короткие, выбор равнозначный.
+     Строки нужны там, где у пункта длинное имя и спутники справа. */
+  #learn-body .k-tiles {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 2px 12px 12px;
+  }
+  #learn-body .k-tile {
+    display: flex; flex-direction: column; gap: 3px; text-align: left;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 12px 13px 11px; cursor: pointer;
+    font: inherit; color: var(--ink); -webkit-tap-highlight-color: transparent;
+  }
+  #learn-body .k-tile:only-child { grid-column: 1 / -1; }
+  #learn-body .k-tile .t-mk { font-size: 19px; line-height: 1.1; margin-bottom: 2px; }
+  #learn-body .k-tile .t-mk .ic { width: 24px; height: 24px; }
+  .t-mk.mk-j { color: var(--subj-j); } .t-mk.mk-n { color: var(--subj-n); }
+  #learn-body .k-tile .t-nm { font-size: 17px; font-weight: 640; }
+  #learn-body .k-tile .t-ds { font-size: 13px; color: var(--muted); line-height: 1.3; }
+  #learn-body .k-tile .t-cnt {
+    margin-top: 6px; font-size: 11.5px; color: var(--accent); font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  #learn-body .k-empty { text-align: center; font-size: 12.5px; color: var(--muted); padding: 14px; }
+  /* Название главы над группой уроков. */
+  #learn-body .k-cap {
+    max-width: 520px; width: 100%; align-self: center;
+    margin: 14px 2px 2px; font-size: 11.5px; font-weight: 600; color: var(--muted);
+  }
+  /* Закрытый урок: название видно, но приглушено и не нажимается. */
+  #learn-body .learn-item.k-off { opacity: .45; cursor: default; }
+  /* Текст урока. Арабские названия и цитаты идут вперемешку с русским —
+     direction: ltr обязателен, иначе строка вроде «ط د ت / ص س ز» внутри
+     RTL-контейнера переставляется (та же ловушка, что с «7-бет»). */
+  #learn-body .k-text {
+    max-width: 520px; width: 100%; align-self: center; direction: ltr;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 18px; box-shadow: var(--shadow-sm);
+    /* 17px и межстрочный 1.65 (14.09.2026, пользователь: «мелковато для
+       чтения с телефона, оптимально для глаз 40-летних»). Было 14px. */
+    padding: 16px 18px 22px; font-size: 17px; line-height: 1.65;
+    color: var(--ink); white-space: pre-wrap; word-break: break-word;
+  }
+  #learn-body .k-text .k-chapter {
+    margin: 0 0 12px; font-size: 13px; color: var(--muted); white-space: normal;
+  }
+  /* Арабские слова в уроке крупнее русского: буква с харакатами при том же
+     кегле, что кириллица, читается хуже всего. ТОЛЬКО размер: direction и
+     unicode-bidi здесь нельзя - изолированный каждый кусок раскладывался
+     слева направо, и «ا و ي» читалось задом наперёд (поймано снимком
+     14.09.2026). Без них порядок остаётся тем же, что и без span. */
+  #learn-body .k-text .k-ar { font-size: 1.3em; line-height: 1.4; }
+  #learn-body .k-cap, #learn-body .learn-item .nm { direction: ltr; }
+  .learn-item {
+    display: flex; gap: 11px; align-items: flex-start; text-align: left;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 15px; padding: 12px 13px; font: inherit; color: var(--ink);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .learn-item .mk { font-size: 17px; color: var(--muted); line-height: 1.2; flex: 0 0 auto; }
+  .learn-item .nm { font-size: 16px; font-weight: 640; display: block; }
+  .learn-item .ds { font-size: 13px; color: var(--muted); display: block; margin-top: 2px; }
+  .learn-item .cnt { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; flex: 0 0 auto; }
+  .learn-item .cnt.done { color: var(--ok); }
+  /* Шаг: картинка сверху, под ней текст, внизу точки и кнопки. Картинка -
+     реальный экран приложения, снятый скриптом (scripts/shoot_onboarding.py),
+     поэтому «где нажимать» видно без слов. */
+  #learn-step { display: flex; flex-direction: column; gap: 12px; }
+  #learn-step .shot {
+    border: 1px solid var(--card-border); border-radius: 15px; overflow: hidden;
+    background: var(--card-bg); align-self: center; max-width: 100%;
+  }
+  /* Снимок - главное на шаге: по нему видно, куда нажимать. Даём ему всю
+     ширину и до двух третей высоты (08.09.2026: при половине экрана мелко,
+     жалоба пользователя). Не влезло - шаг прокручивается, а тап по снимку
+     открывает его во весь экран. */
+  #learn-step .shot { cursor: zoom-in; }
+  /* На маленьком экране снимок неизбежно мелкий - подсказываем, что его
+     можно открыть целиком; сам по себе тап никто не угадает. */
+  .learn-zoomhint { font-size: 11.5px; color: var(--muted); text-align: center; margin: -4px 0 0; }
+  #learn-step .shot img {
+    display: block; width: 100%; max-width: 100%; max-height: 66vh;
+    object-fit: contain;
+  }
+  /* Короткий экран (старый Android, 640 точек): при 66vh под снимком не
+     остаётся места объяснению - оно обрезается на середине фразы. */
+  @media (max-height: 720px) {
+    #learn-step .shot img { max-height: 44vh; }
+  }
+  /* Снимок во весь экран - поверх всего, тап в любом месте закрывает. */
+  #learn-zoom {
+    display: none; position: fixed; inset: 0; z-index: 60;
+    background: rgba(20, 16, 8, .92);
+    align-items: center; justify-content: center; padding: 12px;
+    cursor: zoom-out;
+  }
+  #learn-zoom.visible { display: flex; }
+  #learn-zoom img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+  #learn-step { max-width: 520px; width: 100%; align-self: center; }
+  #learn-step h3 {
+    margin: 0; font-size: clamp(15.5px, 4.4vw, 19px); font-weight: 650; text-wrap: balance;
+  }
+  #learn-step p {
+    margin: 0; font-size: clamp(13.5px, 3.8vw, 16px); line-height: 1.55; color: var(--ink);
+  }
+  /* Шаг без снимка («Правила», 07.10.2026): текст - единственное, что на
+     экране, и размер снимочных шагов ему мал (жалоба пользователя: «текст
+     маленький, внизу пусто»). Крупнее заголовок и абзац, строка до ~60
+     знаков, воздух сверху - читается как страница, а не как подпись. */
+  #learn-step.text { gap: 14px; padding-top: 10px; }
+  #learn-step.text h3 { font-size: clamp(21px, 5.8vw, 25px); line-height: 1.25; }
+  #learn-step.text p { font-size: clamp(17px, 4.7vw, 19px); line-height: 1.6; max-width: 34em; }
+  /* Глава-страница: пункты подряд, между ними тонкая линия - это разные
+     правила, а не абзацы одного. Заголовок пункта чуть меньше заголовка
+     страницы в шапке. */
+  #learn-step.article section { display: flex; flex-direction: column; gap: 8px; }
+  #learn-step.article section + section { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--card-border); }
+  #learn-step.article h3 { font-size: clamp(18.5px, 5vw, 21px); }
+  /* Видео-инструкция раздела (27.10.2026): ролик вертикальный, 9:16. Ширину
+     берём от высоты экрана, чтобы ролик целиком влезал вместе с кнопкой
+     «Пошагово» под ним; на узком экране упирается в ширину колонки. */
+  #learn-body .learn-video {
+    width: min(100%, 520px, calc((100vh - 190px) * 9 / 16));
+    width: min(100%, 520px, calc((100dvh - 190px) * 9 / 16));
+    aspect-ratio: 9 / 16; align-self: center;
+    border-radius: 18px; overflow: hidden; background: #000; box-shadow: var(--shadow-sm);
+  }
+  #learn-body .learn-video iframe { width: 100%; height: 100%; border: 0; display: block; }
+  /* Видеоурок над текстом урока (10.11.2026): тот же плеер, под ним текст. */
+  #learn-body .learn-video + .k-text { margin-top: 14px; }
+  /* Низ - над панелью Telegram и полосой iPhone (07.10.2026: «нижняя
+     кнопка не видна» - подвал уходил под них), как у остальных экранов. */
+  #learn-foot { flex: 0 0 auto; direction: ltr;
+    padding: 0 16px max(16px, env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px)); }
+  #learn-dots { display: flex; gap: 5px; justify-content: center; margin: 0 0 10px; }
+  #learn-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--card-border); display: block; }
+  #learn-dots i.on { background: var(--ok); width: 16px; border-radius: 3px; }
+  #learn-buttons { display: flex; gap: 8px; max-width: 520px; width: 100%; margin: 0 auto; }
+  #learn-buttons button {
+    flex: 1; font: inherit; font-size: clamp(13px, 3.7vw, 15px); padding: 11px 10px; border-radius: 11px;
+    border: 1px solid var(--card-border); background: var(--card-bg); color: var(--muted);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #learn-buttons button.go {
+    flex: 2; background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 600;
+  }
+  #subs-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px 28px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  /* Тело - flex-столбец, а флекс-элементы по умолчанию СЖИМАЮТСЯ. Пока
+     список короткий, это незаметно; как только сдач становится много, блок
+     «нужно пересдать» ужимается - и у него overflow:hidden, который снимает
+     защиту min-height:auto, поэтому он схлопывался вплоть до одной красной
+     линии, унося с собой замечание устаза и кнопку «Разобрать» (жалоба
+     07.09.2026: «пометка устазовская на пересдачу вверху не видна»).
+     Правило одно на всех прямых детей: никто здесь не резиновый, высоту
+     задаёт содержимое, а прокручивается сам столбец. */
+  #subs-body > * { flex: 0 0 auto; }
+  .sub-row {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .sub-row .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .sub-row .place { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+  .sub-row .meta { font-size: 12.5px; color: var(--muted); }
+  /* Статус - закрашенная пилюля, а не цветной текст: состояние сдачи должно
+     считываться пятном (тот же принцип, что у бейджа в тренажёре). */
+  .sub-pill {
+    font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .sub-pill.wait {
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+    color: var(--marker-color);
+  }
+  .sub-pill.done { background: var(--accent-soft); color: var(--accent); }
+  .sub-pill.retake { background: var(--no-soft); color: var(--no); }
+  .sub-review {
+    font-size: 13px; color: var(--ink);
+    background: var(--accent-soft); border-radius: 9px; padding: 8px 10px;
+  }
+  .sub-review b { font-weight: 600; }
+  .sub-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sub-actions button {
+    flex: 1 1 auto; min-width: 120px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 9px 10px;
+    font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer;
+  }
+  .sub-actions button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  }
+  .sub-actions button:disabled { opacity: .5; cursor: default; }
+  /* Блок «нужно пересдать» - единственное на экране, что требует действия
+     (07.09.2026). Красная рамка здесь уместна: это и правда долг студента, в
+     отличие от «на проверке», который долг устаза. */
+  .subs-todo {
+    border: 1px solid var(--no); border-radius: 12px;
+    overflow: hidden; margin-bottom: 10px;
+  }
+  .subs-todo .hd {
+    background: color-mix(in srgb, var(--no) 12%, transparent);
+    color: var(--no); font-size: 12.5px; font-weight: 700; padding: 8px 11px;
+  }
+  .subs-todo .body { background: var(--card-bg); padding: 10px 11px; }
+  .subs-todo .body .sub-row { border: none; padding: 0; margin: 0; }
+  .subs-rev-go { margin-top: 10px; }
+  .subs-rev-go button {
+    width: 100%; padding: 11px; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+  }
+  .subs-todo-why {
+    font-size: 13px; line-height: 1.45; color: var(--muted);
+    margin: 0 0 10px; padding: 0 2px;
+  }
+  .subs-wall-note {
+    display: block; font-size: 12.5px; font-weight: 600;
+    color: var(--warn, #b45309); margin-top: 2px;
+  }
+  .subs-todo-hint {
+    font-size: 12px; color: var(--ink); background: var(--marker-soft, #f5edd8);
+    border-radius: 8px; padding: 7px 9px; margin-top: 8px;
+  }
+  .subs-quiet {
+    font-size: 12px; color: var(--muted); text-align: center;
+    padding: 8px; border: 1px dashed var(--card-border);
+    border-radius: 10px; margin-bottom: 10px;
+  }
+  .subs-empty { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; }
+
+  /* Кабинет устаза (03.09.2026) - тот же экранный каркас, что у #trainer
+     (топбар + прокручиваемое тело), список читается сверху вниз, не
+     центрирован - это не сообщение "пока пусто", а рабочий список. */
+  #ustaz {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(180deg, var(--dash-bg-start), var(--dash-bg-end));
+  }
+  #ustaz-topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    direction: ltr; flex: 0 0 auto;
+  }
+  #ustaz-topbar button {
+    background: none; border: none; color: var(--accent);
+    font-size: 14px; font-weight: 600; padding: 6px 4px; cursor: pointer;
+    font-family: inherit;
+  }
+  #ustaz-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px 28px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    direction: ltr;
+  }
+  .ustaz-empty { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; }
+  /* Зоны кабинета: "Ждут" - что делать сейчас, "Студенты" - кто как идёт
+     (04.09.2026, макет 01.09). Отдельная полоса над вкладками групп, чтобы
+     не путать два разных переключателя. */
+  .ustaz-zones {
+    display: flex; gap: 6px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 10px; padding: 3px;
+  }
+  .ustaz-zones button {
+    flex: 1 1 0; padding: 8px 6px; border: none; border-radius: 8px;
+    background: none; font: inherit; font-size: 13px; color: var(--muted);
+    cursor: pointer;
+  }
+  .ustaz-zones button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  /* Четвёртая зона «Повторения» есть не у всех устазов (16.09.2026), и с ней
+     подписи на 390px переносились в две строки - полоса росла вдвое. Сжимаем
+     только этот случай, у трёх кнопок всё остаётся как было. */
+  .ustaz-zones.four button { font-size: 11.5px; padding: 8px 2px; letter-spacing: -.2px; }
+  /* Фильтр ВНУТРИ зоны (07.09.2026): вкладок кабинета осталось три, а
+     «Проверено» отвечает на два разных вопроса - что вообще разобрано и
+     кому висит пересдача. Второй вопрос важнее, но четвёртой вкладкой он не
+     тянет: это не отдельное место, а срез того же списка. Отсюда и размер -
+     строка мельче и без рамки, чтобы не спорить с зонами. */
+  .ustaz-filter { display: flex; gap: 14px; padding: 2px 4px; }
+  .ustaz-filter button {
+    border: none; background: none; padding: 2px 0; cursor: pointer;
+    font: inherit; font-size: 12.5px; color: var(--muted);
+    border-bottom: 1.5px solid transparent;
+  }
+  .ustaz-filter button.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+  .sub-row.open { cursor: pointer; }
+  .sub-row .note { font-size: 12px; margin-top: 2px; }
+  .sub-row .note.wait { color: var(--no); }
+  .sub-row .note.answered { color: var(--ok); }
+  /* Месяц полосками: один столбик - один день, высота одна, цвет по числу
+     сданных заданий. Не график, а «видно с одного взгляда, где провалы». */
+  .stu-row {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 11px 13px;
+    display: flex; flex-direction: column; gap: 7px; cursor: pointer;
+  }
+  .stu-row .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .stu-row .name { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+  .stu-row .miss { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .stu-row .miss.near { color: var(--no); font-weight: 700; }
+  .stu-strip { display: flex; gap: 2px; align-items: flex-end; }
+  .stu-strip i {
+    flex: 1 1 0; height: 16px; border-radius: 2px;
+    background: var(--no-soft);
+  }
+  .stu-strip i.d1 { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .stu-strip i.d2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+  .stu-strip i.d3 { background: var(--accent); }
+  .stu-strip i.future { background: var(--card-border); opacity: .5; }
+  /* Сгоревший слот запаса (вариант В, 06.09.2026). Красный здесь уместен -
+     это и правда долг: потраченный пропуск назад не возвращается. Приглушён
+     до 42%, чтобы полоска запаса не кричала громче самих сдач. */
+  .stu-strip i.burn { background: color-mix(in srgb, var(--no) 42%, transparent); }
+  .subs-month-tap { font-size: 11px; color: var(--accent); text-align: center; margin-top: 3px; }
+  /* Правило подготовительной - НЕ мелким серым в общем ряду подписей
+     (06.09.2026, замечание пользователя: это важная заметка, её должно быть
+     видно). Акцентом на мягкой подложке, а не красным: это условие
+     прохождения, а не выговор. */
+  .subs-note {
+    font-size: 12.5px; line-height: 1.4; text-align: center;
+    color: var(--accent); background: var(--accent-soft);
+    border-radius: 9px; padding: 7px 10px; margin-top: 6px;
+  }
+  /* Баннер "нет связи" (06.09.2026). Внизу и поверх всего: он должен быть
+     виден на любом экране, где бы человека ни застал обрыв. */
+  #offline-bar {
+    position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 999;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 10px 12px;
+    box-shadow: 0 6px 20px rgba(30, 25, 10, 0.14);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 13px; color: var(--ink);
+  }
+  #offline-bar button {
+    flex: none; border: 0; border-radius: 9px; padding: 8px 13px;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
+  .stu-legend { font-size: 11.5px; color: var(--muted); text-align: center; }
+  /* Календарь одного студента - тот же, что потом увидит он сам. */
+  .stu-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .stu-cal .c {
+    aspect-ratio: 1; border-radius: 6px; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--no-soft); color: var(--ink);
+  }
+  .stu-cal .c.d1 { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .stu-cal .c.d2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+  .stu-cal .c.d3 { background: var(--accent); color: #fff; }
+  .stu-cal .c.empty { background: none; }
+  .stu-cal .c.future { background: var(--card-border); opacity: .45; }
+  /* Онлайн-урок (14.09.2026): точка под днём - под черточкой в полосе списка
+     и под числом в календаре месяца. Сами черточки не трогаем: они про сдачи
+     по заданиям, урок рядом, но отдельно (уточнение пользователя). */
+  .stu-strip.has-les { padding-bottom: 10px; }
+  .stu-strip i.les { position: relative; }
+  .stu-strip i.les::after {
+    content: ''; position: absolute; left: 50%; bottom: -9px;
+    width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .stu-cal .c.les { position: relative; }
+  .stu-cal .c.les::after {
+    content: ''; position: absolute; left: 50%; bottom: 5px;
+    width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .stu-cal .c.d3.les::after { background: #fff; }
+  .stu-cal .c.les.tap { cursor: pointer; }
+  /* Неполный день отвечает на тап (07.10.2026): тонкая обводка цветом
+     долга - «здесь есть что посмотреть», без крика. */
+  .stu-cal .c.part { cursor: pointer; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--no) 55%, transparent); }
+  /* Пауза «Цикл» (03.11.2026): пунктир акцентом - «не пропуск и не сдача»,
+     без слова на клетке. Тап - разбор дня с одной строкой «пауза». */
+  .stu-cal .c.pz { background: var(--card-bg); color: var(--accent); cursor: pointer; box-sizing: border-box;
+    border: 1.5px dashed color-mix(in srgb, var(--accent) 60%, transparent); }
+  .stu-strip i.pz { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  /* Карточка «Не могу сегодня» в «Работе с устазом» (03.11.2026) - той же
+     формы, что «Онлайн-урок»: редкое действие, на главный экран не выносим. */
+  #subs-absence .lesson-row { margin-top: 0; }
+  .lesson-row .abs-btns { display: flex; gap: 8px; flex: 0 0 auto; }
+  #abs-veil { position: fixed; inset: 0; background: rgba(20, 18, 10, .32); z-index: 900; display: none; }
+  #abs-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; display: none; direction: ltr;
+    max-width: 560px; margin: 0 auto; box-sizing: border-box;
+    background: var(--card-bg); color: var(--ink); border-radius: 22px 22px 0 0;
+    padding: 10px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 30px rgba(30, 25, 10, .12);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #abs-veil.on, #abs-sheet.on { display: block; }
+  #abs-sheet .grip { width: 38px; height: 4px; border-radius: 2px; background: var(--card-border); margin: 0 auto 14px; }
+  #abs-sheet h3 { margin: 0 0 2px; font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
+  #abs-sheet .sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  #abs-sheet textarea {
+    width: 100%; box-sizing: border-box; min-height: 84px; border-radius: 14px; resize: none;
+    border: 1px solid var(--card-border); padding: 12px 13px; font: inherit; font-size: 16px;
+    background: var(--dash-bg-end); color: var(--ink);
+  }
+  #abs-sheet .note { font-size: 13px; color: var(--muted); line-height: 1.4; margin: 10px 2px 16px; }
+  #abs-sheet ul { margin: 4px 0 18px; padding: 0; list-style: none; }
+  #abs-sheet li { position: relative; padding: 0 0 9px 20px; font-size: 14.5px; line-height: 1.4; }
+  #abs-sheet li::before { content: ''; position: absolute; left: 4px; top: 8px; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--accent); }
+  #abs-sheet .go { width: 100%; border: 0; border-radius: 15px; padding: 15px; font: inherit;
+    font-size: 16px; font-weight: 600; background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+  #abs-sheet .go:disabled { opacity: .6; }
+  #abs-sheet .cancel { display: block; width: 100%; text-align: center; margin-top: 10px; padding: 8px;
+    font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; cursor: pointer; }
+  .stu-day { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--card-bg, #fff);
+             border: 1px solid var(--card-border); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+  .stu-day .stu-day-head { font-weight: 600; margin-bottom: 2px; }
+  .stu-day .no { color: var(--no); }
+  .stu-day .trail { color: var(--muted); font-size: 11.5px; margin-top: 6px; line-height: 1.45; }
+  /* Строка «Онлайн-урок» у студента. Кнопка контурная: сплошной зелёный на
+     этом экране занят «Разбором устаза», отметка раз в неделю не должна
+     перетягивать внимание. */
+  .lesson-row {
+    display: flex; align-items: center; gap: 10px; direction: ltr;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 10px 12px; margin: 10px 0 12px;
+  }
+  .lesson-row .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .lesson-row b { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+  .lesson-row span { font-size: 12px; color: var(--muted); }
+  .lesson-row button {
+    flex: 0 0 auto; border-radius: 10px; padding: 9px 14px; font: inherit;
+    font-size: 13px; font-weight: 600; background: transparent; cursor: pointer;
+    color: var(--accent); border: 1px solid var(--accent);
+  }
+  .ustaz-row {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .ustaz-row .name {
+    font-size: 14.5px; font-weight: 600; color: var(--ink);
+    /* flex-start, а не center: у длинного имени в две строки метка иначе
+       повисает по середине столбиком - выравниваем по первой строке. */
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  }
+  .ustaz-row .meta { font-size: 12.5px; color: var(--muted); }
+  /* Откуда пришла сдача (06.09.2026, просьба пользователя). Из приложения -
+     есть лист со строчками и место: такую устаз открывает и разбирает по
+     словам, это заметно быстрее. Голосовым в группу - только звук, открывать
+     нечего. Разницу должно быть видно ДО тапа, иначе устаз тыкает наугад и
+     половина строк просто не отзывается. */
+  .sub-pill.app { background: var(--accent-soft); color: var(--accent); }
+  /* Нейтральный серый, НЕ красный: сдать голосовым в группу - не провинность,
+     так сдаёт пока большинство. Красное пятно в этом приложении означает долг
+     (счётчик на двери, просрочка), и вешать его на способ сдачи нельзя. */
+  .sub-pill.audio {
+    background: color-mix(in srgb, var(--muted) 14%, transparent);
+    color: var(--muted);
+  }
+  /* "Ждёт" краснеет само после суток (04.09.2026, макет 01.09): срочность
+     должна считываться пятном, а не вычитанием дат в уме. */
+  .ustaz-row .meta b.late { color: var(--no); font-weight: 600; }
+  /* Длина записи (14.09.2026, вариант В макета): справа от имени, без фона -
+     это не статус, а мера работы. Табличные цифры, чтобы столбик «1:48 /
+     0:52 / 2:15» не плясал по ширине. */
+  .sub-pill.dur {
+    padding: 0; background: transparent; color: var(--ink);
+    font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  /* Запись повторения короче, чем читается охват страниц (16.09.2026) -
+     устазу видно, кого слушать, не слушая всех. */
+  .sub-pill.short { background: #fde8e8; color: #b42318; }
+  /* Плеер записи повторения (16.09.2026). Запись идёт до двух часов, и
+     слушать её подряд устаз не станет - нужна полоса, по которой он прыгает
+     в любое место, и шаг в полминуты для точной сверки. */
+  .rev-player { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .rev-player .line { display: flex; align-items: center; gap: 10px; }
+  .rev-player .pp {
+    width: 40px; height: 40px; flex: none; border: none; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: 15px; cursor: pointer;
+  }
+  .rev-track { flex: 1; height: 6px; border-radius: 3px; background: var(--card-border); cursor: pointer;
+    position: relative; touch-action: none; }
+  /* Ползунок и широкая зона захвата (10.11.2026): полосу тянут пальцем, а не
+     тыкают в точку - см. audioSeekable. */
+  .rev-track::before { content: ''; position: absolute; left: 0; right: 0; top: -12px; bottom: -12px; }
+  .rev-fill { height: 100%; border-radius: 3px; background: var(--accent); width: 0; position: relative; }
+  .rev-fill::after { content: ''; position: absolute; right: -8px; top: 50%; width: 16px; height: 16px;
+    margin-top: -8px; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .rev-time {
+    font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+    min-width: 84px; text-align: right;
+  }
+  .rev-skips { display: flex; gap: 6px; }
+  .rev-skips button {
+    flex: 1 1 0; padding: 7px 4px; border: 1px solid var(--card-border);
+    background: var(--card-bg); border-radius: 8px; font: inherit; font-size: 12.5px;
+    color: var(--ink); cursor: pointer;
+  }
+  .rev-acts { display: flex; gap: 8px; margin-top: 2px; }
+  .rev-acts button {
+    flex: 1 1 0; padding: 9px 6px; border-radius: 9px; font: inherit;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .rev-acts .no { border: 1px solid #d9534f; background: #fde8e8; color: #b42318; }
+  .rev-acts .ok { border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+  .rev-done { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+  .ustaz-row.rev.playing { background: var(--tint, #eef3ff); }
+  /* Заголовок группы внутри списка - устаз ведёт несколько групп (у Умар
+     устаза их три), и "кто ждёт" без "где" читается плохо. */
+  .ustaz-group-title {
+    font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted);
+    margin: 6px 2px -2px;
+  }
+  /* Группы - ОДНА строка вкладок, а не список один под другим (04.09.2026,
+     вопрос пользователя: "я что должен вниз скроллить, пока не дойду до
+     другой группы?"). Показывается очередь ровно одной группы, переключение
+     тапом по вкладке. Полоса липкая: у устаза с тремя группами и у
+     супер-админа с восемнадцатью она нужна и на середине списка. */
+  /* Шапка кабинета: зоны и группы ОДНИМ липким блоком (04.09.2026).
+     Раньше липкой была только полоса групп, и со своим отрицательным верхним
+     отступом (он гасил падинг тела, пока она шла первой) она уезжала под
+     появившийся бар зон и срезалась - поймано пользователем на скриншоте.
+     Один блок отменяет саму возможность такого наложения.
+     Фон плотный: сквозь полупрозрачную полосу читались два слоя текста. */
+  .ustaz-head {
+    position: sticky; top: 0; z-index: 5;
+    margin: -14px -16px 6px; padding: 10px 16px 8px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .06);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  /* Выбор группы СПИСКОМ по тапу, а не полосой чипов (07.09.2026).
+     У супер-админа групп 17: полоса показывала 3-4, до дальней уходило
+     пять свайпов. Но хуже свайпов было то, что числа долгов есть только у
+     видимых чипов - пока листаешь, не знаешь, где скопилось. А скопилось
+     очень неравномерно (334 старых у одной группы против нуля у другой).
+     Список показывает все группы с числами разом. */
+  .ustaz-picker {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px; border-radius: 11px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent-soft);
+    color: var(--accent); font-size: 14px; font-weight: 600;
+  }
+  .ustaz-picker .caret { font-size: 10px; opacity: .75; }
+  /* Абсолютный, а не в потоке: иначе раскрытый список растягивал бы липкую
+     шапку на пол-экрана. .ustaz-head позиционирован (sticky), поэтому он и
+     есть точка отсчёта. */
+  .ustaz-groups {
+    display: none;
+    position: absolute; left: 16px; right: 16px; top: 100%;
+    z-index: 8; max-height: 60vh; overflow-y: auto;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; box-shadow: var(--shadow-md);
+  }
+  .ustaz-groups.open { display: block; }
+  .ustaz-groups .g {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 12px; font-size: 14px; color: var(--ink);
+    border-top: 1px solid var(--card-border); cursor: pointer;
+  }
+  .ustaz-groups .g:first-child { border-top: none; }
+  .ustaz-groups .g.on { background: var(--accent-soft); font-weight: 600; }
+  .ustaz-groups .g .t { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .ustaz-groups .g .t span {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* Своя группа - подписью, а не пунктиром: в списке рамку не видно. */
+  .ustaz-groups .g .mine {
+    flex: none; font-size: 10px; font-weight: 700; padding: 2px 6px;
+    border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  }
+  .ustaz-groups .hd {
+    font-size: 11px; color: var(--muted); font-weight: 600;
+    padding: 8px 12px 4px; letter-spacing: .04em;
+  }
+  /* Число непроверенных - КРАСНЫМ (04.09.2026, решение пользователя:
+     "чтобы устазы сразу видели"). Тот же язык, что и счётчик на двери:
+     красное пятно = долг. Ноль не красим - долга нет, красить нечего. */
+  .ustaz-groups .g .n {
+    flex: none; font-size: 13px; color: var(--no); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .ustaz-groups .g .n.zero { color: var(--muted); font-weight: 400; }
+  /* Хвост старше окна - приглушённой добавкой к красному числу, чтобы
+     "10 · 131" не читалось как 141 сегодняшних. */
+  .ustaz-groups .g .n small { color: var(--muted); font-weight: 400; }
+  /* Хвост старше окна - одна строка, разворачивается тапом. Прятать совсем
+     нельзя (там может лежать неразобранное), пугать сотней строк - тоже. */
+  .ustaz-older {
+    text-align: center; font-size: 13px; color: var(--accent);
+    padding: 10px; cursor: pointer;
+  }
+  /* Голосовые из группы одной строкой (13.09.2026). Пунктир и серый: это не
+     работа кабинета и не долг на двери, а напоминание, что в группе тоже
+     ждут. */
+  .ustaz-fold {
+    display: flex; align-items: center; gap: 10px; cursor: pointer; direction: ltr;
+    border: 1px dashed var(--card-border); border-radius: 12px;
+    padding: 11px 14px; color: var(--muted);
+  }
+  .ustaz-fold .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .ustaz-fold b { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+  .ustaz-fold span { font-size: 12px; }
+  .ustaz-fold .go { flex: 0 0 auto; color: var(--accent); font-size: 13px; font-weight: 600; }
+
+  /* Бейдж фидбека - закрашенная пилюля, не просто цветной текст (25.08 ->
+     29.08.2026, "высший класс дизайнера": верный/неверный ответ должен
+     считываться цветовым пятном, а не вчитыванием). */
+  .trainer-feedback {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 999px;
+  }
+  .trainer-feedback.ok { color: var(--ok); background: var(--ok-soft); }
+  .trainer-feedback.no { color: var(--no); background: var(--no-soft); }
+  /* Арабское слово внутри плашки - тем же шрифтом, что и карточка вопроса,
+     иначе оно рисуется системным и выглядит чужеродно. Крупнее окружающего
+     текста, но заметно мельче карточки (52px): плашка говорит о ПРОШЛОМ
+     слове, карточка - о текущем, их нельзя путать. unicode-bidi isolate -
+     чтобы RTL-слово не растаскивало пунктуацию строки вокруг себя. */
+  .trainer-feedback-ar {
+    font-family: 'Scheherazade New', serif;
+    font-size: 22px;
+    line-height: 1;
+    vertical-align: -2px;
+    direction: rtl;
+    unicode-bidi: isolate;
+  }
+  .trainer-hint { font-size: 12px; color: var(--muted); }
+
+  /* Карточка со словом - приподнята над фоном тенью, крупный шрифт для
+     чтения на расстоянии вытянутой руки. */
+  .trainer-word-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-md);
+    padding: 22px 24px;
+    width: 100%;
+    max-width: 420px;
+    margin: 4px 0;
+  }
+  .trainer-word {
+    font-family: 'Scheherazade New', serif;
+    direction: rtl;
+    font-size: 52px;
+    line-height: 1.3;
+    color: var(--ink);
+  }
+  /* Строка мусхафа со словом вопроса (22.09.2026). Без карточки-подложки:
+     строка и есть вопрос, рамка вокруг неё только сузила бы её. Крупно
+     (~30px), переносится в два ряда - читать важнее, чем узнать вид листа.
+     Слово - зелёной подложкой, как в тренажёре нахва. */
+  .trainer-ctx { width: 100%; max-width: 520px; text-align: center; margin: 6px 0 4px; }
+  .trainer-line {
+    font-family: 'Scheherazade New', serif; direction: rtl;
+    font-size: 30px; line-height: 1.95; color: var(--ink);
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .28em;
+  }
+  /* Слово строки глифом мусхафа (23.09.2026) - см. trainerLineFont. */
+  @font-palette-values --TrV4Light { font-family: 'trainer-v4'; base-palette: 0; }
+  @font-palette-values --TrV4Dark { font-family: 'trainer-v4'; base-palette: 1; }
+  .trainer-line .tl-v4 { font-family: 'trainer-v4', 'Scheherazade New', serif; font-palette: --TrV4Light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
+  }
+  :root[data-theme="dark"] .trainer-line .tl-v4 { font-palette: --TrV4Dark; }
+  /* Строка дня на «Сегодня» глифами мусхафа (11.11.2026) - см. dashLineFont.
+     Семейство своё ('today-v4'), чтобы не сбить лист в мусхафе и тренажёр.
+     Вёрстка как у .mushaf-line: flex + space-between, одна строка, кегль
+     подгоняется под ширину (dashFitLines). */
+  @font-palette-values --TdV4Light { font-family: 'today-v4'; base-palette: 0; }
+  @font-palette-values --TdV4Dark { font-family: 'today-v4'; base-palette: 1; }
+  #dash-hero .h-line.v4line { display: flex; flex-wrap: nowrap; justify-content: space-between;
+    align-items: baseline; white-space: nowrap; overflow: hidden; line-height: 2; }
+  #dash-hero .h-line.v4line .td-v4 { font-family: 'today-v4', 'Scheherazade New', serif; font-palette: --TdV4Light; }
+  #dash-hero .h-line.v4tail { justify-content: flex-start; gap: .25em; margin-top: 4px; padding-top: 4px; padding-bottom: 4px;
+    background: transparent; opacity: .55; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
+  }
+  :root[data-theme="dark"] #dash-hero .h-line.v4line .td-v4 { font-palette: --TdV4Dark; }
+  .trainer-line .tl-w.on {
+    background: var(--ok-soft); box-shadow: 0 0 0 2px var(--ok);
+    border-radius: 8px; padding: 0 .18em;
+  }
+  /* Номер аята - кружком, а не орнаментными скобками ﴾﴿: вынутые из
+     мусхафа в rtl-строку, они зеркалились и читались «)١٠(» (снимок). */
+  .trainer-line .tl-ae {
+    color: var(--muted); font-size: .5em; align-self: center;
+    border: 1px solid var(--card-border); border-radius: 999px;
+    min-width: 1.9em; padding: 0 .35em; line-height: 1.9; text-align: center;
+  }
+  .trainer-range { font-size: 12.5px; color: var(--muted); align-self: center; }
+
+  /* Полоса прогресса "Общий вес" - визуальный эквивалент score10/10,
+     не только цифра в тексте. */
+  .trainer-score-bar {
+    width: 100%;
+    max-width: 300px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--card-border);
+    overflow: hidden;
+    margin: 2px 0 4px;
+  }
+  .trainer-score-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+
+  .trainer-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    max-width: 420px;
+  }
+  .trainer-opt {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.1s ease, border-color 0.1s ease;
+  }
+  .trainer-opt:active { transform: scale(0.96); border-color: var(--accent); }
+
+  .trainer-pagebar, .trainer-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .trainer-pagebar button, .trainer-actions button, .trainer-page-input button {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.1s ease;
+  }
+  .trainer-pagebar button:active, .trainer-actions button:active, .trainer-page-input button:active {
+    transform: scale(0.96);
+  }
+  /* "Закончить" - единственное закрашенное акцентом действие на экране
+     (primary), всё остальное - вторично (outline-карточки) - иерархия
+     действий, а не десяток одинаково громких кнопок. */
+  #tr-end, #tp-submit {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  .trainer-page-input {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .trainer-page-input input {
+    width: 80px;
+    font-size: 15px;
+    text-align: center;
+    padding: 9px 6px;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    color: var(--ink);
+    font-family: inherit;
+  }
+  .trainer-division {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent);
+    margin-top: 10px;
+    align-self: flex-start;
+  }
+  .trainer-lb-row {
+    width: 100%;
+    font-size: 13px;
+    color: var(--ink);
+    align-self: flex-start;
+    padding: 8px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+  }
+  .trainer-lb-row.you { font-weight: 700; border-color: var(--accent); background: var(--accent-soft); }
+  /* Своя строка под первой семёркой (28.09.2026): между ними «…». */
+  .trainer-lb-gap { align-self: center; color: var(--muted); line-height: 1; }
+  /* Закладка тренажёра разошлась с местом заучивания (28.09.2026). */
+  .trainer-hint {
+    font-size: 12.5px; color: var(--muted); text-align: center; align-self: center;
+    display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; align-items: center;
+  }
+  .trainer-hint button {
+    font-size: 12.5px; padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--accent); background: transparent; color: var(--accent);
+  }
+

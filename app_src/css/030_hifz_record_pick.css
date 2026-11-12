@@ -1,0 +1,402 @@
+  /* ─── Сдача 40+40: запись прямо в приложении (02.09.2026) ────────────
+     Порядок из макета: записал → ПРОСЛУШАЛ СЕБЯ → отправил / перезаписал /
+     удалил. Пока не отправил — сдачи не существует, поэтому «Удалить»
+     просто закрывает окно, ничего не спрашивая на сервере. */
+  /* Нижняя шторка, а НЕ модалка на весь экран (06.09.2026, жалоба: панель
+     записи закрывала нижние строки, и прочитать их было нельзя). Раньше
+     здесь были inset:0 и затемнение — то есть прозрачная сверху, но
+     перехватывающая все касания плёнка поверх страницы: мусхаф под ней не
+     скроллился, хотя #page-wrap скроллиться умеет. Студент при этом должен
+     ЧИТАТЬ страницу вслух — закрывать её модалкой прямо во время чтения
+     противоречит самой задаче.
+
+     Теперь панель занимает только низ, страница остаётся живой, а место
+     под шторкой ей добирает padding-bottom (см. hifzRecPad). */
+  #hifz-rec {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    justify-content: center; direction: ltr;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  #hifz-rec.visible { display: flex; }
+  #hifz-rec .card {
+    width: 100%; max-width: 520px; box-sizing: border-box;
+    background: var(--chrome-bg); border-radius: 16px 16px 0 0;
+    padding: 16px 16px 22px; text-align: center;
+    /* Затемнения больше нет, поэтому границу шторки держит тень - иначе
+       она сливалась бы с бумагой мусхафа. */
+    box-shadow: 0 -6px 24px rgba(30, 25, 10, .18);
+  }
+  #hifz-rec .card { position: relative; }
+  #hifz-rec-close {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none; color: var(--muted);
+    font-size: 16px; line-height: 1; padding: 4px 6px; cursor: pointer;
+  }
+  #hifz-rec .place { font-size: 12.5px; color: var(--muted); }
+  #hifz-rec .timer {
+    font-size: 30px; font-weight: 600; color: var(--ink);
+    margin: 10px 0 2px; font-variant-numeric: tabular-nums;
+  }
+  #hifz-rec .timer.rec { color: #c0392b; }
+  #hifz-rec .hint { font-size: 12px; color: var(--muted); min-height: 16px; }
+  #hifz-rec audio { width: 100%; margin: 12px 0 4px; }
+  #hifz-rec .actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+  #hifz-rec .actions button {
+    flex: 1; padding: 11px 8px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 600 13px inherit;
+  }
+  #hifz-rec .actions button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  /* «Стоп» НЕ зелёная (13.09.2026). Зелёная главная кнопка в приложении
+     значит «хорошее итоговое действие» - сдать, отправить. Остановка записи
+     таким действием не является, а стояла ровно на месте «Отправить» и того
+     же цвета: палец, летящий вторым тапом, попадал в отправку (жалоба
+     студента 2б, 12.09: «3 записи, которые не собирался отправлять, ушли»). */
+  #hifz-rec .actions button.stop {
+    background: var(--no-soft); border-color: var(--no); color: var(--no);
+  }
+  #hifz-rec .actions button:disabled { opacity: .45; cursor: default; }
+
+  /* Захват прогресса 40+40 (03.09.2026) - см. #hifz-rec .actions выше,
+     та же палитра кнопок, отдельный блок ниже записи. */
+  #hifz-progress { display: none; text-align: left; margin-top: 6px; }
+  /* Две строки методики - главное в панели, всё остальное тихо рядом. */
+  #hifz-progress .hp-rows { margin: 2px 0 10px; }
+  #hifz-progress .hp-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 3px 0; color: var(--muted); font-size: 13px;
+  }
+  #hifz-progress .hp-row .val { font-variant-numeric: tabular-nums; }
+  #hifz-progress .hp-row .val b { font-size: 19px; font-weight: 700; color: var(--ink); }
+  #hifz-progress .hp-row .val i { font-style: normal; font-size: 13px; }
+  /* Строка «глядя» гаснет, когда её сорок набраны: работа идёт по памяти. */
+  #hifz-progress .hp-row.done .val b { color: var(--ok); }
+  #hifz-progress .hp-row.idle { opacity: .45; }
+  /* Полоса на все 80 с засечкой на сороковом: видно, где кончается «глядя». */
+  #hifz-progress .hp-bar {
+    position: relative; height: 6px; border-radius: 3px;
+    background: var(--chrome-border); overflow: hidden; margin-bottom: 12px;
+  }
+  #hifz-progress .hp-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  #hifz-progress .hp-bar u {
+    position: absolute; left: 50%; top: 0; width: 1px; height: 100%;
+    background: var(--bg); opacity: .9;
+  }
+  #hifz-progress .hp-adjust {
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    margin-bottom: 8px;
+  }
+  #hifz-progress .hp-adjust b {
+    min-width: 46px; text-align: center; font-size: 17px; font-weight: 700;
+    color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  #hifz-progress .hp-adjust button {
+    width: 42px; height: 42px; border-radius: 21px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 600 19px inherit; line-height: 1;
+  }
+  #hifz-progress .hp-adjust button:disabled { opacity: .35; cursor: default; }
+  #hifz-progress .hp-chips { display: flex; gap: 8px; }
+  #hifz-progress .hp-own-row { display: flex; gap: 6px; flex-direction: column; }
+  #hifz-progress .hp-hint { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+  #hifz-progress .hp-chips button, #hifz-progress .hp-own-row button {
+    flex: 1; padding: 11px 8px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 600 13px inherit; font-variant-numeric: tabular-nums;
+  }
+  #hifz-progress .hp-own-row input {
+    flex: 1; border: 1px solid var(--accent); border-radius: 10px;
+    padding: 9px 10px; font: 13px inherit; color: var(--ink); background: var(--bg);
+  }
+  #hifz-progress .hp-own-row input:focus { outline: none; }
+  #hifz-progress .hp-save {
+    width: 100%; margin-top: 12px; padding: 11px 0; border: none; border-radius: 10px;
+    cursor: pointer; background: var(--accent); color: var(--accent-ink); font: 600 13.5px inherit;
+  }
+  #hifz-progress .hp-save.closing { background: var(--ok); }
+
+  /* Слово с ЧУЖОГО листа: рисуется настоящим арабским юникодом
+     (t.html) обычным шрифтом — глифовые коды V4 чужой страницы наш
+     шрифт прочитает как другие буквы (02.09.2026). */
+  .tail-plain { font-family: 'Scheherazade New', serif; }
+
+  #hifz-foot {
+    align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px 11px; border-top: 1px solid var(--chrome-border);
+  }
+  #hifz-foot button {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 9px 12px; font: inherit; font-size: 12.5px;
+    color: var(--ink); cursor: pointer;
+  }
+  #hifz-foot button.primary {
+    background: var(--accent); border-color: var(--accent);
+    color: var(--accent-ink); font-weight: 600;
+  }
+  #hifz-foot button:disabled { opacity: .4; cursor: default; }
+  /* Без «Крупно» (22.09.2026) место в полосе отдано счётчику: по нему
+     тапают вслепую, чем шире мишень, тем вернее. */
+  #app:not(.land) #hifz-count { flex: 1 1 auto; }
+  /* Цифра под размер мишени: в широкой коробке 17px терялись. */
+  #app:not(.land) #hifz-count .c-n b { font-size: 23px; }
+
+  /* Прослушать: компактная круглая кнопка (не текстовая, как соседи) —
+     иконка сама объясняет назначение, а вкл/выкл читается по заливке,
+     как у остальных toggle-кнопок приложения (#hifz-units button.on). */
+  .hifz-listen-btn {
+    flex: 0 0 auto; width: 38px; height: 38px; padding: 0 !important;
+    border-radius: 50%; font-size: 16px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .hifz-listen-btn.on {
+    background: var(--accent) !important; border-color: var(--accent) !important;
+    color: var(--accent-ink) !important;
+    animation: hifzListenPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes hifzListenPulse {
+    0%, 100% { opacity: 1; } 50% { opacity: .6; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hifz-listen-btn.on { animation: none; }
+  }
+
+  /* Выделение строчки. Подложка на всю ширину — это и есть привычное
+     «выделил строку»; box-shadow добавляет ей воздуха, не сдвигая вёрстку. */
+  .mushaf-line.hifz-lit {
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--marker-color) 16%, transparent);
+    border-radius: 4px;
+  }
+  .mushaf-line.hifz-dim { opacity: .42; }
+  /* Переходные слова — та же подложка вполсилы, уже на следующей строчке:
+     видно, докуда дочитать, и видно, что это не твоя строка. */
+  .mushaf-line .hifz-tail {
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+    border-radius: 3px;
+  }
+  .mushaf-line.hifz-has-tail { opacity: 1; }
+  .mushaf-line.hifz-has-tail > span:not(.hifz-tail) { opacity: .42; }
+  /* Этап 2 стоя (22.09.2026, решение пользователя): своя половина и
+     переход, чужая - силуэтом. Не display: половина остаётся на СВОЁМ месте
+     листа - хафиз помнит, что вторая половина внизу. Не пустота
+     (visibility: hidden, первый заход): на снимке пустые полэкрана
+     читались как «лист не догрузился», а шрифт стоя всё равно держит
+     ширина - спрятанная половина места буквам не давала. Силуэт держит
+     вид листа, а прочесть его нельзя. Проверку устаза и разбор не трогаем. */
+  #app.hifz.hifz-s2:not(.land):not(.hifz-pick):not(.review):not(.look) #ayah-text > .hifz-off {
+    opacity: .12;
+  }
+  /* Переход, когда единица кончилась последней строкой листа: слова с
+     первой строки СЛЕДУЮЩЕГО листа отдельной строкой под листом (22.09).
+     Раньше его было видно только в «Крупно» и только на этапе 1. Чужой
+     лист - свой шрифт, поэтому обычный Scheherazade (.tail-plain). */
+  /* direction: rtl своя - #ayah-text может стоять в ltr, и тогда начало
+     следующей строки уезжало влево (поймано снимком). */
+  .hifz-xtail {
+    direction: rtl; display: flex; gap: .3em; justify-content: flex-start;
+    margin-top: .25em; padding-top: .2em;
+    border-top: 1px dashed var(--chrome-border);
+  }
+  /* Переход под целым листом стоя (этап 3, последняя строка) - лист и так
+     во весь экран. Строки чуть плотнее, переход ниже ростом: иначе он
+     уходил за низ и был виден наполовину (снимок 22.09.2026). */
+  #app.hifz.hifz-xt:not(.land) #ayah-text { line-height: 1.86; }
+  #app.hifz.hifz-xt:not(.land) .hifz-xtail { line-height: 1.5; margin-top: .1em; }
+  .hifz-xtail > span {
+    opacity: .5; border-radius: 3px;
+    background: color-mix(in srgb, var(--marker-color) 16%, transparent);
+  }
+  /* Выбор строчки: спрашивается один раз, поэтому подсказка крупная. */
+  #app.hifz-pick .mushaf-line { cursor: pointer; border-radius: 4px; }
+  #app.hifz-pick.pick-line .mushaf-line:active {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  /* Выбор ПОЛОВИНЫ листа (02.09.2026): страница физически превращается в
+     два блока — студенту не нужно объяснять словами, куда тапать, и он
+     заодно видит, где вообще проходит граница половины (нигде больше она
+     не показана). Подсветка групповая, поэтому :active на отдельной
+     строке здесь выключен — он подсказывал бы построчную точность,
+     которой на этом шаге нет. */
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-a,
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-b {
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-b {
+    background: color-mix(in srgb, var(--marker-color) 9%, transparent);
+  }
+  /* Зазор между половинами — сама граница, без отдельной линии. */
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-first-b { margin-top: 10px; }
+  #app.hifz-pick.pick-half .mushaf-line.pick-half-last-a {
+    padding-bottom: 4px; border-bottom: 1px dashed var(--chrome-border);
+  }
+
+  /* Выбор единицы (строка / половина / страница) живёт в нижней панели и
+     только на время выбора: в обычном режиме там [Крупно] [Сдать], и обе
+     всё равно были бы выключены, пока идёт выбор. */
+  #hifz-units { display: none; gap: 8px; flex: 1 1 auto; }
+  #app.hifz-pick #hifz-units { display: flex; }
+  #app.hifz-pick #hifz-submit { display: none; }
+  /* Плашка «Место не изменено» после ✕ посреди выбора (13.09.2026). */
+  #hifz-note {
+    position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 8px);
+    /* Своя ширина по тексту, а не «сколько осталось от середины экрана»:
+       иначе плашка сжималась в узкий столбик в пять строк (22.09.2026). */
+    width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box; text-align: center;
+    padding: 9px 14px; border-radius: 12px; background: var(--ink); color: var(--card-bg);
+    font: 500 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60;
+  }
+  #hifz-note.visible { opacity: 1; transform: translate(-50%, 0); }
+  #hifz-note small { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 400; opacity: .75; }
+  #hifz-units button {
+    flex: 1; padding: 9px 6px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--chrome-border); background: transparent;
+    color: var(--ink); font: 500 12.5px inherit;
+  }
+  #hifz-units button.on {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+    font-weight: 600;
+  }
+
+  /* «Крупно» — не основной экран, а кнопка для тех, кому мелко. */
+  #hifz-big {
+    position: fixed; inset: 0; z-index: 55;
+    background: linear-gradient(180deg, var(--mushaf-bg-start), var(--mushaf-bg-end));
+    display: none; flex-direction: column;
+  }
+  #hifz-big.visible { display: flex; }
+  #hifz-big .big-inner {
+    flex: 1 1 auto; min-height: 0; display: flex; align-items: center;
+    justify-content: center; padding: 10px 14px; direction: rtl;
+  }
+  #hifz-big .big-words {
+    display: flex; flex-wrap: wrap; gap: 10px 4px;
+    justify-content: center; align-items: baseline; line-height: 1.9;
+  }
+  #hifz-big .big-words .hifz-tail { opacity: .45; background: none; }
+
+  .view {
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .view.active { display: flex; }
+
+  #page-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    /* Боковой padding 8px, не 14px (30.08.2026): на телефоне каждые 6px по
+       краям - это ~3% ширины колонки, а значит и ~3% размера шрифта. */
+    padding: 6px 8px;
+    overflow-y: auto;
+    /* Вбок страница не ездит НИКОГДА (30.08.2026, баг с iPhone: при быстром
+       свайпе страница "уходила" вправо/влево целиком и застревала; на
+       Android не воспроизводился).
+       Причина: строки мусхафа идут nowrap, и в момент замера clampFontToFit
+       временно ставит 40px - строки заведомо шире экрана, появляется
+       горизонтальный скролл. На iOS он ещё и резиновый (rubber-band), плюс
+       свайп от края перехватывает нативная навигация "назад".
+       overflow-x: hidden убирает сам скролл, overscroll-behavior-x гасит
+       резину и увод в историю, touch-action: pan-y отдаёт браузеру только
+       вертикальный жест - горизонтальный остаётся целиком нашему
+       обработчику свайпа страниц (он читает координаты в touchstart/
+       touchend и в preventDefault не нуждается, слушатели passive).
+       На scrollWidth в clampFontToFit это не влияет - он меряется у самой
+       .mushaf-line и от overflow родителя не зависит. */
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
+    /* Перемер кегля (замер при 40px, потом настоящий) меняет высоту всего
+       листа; «якорь прокрутки» браузера при этом сам двигал место чтения.
+       Место держим сами - см. mushafScrollShare (21.09.2026). */
+    overflow-anchor: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Текст Корана не выделяется (22.09.2026, пользователь с телефона): в
+     Chrome на Android касание по слову выделяло его и открывало панель
+     «найти в Google» (Touch to Search) поверх нашего перевода. Без
+     выделения её нет, а тап - перевод, двойной - «Мои слова» - работают как
+     были. -webkit-touch-callout - то же меню айфона на долгое нажатие.
+     Цена - слово из мусхафа не скопировать, в чтении это не нужно.
+     24.09.2026: панель всё ещё «иногда» вылезала - касание попадало в
+     окошко перевода слова, список слов или смысловой перевод аятов, где
+     выделение оставалось. Закрыты и они.
+     25.09.2026: и снова «иногда», лёжа - закрывали по одному месту, панель
+     находила следующее (строка страниц в конце листа, шапка, подписи).
+     Теперь весь экран мусхафа (#app) без выделения, кроме полей ввода.
+     05.10.2026: панель вылезла в тренажёре слов (пользователь; у Нурлана
+     из G-8 тап по верному варианту «не шёл» - Chrome забирал касание под
+     выделение). Тренажёры, дашборд, лента и остальные экраны лежат вне
+     #app - закрываем всё приложение разом, по одному месту больше не
+     догоняем. */
+  body, #ayah-text, #hifz-big-words, .trainer-line, .trainer-word,
+  #word-popup, .word-row, #meaning-list {
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text; user-select: text;
+  }
+  #ayah-text {
+    direction: rtl;
+    line-height: 2.0;
+    width: 100%;
+    /* Колонка чтения книжной ширины - без этого на широком экране (десктоп,
+     * планшет, Telegram Desktop) justify растягивает 7-8 книжных слов на
+     * всю ширину монитора с уродливыми огромными пробелами (поймано
+     * пользователем 27.08.2026, смотрел с компьютера - подтвердил, что это
+     * не артефакт моего теста). На настоящем узком телефоне (< 520px)
+     * max-width вообще не срабатывает - там и так уже уже. */
+    max-width: 520px;
+    margin: 0 auto;
+  }
+  .mushaf-line {
+    /* Каждая строка мусхафа - СВОЙ <div> (настоящая построчная вёрстка
+     * QUL/King Fahd Complex, 27.08.2026). Flex + justify-content:
+     * space-between, НЕ text-align: justify (28.08.2026, реальный баг -
+     * левый край "гулял", разной длины на разных строках). Причина: у
+     * V4-глифов (см. .v4-word) между словами нет обычного пробельного
+     * символа - это отдельные PUA-глифы, конкатенированные впритык
+     * (собственные интервалы уже зашиты в сам глиф) - тексту-выравниванию
+     * банально нечего растягивать. Flex распределяет свободное
+     * пространство между словами-элементами напрямую, не полагаясь на
+     * пробелы в тексте - работает одинаково что для v4-слов, что для
+     * отката на обычный юникод-текст (см. renderPage). */
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  /* Страховка от сжатия слов при переполнении строки (30.08.2026).
+     ВЫИГРЫША НЕ ДАЁТ - проверено прямым замером: scrollWidth одинаков и с
+     flex: 1 1 auto, и с flex: 0 0 auto, потому что у flex-элемента
+     min-width: auto, а для nowrap-текста это его полная ширина, сжаться он
+     физически не может. Оставлено явно, чтобы замер в clampFontToFit() не
+     зависел от этой неочевидной детали. */
+  .mushaf-line > span { flex: 0 0 auto; }
+  /* Только на время замера (см. clampFontToFit): снимает растягивание,
+     чтобы scrollWidth строки дал настоящую сумму ширин слов. Без этого у
+     влезающей страницы scrollWidth просто равен clientWidth. */
+  #ayah-text.measuring .mushaf-line { justify-content: flex-start; }
+  .surah-banner {
+    display: block;
+    text-align: center;
+    font-size: 0.7em;
+    color: var(--marker-color);
+    margin: 0.3em 0 0.5em;
+    padding-bottom: 0.15em;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .bismillah {
+    display: block;
+    text-align: center;
+    margin: 0 0 0.4em;
+  }
+

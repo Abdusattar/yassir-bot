@@ -1,0 +1,165 @@
+  /* ─── Режим заучивания 40+40 (01.09.2026) ──────────────────────────
+     Порядок повторяет привычку студентов (см. materials/7f.jpeg, стороннее
+     приложение, которым они пользуются сейчас): ОДИН ТАП — строчка выделена
+     подложкой на всю ширину, переход подсвечен вполсилы уже на следующей
+     строке, дальше повторы, дальше отправка. Всё это происходит НА САМОЙ
+     СТРАНИЦЕ, а не на отдельном экране — иначе ломается привычка.
+
+     Текст не перекрашиваем: у V4 цвета таджвида зашиты в шрифт (COLR/CPAL),
+     CSS их не перебьёт, да и незачем — таджвида в том приложении нет вовсе.
+     Наш эквивалент выделения: подложка плюс мягкое приглушение остального.
+     Приглушение именно мягкое (0.42): страница должна остаться страницей,
+     студент привык видеть весь лист. */
+  /* !important обязателен: switchTab ставит #page-nav/#tabbar инлайновый
+     display, а инлайн бьёт обычное правило. */
+  #app.hifz #page-nav { display: none !important; }
+  /* Исключение — «поправить» (13.09.2026, просьба пользователя). В обычном
+     заучивании страница идёт за указателем, уходить с неё незачем и нельзя
+     (см. pageTurnBlocked). А когда человек ставит место заново, перескок
+     нужен: его строка может быть в тридцати листах отсюда, и тридцать
+     свайпов вместо ввода номера страницы — это не выбор, а наказание. */
+  #app.hifz.hifz-pick #page-nav { display: flex !important; }
+  /* Топбар (← Дашборд, название суры, 📖/🔁) тоже прячем (02.09.2026,
+     пожелание пользователя): выход и так есть через ✕ в #hifz-head, а
+     навигация по сурам во время заучивания не нужна. Без этого над текстом
+     стояло три бара подряд и место мусхафа заметно суживалось. */
+  #app.hifz #topbar { display: none; }
+  #app.hifz #hifz-head,
+  #app.hifz #hifz-foot { display: flex; }
+
+  #hifz-head, #hifz-foot {
+    display: none;
+    flex: 0 0 auto;
+    background: var(--chrome-bg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* direction: ltr обязателен — контейнеры внутри #app, который наследует
+       dir="rtl" для арабского. Правило от 30.08.2026: любой элемент с
+       направленными символами (‹ › ✕) в rtl-контейнере получает свой ltr,
+       иначе и порядок, и сами глифы переворачиваются. */
+    direction: ltr;
+  }
+  #hifz-head {
+    align-items: center; justify-content: space-between;
+    padding: 7px 12px; border-bottom: 1px solid var(--chrome-border);
+  }
+  /* Шапка заучивания в одну строку (11.09.2026, просьба пользователя):
+     двумя строками она отъедала место у мусхафа, а этап умещается тут же
+     коротким словом. */
+  #hifz-head .where {
+    text-align: right; line-height: 1.3;
+    display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  #hifz-head .where b { display: inline; }
+  #hifz-head .where small::before { content: '· '; }
+
+  /* Счётчик 40+40 у кнопки Хусари. */
+  #hifz-count, #big-count {
+    flex: 0 0 auto; display: none; flex-direction: column; align-items: center;
+    cursor: pointer; direction: ltr; font: inherit;
+    border: 1px solid var(--accent); background: var(--accent-soft);
+    border-radius: 10px; padding: 4px 11px 5px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #hifz-count.on, #big-count.on { display: flex; }
+  #hifz-count .c-cap, #big-count .c-cap {
+    font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; line-height: 1.4;
+  }
+  #hifz-count .c-n, #big-count .c-n {
+    font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1;
+  }
+  #hifz-count .c-n b { font-size: 17px; font-weight: 700; }
+  #hifz-count .c-n i, #big-count .c-n i {
+    font-style: normal; font-size: 10.5px; color: var(--muted);
+  }
+  /* В «Крупно» мишень во всю ширину и заметно крупнее: её тапают вслепую,
+     не отрывая глаз от строки. */
+  #big-count {
+    margin: 0 14px 10px; padding: 13px 16px 11px; border-radius: 18px;
+    align-items: center;
+  }
+  #big-count .c-n b { font-size: 44px; font-weight: 700; line-height: 1.02; }
+  #big-count .c-n i { font-size: 14px; }
+  #big-count .c-cap { font-size: 11px; letter-spacing: .12em; }
+  /* Полоса всей работы (0-80) в основании мишени. Она отвечает на вопрос
+     «сколько всего осталось», не требуя читать второе число, и объясняет
+     сброс цифры на сороковом повторе: цифра пошла заново, а полоса
+     продолжила расти. */
+  /* align-self: stretch обязателен: мишень - flex-колонка с
+     align-items:center, и без него полоса получает ширину по содержимому,
+     то есть ноль (поймано скриншотом 11.09.2026 - ширина ставилась в 45%,
+     а на экране полоса оставалась пустой). */
+  #hifz-count .c-bar, #big-count .c-bar {
+    display: block; align-self: stretch; border-radius: 3px;
+    /* Подложка своя, не --card-border: на светлой мишени он почти сливается
+       с фоном, и первые повторы не читались вовсе (11.09.2026). */
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    overflow: hidden;
+  }
+  #hifz-count .c-bar { height: 4px; margin-top: 4px; }
+  #big-count .c-bar { height: 6px; margin-top: 9px; }
+  #hifz-count .c-bar i, #big-count .c-bar i {
+    display: block; height: 100%; background: var(--accent);
+    transition: width .18s ease-out;
+  }
+  #hifz-count.second .c-bar i, #big-count.second .c-bar i { background: var(--ok); }
+  /* Второй этап другим цветом: сорок «по памяти» — другая работа, и сразу
+     видно, что первые сорок позади. */
+  #hifz-count.second, #big-count.second {
+    border-color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent);
+  }
+  #hifz-count.second .c-cap, #big-count.second .c-cap { color: var(--ok); }
+  /* Набрано всё — мишень гаснет: дальше не считать, а сдавать. */
+  #hifz-count.full, #big-count.full { opacity: .5; }
+  /* Отклик на тап: цифра коротко подпрыгивает — единственный ответ, который
+     видно, не отрывая глаз от строки. */
+  #hifz-count.hit .c-n b, #big-count.hit .c-n b { animation: countHit .22s ease-out; }
+  @keyframes countHit { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) {
+    #hifz-count.hit .c-n b, #big-count.hit .c-n b { animation: none; }
+  }
+  #hifz-head .where b { display: block; font-size: 12.5px; color: var(--ink); font-weight: 600; }
+  #hifz-head .where small { font-size: 11px; color: var(--muted); }
+  #hifz-head .where .fix {
+    font-weight: 500; font-size: 11px; color: var(--accent);
+    border-bottom: 1px dashed var(--accent); margin-left: 5px; cursor: pointer;
+  }
+  #hifz-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 15px; line-height: 1; cursor: pointer; padding: 4px 6px;
+    font-family: inherit;
+  }
+  /* Подписанный возврат виднее крестика и говорит, КУДА уводит. */
+  #hifz-close.back {
+    color: var(--accent); font-size: 13.5px; font-weight: 600;
+    white-space: nowrap;
+  }
+  /* Общее правило навигации (09.09.2026): «← Откуда» слева вверху,
+     ✕ справа вверху, низ — только действия. В разборе #hifz-close и ЕСТЬ
+     возврат (класс .back) — он остаётся слева; в режиме заучивания это
+     настоящее закрытие режима, оно уезжает вправо, а место читается
+     слева (класс .closing ставит hifzClose(), см. hifzHead). */
+  #hifz-head.closing #hifz-close { order: 2; }
+  #hifz-head.closing .where { text-align: left; }
+
+  /* Один вид у всех подписанных возвратов приложения. */
+  .nav-back {
+    background: none; border: none; color: var(--accent);
+    font: 600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 0; cursor: pointer; white-space: nowrap;
+  }
+  /* Липкая шапка кабинета - flex-колонка, кнопка иначе растянулась бы на
+     всю ширину и её текст встал бы по центру (09.09.2026, поймано
+     скриншотом): возврат всегда прижат влево. */
+  .ustaz-head > .nav-back { align-self: flex-start; }
+  /* Шапка «Крупно»: слева возврат, следом место на листе. */
+  #hifz-big-head {
+    display: flex; align-items: center; gap: 10px; direction: ltr;
+    padding: 10px 14px; border-bottom: 1px solid var(--chrome-border);
+    background: var(--chrome-bg);
+  }
+  #hifz-big-where {
+    font: 600 12.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--ink);
+  }
