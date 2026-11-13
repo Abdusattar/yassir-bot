@@ -36,7 +36,7 @@ from aiohttp import web                     # noqa: E402
 
 OUT = ROOT / "logs" / "landscape"
 PORT = int(__import__("os").environ.get("LAND_PORT", "8810"))
-PAGE = 50
+PAGE = int(__import__("os").environ.get("LAND_PAGE", "50"))
 
 PORTRAIT = [("stoya", 390, 844)]
 LANDSCAPE = [("se", 667, 375), ("i14", 844, 390), ("promax", 932, 430), ("android", 915, 412)]
@@ -69,9 +69,13 @@ SCENES = {
                  ("document.getElementById('page-wrap').click()", 700)],
     "tap_word": [("document.getElementById('dash-mushaf').click()", 4500),
                  ("document.querySelector('#ayah-text [data-tr]').click()", 700)],
+    # Чтение лёжа с подписями под словами (13.11.2026: жалоба «лёжа шрифт
+    # стал мельче» была именно в этом режиме, а сцена его не снимала).
+    "gloss":    [("document.getElementById('dash-mushaf').click()", 2500),
+                 ("document.getElementById('read-gloss-btn').click()", 2500)],
 }
 # Что лёжа меняется намеренно - там сравнение с HEAD не требуется.
-CHANGED_LAND = {"mushaf", "mush_end", "turn", "rev_rec", "bare", "tap", "tap_word", "hifz"}
+CHANGED_LAND = {"gloss", "mushaf", "mush_end", "turn", "rev_rec", "bare", "tap", "tap_word", "hifz"}
 
 MEASURE = """() => {
   var el = document.getElementById('ayah-text');
@@ -210,6 +214,37 @@ def rotation_check(pw, engine):
     return before, out
 
 
+def capped_rotation_check(pw, engine):
+    """Стоя лист ужат по высоте (колонка сужена, mushafHeightCap), повернули
+    лёжа - кегль должен считаться от полной ширины (13.11.2026: оставался
+    стоячим, 21px вместо 49, слова раздвинуты пустотами). Эталон - тот же
+    лист, открытый сразу лёжа."""
+    out = []
+    for page in (17, 50):
+        b = getattr(pw, engine).launch()
+        ctx = b.new_context(viewport={"width": 412, "height": 760}, is_mobile=engine == "chromium",
+                            has_touch=True)
+        ctx.add_init_script("try{localStorage.setItem('yassir_mushaf_page','%d')}catch(e){}" % page)
+        pg = ctx.new_page()
+        pg.goto(f"http://127.0.0.1:{PORT}/new?bot=male")
+        pg.wait_for_timeout(2500)
+        pg.evaluate("document.getElementById('dash-mushaf').click()")
+        pg.wait_for_function("document.querySelectorAll('#ayah-text .mushaf-line').length > 0", timeout=15000)
+        pg.wait_for_timeout(3000)
+        pg.set_viewport_size({"width": 840, "height": 392})
+        pg.wait_for_timeout(3500)
+        turned = float(pg.evaluate(MEASURE)["font"].rstrip("px"))
+        pg.reload()
+        pg.wait_for_timeout(2500)
+        pg.evaluate("document.getElementById('dash-mushaf').click()")
+        pg.wait_for_function("document.querySelectorAll('#ayah-text .mushaf-line').length > 0", timeout=15000)
+        pg.wait_for_timeout(3000)
+        direct = float(pg.evaluate(MEASURE)["font"].rstrip("px"))
+        b.close()
+        out.append((page, turned, direct))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--engines", default="chromium,webkit")
@@ -228,7 +263,7 @@ def main():
                 for size in PORTRAIT + LANDSCAPE:
                     land = size[1] > size[2]
                     new, m, errs = shoot(pw, engine, "new", scene, size)
-                    old, _, _ = shoot(pw, engine, "old", scene, size)
+                    old, mo, _ = shoot(pw, engine, "old", scene, size)
                     must_match = not (land and scene in CHANGED_LAND)
                     eq = same(new, old, dash=(scene == "dash" and not land))
                     tag = "=" if eq else ("изменено" if not must_match else "РАЗНИЦА!")
@@ -245,8 +280,9 @@ def main():
                         if shown != (scene == "tap"):
                             problems.append(f"{engine} {scene} {size[0]}: шапка {'видна' if shown else 'спрятана'}")
                         extra = f"  шапка низ {m['bar_bottom']}"
-                    if m and scene in ("mushaf", "mush_end", "turn", "rev_rec"):
-                        extra = (f"  лист {m['page']} сверху {m['top']} срез {m['cut_top']} кегль {m['font']} "
+                    if m and scene in ("mushaf", "mush_end", "turn", "rev_rec", "gloss"):
+                        was = f" (было {mo['font']})" if mo and mo["font"] != m["font"] else ""
+                        extra = (f"  лист {m['page']} сверху {m['top']} срез {m['cut_top']} кегль {m['font']}{was} "
                                  f"колонка {m['col']} вылезло {m['over_px']}px "
                                  f"высота чтения {m['read_h']} меню {m['tabbar']} "
                                  f"стр.в конце {m['nav_in_page']} бок.скролл {m['doc_overflow_x']}")
@@ -260,6 +296,10 @@ def main():
             for sz, share, font, over, nav in rot[:1]:
                 if abs(share - before) > 0.12:
                     problems.append(f"{engine} поворот {sz}: место {before} -> {share}")
+            for page, turned, direct in capped_rotation_check(pw, engine):
+                print(f"  поворот из ужатого стоя, лист {page}: {turned}px (сразу лёжа {direct}px)")
+                if abs(turned - direct) > 1:
+                    problems.append(f"{engine} поворот из ужатого стоя, лист {page}: {turned} вместо {direct}")
             for sz, share, font, over, nav in rot:
                 if over > 1:
                     problems.append(f"{engine} поворот {sz}: вылезло {over}px")

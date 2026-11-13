@@ -177,6 +177,11 @@
     var w = table && table[page];
     if (!w) return null;
     var lines = el.querySelectorAll('.mushaf-line').length;
+    // Сужение колонки от предела по высоте (mushafHeightCap) - не ширина
+    // для подбора (13.11.2026): стоя колонку ужало до 347px, телефон
+    // повернули, и лёжа кегль считался от тех же 347px - 21px вместо 49,
+    // слова раздвинуты пустотами. clampFontToFit снимает его так же.
+    el.style.maxWidth = '';
     var avail = el.clientWidth;
     if (!lines || !avail) return null;
     var font = MUSHAF_MEASURE_BASE * avail / (w * mushafFitK) * MUSHAF_FIT_SAFETY;
