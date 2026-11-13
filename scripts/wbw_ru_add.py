@@ -9,7 +9,10 @@ ROOT = Path(__file__).resolve().parent.parent
 import os
 JUZ = int(os.environ.get("WBW_JUZ", "1"))
 JUZ_KEYS = {1: [f"1:{a}" for a in range(1, 8)] + [f"2:{a}" for a in range(1, 142)],
-            2: [f"2:{a}" for a in range(142, 253)]}
+            2: [f"2:{a}" for a in range(142, 253)],
+            3: [f"2:{a}" for a in range(253, 287)] + [f"3:{a}" for a in range(1, 93)],
+            4: [f"3:{a}" for a in range(93, 201)] + [f"4:{a}" for a in range(1, 24)],
+            5: [f"4:{a}" for a in range(24, 148)]}
 D = ROOT / "logs" / f"wbw_ru_juz{JUZ}"; REFS = ROOT / "sources" / "wbw_ru_refs"
 D.mkdir(parents=True, exist_ok=True)
 CH = D / "changes.json"; NT = D / "notes.json"
