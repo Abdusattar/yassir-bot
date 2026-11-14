@@ -185,6 +185,16 @@ def move_progress(conn, moves, restale, apply):
           f"на прежнем ключе помечено к переспросу {kept}")
 
 
+def _rebuild_chunks(db):
+    """Файлы переводов для мусхафа (wbw/<язык>/<сура>.json) - сразу из обновлённой базы.
+    Только для рабочей базы: прогон на копии (--db) файлы приложения не трогает."""
+    if Path(db).resolve() != Path(HADITHS_DB).resolve():
+        return
+    from scripts.build_wbw_chunks import build
+    _, written = build(db, languages={"ru"})
+    print("файлы переводов мусхафа: переписано %d" % written)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
@@ -227,6 +237,7 @@ def main():
     if args.apply:
         conn.execute("COMMIT")
         print("записано")
+        _rebuild_chunks(args.db)
     else:
         conn.execute("ROLLBACK")
         print("это был план (откат). Записать: --apply")

@@ -71,6 +71,8 @@ def main():
         for (p, ar, _), g in zip(ru[key], glosses):
             save_mufradat_word(s, a, p, ar, g.strip(), language=LANGUAGE)
     print("записано в %s" % HADITHS_DB)
+    from scripts.build_wbw_chunks import build
+    print("файлы переводов мусхафа: переписано %d" % build(languages={LANGUAGE})[1])
 
 
 if __name__ == "__main__":

@@ -8749,6 +8749,18 @@
       return data;
     });
   }
+  // Лист не ждёт переводы дольше WBW_WAIT_MS (слабая сеть): не успели - показываем
+  // со вшитым переводом (старый путь), а файлы докачиваются и лягут в кэш к
+  // следующему листу. До чистки страниц (шаг 3 плана) вшитый перевод всегда есть.
+  var WBW_WAIT_MS = 2500;
+  function wbwSoon(p) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var timer = setTimeout(function () { if (!done) { done = true; resolve(null); } }, WBW_WAIT_MS);
+      p.then(function (v) { if (!done) { done = true; clearTimeout(timer); resolve(v); } },
+             function () { if (!done) { done = true; clearTimeout(timer); resolve(null); } });
+    });
+  }
   // Единый загрузчик листа для мусхафа, заучивания и «Сегодня».
   function fetchPageData(n) {
     var lang = UI_LANG;
@@ -8756,14 +8768,21 @@
       if (!r.ok) throw new Error('page ' + n);
       return r.json();
     });
-    return Promise.all([wbwManifest(), base]).then(function (got) {
-      var man = got[0], data = got[1];
-      if (man && man.ru && (lang === 'ru' || man[lang])) return wbwApply(data, man, lang);
+    function oldWay(data) {
       if (lang === 'ru') return data;
-      // старый путь: языковая копия листа, нет её - русская основа
+      // языковая копия листа, нет её - русская основа
       return fetch(pageJsonUrl(n, lang))
         .then(function (r) { return r.ok ? r.json() : data; })
         .catch(function () { return data; });
+    }
+    return Promise.all([wbwSoon(wbwManifest()), base]).then(function (got) {
+      var man = got[0], data = got[1];
+      if (!(man && man.ru && (lang === 'ru' || man[lang]))) return oldWay(data);
+      // переводы вписываются в копию: опоздавшая запись не тронет уже показанный лист
+      var copy = JSON.parse(JSON.stringify(data));
+      return wbwSoon(wbwApply(copy, man, lang)).then(function (filled) {
+        return filled || oldWay(data);
+      });
     });
   }
   // ── Настройки: открытие экрана и профиль (10.09.2026) ─────────────────

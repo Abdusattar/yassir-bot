@@ -44,7 +44,8 @@ mushaf_data/*.json
 !mushaf_data/manifest.json
 # Пословные переводы по сурам (14.11.2026, scripts/build_wbw_chunks.py) - собираются
 # из базы на сервере, источник - mufradat_words, не git.
-mushaf_data/wbw/
+mushaf_data/wbw/*/
+mushaf_data/wbw/manifest.json
 
 # Кэш HTML печатной раскладки KFGQPC V4 из QUL (scripts/fix_mushaf_lines.py) -
 # 97 МБ скачанных превью, нужен только для перезапуска починки разметки.
