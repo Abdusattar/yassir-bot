@@ -1,0 +1,14 @@
+[Unit]
+Description=Yassir Quran Bot
+After=network.target
+
+[Service]
+User=stursunkul
+WorkingDirectory=/home/stursunkul/yassir-bot
+EnvironmentFile=/home/stursunkul/yassir-bot/.env
+ExecStart=/home/stursunkul/yassir-bot/venv/bin/python3 bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target  

@@ -1,0 +1,13 @@
+[Unit]
+Description=Yassir Quran Bot (Female)
+After=network.target
+
+[Service]
+WorkingDirectory=/home/stursunkul/yassir-bot
+EnvironmentFile=/home/stursunkul/yassir-bot/.env.female
+ExecStart=/home/stursunkul/yassir-bot/venv/bin/python3 bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

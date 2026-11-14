@@ -1,0 +1,95 @@
+server {
+    server_name yassir.ddns.net yassirilm.com www.yassirilm.com;
+    root /var/www/yassir-app;
+    index index.html;
+
+    # Тренажёр муфрадата в вебе (29.08.2026) - API живёт в процессе бота
+    # (core/mufradat_api.py), свой порт на мужского/женского бота (два
+    # процесса на сервере). Префикс пути выбирает нужный процесс.
+    location /api/muf/male/ {
+        # Голосовая сдача 40+40 из YassirApp (02.09.2026): дефолтный предел
+        # nginx - 1 МБ, запись чтения целой страницы в него не влезает.
+        client_max_body_size 45m;
+        # Перекодировка длинной сдачи занимает время: 30 минут с iPhone
+        # (mp4/aac -> opus) - около минуты на этом сервере. Дефолтные 60 сек
+        # nginx рвали бы такой запрос, и студент терял бы всю запись
+        # (замерено 06.09.2026). Chrome-путь идёт перепаковкой за секунды.
+        proxy_read_timeout 900s;
+        proxy_send_timeout 900s;
+        proxy_pass http://127.0.0.1:8081/api/muf/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    location /api/muf/female/ {
+        # Голосовая сдача 40+40 из YassirApp (02.09.2026): дефолтный предел
+        # nginx - 1 МБ, запись чтения целой страницы в него не влезает.
+        client_max_body_size 45m;
+        # Перекодировка длинной сдачи занимает время: 30 минут с iPhone
+        # (mp4/aac -> opus) - около минуты на этом сервере. Дефолтные 60 сек
+        # nginx рвали бы такой запрос, и студент терял бы всю запись
+        # (замерено 06.09.2026). Chrome-путь идёт перепаковкой за секунды.
+        proxy_read_timeout 900s;
+        proxy_send_timeout 900s;
+        proxy_pass http://127.0.0.1:8082/api/muf/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # index.html и page*.json обновляются НА МЕСТЕ (имена файлов не меняются),
+    # поэтому клиенту нельзя кэшировать их вслепую: без Cache-Control браузер
+    # применяет эвристику и держит старую версию, переживая даже перезапуск
+    # Telegram (поймано 29.08.2026 - пересчитанная раскладка страниц не
+    # доходила до телефона). no-cache = хранить можно, но каждый раз
+    # перепроверить по ETag; совпало - ответ 304 без тела, это дёшево.
+    location ~* ^/(index\.html|sw\.js|manifest\.json|page[0-9]+\.json)$ {
+        add_header Cache-Control no-cache;
+        try_files $uri =404;
+    }
+
+    # Шрифты листов мусхафа (QPC V4): файлы неизменны - кэш на год, без перепроверки.
+    location ^~ /v4/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Access-Control-Allow-Origin *;
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/yassir.ddns.net/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/yassir.ddns.net/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+
+
+
+}
+server {
+    if ($host = www.yassirilm.com) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    if ($host = yassirilm.com) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    if ($host = yassir.ddns.net) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    listen 80;
+    server_name yassir.ddns.net yassirilm.com www.yassirilm.com;
+    return 404; # managed by Certbot
+
+
+
+
+
+
+}
