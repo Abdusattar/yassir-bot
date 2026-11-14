@@ -24,4 +24,4 @@
 | `[Боты]` | два бота, один вход, сервер, деплой, nginx, безопасность | `infrastructure.md`, `one_bot.md`, `hacked_accounts.md` |
 | `[ИИ]` | ИИ-таджвид по аудио, модели, расходы | `ai_tajweed_audio.md`, `ai_costs.md`, `ai_reasoning_models_max_tokens.md` |
 | `[Контент]` | Тадаббур, насыхи, сито источников | `tadabbur_post_philosophy.md`, `tadabbur_audience.md`, `content_sieve_methodology.md` |
-| `[Команда]` | как работаем вместе, архитектура, планы на согласовании | `team_workflow.md`, `index_split_plan.md` (исходники `app_src/` и сборка), `architecture_roadmap.md`, `architecture_roadmap_review.md` |
+| `[Команда]` | как работаем вместе, архитектура, планы на согласовании | **`architecture.md` (главный: слои, правила, долги — читать перед любым действием)**, `team_workflow.md`, `index_split_plan.md` (исходники `app_src/` и сборка), `architecture_roadmap.md`, `architecture_roadmap_review.md` |
