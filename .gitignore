@@ -75,3 +75,6 @@ tajweed_ai/data/_*.log
 tajweed_ai/data/hear_emb/
 tajweed_ai/data/hear_results.jsonl
 tajweed_ai/data/hear_marked_ids.txt
+
+# отметка «какие джузы пословного ru загружены в базу» (scripts/check_wbw_ru_loaded.py) - у каждой машины своя
+.wbw_ru_loaded.json

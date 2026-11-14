@@ -238,6 +238,11 @@ def main():
         conn.execute("COMMIT")
         print("записано")
         _rebuild_chunks(args.db)
+        if Path(args.db).resolve() == Path(HADITHS_DB).resolve():
+            from scripts.check_wbw_ru_loaded import update_mark
+            left = [k for k, v in update_mark().items() if v]
+            print("отметка загруженных джузов обновлена" + (
+                "; ещё не загружены: " + ", ".join(left) if left else ""))
     else:
         conn.execute("ROLLBACK")
         print("это был план (откат). Записать: --apply")

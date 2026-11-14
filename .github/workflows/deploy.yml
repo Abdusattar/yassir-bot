@@ -84,6 +84,10 @@ jobs:
             # приложение берёт из него адреса файлов. Лежит ссылкой - пересборка между
             # выкатками (загрузка перевода) видна сразу.
             python scripts/build_data_manifest.py || echo "::warning::data_manifest.json не пересобран"
+            # Перевод джуза в git, а в базу не загружен (architecture.md С1): выкатку не
+            # останавливает - загрузка ручная (переносит прогресс), но отметка обновляется,
+            # и наблюдение напомнит в Telegram, если файл так и лежит дольше получаса.
+            python scripts/check_wbw_ru_loaded.py || echo "::warning::перевод джуза в git не загружен в базу"
             [ -e /var/www/yassir-app/data_manifest.json ] || ln -s ~/yassir-bot/mushaf_data/data_manifest.json /var/www/yassir-app/data_manifest.json
             sudo systemctl restart yassir-bot
             # Женский бот - в том же деплое (23.09.2026). Раньше его

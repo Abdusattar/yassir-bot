@@ -117,6 +117,13 @@ def find_problems():
     b = backup_problem()
     if b:
         problems["backup"] = b
+    try:
+        from scripts.check_wbw_ru_loaded import not_loaded
+        files = not_loaded()
+        if files:
+            problems["wbw_ru"] = "перевод в git не загружен в базу: " + ", ".join(files)
+    except Exception as e:  # noqa: BLE001
+        problems["wbw_ru"] = "сверка перевода с базой не сработала: %s" % e
     return problems
 
 
