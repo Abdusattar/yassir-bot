@@ -19,7 +19,18 @@
     // fetchPageData в 034_wbw_words.js): слова без перевода на языке - по-русски,
     // занятие не прерывается там, где перевод ещё не готов. Раскладка (dm/)
     // сохраняется - египетский лист не подменяется мединским.
-    fetchPageData(n)
+    fetchPageData(n, function (late) {
+        // Переводы пришли после показа листа (слабая сеть): данные подменяем всегда,
+        // экран перерисовываем, только если этот лист ещё открыт и человек ничего
+        // на нём не держит (подсказка слова, панель аята) - иначе к следующему показу.
+        cache[cacheKey] = late;
+        if (currentPage !== n || cacheKey !== n + ':' + UI_LANG + ':' + pageLayout()) return;
+        var pop = document.getElementById('word-popup'), sheet = document.getElementById('ayah-sheet');
+        if ((pop && pop.classList.contains('visible')) || (sheet && !sheet.hidden)) return;
+        var wrap = document.getElementById('page-wrap'), top = wrap ? wrap.scrollTop : 0;
+        renderPage(late);
+        if (wrap) wrap.scrollTop = top;
+      })
       .then(function (data) {
         cache[cacheKey] = data;
         // Быстро листали: пока шла эта страница, открыли другую - опоздавший
@@ -66,8 +77,8 @@
       return Promise.all([mushafWarmFont(data.font_url), fp ? mushafWarmFont(v4FontUrl(fp)) : null]);
     };
     if (cache[key]) return warm(cache[key]);
-    return fetchPageData(p)
-      .then(function (data) { cache[key] = data; return warm(data); });
+    return fetchPageData(p, function (late) { cache[key] = late; })
+      .then(function (data) { if (!cache[key]) cache[key] = data; return warm(data); });
   }
   function mushafPrefetchPump() {
     while (mushafPrefetchActive < MUSHAF_PREFETCH_PAR && mushafPrefetchQueue.length) {

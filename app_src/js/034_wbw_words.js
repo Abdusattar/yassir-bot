@@ -79,10 +79,13 @@
       return data;
     });
   }
-  // Лист не ждёт переводы дольше WBW_WAIT_MS (слабая сеть): не успели - показываем
-  // со вшитым переводом (старый путь), а файлы докачиваются и лягут в кэш к
-  // следующему листу. До чистки страниц (шаг 3 плана) вшитый перевод всегда есть.
-  var WBW_WAIT_MS = 2500;
+  // Лист ждёт переводы не дольше WBW_WAIT_MS (0,7 с: обычно они уже в кэше, а перерисовка на глазах хуже короткой паузы). Не успели - лист отдаётся
+  // сразу старым путём (вшитый перевод / _lang-копия; после чистки страниц, шаг 3
+  // wiki/wbw_split_plan.md, - без подписей), а когда переводы всё-таки пришли,
+  // зовётся onLate(лист с переводами): показывающий экран подменяет данные и
+  // дорисовывает подписи. Так лист виден сразу, подписи дописываются по приходу
+  // (wiki/architecture.md, слой 4, правило 5).
+  var WBW_WAIT_MS = 700;
   function wbwSoon(p) {
     return new Promise(function (resolve) {
       var done = false;
@@ -92,7 +95,8 @@
     });
   }
   // Единый загрузчик листа для мусхафа, заучивания и «Сегодня».
-  function fetchPageData(n) {
+  // onLate (необязательно) - см. выше; зовётся не больше одного раза.
+  function fetchPageData(n, onLate) {
     var lang = UI_LANG;
     var base = fetch(pageJsonUrl(n)).then(function (r) {
       if (!r.ok) throw new Error('page ' + n);
@@ -105,13 +109,16 @@
         .then(function (r) { return r.ok ? r.json() : data; })
         .catch(function () { return data; });
     }
-    return Promise.all([wbwSoon(wbwManifest()), base]).then(function (got) {
+    // лист с переводами из wbw/ или null (нет манифеста / языка / файл не пришёл)
+    var filledP = Promise.all([wbwManifest(), base]).then(function (got) {
       var man = got[0], data = got[1];
-      if (!(man && man.ru && (lang === 'ru' || man[lang]))) return oldWay(data);
+      if (!(man && man.ru && (lang === 'ru' || man[lang]))) return null;
       // переводы вписываются в копию: опоздавшая запись не тронет уже показанный лист
-      var copy = JSON.parse(JSON.stringify(data));
-      return wbwSoon(wbwApply(copy, man, lang)).then(function (filled) {
-        return filled || oldWay(data);
-      });
+      return wbwApply(JSON.parse(JSON.stringify(data)), man, lang);
+    }).catch(function () { return null; });
+    return wbwSoon(filledP).then(function (filled) {
+      if (filled) return filled;
+      if (onLate) filledP.then(function (late) { if (late) onLate(late); });
+      return base.then(oldWay);
     });
   }

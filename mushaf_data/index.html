@@ -8749,10 +8749,13 @@
       return data;
     });
   }
-  // Лист не ждёт переводы дольше WBW_WAIT_MS (слабая сеть): не успели - показываем
-  // со вшитым переводом (старый путь), а файлы докачиваются и лягут в кэш к
-  // следующему листу. До чистки страниц (шаг 3 плана) вшитый перевод всегда есть.
-  var WBW_WAIT_MS = 2500;
+  // Лист ждёт переводы не дольше WBW_WAIT_MS (0,7 с: обычно они уже в кэше, а перерисовка на глазах хуже короткой паузы). Не успели - лист отдаётся
+  // сразу старым путём (вшитый перевод / _lang-копия; после чистки страниц, шаг 3
+  // wiki/wbw_split_plan.md, - без подписей), а когда переводы всё-таки пришли,
+  // зовётся onLate(лист с переводами): показывающий экран подменяет данные и
+  // дорисовывает подписи. Так лист виден сразу, подписи дописываются по приходу
+  // (wiki/architecture.md, слой 4, правило 5).
+  var WBW_WAIT_MS = 700;
   function wbwSoon(p) {
     return new Promise(function (resolve) {
       var done = false;
@@ -8762,7 +8765,8 @@
     });
   }
   // Единый загрузчик листа для мусхафа, заучивания и «Сегодня».
-  function fetchPageData(n) {
+  // onLate (необязательно) - см. выше; зовётся не больше одного раза.
+  function fetchPageData(n, onLate) {
     var lang = UI_LANG;
     var base = fetch(pageJsonUrl(n)).then(function (r) {
       if (!r.ok) throw new Error('page ' + n);
@@ -8775,14 +8779,17 @@
         .then(function (r) { return r.ok ? r.json() : data; })
         .catch(function () { return data; });
     }
-    return Promise.all([wbwSoon(wbwManifest()), base]).then(function (got) {
+    // лист с переводами из wbw/ или null (нет манифеста / языка / файл не пришёл)
+    var filledP = Promise.all([wbwManifest(), base]).then(function (got) {
       var man = got[0], data = got[1];
-      if (!(man && man.ru && (lang === 'ru' || man[lang]))) return oldWay(data);
+      if (!(man && man.ru && (lang === 'ru' || man[lang]))) return null;
       // переводы вписываются в копию: опоздавшая запись не тронет уже показанный лист
-      var copy = JSON.parse(JSON.stringify(data));
-      return wbwSoon(wbwApply(copy, man, lang)).then(function (filled) {
-        return filled || oldWay(data);
-      });
+      return wbwApply(JSON.parse(JSON.stringify(data)), man, lang);
+    }).catch(function () { return null; });
+    return wbwSoon(filledP).then(function (filled) {
+      if (filled) return filled;
+      if (onLate) filledP.then(function (late) { if (late) onLate(late); });
+      return base.then(oldWay);
     });
   }
   // ── Настройки: открытие экрана и профиль (10.09.2026) ─────────────────
@@ -12136,7 +12143,18 @@
     // fetchPageData в 034_wbw_words.js): слова без перевода на языке - по-русски,
     // занятие не прерывается там, где перевод ещё не готов. Раскладка (dm/)
     // сохраняется - египетский лист не подменяется мединским.
-    fetchPageData(n)
+    fetchPageData(n, function (late) {
+        // Переводы пришли после показа листа (слабая сеть): данные подменяем всегда,
+        // экран перерисовываем, только если этот лист ещё открыт и человек ничего
+        // на нём не держит (подсказка слова, панель аята) - иначе к следующему показу.
+        cache[cacheKey] = late;
+        if (currentPage !== n || cacheKey !== n + ':' + UI_LANG + ':' + pageLayout()) return;
+        var pop = document.getElementById('word-popup'), sheet = document.getElementById('ayah-sheet');
+        if ((pop && pop.classList.contains('visible')) || (sheet && !sheet.hidden)) return;
+        var wrap = document.getElementById('page-wrap'), top = wrap ? wrap.scrollTop : 0;
+        renderPage(late);
+        if (wrap) wrap.scrollTop = top;
+      })
       .then(function (data) {
         cache[cacheKey] = data;
         // Быстро листали: пока шла эта страница, открыли другую - опоздавший
@@ -12183,8 +12201,8 @@
       return Promise.all([mushafWarmFont(data.font_url), fp ? mushafWarmFont(v4FontUrl(fp)) : null]);
     };
     if (cache[key]) return warm(cache[key]);
-    return fetchPageData(p)
-      .then(function (data) { cache[key] = data; return warm(data); });
+    return fetchPageData(p, function (late) { cache[key] = late; })
+      .then(function (data) { if (!cache[key]) cache[key] = data; return warm(data); });
   }
   function mushafPrefetchPump() {
     while (mushafPrefetchActive < MUSHAF_PREFETCH_PAR && mushafPrefetchQueue.length) {
