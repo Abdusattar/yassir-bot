@@ -5,7 +5,7 @@
 в неделю днём, когда компьютер включён, - Claude спрашивает в начале сессии, если последней
 копии больше двух дней. Скрипт: снимает свежую копию на сервере (scripts/backup_db.py),
 скачивает её в папку ВНЕ репозитория (репо публичный, в базах личные данные),
-проверяет, что каждая база открывается, и хранит KEEP последних копий.
+проверяет, что каждая база открывается, и хранит KEEP последних копий (3 копии раз в 3 дня = охват около 9 дней; решение 14.11).
 
     python scripts/pull_backup.py            # снять и скачать
     python scripts/pull_backup.py --age      # только сказать, сколько дней последней копии
@@ -21,7 +21,7 @@ from datetime import date
 from pathlib import Path
 
 DEST = Path.home() / "YassirBackups"
-KEEP = 6
+KEEP = 3
 HOST = "claude-access@34.51.213.67"
 SSH = ["-o", "ConnectTimeout=25", "-i", str(Path.home() / ".ssh" / "claude_gcp")]
 REMOTE = "/home/stursunkul/backups/db"
