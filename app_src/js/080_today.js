@@ -168,10 +168,19 @@
     if (k === 'm') dashGoHifz();
     else if (k === 'r') dashGoRevision();
     else if (k === 't') openTrainer();
-    else if (k === 'j') openTajweed();
-    else if (k === 'n') openNahw();
-    else if (k === 'h') openHadith();
+    else if (k === 'j' || k === 'n' || k === 'h') {
+      // openTajweed/openNahw/openHadith прячут только хаб тренажёров (их звали
+      // оттуда): с «Сегодня» дашборд оставался поверх, и «пройти» выглядело
+      // мёртвым (14.11.2026, скрин пользователя).
+      document.getElementById('dashboard').style.display = 'none';
+      if (k === 'j') openTajweed(); else if (k === 'n') openNahw(); else openHadith();
+    }
   }
+  // Первое несданное доп-задание дня в порядке группы (таджвид, нахв, хадис).
+  function dashNextExtra(f) {
+    return ((f.day && f.day.tasks) || []).filter(function (x) { return !x.done && 'jnh'.indexOf(x.k) >= 0; })[0] || null;
+  }
+  function dashExtraFacts(f, k) { return k === 'j' ? f.tajweed : k === 'n' ? f.nahw : f.hadith; }
   var dashHeroReq = 0;
   function dashHero(f) {
     var sura = document.getElementById('dash-hero-sura'), place = document.getElementById('dash-hero-place');
@@ -241,13 +250,20 @@
       sura.textContent = T('task_t');
       place.textContent = f.words ? T('daily_n', { N: f.words.done, M: f.words.target }) : '';
       row.innerHTML = btn('t', T('hero_words'), true);
+    } else if (dashNextExtra(f)) {
+      // Доп-задания группы (14.11.2026, правка пользователя): карточка ведёт к
+      // следующему так же, как к трём основным, а не говорит «на сегодня всё».
+      var nx = dashNextExtra(f), fx = dashExtraFacts(f, nx.k);
+      sura.textContent = T('task_' + nx.k);
+      place.textContent = fx ? T('daily_n', { N: fx.done, M: fx.target }) : '';
+      row.innerHTML = btn(nx.k, T('hero_go_' + nx.k), true);
     } else {
       sura.textContent = T('hero_all'); place.textContent = '';
       var left = ((f.day && f.day.tasks) || []).filter(function (x) { return !x.done; });
       if (left.length) {
         body.innerHTML = '<p class="h-note">' + T('hero_left', { N: left.map(function (x) { return dayTaskName(x.k); }).join(', ') }) + '</p>';
       } else if (m && m.done) {
-        body.innerHTML = '<div class="h-lock">' + ICON.lock + '<span>' + T('hero_next_locked') + '</span></div>';
+        body.innerHTML = '<div class="h-lock">' + ICON.hourglass + '<span>' + T('hero_next_locked') + '</span></div>';
       }
       row.innerHTML = btn('mushaf', T('hero_open'), true, ICON['book-open']);
     }

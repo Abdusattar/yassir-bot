@@ -5329,7 +5329,10 @@
       hero_all: 'На сегодня всё, мāшāАллах',
       hero_open: 'Открыть мусхаф',
       hero_left: 'Осталось: %N%',
-      hero_next_locked: 'Следующая строчка откроется, когда устаз примет сегодняшнюю.',
+      hero_next_locked: 'Задания на проверке, а пока можно дополнительно поработать с Кораном',
+      hero_go_j: 'Пройти таджвид',
+      hero_go_n: 'Пройти нахв',
+      hero_go_h: 'Пройти хадис',
       check_rec: 'записать',
       check_mark: 'отметить',
       check_go: 'пройти',
@@ -6053,7 +6056,10 @@
       hero_all: 'Бүгүнкүгө баары, машаАллах',
       hero_open: 'Мусхафты ачуу',
       hero_left: 'Калды: %N%',
-      hero_next_locked: 'Кийинки сап устаз бүгүнкүнү кабыл алганда ачылат.',
+      hero_next_locked: 'Тапшырмалар текшерүүдө, азырынча Куран менен кошумча иштесе болот',
+      hero_go_j: 'Тажвидди өтүү',
+      hero_go_n: 'Нахвды өтүү',
+      hero_go_h: 'Хадисти өтүү',
       check_rec: 'жазуу',
       check_mark: 'белгилөө',
       check_go: 'өтүү',
@@ -6869,7 +6875,10 @@
       hero_all: 'Бугунга ҳаммаси, машаАллоҳ',
       hero_open: 'Мусҳафни очиш',
       hero_left: 'Қолди: %N%',
-      hero_next_locked: 'Кейинги қатор устоз бугунгисини қабул қилганда очилади.',
+      hero_next_locked: 'Топшириқлар текширувда, ҳозирча Қуръон билан қўшимча ишлаш мумкин',
+      hero_go_j: 'Тажвидни ўтиш',
+      hero_go_n: 'Наҳвни ўтиш',
+      hero_go_h: 'Ҳадисни ўтиш',
       check_rec: 'ёзиш',
       check_mark: 'белгилаш',
       check_go: 'ўтиш',
@@ -7685,7 +7694,10 @@
       hero_all: '今日已全部完成，马沙安拉',
       hero_open: '打开穆斯哈夫',
       hero_left: '剩余：%N%',
-      hero_next_locked: '老师通过今天这一行后，下一行才会打开。',
+      hero_next_locked: '作业已提交待检查，现在可以额外研读古兰经',
+      hero_go_j: '练习诵读规则',
+      hero_go_n: '练习语法',
+      hero_go_h: '练习圣训',
       check_rec: '录音',
       check_mark: '标记',
       check_go: '开始',
@@ -9766,10 +9778,19 @@
     if (k === 'm') dashGoHifz();
     else if (k === 'r') dashGoRevision();
     else if (k === 't') openTrainer();
-    else if (k === 'j') openTajweed();
-    else if (k === 'n') openNahw();
-    else if (k === 'h') openHadith();
+    else if (k === 'j' || k === 'n' || k === 'h') {
+      // openTajweed/openNahw/openHadith прячут только хаб тренажёров (их звали
+      // оттуда): с «Сегодня» дашборд оставался поверх, и «пройти» выглядело
+      // мёртвым (14.11.2026, скрин пользователя).
+      document.getElementById('dashboard').style.display = 'none';
+      if (k === 'j') openTajweed(); else if (k === 'n') openNahw(); else openHadith();
+    }
   }
+  // Первое несданное доп-задание дня в порядке группы (таджвид, нахв, хадис).
+  function dashNextExtra(f) {
+    return ((f.day && f.day.tasks) || []).filter(function (x) { return !x.done && 'jnh'.indexOf(x.k) >= 0; })[0] || null;
+  }
+  function dashExtraFacts(f, k) { return k === 'j' ? f.tajweed : k === 'n' ? f.nahw : f.hadith; }
   var dashHeroReq = 0;
   function dashHero(f) {
     var sura = document.getElementById('dash-hero-sura'), place = document.getElementById('dash-hero-place');
@@ -9839,13 +9860,20 @@
       sura.textContent = T('task_t');
       place.textContent = f.words ? T('daily_n', { N: f.words.done, M: f.words.target }) : '';
       row.innerHTML = btn('t', T('hero_words'), true);
+    } else if (dashNextExtra(f)) {
+      // Доп-задания группы (14.11.2026, правка пользователя): карточка ведёт к
+      // следующему так же, как к трём основным, а не говорит «на сегодня всё».
+      var nx = dashNextExtra(f), fx = dashExtraFacts(f, nx.k);
+      sura.textContent = T('task_' + nx.k);
+      place.textContent = fx ? T('daily_n', { N: fx.done, M: fx.target }) : '';
+      row.innerHTML = btn(nx.k, T('hero_go_' + nx.k), true);
     } else {
       sura.textContent = T('hero_all'); place.textContent = '';
       var left = ((f.day && f.day.tasks) || []).filter(function (x) { return !x.done; });
       if (left.length) {
         body.innerHTML = '<p class="h-note">' + T('hero_left', { N: left.map(function (x) { return dayTaskName(x.k); }).join(', ') }) + '</p>';
       } else if (m && m.done) {
-        body.innerHTML = '<div class="h-lock">' + ICON.lock + '<span>' + T('hero_next_locked') + '</span></div>';
+        body.innerHTML = '<div class="h-lock">' + ICON.hourglass + '<span>' + T('hero_next_locked') + '</span></div>';
       }
       row.innerHTML = btn('mushaf', T('hero_open'), true, ICON['book-open']);
     }
