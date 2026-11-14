@@ -5,6 +5,10 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+# Все варианты файла с ключами: .env.female, .env.bak-* (14.11.2026 - .env.female не был
+# в списке и висел «неотслеживаемым» на сервере; репо публичный).
+.env.*
+!.env.example
 bot.log
 nohup.out
 
