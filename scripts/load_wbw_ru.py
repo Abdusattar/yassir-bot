@@ -131,25 +131,44 @@ def check_invariant(conn):
     return mixed, orphan
 
 
-def move_progress(conn, moves, restale, apply):
+def invariant_after(rows, new_t, rekey):
+    """То же правило, что check_invariant, но посчитанное в памяти для состояния ПОСЛЕ правки -
+    чтобы план (без --apply) ничего не писал в рабочую базу и не запирал её."""
+    pairs = collections.defaultdict(set)
+    key_of = {}
+    for i, r in rows.items():
+        k = rekey.get(i, r["k"])
+        key_of[i] = k
+        pairs[k].add((r["ar"], normalize_gloss(new_t.get(i, r["t"]))))
+    mixed = sum(1 for v in pairs.values() if len(v) > 1)
+    orphan = sum(1 for i, k in key_of.items() if key_of.get(k) != k)
+    return mixed, orphan
+
+
+def plan_progress(conn, moves, restale):
+    """Что сделать с прогрессом студентов: (строки к вставке, строки к пометке «переспросить»,
+    счётчики). Только читает, и читает таблицу ОДНИМ проходом: до 14.11.2026 здесь было по
+    запросу на каждый ключ без индекса по word_id - на сервере это минуты, и всё это время
+    база была заперта (14.11 приложение у студентов не открывалось 17 минут)."""
     stale_date = (date.today() - timedelta(days=RECHECK_AFTER_DAYS + 1)).isoformat()
     cols = {row[1] for row in conn.execute("PRAGMA table_info(mufradat_progress)")}
     if not cols:
-        print("  таблицы mufradat_progress нет - переносить нечего")
-        return
-    has_cc = "correct_count" in cols
+        return [], [], {"copied": 0, "users": 0, "staled": 0, "kept": 0, "has_cc": False, "none": True}
     by_new = collections.defaultdict(list)
     for (ok, nk), changed in moves.items():
         by_new[nk].append((ok, changed))
-    copied = staled = users = 0
-    seen_users = set()
+    need = set(by_new) | {ok for srcs in by_new.values() for ok, _ in srcs} | set(restale)
+    prog = collections.defaultdict(list)         # word_id -> [(user, streak, days, last)]
+    for u, w, streak, days, last in conn.execute(
+            "SELECT user_id, word_id, correct_streak, days_correct, last_correct_date FROM mufradat_progress"):
+        if w in need:
+            prog[w].append((u, streak, days, last))
+    inserts, seen_users, staled = [], set(), 0
     for nk, sources in by_new.items():
-        have = {u for (u,) in conn.execute("SELECT user_id FROM mufradat_progress WHERE word_id=?", (nk,))}
+        have = {u for u, *_ in prog.get(nk, ())}
         best = {}                                # user -> (streak, days_correct, last, changed)
         for ok, changed in sources:
-            for u, streak, days, last in conn.execute(
-                    "SELECT user_id, correct_streak, days_correct, last_correct_date "
-                    "FROM mufradat_progress WHERE word_id=?", (ok,)):
+            for u, streak, days, last in prog.get(ok, ()):
                 if u in have:
                     continue
                 if u not in best or streak > best[u][0]:
@@ -159,30 +178,34 @@ def move_progress(conn, moves, restale, apply):
                 continue                         # нечего сохранять: слово и так «не начато»
             if changed and streak >= MASTERY_STREAK:
                 last = stale_date; staled += 1
-            copied += 1; seen_users.add(u)
-            if apply:
-                if has_cc:
-                    conn.execute(
-                        "INSERT INTO mufradat_progress(user_id, word_id, correct_streak, wrong_count, "
-                        "days_correct, last_correct_date, correct_count) VALUES (?,?,?,?,?,?,0)",
-                        (u, nk, streak, 0, days, last))
-                else:
-                    conn.execute(
-                        "INSERT INTO mufradat_progress(user_id, word_id, correct_streak, wrong_count, "
-                        "days_correct, last_correct_date) VALUES (?,?,?,?,?,?)", (u, nk, streak, 0, days, last))
-    kept = 0
-    for k in restale:
-        n = conn.execute(
-            "SELECT COUNT(*) FROM mufradat_progress WHERE word_id=? AND correct_streak>=? "
-            "AND (last_correct_date IS NULL OR last_correct_date>?)", (k, MASTERY_STREAK, stale_date)).fetchone()[0]
-        kept += n
-        if apply and n:
-            conn.execute(
-                "UPDATE mufradat_progress SET last_correct_date=? WHERE word_id=? AND correct_streak>=? "
-                "AND (last_correct_date IS NULL OR last_correct_date>?)", (stale_date, k, MASTERY_STREAK, stale_date))
-    users = len(seen_users)
-    print(f"  прогресс: скопировано строк {copied} (студентов {users}), из них выученных на переспрос {staled}; "
-          f"на прежнем ключе помечено к переспросу {kept}")
+            seen_users.add(u)
+            inserts.append((u, nk, streak, 0, days, last))
+    restale_rows = [(stale_date, u, k) for k in restale for u, streak, days, last in prog.get(k, ())
+                    if streak >= MASTERY_STREAK and (last is None or last > stale_date)]
+    stats = {"copied": len(inserts), "users": len(seen_users), "staled": staled,
+             "kept": len(restale_rows), "has_cc": "correct_count" in cols, "none": False}
+    return inserts, restale_rows, stats
+
+
+def write_progress(conn, inserts, restale_rows, has_cc):
+    if has_cc:
+        conn.executemany(
+            "INSERT OR IGNORE INTO mufradat_progress(user_id, word_id, correct_streak, wrong_count, "
+            "days_correct, last_correct_date, correct_count) VALUES (?,?,?,?,?,?,0)", inserts)
+    else:
+        conn.executemany(
+            "INSERT OR IGNORE INTO mufradat_progress(user_id, word_id, correct_streak, wrong_count, "
+            "days_correct, last_correct_date) VALUES (?,?,?,?,?,?)", inserts)
+    conn.executemany("UPDATE mufradat_progress SET last_correct_date=? WHERE user_id=? AND word_id=?",
+                     restale_rows)
+
+
+def _print_progress(st):
+    if st["none"]:
+        print("  таблицы mufradat_progress нет - переносить нечего")
+        return
+    print(f"  прогресс: скопировано строк {st['copied']} (студентов {st['users']}), из них выученных на "
+          f"переспрос {st['staled']}; на прежнем ключе помечено к переспросу {st['kept']}")
 
 
 def _rebuild_chunks(db):
@@ -211,10 +234,14 @@ def main():
             src_c.backup(dst_c); dst_c.close(); src_c.close()
             print("копия базы:", bak)
 
+    # Рабочую базу запираем только на саму запись (секунды). Всё чтение и расчёт - до неё и
+    # без запирающей транзакции; план без --apply не пишет в базу ничего (14.11.2026: и план, и
+    # запись держали базу запертой минутами - приложение у студентов не открывалось).
     conn = sqlite3.connect(db, timeout=60)
     conn.row_factory = sqlite3.Row
     conn.isolation_level = None          # транзакцией управляем сами
-    ensure_mufradat_schema(conn)
+    if args.apply:
+        ensure_mufradat_schema(conn)
     before = check_invariant(conn)
     rows, new_t, rekey, moves, restale, groups = plan(conn, data)
     print(f"аятов {len(data)}; подписей к замене {len(new_t)}; строк со сменой ключа {len(rekey)} "
@@ -224,28 +251,41 @@ def main():
     if not new_t:
         print("нечего менять")
         return
-
-    conn.execute("BEGIN IMMEDIATE")
-    conn.executemany("UPDATE mufradat_words SET translation=? WHERE id=?", [(g, i) for i, g in new_t.items()])
-    conn.executemany("UPDATE mufradat_words SET progress_key=? WHERE id=?", [(k, i) for i, k in rekey.items()])
-    move_progress(conn, moves, restale, apply=True)
-    after = check_invariant(conn)
+    after = invariant_after(rows, new_t, rekey)
     print(f"  после: ключей с разными подписями {after[0]}, строк без представителя {after[1]}")
     if after[0] > before[0] or after[1] > before[1]:
-        conn.execute("ROLLBACK")
-        raise SystemExit("нарушено правило ключей - откат, ничего не записано")
-    if args.apply:
+        raise SystemExit("нарушено правило ключей - ничего не записано")
+
+    if not args.apply:
+        _print_progress(plan_progress(conn, moves, restale)[2])
+        print("это был план (база не тронута). Записать: --apply")
+        return
+
+    import time
+    t0 = time.time()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        # прогресс читаем уже под замком: ответ студента секунду назад не потеряется
+        inserts, restale_rows, st = plan_progress(conn, moves, restale)
+        conn.executemany("UPDATE mufradat_words SET translation=? WHERE id=?", [(g, i) for i, g in new_t.items()])
+        conn.executemany("UPDATE mufradat_words SET progress_key=? WHERE id=?", [(k, i) for i, k in rekey.items()])
+        if not st["none"]:
+            write_progress(conn, inserts, restale_rows, st["has_cc"])
+        real = check_invariant(conn)
+        if real[0] > before[0] or real[1] > before[1]:
+            raise SystemExit("нарушено правило ключей - откат, ничего не записано")
         conn.execute("COMMIT")
-        print("записано")
-        _rebuild_chunks(args.db)
-        if Path(args.db).resolve() == Path(HADITHS_DB).resolve():
-            from scripts.check_wbw_ru_loaded import update_mark
-            left = [k for k, v in update_mark().items() if v]
-            print("отметка загруженных джузов обновлена" + (
-                "; ещё не загружены: " + ", ".join(left) if left else ""))
-    else:
+    except BaseException:
         conn.execute("ROLLBACK")
-        print("это был план (откат). Записать: --apply")
+        raise
+    _print_progress(st)
+    print("записано; база была заперта %.1f с" % (time.time() - t0))
+    _rebuild_chunks(args.db)
+    if Path(args.db).resolve() == Path(HADITHS_DB).resolve():
+        from scripts.check_wbw_ru_loaded import update_mark
+        left = [k for k, v in update_mark().items() if v]
+        print("отметка загруженных джузов обновлена" + (
+            "; ещё не загружены: " + ", ".join(left) if left else ""))
 
 
 if __name__ == "__main__":

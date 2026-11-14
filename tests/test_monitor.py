@@ -42,3 +42,17 @@ def test_env_reader(tmp_path):
     f = tmp_path / ".env"
     f.write_text('# c\nTELEGRAM_TOKEN="abc"\nSUPER_ADMIN_IDS=1,2\n', encoding="utf-8")
     assert read_env(f) == {"TELEGRAM_TOKEN": "abc", "SUPER_ADMIN_IDS": "1,2"}
+
+
+def test_db_locked(tmp_path):
+    import sqlite3
+    from scripts.monitor import db_locked
+    db = tmp_path / "x.db"
+    c = sqlite3.connect(str(db)); c.isolation_level = None
+    c.execute("CREATE TABLE t (a)")
+    assert db_locked(db, wait_s=0.2) is False
+    c.execute("BEGIN IMMEDIATE")
+    assert db_locked(db, wait_s=0.2) is True
+    c.execute("ROLLBACK"); c.close()
+    assert db_locked(db, wait_s=0.2) is False
+    assert db_locked(tmp_path / "нет.db") is False

@@ -102,8 +102,30 @@ def refresh_data_manifest(data_dir=None, now=None):
         return "список отпечатков мусхафа не пересобрался: %s" % e
 
 
+def db_locked(path, wait_s=5):
+    """База заперта на запись дольше wait_s секунд (кто-то держит длинную транзакцию) - True.
+    14.11.2026 загрузка перевода держала hadiths.db 17 минут: боты «отвечали», а приложение
+    у студентов висело, и наблюдение молчало. Сама проверка ничего не пишет."""
+    import sqlite3
+    if not Path(path).exists():
+        return False
+    conn = sqlite3.connect(str(path), timeout=wait_s)
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("ROLLBACK")
+        return False
+    except sqlite3.OperationalError:
+        return True
+    finally:
+        conn.close()
+
+
 def find_problems():
     problems = {}
+    for name in ("sources/hadiths.db", "quran_male.db", "quran_female.db"):
+        if db_locked(ROOT / name):
+            problems["lock_" + name] = "база %s заперта дольше 5 секунд - приложение может висеть" % name
     m = refresh_data_manifest()
     if m:
         problems["manifest"] = m
