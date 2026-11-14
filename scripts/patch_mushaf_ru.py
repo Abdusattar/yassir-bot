@@ -78,6 +78,11 @@ def main():
           + (" (проверка, без записи)" if check else ""))
     if missing:
         print(f"ВНИМАНИЕ: {len(missing)} слов из файла не найдены в страницах, первые: {missing[:5]}")
+    if not check and changed_files:
+        # листы изменились - новые отпечатки, иначе телефон не узнает о правке
+        from scripts.build_data_manifest import build as build_data_manifest
+        build_data_manifest()
+        print("data_manifest.json пересобран")
 
 
 if __name__ == "__main__":

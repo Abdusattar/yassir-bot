@@ -15,6 +15,7 @@
     python scripts/monitor.py --dry      # показать, что нашёл, никому не писать
 """
 import json
+import os
 import shutil
 import sys
 import time
@@ -73,8 +74,39 @@ def backup_problem(backups=BACKUPS, now=None, max_age_h=BACKUP_MAX_AGE_H):
     return None
 
 
+def refresh_data_manifest(data_dir=None, now=None):
+    """Список отпечатков мусхафа отстал от файлов (кто-то поправил лист или перевод и не
+    пересобрал) - пересобрать самому: шаг, который можно забыть, должен запускаться сам
+    (wiki/architecture.md, слой 2). Дёшево: сверяется время правки, хэши считаются
+    только когда файл новее списка. Возвращает текст беды или None."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from scripts import build_data_manifest as bdm
+    data_dir = Path(data_dir) if data_dir else bdm.DEFAULT_DIR
+    man = data_dir / bdm.NAME
+    try:
+        newest = 0.0
+        for folder, deep in ((data_dir, False), (data_dir / "dm", False),
+                             (data_dir / "meaning", True), (data_dir / "wbw", True)):
+            if not folder.is_dir():
+                continue
+            for f in (folder.glob("*/*.json") if deep else folder.glob("page*.json")):
+                newest = max(newest, f.stat().st_mtime)
+        if man.exists() and man.stat().st_mtime >= newest:
+            return None
+        _, changed = bdm.build(data_dir)
+        if not changed:
+            os.utime(str(man), None)     # содержимое то же - просто отметить, что сверено
+        return None
+    except Exception as e:  # noqa: BLE001 - наблюдение не должно падать само
+        return "список отпечатков мусхафа не пересобрался: %s" % e
+
+
 def find_problems():
     problems = {}
+    m = refresh_data_manifest()
+    if m:
+        problems["manifest"] = m
     if not check_port(8081):
         problems["male"] = "мужской бот не отвечает (порт 8081)"
     if not check_port(8082):

@@ -18,7 +18,10 @@ JUZ_KEYS = {1: [f"1:{a}" for a in range(1, 8)] + [f"2:{a}" for a in range(1, 142
             8: [f"6:{a}" for a in range(111, 166)] + [f"7:{a}" for a in range(1, 88)],
             9: [f"7:{a}" for a in range(88, 207)] + [f"8:{a}" for a in range(1, 41)],
             10: [f"8:{a}" for a in range(41, 76)] + [f"9:{a}" for a in range(1, 93)],
-            11: [f"9:{a}" for a in range(93, 130)] + [f"10:{a}" for a in range(1, 110)] + [f"11:{a}" for a in range(1, 6)]}
+            11: [f"9:{a}" for a in range(93, 130)] + [f"10:{a}" for a in range(1, 110)] + [f"11:{a}" for a in range(1, 6)],
+            12: [f"11:{a}" for a in range(6, 124)] + [f"12:{a}" for a in range(1, 53)],
+            13: [f"12:{a}" for a in range(53, 112)] + [f"13:{a}" for a in range(1, 44)] + [f"14:{a}" for a in range(1, 53)],
+            14: [f"15:{a}" for a in range(1, 100)] + [f"16:{a}" for a in range(1, 129)]}
 D = ROOT / "logs" / f"wbw_ru_juz{JUZ}"; REFS = ROOT / "sources" / "wbw_ru_refs"
 D.mkdir(parents=True, exist_ok=True)
 CH = D / "changes.json"; NT = D / "notes.json"

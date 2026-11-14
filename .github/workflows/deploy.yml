@@ -80,6 +80,11 @@ jobs:
             # пересобираются на каждой выкатке - забыть нельзя. Не собралось - приложение
             # берёт прежние файлы или вшитый перевод, выкатку это не останавливает.
             python scripts/build_wbw_chunks.py || echo "::warning::wbw: файлы переводов не пересобраны"
+            # Единый список отпечатков листов, смысла и переводов (14.11.2026, architecture.md Р1):
+            # приложение берёт из него адреса файлов. Лежит ссылкой - пересборка между
+            # выкатками (загрузка перевода) видна сразу.
+            python scripts/build_data_manifest.py || echo "::warning::data_manifest.json не пересобран"
+            [ -e /var/www/yassir-app/data_manifest.json ] || ln -s ~/yassir-bot/mushaf_data/data_manifest.json /var/www/yassir-app/data_manifest.json
             sudo systemctl restart yassir-bot
             # Женский бот - в том же деплое (23.09.2026). Раньше его
             # перезапускали руками, и однажды он неделю крутил код от 26.07:

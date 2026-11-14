@@ -13,9 +13,14 @@
  *   index.html  — сеть вперёд, кэш только если сети нет. Правки приложения
  *                 доходят в тот же момент, что и раньше; офлайн открывается
  *                 последняя виденная версия.
- *   page*.json, meaning/<язык>/<сура>.json — отдаём из кэша сразу и молча обновляем в фоне. Страница
- *                 мусхафа появляется мгновенно и работает без сети, а
- *                 исправление раскладки доезжает к следующему открытию.
+ *   листы, смысл, переводы слов с отпечатком в адресе (...json?h=<отпечаток>,
+ *                 с 14.11.2026) — из кэша навсегда: содержимое по такому адресу
+ *                 не меняется. Исправили файл - приложение попросит новый адрес
+ *                 (data_manifest.json), старая запись заменится.
+ *   data_manifest.json — сеть вперёд; сеть молчит дольше секунды - последний
+ *                 виденный список.
+ *   page*.json, meaning/ без отпечатка (старая оболочка или список не пришёл) —
+ *                 из кэша сразу, обновление в фоне.
  *   шрифты      — из кэша навсегда: у каждой страницы мусхафа свой файл
  *                 шрифта, и он неизменен (QPC V4, CDN).
  *   /api/muf/*  — НИКОГДА не кэшируем. Это живые данные: прогресс, сдачи,
@@ -51,25 +56,24 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Смысловой перевод по сурам (02.11.2026, meaning/<перевод>/<сура>.json) -
-// та же стратегия, что у листов: из кэша сразу, обновление в фоне. Иначе
-// чтение смысла без сети было бы пустым.
-function isPageJson(url) {
+// Данные мусхафа готовыми файлами: листы обеих раскладок, смысл по сурам, переводы слов.
+function isDataFile(url) {
   return url.origin === self.location.origin &&
-    (/^\/page\d+\.json$/.test(url.pathname) || /^\/meaning\/[a-z_]+\/\d+\.json$/.test(url.pathname));
+    (/^\/(dm\/)?page\d+\.json$/.test(url.pathname) ||
+     /^\/meaning\/[a-z_]+\/\d+\.json$/.test(url.pathname) ||
+     /^\/wbw\/[a-z]+\/\d+\.json$/.test(url.pathname));
 }
-
-// Пословные переводы по сурам (14.11.2026, wiki/wbw_split_plan.md):
-// wbw/<язык>/<сура>.json?h=<хэш> - содержимое по адресу не меняется, берём из кэша
-// навсегда; на (язык, сура) держим одну запись - новая версия вытесняет старую.
-// wbw/manifest.json - сеть вперёд (там свежие хэши), без сети - последний виденный.
-// Кэш не чистится при выходе: при слабом интернете дешевле не качать заново.
-function isWbwChunk(url) {
-  return url.origin === self.location.origin && /^\/wbw\/[a-z]+\/\d+\.json$/.test(url.pathname);
+// Адрес с отпечатком содержимого (?h=...): по нему файл не меняется никогда.
+function isHashed(url) {
+  return /^\?h=[0-9a-f]+$/.test(url.search);
 }
-function isWbwManifest(url) {
-  return url.origin === self.location.origin && url.pathname === '/wbw/manifest.json';
+// Списки отпечатков: единый data_manifest.json (14.11.2026, wiki/architecture.md Р1)
+// и прежний wbw/manifest.json (его просит оболочка, открытая до обновления).
+function isManifest(url) {
+  return url.origin === self.location.origin &&
+    (url.pathname === '/data_manifest.json' || url.pathname === '/wbw/manifest.json');
 }
+const MANIFEST_WAIT_MS = 1000;
 
 function isFont(url) {
   return /\.(woff2?|ttf|otf)$/i.test(url.pathname);
@@ -106,47 +110,63 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  if (isWbwManifest(url)) {
+  if (isManifest(url)) {
+    // Сеть вперёд: в списке свежие отпечатки. Но лист не должен ждать слабую сеть:
+    // молчит дольше секунды - отдаём последний виденный список, новый доедет в кэш
+    // и сработает при следующем открытии. Без сети - тоже последний виденный.
     e.respondWith(
-      fetch(req).then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(PAGES).then((c) => c.put(url.pathname, copy)).catch(() => {});
-        }
-        return res;
-      }).catch(() => caches.match(url.pathname))
+      caches.open(PAGES).then((cache) =>
+        cache.match(url.pathname).then((hit) => {
+          const fresh = fetch(req).then((res) => {
+            if (res && res.ok) cache.put(url.pathname, res.clone()).catch(() => {});
+            return res;
+          });
+          if (!hit) return fresh;
+          const late = new Promise((resolve) => setTimeout(() => resolve(hit), MANIFEST_WAIT_MS));
+          return Promise.race([fresh.catch(() => hit), late]);
+        })
+      )
     );
     return;
   }
 
-  if (isWbwChunk(url)) {
+  if (isDataFile(url) && isHashed(url)) {
+    // Из кэша навсегда. На файл держим одну запись: новая версия вытесняет и старые
+    // отпечатки, и запись без отпечатка, оставшуюся от прежней оболочки.
     e.respondWith(
       caches.open(PAGES).then((cache) =>
         cache.match(req).then((hit) => hit || fetch(req).then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
-            // старые версии этой суры на этом языке больше не нужны
             cache.keys().then((keys) => Promise.all(keys
               .filter((k) => { const u = new URL(k.url); return u.pathname === url.pathname && u.search !== url.search; })
               .map((k) => cache.delete(k)))
             ).then(() => cache.put(req, copy)).catch(() => {});
           }
           return res;
-        }))
+        }).catch((err) =>
+          // сети нет, а нужной версии в кэше нет - лучше прежняя версия файла, чем пустой лист
+          cache.match(req, { ignoreSearch: true }).then((old) => old || Promise.reject(err))
+        ))
       )
     );
     return;
   }
 
-  if (isPageJson(url)) {
+  if (isDataFile(url)) {
+    // Без отпечатка: из кэша сразу (годится и запись с отпечатком), обновление в фоне.
     e.respondWith(
       caches.open(PAGES).then((cache) =>
-        cache.match(req).then((hit) => {
+        cache.match(req).then((exact) =>
+          exact ? { hit: exact, own: true }
+                : cache.match(req, { ignoreSearch: true }).then((any) => ({ hit: any, own: !any }))
+        ).then((found) => {
+          const hit = found.hit;
           const fresh = fetch(req).then((res) => {
-            if (res && res.ok) cache.put(req, res.clone());
+            // запись с отпечатком уже есть - вторую копию того же файла не кладём
+            if (res && res.ok && found.own) cache.put(req, res.clone());
             return res;
-          }).catch(() => hit);
-          // Есть в кэше — отдаём мгновенно, обновление идёт своим ходом.
+          }).catch((err) => hit || Promise.reject(err));
           return hit || fresh;
         })
       )

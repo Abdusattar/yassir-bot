@@ -10,6 +10,13 @@
   var wbwManifestP = null;
   var wbwChunkP = {};
   function wbwManifest() {
+    // с 14.11 отпечатки переводов - раздел wbw единого списка (030); отдельный
+    // wbw/manifest.json - запасной путь, пока единого списка нет
+    return dataManifest().then(function (m) {
+      return m && m.wbw && m.wbw.ru ? m.wbw : wbwManifestOld();
+    });
+  }
+  function wbwManifestOld() {
     if (!wbwManifestP) {
       wbwManifestP = fetch('wbw/manifest.json', { cache: 'no-cache' })
         .then(function (r) { return r.ok ? r.json() : null; })
@@ -98,7 +105,7 @@
   // onLate (необязательно) - см. выше; зовётся не больше одного раза.
   function fetchPageData(n, onLate) {
     var lang = UI_LANG;
-    var base = fetch(pageJsonUrl(n)).then(function (r) {
+    var base = pageUrlP(n).then(function (url) { return fetch(url); }).then(function (r) {
       if (!r.ok) throw new Error('page ' + n);
       return r.json();
     });

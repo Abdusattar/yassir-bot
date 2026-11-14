@@ -92,6 +92,10 @@ def build(db_path=DEFAULT_DB, out_dir=DEFAULT_OUT, languages=None):
     raw = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     if not man_path.exists() or man_path.read_text(encoding="utf-8") != raw:
         man_path.write_text(raw, encoding="utf-8")
+    if out_dir.resolve() == DEFAULT_OUT.resolve():
+        # единый список отпечатков (листы, смысл, переводы) - приложение берёт адреса из него
+        from scripts.build_data_manifest import build as build_data_manifest
+        build_data_manifest()
     return manifest, written
 
 

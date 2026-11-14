@@ -26,7 +26,11 @@
   function meaningSurah(src, s) {
     var key = src + '/' + s;
     if (!meaningCache[key]) {
-      meaningCache[key] = fetch('meaning/' + key + '.json?v=' + MEANING_VER)
+      // адрес с отпечатком из единого списка (030); списка нет - прежний ручной номер
+      meaningCache[key] = dataManifestSoon().then(function (m) {
+          var h = m && m.meaning && m.meaning[src] && m.meaning[src][String(s)];
+          return fetch('meaning/' + key + '.json?' + (h ? 'h=' + h : 'v=' + MEANING_VER));
+        })
         .then(function (r) { if (!r.ok) throw new Error('meaning ' + key); return r.json(); })
         .then(function (d) { return d.t || []; });
       meaningCache[key].catch(function () { delete meaningCache[key]; });
