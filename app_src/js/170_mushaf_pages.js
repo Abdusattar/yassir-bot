@@ -15,20 +15,11 @@
       mushafPrefetch(n);
       return;
     }
-    // Нерусский язык живёт в отдельном файле page{N}_{lang}.json и есть не
-    // на всех страницах (кыргызский и узбекский пока покрывают джуз 1) -
-    // если файла нет, тихо откатываемся на русский. Интерфейс при этом
-    // остаётся на выбранном языке, меняются только переводы слов: занятие
-    // не должно прерываться там, где перевод ещё не готов.
-    // Откат на русский - в ТОЙ ЖЕ раскладке (dm/ сохраняется), иначе
-    // египетский лист молча подменился бы мединским.
-    var url = pageJsonUrl(n, UI_LANG);
-    fetch(url)
-      .then(function (r) {
-        if (r.ok) return r.json();
-        if (UI_LANG === 'ru') throw new Error('page ' + n);
-        return fetch(pageJsonUrl(n)).then(function (r2) { return r2.json(); });
-      })
+    // Лист раскладки + переводы слов на языке интерфейса (14.11.2026,
+    // fetchPageData в 034_wbw_words.js): слова без перевода на языке - по-русски,
+    // занятие не прерывается там, где перевод ещё не готов. Раскладка (dm/)
+    // сохраняется - египетский лист не подменяется мединским.
+    fetchPageData(n)
       .then(function (data) {
         cache[cacheKey] = data;
         // Быстро листали: пока шла эта страница, открыли другую - опоздавший
@@ -75,12 +66,7 @@
       return Promise.all([mushafWarmFont(data.font_url), fp ? mushafWarmFont(v4FontUrl(fp)) : null]);
     };
     if (cache[key]) return warm(cache[key]);
-    return fetch(pageJsonUrl(p, UI_LANG))
-      .then(function (r) {
-        if (r.ok) return r.json();
-        if (UI_LANG === 'ru') throw new Error('page ' + p);
-        return fetch(pageJsonUrl(p)).then(function (r2) { return r2.json(); });
-      })
+    return fetchPageData(p)
       .then(function (data) { cache[key] = data; return warm(data); });
   }
   function mushafPrefetchPump() {
