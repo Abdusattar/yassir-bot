@@ -21,8 +21,9 @@
  *                 виденный список.
  *   page*.json, meaning/ без отпечатка (старая оболочка или список не пришёл) —
  *                 из кэша сразу, обновление в фоне.
- *   шрифты      — из кэша навсегда: у каждой страницы мусхафа свой файл
- *                 шрифта, и он неизменен (QPC V4, CDN).
+ *   шрифты      — из кэша: у каждой страницы мусхафа свой файл шрифта, и он
+ *                 неизменен (QPC V4). Держим 150 последних открывавшихся
+ *                 листов, давние вытесняются (14.11.2026).
  *   /api/muf/*  — НИКОГДА не кэшируем. Это живые данные: прогресс, сдачи,
  *                 пульс. Отданный из кэша ответ здесь означал бы враньё.
  *   аудио       — мимо кэша: разборы устаза и чтение Хусари весят много,
@@ -77,6 +78,48 @@ const MANIFEST_WAIT_MS = 1000;
 
 function isFont(url) {
   return /\.(woff2?|ttf|otf)$/i.test(url.pathname);
+}
+
+// Шрифты листов мусхафа (p<N>.woff2): у каждого листа свой, ~87 КБ, все 604 - около
+// 53 МБ. Весь мусхаф разом никто не читает (решение пользователя 14.11.2026): держим
+// FONT_LIMIT последних открывавшихся листов (~7 джузов, ~13 МБ), остальные вытесняем -
+// давно не открывавшийся лист при сети просто скачает шрифт заново.
+// Когда лист открывали, помнит запись FONT_LRU в том же кэше: {адрес: время}.
+const FONT_LIMIT = 150;
+const FONT_LRU = '/__font_lru';
+function isPageFont(url) {
+  return /\/p\d+\.(woff2?|ttf)$/i.test(url.pathname);
+}
+let fontLru = null;          // в памяти, пока service worker жив
+let fontLruQueue = Promise.resolve();
+const fontSeen = {};         // отметки, ещё не записанные: ставятся сразу, до очереди
+function fontTouch(cache, href, added) {
+  // Время ставим немедленно: при подгрузке десятка листов разом только что скачанный
+  // шрифт без отметки иначе выглядел бы самым давним и вытеснялся первым.
+  fontSeen[href] = Date.now();
+  // по очереди: два листа, открытые разом, не затирают отметки друг друга
+  fontLruQueue = fontLruQueue.then(() => fontTouchNow(cache, href, added)).catch(() => {});
+  return fontLruQueue;
+}
+function fontTouchNow(cache, href, added) {
+  const load = fontLru ? Promise.resolve(fontLru)
+    : cache.match(FONT_LRU).then((r) => (r ? r.json() : {})).catch(() => ({})).then((m) => (fontLru = m));
+  return load.then((lru) => {
+    Object.keys(fontSeen).forEach((u) => { lru[u] = fontSeen[u]; delete fontSeen[u]; });
+    if (!added) return lru;
+    return cache.keys().then((keys) => {
+      const fonts = keys.map((k) => k.url).filter((u) => isPageFont(new URL(u)));
+      const have = {};
+      fonts.forEach((u) => { have[u] = true; });
+      Object.keys(lru).forEach((u) => { if (!have[u]) delete lru[u]; });   // отметки без файла
+      if (fonts.length <= FONT_LIMIT) return lru;
+      fonts.sort((x, y) => (lru[x] || 0) - (lru[y] || 0));                  // давние - первыми
+      const drop = fonts.slice(0, fonts.length - FONT_LIMIT);
+      drop.forEach((u) => { delete lru[u]; });
+      return Promise.all(drop.map((u) => cache.delete(u))).then(() => lru);
+    });
+  }).then((lru) => cache.put(FONT_LRU, new Response(JSON.stringify(lru), {
+    headers: { 'Content-Type': 'application/json' } })));
 }
 
 function isIndex(url) {
@@ -183,10 +226,18 @@ self.addEventListener('fetch', (e) => {
           // навсегда. Шрифт грузит FontFace - это CORS-запрос, у ответа
           // виден статус. Уже застрявшая ошибка не отдаётся, а качается
           // заново - без смены VERSION и перекачки всех 604 шрифтов.
-          if (hit && hit.ok) return hit;
+          if (hit && hit.ok) {
+            if (isPageFont(url)) e.waitUntil(fontTouch(cache, req.url, false));
+            return hit;
+          }
           return fetch(req).then((res) => {
-            if (res && res.ok) cache.put(req, res.clone());
-            else if (hit) cache.delete(req);
+            if (res && res.ok) {
+              const stored = cache.put(req, res.clone());
+              if (isPageFont(url)) {
+                fontSeen[req.url] = Date.now();
+                e.waitUntil(stored.then(() => fontTouch(cache, req.url, true)));
+              }
+            } else if (hit) cache.delete(req);
             return res;
           });
         })
