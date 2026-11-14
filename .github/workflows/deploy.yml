@@ -76,6 +76,10 @@ jobs:
             # Пояснения к словам и страница «что изменилось» в пословном (12.11.2026).
             [ -e /var/www/yassir-app/notes ] || ln -s ~/yassir-bot/mushaf_data/notes /var/www/yassir-app/notes
             [ -e /var/www/yassir-app/wbw ] || ln -s ~/yassir-bot/mushaf_data/wbw /var/www/yassir-app/wbw
+            # Пословные переводы по сурам из базы (14.11.2026, wiki/wbw_split_plan.md):
+            # пересобираются на каждой выкатке - забыть нельзя. Не собралось - приложение
+            # берёт прежние файлы или вшитый перевод, выкатку это не останавливает.
+            python scripts/build_wbw_chunks.py || echo "::warning::wbw: файлы переводов не пересобраны"
             sudo systemctl restart yassir-bot
             # Женский бот - в том же деплое (23.09.2026). Раньше его
             # перезапускали руками, и однажды он неделю крутил код от 26.07:

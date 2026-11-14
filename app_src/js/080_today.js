@@ -8,7 +8,7 @@
   function dashPage(n, cb) {
     if (!n) return;
     if (dashPageCache[n]) { cb(dashPageCache[n]); return; }
-    fetch(pageJsonUrl(n, UI_LANG)).then(function (r) { return r.ok ? r.json() : null; })
+    fetchPageData(n).catch(function () { return null; })
       .then(function (d) { if (d) { dashPageCache[n] = d; cb(d); } }).catch(function () {});
   }
   function dashTextLines(d) {

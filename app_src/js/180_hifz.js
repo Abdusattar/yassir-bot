@@ -51,15 +51,8 @@
     hifzNextPage.page = want;
     hifzNextPage.layout = lay;
     hifzNextPage.lines = null;
-    // Тот же откат на русский, что и в loadPage: нерусская страница есть не
-    // везде, а переход нужен всегда.
-    var url = pageJsonUrl(want, UI_LANG);
-    fetch(url)
-      .then(function (r) {
-        if (r.ok) return r.json();
-        if (UI_LANG === 'ru') throw new Error('page ' + want);
-        return fetch(pageJsonUrl(want)).then(function (r2) { return r2.json(); });
-      })
+    // Тот же загрузчик, что у loadPage (переводы слов - 034_wbw_words.js).
+    fetchPageData(want)
       .then(function (data) {
         if (hifzNextPage.page !== want || hifzNextPage.layout !== lay) return;
         hifzNextPage.lines = (data.lines || []).filter(function (l) { return l.type === 'text'; });

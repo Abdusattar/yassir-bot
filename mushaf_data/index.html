@@ -8668,6 +8668,123 @@
       .catch(function () {});
   });
 
+  // ── Пословные переводы отдельно от страниц (14.11.2026, wiki/wbw_split_plan.md) ──
+  // Раньше перевод слова был вшит в page{N}.json, а каждый язык был полной копией
+  // страницы (page{N}_ky.json ...) - копии разъезжались (Фатиха в _ky со старой
+  // разбивкой строк). Теперь: лист - всегда основа раскладки (page{N}.json или
+  // dm/page{N}.json), переводы слов - из wbw/<язык>/<сура>.json, собранных из базы
+  // (scripts/build_wbw_chunks.py). Ключ слова "аят:позиция" - один файл на обе
+  // раскладки. Адрес с хэшем из wbw/manifest.json: исправили подпись - новый адрес.
+  // Нет слова на языке интерфейса - русская подпись (решение 30.08.2026), нет
+  // манифеста или нужного языка в нём - старый путь (вшитые переводы, _lang-файл).
+  var wbwManifestP = null;
+  var wbwChunkP = {};
+  function wbwManifest() {
+    if (!wbwManifestP) {
+      wbwManifestP = fetch('wbw/manifest.json', { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (m) {
+          if (!m) wbwManifestP = null;   // не пришёл - спросим снова на следующем листе
+          return m;
+        });
+    }
+    return wbwManifestP;
+  }
+  // {"аят:позиция": подпись} суры на языке или null (нет файла / не скачался).
+  function wbwChunk(man, lang, s) {
+    var h = man && man[lang] && man[lang][String(s)];
+    if (!h) return Promise.resolve(null);
+    var key = lang + ':' + s + ':' + h;
+    if (!wbwChunkP[key]) {
+      wbwChunkP[key] = fetch('wbw/' + lang + '/' + s + '.json?h=' + h)
+        .then(function (r) { if (!r.ok) throw new Error('wbw ' + key); return r.json(); })
+        .then(function (d) { return d.w || {}; })
+        .catch(function () { delete wbwChunkP[key]; return null; });
+    }
+    return wbwChunkP[key];
+  }
+  function wbwPageSurahs(data) {
+    var seen = {}, out = [];
+    (data.ayahs || []).forEach(function (a) {
+      if (!seen[a.surah]) { seen[a.surah] = true; out.push(a.surah); }
+    });
+    return out;
+  }
+  // Вписывает переводы в токены листа (и в lines, и в ayahs[].tokens). Сура, чей
+  // ru-файл не скачался, остаётся со вшитым переводом - лист не теряет подсказки.
+  function wbwApply(data, man, lang) {
+    var surahs = wbwPageSurahs(data);
+    var jobs = [];
+    surahs.forEach(function (s) {
+      jobs.push(wbwChunk(man, 'ru', s));
+      jobs.push(lang !== 'ru' ? wbwChunk(man, lang, s) : Promise.resolve(null));
+    });
+    if (lang !== 'ru') {
+      // смысл аята на языке интерфейса - из meaning/ (у ru-основы вшит Кулиев)
+      surahs.forEach(function (s) {
+        jobs.push(meaningSurah(meaningSrc(), s).catch(function () { return null; }));
+      });
+    }
+    return Promise.all(jobs).then(function (res) {
+      var ru = {}, loc = {}, mean = {};
+      surahs.forEach(function (s, i) {
+        ru[s] = res[2 * i];
+        loc[s] = res[2 * i + 1];
+        if (lang !== 'ru') mean[s] = res[2 * surahs.length + i];
+      });
+      function fill(t, s, a) {
+        if (t.type !== 'word' || !ru[s]) return;
+        var k = a + ':' + t.position;
+        t.translation = (loc[s] && loc[s][k]) || ru[s][k] || '';
+      }
+      (data.lines || []).forEach(function (l) {
+        (l.tokens || []).forEach(function (t) { fill(t, t.surah, t.ayah); });
+      });
+      (data.ayahs || []).forEach(function (a) {
+        (a.tokens || []).forEach(function (t) { fill(t, a.surah, a.ayah); });
+        var m = mean[a.surah];
+        if (m && m[a.ayah - 1]) a.meaning = m[a.ayah - 1];
+      });
+      return data;
+    });
+  }
+  // Лист не ждёт переводы дольше WBW_WAIT_MS (слабая сеть): не успели - показываем
+  // со вшитым переводом (старый путь), а файлы докачиваются и лягут в кэш к
+  // следующему листу. До чистки страниц (шаг 3 плана) вшитый перевод всегда есть.
+  var WBW_WAIT_MS = 2500;
+  function wbwSoon(p) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var timer = setTimeout(function () { if (!done) { done = true; resolve(null); } }, WBW_WAIT_MS);
+      p.then(function (v) { if (!done) { done = true; clearTimeout(timer); resolve(v); } },
+             function () { if (!done) { done = true; clearTimeout(timer); resolve(null); } });
+    });
+  }
+  // Единый загрузчик листа для мусхафа, заучивания и «Сегодня».
+  function fetchPageData(n) {
+    var lang = UI_LANG;
+    var base = fetch(pageJsonUrl(n)).then(function (r) {
+      if (!r.ok) throw new Error('page ' + n);
+      return r.json();
+    });
+    function oldWay(data) {
+      if (lang === 'ru') return data;
+      // языковая копия листа, нет её - русская основа
+      return fetch(pageJsonUrl(n, lang))
+        .then(function (r) { return r.ok ? r.json() : data; })
+        .catch(function () { return data; });
+    }
+    return Promise.all([wbwSoon(wbwManifest()), base]).then(function (got) {
+      var man = got[0], data = got[1];
+      if (!(man && man.ru && (lang === 'ru' || man[lang]))) return oldWay(data);
+      // переводы вписываются в копию: опоздавшая запись не тронет уже показанный лист
+      var copy = JSON.parse(JSON.stringify(data));
+      return wbwSoon(wbwApply(copy, man, lang)).then(function (filled) {
+        return filled || oldWay(data);
+      });
+    });
+  }
   // ── Настройки: открытие экрана и профиль (10.09.2026) ─────────────────
   // Кнопки «Сохранить» нет: поле уходит на сервер по событию change, то
   // есть когда с него ушли или нажали Enter, и отвечает тихой строкой под
@@ -9431,7 +9548,7 @@
   function dashPage(n, cb) {
     if (!n) return;
     if (dashPageCache[n]) { cb(dashPageCache[n]); return; }
-    fetch(pageJsonUrl(n, UI_LANG)).then(function (r) { return r.ok ? r.json() : null; })
+    fetchPageData(n).catch(function () { return null; })
       .then(function (d) { if (d) { dashPageCache[n] = d; cb(d); } }).catch(function () {});
   }
   function dashTextLines(d) {
@@ -12015,20 +12132,11 @@
       mushafPrefetch(n);
       return;
     }
-    // Нерусский язык живёт в отдельном файле page{N}_{lang}.json и есть не
-    // на всех страницах (кыргызский и узбекский пока покрывают джуз 1) -
-    // если файла нет, тихо откатываемся на русский. Интерфейс при этом
-    // остаётся на выбранном языке, меняются только переводы слов: занятие
-    // не должно прерываться там, где перевод ещё не готов.
-    // Откат на русский - в ТОЙ ЖЕ раскладке (dm/ сохраняется), иначе
-    // египетский лист молча подменился бы мединским.
-    var url = pageJsonUrl(n, UI_LANG);
-    fetch(url)
-      .then(function (r) {
-        if (r.ok) return r.json();
-        if (UI_LANG === 'ru') throw new Error('page ' + n);
-        return fetch(pageJsonUrl(n)).then(function (r2) { return r2.json(); });
-      })
+    // Лист раскладки + переводы слов на языке интерфейса (14.11.2026,
+    // fetchPageData в 034_wbw_words.js): слова без перевода на языке - по-русски,
+    // занятие не прерывается там, где перевод ещё не готов. Раскладка (dm/)
+    // сохраняется - египетский лист не подменяется мединским.
+    fetchPageData(n)
       .then(function (data) {
         cache[cacheKey] = data;
         // Быстро листали: пока шла эта страница, открыли другую - опоздавший
@@ -12075,12 +12183,7 @@
       return Promise.all([mushafWarmFont(data.font_url), fp ? mushafWarmFont(v4FontUrl(fp)) : null]);
     };
     if (cache[key]) return warm(cache[key]);
-    return fetch(pageJsonUrl(p, UI_LANG))
-      .then(function (r) {
-        if (r.ok) return r.json();
-        if (UI_LANG === 'ru') throw new Error('page ' + p);
-        return fetch(pageJsonUrl(p)).then(function (r2) { return r2.json(); });
-      })
+    return fetchPageData(p)
       .then(function (data) { cache[key] = data; return warm(data); });
   }
   function mushafPrefetchPump() {
@@ -12640,15 +12743,8 @@
     hifzNextPage.page = want;
     hifzNextPage.layout = lay;
     hifzNextPage.lines = null;
-    // Тот же откат на русский, что и в loadPage: нерусская страница есть не
-    // везде, а переход нужен всегда.
-    var url = pageJsonUrl(want, UI_LANG);
-    fetch(url)
-      .then(function (r) {
-        if (r.ok) return r.json();
-        if (UI_LANG === 'ru') throw new Error('page ' + want);
-        return fetch(pageJsonUrl(want)).then(function (r2) { return r2.json(); });
-      })
+    // Тот же загрузчик, что у loadPage (переводы слов - 034_wbw_words.js).
+    fetchPageData(want)
       .then(function (data) {
         if (hifzNextPage.page !== want || hifzNextPage.layout !== lay) return;
         hifzNextPage.lines = (data.lines || []).filter(function (l) { return l.type === 'text'; });

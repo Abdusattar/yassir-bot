@@ -59,6 +59,18 @@ function isPageJson(url) {
     (/^\/page\d+\.json$/.test(url.pathname) || /^\/meaning\/[a-z_]+\/\d+\.json$/.test(url.pathname));
 }
 
+// Пословные переводы по сурам (14.11.2026, wiki/wbw_split_plan.md):
+// wbw/<язык>/<сура>.json?h=<хэш> - содержимое по адресу не меняется, берём из кэша
+// навсегда; на (язык, сура) держим одну запись - новая версия вытесняет старую.
+// wbw/manifest.json - сеть вперёд (там свежие хэши), без сети - последний виденный.
+// Кэш не чистится при выходе: при слабом интернете дешевле не качать заново.
+function isWbwChunk(url) {
+  return url.origin === self.location.origin && /^\/wbw\/[a-z]+\/\d+\.json$/.test(url.pathname);
+}
+function isWbwManifest(url) {
+  return url.origin === self.location.origin && url.pathname === '/wbw/manifest.json';
+}
+
 function isFont(url) {
   return /\.(woff2?|ttf|otf)$/i.test(url.pathname);
 }
@@ -90,6 +102,38 @@ self.addEventListener('fetch', (e) => {
           return res;
         })
         .catch(() => caches.match('/index.html').then((r) => r || caches.match('/')))
+    );
+    return;
+  }
+
+  if (isWbwManifest(url)) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(PAGES).then((c) => c.put(url.pathname, copy)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(url.pathname))
+    );
+    return;
+  }
+
+  if (isWbwChunk(url)) {
+    e.respondWith(
+      caches.open(PAGES).then((cache) =>
+        cache.match(req).then((hit) => hit || fetch(req).then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            // старые версии этой суры на этом языке больше не нужны
+            cache.keys().then((keys) => Promise.all(keys
+              .filter((k) => { const u = new URL(k.url); return u.pathname === url.pathname && u.search !== url.search; })
+              .map((k) => cache.delete(k)))
+            ).then(() => cache.put(req, copy)).catch(() => {});
+          }
+          return res;
+        }))
+      )
     );
     return;
   }
